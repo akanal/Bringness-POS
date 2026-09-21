@@ -1,0 +1,20 @@
+name: Build Windows Desktop
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults: {run: {working-directory: apps/desktop}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - run: npm install
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bringness-POS-Windows
+          path: apps/desktop/dist/*.exe
