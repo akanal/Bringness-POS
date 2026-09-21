@@ -1,14 +1,23 @@
-import http from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
-const port=Number(process.env.PORT||8080);
-const root=join(process.cwd(),"apps","web","public");
-const types={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".svg":"image/svg+xml",".json":"application/json; charset=utf-8"};
-http.createServer(async(req,res)=>{
-  if(req.url==="/health"){res.writeHead(200,{"content-type":"application/json"});return res.end(JSON.stringify({status:"ok",service:"bringness-pos"}));}
-  let path=(req.url||"/").split("?")[0]; if(path==="/") path="/index.html";
-  if(["/datenschutz","/impressum","/ueber-uns"].includes(path)) path+="/index.html";
-  const safe=normalize(path).replace(/^([.][.][/\\])+/, "");
-  try{const data=await readFile(join(root,safe));res.writeHead(200,{"content-type":types[extname(safe)]||"application/octet-stream","x-content-type-options":"nosniff","referrer-policy":"strict-origin-when-cross-origin","x-frame-options":"SAMEORIGIN"});res.end(data);}
-  catch{res.writeHead(404,{"content-type":"text/plain; charset=utf-8"});res.end("Nicht gefunden");}
-}).listen(port,"0.0.0.0",()=>console.log("Bringness POS listening on",port));
+import http from "node:http";import fs from "node:fs";import path from "node:path";import crypto from "node:crypto";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../apps/web/public"),port=process.env.PORT||3000;
+const type={".html":"text/html; charset=utf-8",".css":"text/css",".js":"text/javascript",".json":"application/json",".png":"image/png",".svg":"image/svg+xml"};
+const db={users:[],restaurants:[],categories:[],products:[],orders:[],sessions:new Map()};
+const json=(res,n,data)=>{res.writeHead(n,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(data))};
+const body=req=>new Promise((ok,bad)=>{let d="";req.on("data",c=>d+=c);req.on("end",()=>{try{ok(d?JSON.parse(d):{})}catch(e){bad(e)}})});
+const token=req=>(req.headers.authorization||"").replace(/^Bearer /,""), user=req=>db.sessions.get(token(req));
+function auth(req,res){const u=user(req);if(!u){json(res,401,{error:"Nicht angemeldet"});return null}return u}
+function routeFile(url){let p=url.split("?")[0];if(p==="/")p="/index.html";if(p==="/datenschutz")p="/datenschutz/index.html";if(p==="/impressum")p="/impressum/index.html";if(p==="/ueber-uns")p="/ueber-uns/index.html";if(p==="/pos"||p==="/pos/")p="/pos/index.html";return path.join(root,p)}
+const server=http.createServer(async(req,res)=>{const u=new URL(req.url,"http://local"),p=u.pathname;
+try{
+if(p==="/health")return json(res,200,{status:"ok",service:"bringness-pos",version:"0.3.0"});
+if(p==="/api/v1/auth/register"&&req.method==="POST"){const b=await body(req);if(!b.email||!b.password||!b.name)return json(res,400,{error:"Name, E-Mail und Passwort erforderlich"});if(db.users.some(x=>x.email===b.email.toLowerCase()))return json(res,409,{error:"E-Mail bereits vorhanden"});const x={id:crypto.randomUUID(),name:b.name,email:b.email.toLowerCase(),password:b.password};db.users.push(x);const t=crypto.randomUUID();db.sessions.set(t,x);return json(res,201,{token:t,user:{id:x.id,name:x.name,email:x.email}})}
+if(p==="/api/v1/auth/login"&&req.method==="POST"){const b=await body(req),x=db.users.find(x=>x.email===String(b.email||"").toLowerCase()&&x.password===b.password);if(!x)return json(res,401,{error:"Anmeldedaten stimmen nicht"});const t=crypto.randomUUID();db.sessions.set(t,x);return json(res,200,{token:t,user:{id:x.id,name:x.name,email:x.email}})}
+if(p==="/api/v1/bootstrap"&&req.method==="GET"){const x=auth(req,res);if(!x)return;return json(res,200,{user:{id:x.id,name:x.name,email:x.email},restaurants:db.restaurants.filter(r=>r.userId===x.id),categories:db.categories.filter(c=>c.userId===x.id),products:db.products.filter(q=>q.userId===x.id),orders:db.orders.filter(o=>o.userId===x.id)})}
+if(p==="/api/v1/restaurants"&&req.method==="POST"){const x=auth(req,res);if(!x)return;const b=await body(req),r={id:crypto.randomUUID(),userId:x.id,name:b.name||"Mein Betrieb",mode:b.mode||"counter"};db.restaurants.push(r);return json(res,201,r)}
+if(p==="/api/v1/categories"&&req.method==="POST"){const x=auth(req,res);if(!x)return;const b=await body(req),c={id:crypto.randomUUID(),userId:x.id,restaurantId:b.restaurantId,name:b.name||"Neue Kategorie"};db.categories.push(c);return json(res,201,c)}
+if(p==="/api/v1/products"&&req.method==="POST"){const x=auth(req,res);if(!x)return;const b=await body(req),q={id:crypto.randomUUID(),userId:x.id,restaurantId:b.restaurantId,categoryId:b.categoryId,name:b.name||"Produkt",price:Number(b.price)||0,tax:Number(b.tax)||19,emoji:b.emoji||"🍽️"};db.products.push(q);return json(res,201,q)}
+if(p==="/api/v1/orders"&&req.method==="POST"){const x=auth(req,res);if(!x)return;const b=await body(req),o={id:crypto.randomUUID(),userId:x.id,restaurantId:b.restaurantId,items:b.items||[],total:Number(b.total)||0,status:"paid",createdAt:new Date().toISOString()};db.orders.push(o);return json(res,201,o)}
+if(p.startsWith("/api/"))return json(res,404,{error:"Route nicht gefunden"});
+const f=routeFile(req.url);if(!f.startsWith(root)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){res.writeHead(404);return res.end("Not found")}res.writeHead(200,{"content-type":type[path.extname(f)]||"application/octet-stream","x-content-type-options":"nosniff","referrer-policy":"strict-origin-when-cross-origin","x-frame-options":"SAMEORIGIN"});fs.createReadStream(f).pipe(res)
+}catch(e){json(res,500,{error:"Serverfehler"})}});
+server.listen(port,()=>console.log("Bringness POS listening on",port));
