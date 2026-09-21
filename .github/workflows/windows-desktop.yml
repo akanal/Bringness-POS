@@ -16,6 +16,9 @@ jobs:
         with: {node-version: 20}
       - run: npm install
       - run: npm run build
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
       - name: Publish latest installer asset
         uses: softprops/action-gh-release@v2
         with:
