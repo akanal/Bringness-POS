@@ -14,6 +14,14 @@ jobs:
         with: {node-version: 20}
       - run: npm install
       - run: npm run build
+      - name: Publish latest installer asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-latest
+          name: Bringness POS Windows
+          prerelease: true
+          make_latest: false
+          files: apps/desktop/dist/*.exe
       - uses: actions/upload-artifact@v4
         with:
           name: Bringness-POS-Windows
