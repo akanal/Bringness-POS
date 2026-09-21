@@ -1,0 +1,12 @@
+{
+  "name": "bringness-pos-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bringness POS Plattform",
+  "workspaces": ["apps/*", "packages/*", "server"],
+  "scripts": {
+    "dev": "echo \"Bringness POS workspace initialized\"",
+    "test": "echo \"Tests werden im nächsten Build-Schritt ergänzt\""
+  },
+  "engines": {"node": ">=20"}
+}
