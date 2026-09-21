@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
