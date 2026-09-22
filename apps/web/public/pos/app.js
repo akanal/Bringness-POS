@@ -15,3 +15,18 @@ $("productForm").onsubmit=async e=>{e.preventDefault();let restaurantId=$("resta
 $("pay").onclick=async()=>{if(!cart.length)return;let total=cart.reduce((s,x)=>s+x.qty*x.price,0);await api("/orders",{method:"POST",body:JSON.stringify({restaurantId:$("restaurant").value,items:cart.map(x=>({productId:x.id,name:x.name,qty:x.qty,price:x.price,tax:x.tax})),total,paymentMethod:$("paymentMethod").value})});cart=[];renderCart();$("saleMsg").textContent="Verkauf gespeichert und Beleg erstellt.";setTimeout(()=>$("saleMsg").textContent="",3000)};
 $("employeeForm").onsubmit=async e=>{e.preventDefault();let restaurantId=$("restaurant").value;if(!restaurantId)return alert("Bitte zuerst Betrieb anlegen.");try{await api("/employees",{method:"POST",body:JSON.stringify({restaurantId,name:$("employeeName").value,pin:$("employeePin").value,role:$("employeeRole").value})});$("employeeName").value="";$("employeePin").value="";$("employees").textContent="Mitarbeiter wurde angelegt."}catch(x){$("employees").textContent=x.message}};
 $("logout").onclick=()=>{localStorage.removeItem("bringness-pos-token");location.reload()};load();
+const moduleInfo={
+tische:["Tische","Tischplan und Tischbestellungen","Tischplan wird als nächstes mit Bereichen, Status und offenen Bons an die Bestellungen angebunden."],
+bestellungen:["Bestellungen","Offene und abgeschlossene Bestellungen","Bestellungen aus Kasse, Tisch und später Bringness werden hier zentral geführt."],
+kueche:["Küche","Küchenmonitor / KDS","Neue Bestellungen, in Zubereitung und fertig – getrennt nach Küchenstationen."],
+artikel:["Artikel","Artikel & Kategorien","Kategorien und Produkte werden unten bereits verwaltet. Bearbeiten, Löschen und Bilder werden weiter ausgebaut."],
+varianten:["Varianten","Varianten, Extras und Optionen","Größen, Beilagen, Extras, Aufpreise und produktbezogene Auswahlgruppen."],
+mitarbeiter:["Mitarbeiter","Mitarbeiter & Rechte","Mitarbeiteranlage ist vorhanden; PIN-Anmeldung, Rollen und Schichtzuordnung werden hier zusammengeführt."],
+belege:["Belege","Belege, Rechnungen & Exporte","Belegarchiv, Druck, QR-Beleg und steuerliche Exporte werden hier zentral verfügbar."],
+schicht:["Schicht","Schicht & Kassenbuch","Kassenöffnung, Anfangsbestand, Einlage/Entnahme und Tagesabschluss."],
+tse:["TSE","TSE & Fiskalstatus","Status, Seriennummer, Transaktionen und DSFinV-K-Export. Eine echte zertifizierte TSE wird erst nach Provider-Anbindung als aktiv angezeigt."],
+dashboard:["Dashboard","Umsatz & Betrieb","Umsatz, Bestellungen, Zahlungsarten, Mitarbeiter und Betriebskennzahlen."],
+einstellungen:["Einstellungen","Betrieb & System","Unternehmensdaten, Steuern, Drucker, Geräte, Bringness-Verbindung und Kasseneinstellungen."]
+};
+function showModule(v){document.querySelectorAll("#mainnav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));let k=$("kasseView"),m=$("moduleView"),man=document.querySelectorAll(".manage");if(v==="kasse"){k.style.display="block";m.classList.remove("show");man.forEach(x=>x.style.display="none");return}k.style.display="none";m.classList.add("show");man.forEach(x=>x.style.display=(v==="artikel"||v==="mitarbeiter")?"block":"none");let x=moduleInfo[v]||["Modul","",""];m.innerHTML='<div class="eyebrow">Bringness POS</div><h2>'+x[0]+'</h2><div class="modulegrid"><div class="modulecard"><b>'+x[1]+'</b><p class="muted">'+x[2]+'</p></div><div class="modulecard"><b>Status</b><p class="muted">Modul ist in die neue Kassen-Navigation aufgenommen und wird mit den serverseitigen Funktionen verbunden.</p></div></div>'}
+document.querySelectorAll("#mainnav button").forEach(b=>b.onclick=()=>showModule(b.dataset.view));showModule("kasse");
