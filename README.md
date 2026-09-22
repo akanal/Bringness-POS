@@ -24,3 +24,5 @@ Bringness POS ist die gemeinsame Plattform für Gastronomie, Imbiss, Bäckerei, 
 
 ## Status
 Produktionsaufbau begonnen. Fiskal/TSE und Payment werden erst nach Anbindung realer zertifizierter Provider als produktiv gekennzeichnet.
+
+<!-- deploy-sync: 2026-09-22 POS modules -->
