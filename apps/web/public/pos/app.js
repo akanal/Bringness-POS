@@ -133,3 +133,6 @@ async function renderOrderBoard(view,restaurantId){
  body.querySelector("#refreshOrders").onclick=()=>renderOrderBoard(view,restaurantId);
  body.querySelectorAll("[data-kitchen-next]").forEach(btn=>btn.onclick=async()=>{btn.disabled=true;try{await api("/orders/"+encodeURIComponent(btn.dataset.kitchenNext)+"/status",{method:"PATCH",body:JSON.stringify({status:btn.dataset.nextStatus})});await renderOrderBoard(view,restaurantId)}catch(e){body.querySelector("#kitchenMessage").textContent=e.message;btn.disabled=false}});
 }
+
+function updateHeaderClock(){const time=$("headerClockTime"),date=$("headerClockDate");if(!time||!date)return;const now=new Date();time.textContent=new Intl.DateTimeFormat("de-DE",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(now);date.textContent=new Intl.DateTimeFormat("de-DE",{weekday:"short",day:"2-digit",month:"2-digit",year:"numeric"}).format(now);time.dateTime=now.toISOString()}
+updateHeaderClock();setInterval(updateHeaderClock,250);document.addEventListener("visibilitychange",()=>{if(!document.hidden)updateHeaderClock()});
