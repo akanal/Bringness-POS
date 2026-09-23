@@ -171,3 +171,7 @@ async function refreshTableDashboard(){
  tableDashboardPolling=true;try{const j=await api("/tables?restaurantId="+encodeURIComponent(rid)),snapshot=JSON.stringify(j.tables||[]);if(snapshot!==tableDashboardSnapshot&&document.querySelector("#mainnav button[data-view].active")?.dataset.view==="tische"&&$("restaurant")?.value===rid){const state=tableDashboardState.getState();await renderTableDashboard(rid,state)}}catch(e){console.warn("Tischstatus konnte nicht aktualisiert werden",e)}finally{tableDashboardPolling=false}
 }
 setInterval(refreshTableDashboard,10000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshTableDashboard()});
+
+let newOrderBadgePolling=false;
+async function refreshNewOrderBadge(){const badge=$("newOrderBadge"),restaurant=$("restaurant");if(!badge||!restaurant||!token||newOrderBadgePolling)return;const rid=restaurant.value;if(!rid){badge.hidden=true;return}newOrderBadgePolling=true;try{const j=await api("/orders/new-count?restaurantId="+encodeURIComponent(rid));if(restaurant.value!==rid)return;const count=Number(j.count)||0;badge.textContent=count>99?"99+":String(count);badge.hidden=count===0;badge.title=count+" neue Tisch- und QR-Bestellungen"}catch(e){badge.hidden=true}finally{newOrderBadgePolling=false}}
+setInterval(()=>{if(!document.hidden)refreshNewOrderBadge()},10000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshNewOrderBadge()});$("restaurant")?.addEventListener("change",refreshNewOrderBadge);refreshNewOrderBadge();
