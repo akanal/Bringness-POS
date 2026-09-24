@@ -170,7 +170,7 @@ async function renderRestaurantBranding(restaurantId){
 }
 
 let guestPresencePolling=false;
-async function refreshGuestPresence(){const el=$("guestPresenceCount"),restaurant=$("restaurant");if(!el||!restaurant||!token||guestPresencePolling)return;const rid=restaurant.value;if(!rid){el.textContent="–";return}guestPresencePolling=true;try{const j=await api("/guest/presence/count?restaurantId="+encodeURIComponent(rid));if(restaurant.value===rid){el.textContent=String(j.count);$("guestPresence").title=j.count+" QR-Gäste aktuell aktiv (letzte 90 Sekunden)"}}catch(e){el.textContent="–";$("guestPresence").title="QR-Gäste derzeit nicht abrufbar"}finally{guestPresencePolling=false}}
+async function refreshGuestPresence(){const el=$("guestPresenceCount"),restaurant=$("restaurant");if(!el||!restaurant||!token||guestPresencePolling)return;const rid=restaurant.value;if(!rid){el.textContent="–";return}guestPresencePolling=true;try{const j=await api("/guest/presence/count?restaurantId="+encodeURIComponent(rid));if(restaurant.value===rid){el.textContent=String(j.count);$("guestPresence").title=j.count+" QR-Besuche in den letzten 24 Stunden"}}catch(e){el.textContent="–";$("guestPresence").title="QR-Besuche der letzten 24 Stunden derzeit nicht abrufbar"}finally{guestPresencePolling=false}}
 setInterval(()=>{if(!document.hidden)refreshGuestPresence()},15000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshGuestPresence()});$("restaurant")?.addEventListener("change",refreshGuestPresence);refreshGuestPresence();
 
 async function refreshTableDashboard(){
