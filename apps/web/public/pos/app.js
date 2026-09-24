@@ -174,10 +174,10 @@ setInterval(()=>{if(!document.hidden)refreshGuestPresence()},15000);document.add
 async function refreshTableDashboard(){
  if(tableDashboardPolling||document.hidden||!token||!tableDashboardState)return;
  const rid=tableDashboardState.restaurantId,active=document.querySelector("#mainnav button[data-view].active")?.dataset.view;
- if(active!=="tische"||$("restaurant")?.value!==rid||!$("tableSections")||$("tableFeedback")?.children.length||$("tableCreate")?.hidden===false||document.activeElement?.id==="tableSearch"||document.querySelector(".tablemanage[open]"))return;
+ if(active!=="tische"||$("restaurant")?.value!==rid||!$("tableSections")||$("tableCreate")?.hidden===false||document.activeElement?.id==="tableSearch"||document.querySelector(".tablemanage[open]"))return;
  tableDashboardPolling=true;try{const j=await api("/tables?restaurantId="+encodeURIComponent(rid)),snapshot=JSON.stringify(j.tables||[]);if(snapshot!==tableDashboardSnapshot&&document.querySelector("#mainnav button[data-view].active")?.dataset.view==="tische"&&$("restaurant")?.value===rid){const state=tableDashboardState.getState();await renderTableDashboard(rid,state)}}catch(e){console.warn("Tischstatus konnte nicht aktualisiert werden",e)}finally{tableDashboardPolling=false}
 }
-setInterval(refreshTableDashboard,10000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshTableDashboard()});
+setInterval(refreshTableDashboard,12000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshTableDashboard()});
 
 let newOrderBadgePolling=false;
 async function refreshNewOrderBadge(){const badge=$("newOrderBadge"),kitchenBadge=$("kitchenOrderBadge"),restaurant=$("restaurant");if(!badge||!restaurant||!token||newOrderBadgePolling)return;const rid=restaurant.value;if(!rid){badge.hidden=true;if(kitchenBadge)kitchenBadge.hidden=true;return}newOrderBadgePolling=true;try{const j=await api("/orders/new-count?restaurantId="+encodeURIComponent(rid));if(restaurant.value!==rid)return;const count=Number(j.count)||0;badge.textContent=count>99?"99+":String(count);badge.hidden=count===0;badge.title=count+" neue Tisch- und QR-Bestellungen";if(kitchenBadge){kitchenBadge.textContent=badge.textContent;kitchenBadge.hidden=count===0;kitchenBadge.title=count+" neue Bestellungen für die Küche"}}catch(e){badge.hidden=true;if(kitchenBadge)kitchenBadge.hidden=true}finally{newOrderBadgePolling=false}}
