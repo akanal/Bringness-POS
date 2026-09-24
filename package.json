@@ -13,6 +13,7 @@
   "dependencies": {
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "pdfkit": "^0.17.2"
   }
 }
