@@ -10,9 +10,12 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (!html.includes('/pos/keyboard.js')) {
         html = html.replace("</body>", '<script src="/pos/keyboard.js"></script></body>');
       }
+      if (!html.includes('/pos/tax-export.js')) {
+        html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
+      }
       return Readable.from([Buffer.from(html, "utf8")]);
     } catch (error) {
-      console.error("Could not inject POS keyboard:", error);
+      console.error("Could not inject POS helper modules:", error);
     }
   }
   return originalCreateReadStream(filePath, options);
