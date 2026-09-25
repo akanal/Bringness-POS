@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import pg from "pg";
 import QRCode from "qrcode";
 import webpush from "web-push";
+import PDFDocument from "pdfkit";
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -199,6 +200,19 @@ export async function handleRestaurantOwnerFeature(req,res){
       FROM employees e WHERE wp.employee_id=e.id AND e.user_id=$1 AND wp.ended_at IS NULL
       RETURNING wp.id,wp.started_at,wp.ended_at`,[u.id]);
     json(res,200,{ended:q.rows}); return true;
+  }
+
+  const tableDetails=p.match(/^\\/api\\/v1\\/tables\\/([0-9a-f-]{36})\\/details$/i);
+  if(tableDetails && req.method==="GET"){
+    const u=await user(req);if(!u)return json(res,401,{error:"Nicht angemeldet"});
+    const t=await pool.query("SELECT t.* FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.id=$1 AND r.company_id=$2",[tableDetails[1],u.company_id]);
+    if(!t.rowCount)return json(res,404,{error:"Tisch nicht gefunden"});
+    const q=await pool.query(`SELECT o.id,o.status,o.total_cents,o.created_at,o.closed_at,o.source,o.guest_email,
+      (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity,'note',oi.guest_note,'extras',oi.extras_snapshot)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
+      FROM orders o WHERE o.table_id=$1 AND o.restaurant_id=$2
+      AND (o.status NOT IN ('paid','cancelled') OR coalesce(o.closed_at,o.created_at)>now()-interval '24 hours')
+      ORDER BY o.created_at DESC LIMIT 80`,[tableDetails[1],t.rows[0].restaurant_id]);
+    json(res,200,{table:t.rows[0],orders:q.rows,historyWindowHours:24});return true;
   }
 
   if(p==="/api/v1/owner/presence" && req.method==="GET"){
