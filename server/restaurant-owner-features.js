@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import pg from "pg";
 import QRCode from "qrcode";
+import webpush from "web-push";
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -122,6 +123,62 @@ export async function handleRestaurantOwnerFeature(req,res){
       WHERE t.qr_token=$1 AND p.active=true AND pe.active=true
       ORDER BY pe.product_id,pe.sort_order,pe.name`,[code]);
     json(res,200,{extras:q.rows}); return true;
+  }
+
+  if(p==="/api/v1/guest/order-v2" && req.method==="POST"){
+    const b=await readBody(req),items=Array.isArray(b.items)?b.items:[],code=String(b.code||""),requestId=String(b.requestId||"");
+    if(!/^[a-f0-9]{48}$/.test(code)||!items.length||items.length>20||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))return json(res,400,{error:"Ungültiger Tisch oder Warenkorb"});
+    const ids=items.map(i=>String(i.productId||"")); if(new Set(ids).size!==ids.length)return json(res,400,{error:"Doppelte Artikel im Warenkorb"});
+    const c=await pool.connect();
+    try{
+      await c.query("BEGIN");
+      const tq=await c.query(`SELECT t.id,t.restaurant_id,r.company_id,t.name table_name
+        FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.qr_token=$1 FOR UPDATE OF t`,[code]);
+      if(!tq.rowCount){await c.query("ROLLBACK");return json(res,404,{error:"QR-Code ungültig"})}
+      const t=tq.rows[0];
+      const licensed=await c.query("SELECT 1 FROM company_features WHERE company_id=$1 AND feature_code='table_qr' AND status='active' AND ((ends_at IS NULL OR ends_at>now()) OR (grace_until IS NOT NULL AND grace_until>now()))",[t.company_id]);
+      if(!licensed.rowCount){await c.query("ROLLBACK");return json(res,402,{error:"Tisch-QR ist nicht aktiviert"})}
+      const existing=await c.query("SELECT id,total_cents FROM orders WHERE table_id=$1 AND guest_request_id=$2",[t.id,requestId]);
+      if(existing.rowCount){await c.query("COMMIT");return json(res,200,{orderId:existing.rows[0].id,totalCents:existing.rows[0].total_cents,alreadyReceived:true})}
+      const recent=await c.query("SELECT count(*)::int n FROM orders WHERE table_id=$1 AND source='qr' AND created_at>now()-interval '60 seconds'",[t.id]);
+      if(recent.rows[0].n>=3){await c.query("ROLLBACK");return json(res,429,{error:"Zu viele Bestellungen für diesen Tisch. Bitte eine Minute warten oder das Personal ansprechen."})}
+      const pq=await c.query("SELECT id,name,price_cents,tax_rate FROM products WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND active=true",[ids,t.restaurant_id]);
+      if(pq.rowCount!==ids.length){await c.query("ROLLBACK");return json(res,400,{error:"Artikel nicht verfügbar"})}
+      const pm=new Map(pq.rows.map(z=>[z.id,z])); let total=0; const cleaned=[];
+      for(const item of items){
+        const pr=pm.get(String(item.productId)),qty=Number(item.qty),note=String(item.note||"").trim();
+        if(!pr||!Number.isInteger(qty)||qty<1||qty>99){await c.query("ROLLBACK");return json(res,400,{error:"Ungültige Menge"})}
+        if(note.length>300){await c.query("ROLLBACK");return json(res,400,{error:"Extrawunsch ist zu lang"})}
+        const extraIds=Array.isArray(item.extraIds)?[...new Set(item.extraIds.map(String))]:[];
+        let extras=[];
+        if(extraIds.length){
+          const ex=await c.query("SELECT id,name,price_cents FROM product_extras WHERE product_id=$1 AND active=true AND id=ANY($2::uuid[]) ORDER BY sort_order,name",[pr.id,extraIds]);
+          if(ex.rowCount!==extraIds.length){await c.query("ROLLBACK");return json(res,400,{error:"Eine gewählte Beilage ist nicht mehr verfügbar"})}
+          extras=ex.rows;
+        }
+        const extraPerUnit=extras.reduce((sum,x)=>sum+Number(x.price_cents),0);
+        total+=(Number(pr.price_cents)+extraPerUnit)*qty;
+        cleaned.push({pr,qty,note,extras,unitPrice:Number(pr.price_cents)+extraPerUnit});
+      }
+      if(total<=0||total>100000000){await c.query("ROLLBACK");return json(res,400,{error:"Ungültiger Betrag"})}
+      const email=String(b.email||"").trim().toLowerCase();
+      if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){await c.query("ROLLBACK");return json(res,400,{error:"E-Mail-Adresse ist ungültig"})}
+      const o=(await c.query("INSERT INTO orders(restaurant_id,table_id,source,status,total_cents,guest_request_id,guest_email) VALUES($1,$2,'qr','open',$3,$4,$5) RETURNING id",[t.restaurant_id,t.id,total,requestId,email||null])).rows[0];
+      for(const item of cleaned){
+        const snapshot=item.extras.map(x=>({id:x.id,name:x.name,price_cents:Number(x.price_cents)}));
+        await c.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,guest_note,extras_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[o.id,item.pr.id,item.pr.name,item.unitPrice,item.pr.tax_rate,item.qty,item.note||null,JSON.stringify(snapshot)]);
+      }
+      await c.query("UPDATE dining_tables SET status='open' WHERE id=$1",[t.id]);
+      const pushes=(await c.query("SELECT wps.endpoint,wps.subscription FROM dining_tables dt JOIN employees e ON e.id=dt.waiter_employee_id AND e.active=true JOIN waiter_push_subscriptions wps ON wps.user_id=e.user_id WHERE dt.id=$1",[t.id])).rows;
+      await c.query("COMMIT");
+      if(pushes.length&&process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY){
+        webpush.setVapidDetails(process.env.VAPID_SUBJECT||"mailto:info@bringness.de",process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);
+        const payload=JSON.stringify({title:"Neue Bestellung · "+t.table_name,body:"Eine neue QR-Bestellung ist eingegangen.",url:"/service/"});
+        Promise.allSettled(pushes.map(async row=>{try{await webpush.sendNotification(row.subscription,payload,{TTL:300})}catch(e){if(e.statusCode===404||e.statusCode===410)await pool.query("DELETE FROM waiter_push_subscriptions WHERE endpoint=$1",[row.endpoint])}}));
+      }
+      json(res,201,{orderId:o.id,totalCents:total,emailReceiptRequested:!!email,emailDeliveryConfigured:false});
+      return true;
+    }catch(error){await c.query("ROLLBACK");if(error.code==="22P02")return json(res,400,{error:"Ungültiger Artikel oder Beilage"});throw error}finally{c.release()}
   }
 
   if(p==="/api/v1/waiter/presence/start" && req.method==="POST"){
