@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
+import http from "node:http";
 import pg from "pg";
+import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./restaurant-owner-features.js";
 
 // Protect the current 399 EUR download-license decision from an obsolete
 // initialization statement that would otherwise reset it to 299 EUR.
@@ -12,6 +14,24 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
   return originalPoolQuery.call(this, text, ...args);
 };
 
+// Add modular API routes without destabilising the large legacy server file.
+const originalCreateServer = http.createServer.bind(http);
+http.createServer = function patchedCreateServer(listener) {
+  return originalCreateServer(async (req,res) => {
+    try {
+      if (await handleRestaurantOwnerFeature(req,res)) return;
+    } catch (error) {
+      console.error("Restaurant-owner feature error:", error);
+      if (!res.headersSent) {
+        res.writeHead(500, {"content-type":"application/json","cache-control":"no-store"});
+        return res.end(JSON.stringify({error:"Serverfehler"}));
+      }
+      return res.end();
+    }
+    return listener(req,res);
+  });
+};
+
 const originalCreateReadStream = fs.createReadStream.bind(fs);
 fs.createReadStream = function patchedCreateReadStream(filePath, options) {
   const normalized = String(filePath).replaceAll("\\", "/");
@@ -21,15 +41,45 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (!html.includes('/pos/keyboard.js')) html = html.replace("</body>", '<script src="/pos/keyboard.js"></script></body>');
       if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
       if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
+      if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
       return Readable.from([Buffer.from(html, "utf8")]);
     } catch (error) {
       console.error("Could not inject POS helper modules:", error);
+    }
+  }
+  if (normalized.endsWith("/apps/web/public/tisch/index.html")) {
+    try {
+      let html = fs.readFileSync(filePath, "utf8");
+      if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
+      return Readable.from([Buffer.from(html, "utf8")]);
+    } catch (error) {
+      console.error("Could not inject guest helper module:", error);
+    }
+  }
+  if (normalized.endsWith("/apps/web/public/service/index.html")) {
+    try {
+      let html = fs.readFileSync(filePath, "utf8");
+      if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
+      return Readable.from([Buffer.from(html, "utf8")]);
+    } catch (error) {
+      console.error("Could not inject waiter presence module:", error);
     }
   }
   return originalCreateReadStream(filePath, options);
 };
 
 await import("./index.js");
+
+async function migrateWithRetry(){
+  for(let attempt=1;attempt<=12;attempt++){
+    try{await migrateRestaurantOwnerFeatures();console.log("Restaurant-owner feature schema ready.");return}
+    catch(error){
+      if(attempt===12){console.error("Restaurant-owner feature migration failed:",error);return}
+      await new Promise(r=>setTimeout(r,1000));
+    }
+  }
+}
+migrateWithRetry();
 
 const availabilityPool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
