@@ -40,7 +40,10 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       let html = fs.readFileSync(filePath, "utf8");
       if (!html.includes('/brand-logo.js')) html = html.replace("</body>", '<script src="/brand-logo.js"></script></body>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
-        if (!html.includes('/pos/keyboard.js')) html = html.replace("</body>", '<script src="/pos/keyboard.js"></script></body>');
+        // The former full-screen alphabet keyboard is intentionally no longer
+        // injected into the cash register. POS input stays touch-first and
+        // compact; a dedicated numeric order keypad can live inside the order
+        // panel without covering the register workspace.
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
