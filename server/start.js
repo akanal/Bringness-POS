@@ -35,43 +35,28 @@ http.createServer = function patchedCreateServer(listener) {
 const originalCreateReadStream = fs.createReadStream.bind(fs);
 fs.createReadStream = function patchedCreateReadStream(filePath, options) {
   const normalized = String(filePath).replaceAll("\\", "/");
-  if (normalized.endsWith("/apps/web/public/pos/index.html")) {
+  if (normalized.includes("/apps/web/public/") && normalized.endsWith(".html")) {
     try {
       let html = fs.readFileSync(filePath, "utf8");
-      if (!html.includes('/pos/keyboard.js')) html = html.replace("</body>", '<script src="/pos/keyboard.js"></script></body>');
-      if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
-      if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
-      if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
+      if (!html.includes('/brand-logo.js')) html = html.replace("</body>", '<script src="/brand-logo.js"></script></body>');
+      if (normalized.endsWith("/apps/web/public/pos/index.html")) {
+        if (!html.includes('/pos/keyboard.js')) html = html.replace("</body>", '<script src="/pos/keyboard.js"></script></body>');
+        if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
+        if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
+        if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
+      }
+      if (normalized.endsWith("/apps/web/public/tisch/index.html")) {
+        if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
+      }
+      if (normalized.endsWith("/apps/web/public/service/index.html")) {
+        if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
+      }
+      if (normalized.endsWith("/apps/web/public/admin/index.html")) {
+        if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js"></script></body>');
+      }
       return Readable.from([Buffer.from(html, "utf8")]);
     } catch (error) {
-      console.error("Could not inject POS helper modules:", error);
-    }
-  }
-  if (normalized.endsWith("/apps/web/public/tisch/index.html")) {
-    try {
-      let html = fs.readFileSync(filePath, "utf8");
-      if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
-      return Readable.from([Buffer.from(html, "utf8")]);
-    } catch (error) {
-      console.error("Could not inject guest helper module:", error);
-    }
-  }
-  if (normalized.endsWith("/apps/web/public/service/index.html")) {
-    try {
-      let html = fs.readFileSync(filePath, "utf8");
-      if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
-      return Readable.from([Buffer.from(html, "utf8")]);
-    } catch (error) {
-      console.error("Could not inject waiter presence module:", error);
-    }
-  }
-  if (normalized.endsWith("/apps/web/public/admin/index.html")) {
-    try {
-      let html = fs.readFileSync(filePath, "utf8");
-      if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js"></script></body>');
-      return Readable.from([Buffer.from(html, "utf8")]);
-    } catch (error) {
-      console.error("Could not inject admin control center:", error);
+      console.error("Could not inject web helper modules:", error);
     }
   }
   return originalCreateReadStream(filePath, options);
