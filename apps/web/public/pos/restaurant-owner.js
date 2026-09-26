@@ -50,27 +50,51 @@
     }
   }
 
+  const mins=d=>d.getHours()*60+d.getMinutes();
+  const duration=(a,b)=>Math.round((b-a)/60000);
+  function sameWeeklyPattern(x,employeeId,start,end){
+    const xs=new Date(x.starts_at),xe=new Date(x.ends_at);
+    return String(x.employee_id)===String(employeeId)&&xs.getDay()===start.getDay()&&Math.abs(mins(xs)-mins(start))<=5&&Math.abs(duration(xs,xe)-duration(start,end))<=5;
+  }
+  async function extendRecognizedPattern(existing,payload,start,end){
+    const matches=existing.filter(x=>sameWeeklyPattern(x,payload.employeeId,start,end));
+    if(matches.length<2)return 0;
+    let created=0;
+    for(let week=1;week<=4;week++){
+      const s=new Date(start.getTime()+week*7*86400000),e=new Date(end.getTime()+week*7*86400000);
+      const duplicate=existing.some(x=>String(x.employee_id)===String(payload.employeeId)&&Math.abs(new Date(x.starts_at)-s)<5*60000);
+      if(duplicate)continue;
+      await api("/owner/schedules",{method:"POST",body:JSON.stringify({...payload,startsAt:s.toISOString(),endsAt:e.toISOString(),recurrence:"auto-weekly"})});
+      created++;
+    }
+    return created;
+  }
+
   async function renderShift(){
     const area=body();if(!area)return;const restaurantId=rid();
     const [waiters,presence,schedules]=await Promise.all([api("/waiters?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/presence?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/schedules?restaurantId="+encodeURIComponent(restaurantId))]);
-    const people=waiters.waiters||[];
-    area.innerHTML='<div class="modulegrid"><div class="modulecard"><b>Anwesenheit Kellner</b><p class="muted">Login und Logout werden als Anwesenheitszeit protokolliert.</p><div id="presenceList"></div></div><div class="modulecard"><b>Dienstplan</b><p class="muted">Schichten festlegen; Kellner sehen ihre kommenden Dienste beim Login.</p><form id="scheduleForm" style="display:grid;gap:8px"><select id="scheduleEmployee" required><option value="">Kellner wählen</option>'+people.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+'</option>').join("")+'</select><label>Beginn<input id="scheduleStart" type="datetime-local" required></label><label>Ende<input id="scheduleEnd" type="datetime-local" required></label><input id="scheduleNote" maxlength="300" placeholder="Hinweis, z. B. Terrasse"><button type="submit">Dienst eintragen</button></form></div></div><div class="modulecard" style="margin-top:12px"><b>Kommende Dienste</b><div id="scheduleList"></div></div>';
+    const people=waiters.waiters||[],existing=schedules.schedules||[];
+    area.innerHTML='<div class="modulegrid"><div class="modulecard"><b>Anwesenheit Kellner</b><p class="muted">Login und Logout werden als Anwesenheitszeit protokolliert.</p><div id="presenceList"></div></div><div class="modulecard"><b>Dienstplan</b><p class="muted">Schichten festlegen; Kellner sehen ihre kommenden Dienste beim Login. Wiederholt sich derselbe Wochentag mit derselben Uhrzeit mindestens dreimal, führt Bringness POS diesen Rhythmus automatisch für vier weitere Wochen fort.</p><form id="scheduleForm" style="display:grid;gap:8px"><select id="scheduleEmployee" required><option value="">Kellner wählen</option>'+people.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+'</option>').join("")+'</select><label>Beginn<input id="scheduleStart" type="datetime-local" required></label><label>Ende<input id="scheduleEnd" type="datetime-local" required></label><input id="scheduleNote" maxlength="300" placeholder="Hinweis, z. B. Terrasse"><button type="submit">Dienst eintragen</button></form></div></div><div class="modulecard" style="margin-top:12px"><b>Kommende Dienste</b><div id="scheduleList"></div></div>';
     document.getElementById("presenceList").innerHTML=(presence.presence||[]).map(x=>'<p><b>'+esc(x.display_name)+'</b> · '+new Date(x.started_at).toLocaleString("de-DE")+' – '+(x.ended_at?new Date(x.ended_at).toLocaleString("de-DE"):'anwesend')+'</p>').join("")||'<p class="muted">Noch keine Anwesenheitsdaten.</p>';
-    document.getElementById("scheduleList").innerHTML=(schedules.schedules||[]).map(x=>'<p><b>'+esc(x.display_name)+'</b> · '+new Date(x.starts_at).toLocaleString("de-DE")+' – '+new Date(x.ends_at).toLocaleString("de-DE")+(x.note?' · '+esc(x.note):'')+'</p>').join("")||'<p class="muted">Noch keine Dienste geplant.</p>';
-    document.getElementById("scheduleForm").onsubmit=async e=>{e.preventDefault();try{await api("/owner/schedules",{method:"POST",body:JSON.stringify({restaurantId,employeeId:document.getElementById("scheduleEmployee").value,startsAt:new Date(document.getElementById("scheduleStart").value).toISOString(),endsAt:new Date(document.getElementById("scheduleEnd").value).toISOString(),note:document.getElementById("scheduleNote").value})});await renderShift()}catch(err){alert(err.message)}};
-  }
-
-  function explainTableHistory(){
-    const area=body();if(!area||area.querySelector("[data-history-note]"))return;
-    const note=document.createElement("div");note.className="modulecard";note.dataset.historyNote="1";note.innerHTML='<b>Zahlungsverlauf</b><p class="muted">In der Tischansicht werden nur Vorgänge der letzten 24 Stunden angezeigt. Steuerlich relevante Beleg- und Zahlungsdaten werden dabei nicht aus der Datenbank gelöscht.</p>';
-    area.prepend(note);
+    document.getElementById("scheduleList").innerHTML=existing.map(x=>'<p><b>'+esc(x.display_name)+'</b> · '+new Date(x.starts_at).toLocaleString("de-DE")+' – '+new Date(x.ends_at).toLocaleString("de-DE")+(x.note?' · '+esc(x.note):'')+(x.recurrence==='auto-weekly'?' · <span class="muted">automatisch fortgeführt</span>':'')+'</p>').join("")||'<p class="muted">Noch keine Dienste geplant.</p>';
+    document.getElementById("scheduleForm").onsubmit=async e=>{
+      e.preventDefault();
+      try{
+        const employeeId=document.getElementById("scheduleEmployee").value,start=new Date(document.getElementById("scheduleStart").value),end=new Date(document.getElementById("scheduleEnd").value);
+        const payload={restaurantId,employeeId,startsAt:start.toISOString(),endsAt:end.toISOString(),note:document.getElementById("scheduleNote").value};
+        await api("/owner/schedules",{method:"POST",body:JSON.stringify(payload)});
+        const autoCreated=await extendRecognizedPattern(existing,payload,start,end);
+        if(autoCreated)alert("Dienstplan-Muster erkannt: "+autoCreated+" weitere Dienste wurden automatisch angelegt.");
+        await renderShift();
+      }catch(err){alert(err.message)}
+    };
   }
 
   function hook(){
     addImpressumLink();
     const original=window.showModule;
     if(typeof original!=="function"||original.__roWrapped)return setTimeout(hook,250);
-    const wrapped=async function(v){const out=await original(v);try{if(v==="belege")enhanceReceipts();if(v==="varianten")await renderVariants();if(v==="schicht")await renderShift();if(v==="tische")explainTableHistory()}catch(e){console.error(e);if(body())body().insertAdjacentHTML("beforeend",'<div class="modulecard">Zusatzfunktion: '+esc(e.message)+'</div>')}return out};
+    const wrapped=async function(v){const out=await original(v);try{if(v==="belege")enhanceReceipts();if(v==="varianten")await renderVariants();if(v==="schicht")await renderShift()}catch(e){console.error(e);if(body())body().insertAdjacentHTML("beforeend",'<div class="modulecard">Zusatzfunktion: '+esc(e.message)+'</div>')}return out};
     wrapped.__roWrapped=true;window.showModule=wrapped;
   }
   hook();
