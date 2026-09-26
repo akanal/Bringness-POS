@@ -42,8 +42,8 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         // The former full-screen alphabet keyboard is intentionally no longer
         // injected into the cash register. POS input stays touch-first and
-        // compact; a dedicated numeric order keypad can live inside the order
-        // panel without covering the register workspace.
+        // compact; the numeric keypad now lives directly inside the order panel.
+        if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
