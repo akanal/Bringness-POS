@@ -202,7 +202,7 @@ export async function handleRestaurantOwnerFeature(req,res){
     json(res,200,{ended:q.rows}); return true;
   }
 
-  const tableDetails=p.match(/^\\/api\\/v1\\/tables\\/([0-9a-f-]{36})\\/details$/i);
+  const tableDetails=p.match(/^\/api\/v1\/tables\/([0-9a-f-]{36})\/details$/i);
   if(tableDetails && req.method==="GET"){
     const u=await user(req);if(!u)return json(res,401,{error:"Nicht angemeldet"});
     const t=await pool.query("SELECT t.* FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.id=$1 AND r.company_id=$2",[tableDetails[1],u.company_id]);
