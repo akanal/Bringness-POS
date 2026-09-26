@@ -65,6 +65,15 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       console.error("Could not inject waiter presence module:", error);
     }
   }
+  if (normalized.endsWith("/apps/web/public/admin/index.html")) {
+    try {
+      let html = fs.readFileSync(filePath, "utf8");
+      if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js"></script></body>');
+      return Readable.from([Buffer.from(html, "utf8")]);
+    } catch (error) {
+      console.error("Could not inject admin control center:", error);
+    }
+  }
   return originalCreateReadStream(filePath, options);
 };
 
