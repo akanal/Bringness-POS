@@ -11,7 +11,16 @@ function sendJson(res,status,payload){
   res.end(JSON.stringify(payload));
 }
 function bearer(req){return String(req.headers.authorization||"").replace(/^Bearer\s+/i,"")}
-async function body(req){return new Promise((resolve,reject)=>{let data="";req.on("data",c=>data+=c);req.on("end",()=>{try{resolve(data?JSON.parse(data):{})}catch(reject)})})}
+async function body(req){
+  return new Promise((resolve,reject)=>{
+    let data="";
+    req.on("data",c=>data+=c);
+    req.on("end",()=>{
+      try{resolve(data?JSON.parse(data):{})}
+      catch(err){reject(err)}
+    });
+  });
+}
 async function currentUser(req){
   const token=bearer(req); if(!token)return null;
   const tokenHash=crypto.createHash("sha256").update(token).digest("hex");
