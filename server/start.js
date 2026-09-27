@@ -7,6 +7,7 @@ import { handlePaymentCheckout } from "./payment-checkout.js";
 import { handlePaymentReceipt } from "./payment-receipt.js";
 import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
 import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
+import { handleBillingStatus } from "./billing-status.js";
 import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 
 // Protect the current 399 EUR download-license decision from obsolete legacy SQL.
@@ -25,6 +26,7 @@ http.createServer = function patchedCreateServer(listener) {
     try {
       if (await handleDeviceLicense(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
+      if (await handleBillingStatus(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
