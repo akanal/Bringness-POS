@@ -84,7 +84,16 @@ async function migrateWithRetry(){
       await migrateTseIntegration();
       await migrateBillingAccess();
       await migrateDeviceLicense();
-      console.log("Restaurant-owner, TSE, billing access and device-license schema ready.");
+      const pricingPool = new pg.Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+      });
+      try {
+        await pricingPool.query("UPDATE billing_plans SET amount_cents=39900,currency='EUR' WHERE code='download_license'");
+      } finally {
+        await pricingPool.end();
+      }
+      console.log("Restaurant-owner, TSE, billing access, device-license schema and download pricing ready.");
       return;
     }
     catch(error){
