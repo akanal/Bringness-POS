@@ -4,9 +4,9 @@ const offerings=[
   {code:'pos_base_monthly',title:'Online-Basis',intro:'Die Kasse für den täglichen Verkauf im Browser.',items:['Artikel, Kategorien und Zahlungen','Konto und gemeinsame Datenbank','Monatlich kündbares Abo'],featured:true},
   {code:'restaurant_monthly',title:'Restaurant-Funktionen',intro:'Ergänzung zur Online-Basis für Betriebe mit Tischen.',items:['Tische und Service','Bestellungen und Küche','Online-Basis zusätzlich erforderlich']},
   {code:'table_qr_monthly',title:'Tisch-QR',intro:'QR-Bestellungen direkt am Tisch als Ergänzung.',items:['QR-Code je Tisch','Digitale Speisekarte und Bestellung','Online-Basis und Restaurant-Modul erforderlich']},
-  {code:'download_license',title:'Windows-Download',intro:'Einmalige Lizenz für die Windows-Kasse.',items:['Windows-Installation','Aktivierung mit gekauftem Konto','Vorabversion: Internetverbindung erforderlich']}
+  {code:'download_license',title:'Windows-Download',intro:'Einmalige Lizenz für die reine Windows-Kasse.',items:['Windows-Installation','Kasse, Artikel, Mitarbeiter, Belege, Schicht und TSE','Download erst nach bestätigter Zahlung']}
 ];
-let plans=new Map(),selected=null,accountMode='register',token=localStorage.getItem('bringness-pos-token');
+let plans=new Map(),selected=null,accountMode='register',token=localStorage.getItem('bringness-pos-token'),downloadAccess=null;
 async function request(path,options={}){const response=await fetch('/api/v1'+path,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...options.headers}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Die Anfrage ist fehlgeschlagen.');return data}
 function setMode(mode){accountMode=mode;$('registerMode').classList.toggle('active',mode==='register');$('loginMode').classList.toggle('active',mode==='login');$('nameLabel').hidden=mode!=='register';$('accountName').required=mode==='register';$('accountPassword').autocomplete=mode==='register'?'new-password':'current-password'}
 function card(offer){const plan=plans.get(offer.code);if(!plan)return '';const net=Math.round(Number(plan.amount)*100),vat=Math.round(net*0.19),period=plan.billingType==='monthly'?'/ Monat':'einmalig';return '<article class="plan'+(offer.featured?' featured':'')+'"><div class="eyebrow">'+(plan.billingType==='monthly'?'Monatlicher Tarif':'Einmaliger Kauf')+'</div><h3>'+offer.title+'</h3><div class="price">'+money(net)+' <small>netto '+period+'</small></div><div class="tax">zzgl. 19 % MwSt. ('+money(vat)+') · Gesamt '+money(net+vat)+'</div><p>'+offer.intro+'</p><ul>'+offer.items.map(item=>'<li>'+item+'</li>').join('')+'</ul><button class="btn" type="button" data-plan="'+offer.code+'">'+(offer.code==='download_license'?'Download-Lizenz kaufen':'Jetzt kaufen')+'</button></article>'}
@@ -18,7 +18,44 @@ $('purchaseForm').onsubmit=async event=>{event.preventDefault();if(!selected||!p
 if(new URLSearchParams(location.search).get('payment')==='return'){$('returnMessage').hidden=false;$('returnMessage').innerHTML='Du bist von der Zahlung zurückgekehrt. Die Lizenz wird nach bestätigter Zahlung aktiviert. Diese Seite prüft den Status automatisch. <a href="/pos/">Zur Online-Kasse</a>.';$('purchaseForm').hidden=true;$('kaufen').hidden=false}
 loadPlans();
 
-async function checkDownloadLicense(){if(!token)return;try{const result=await request('/license/status');if(result.license){$('licensedDownload').hidden=false;if(new URLSearchParams(location.search).get('payment')==='return')$('returnMessage').textContent='Zahlung bestätigt: Deine Download-Lizenz ist aktiv.';return true}}catch(error){}return false}
-checkDownloadLicense();if(new URLSearchParams(location.search).get('payment')==='return'){let checks=0;const timer=setInterval(async()=>{if(++checks>24||await checkDownloadLicense())clearInterval(timer)},5000)}
+async function checkDownloadLicense(){
+  if(!token)return false;
+  try{
+    const result=await request('/downloads/windows/access');
+    if(result.allowed&&result.licenseActive&&result.release){
+      downloadAccess=result;
+      $('licensedDownload').hidden=false;
+      $('downloadWindows').textContent='Windows-Kasse '+(result.release.version||'')+' herunterladen';
+      if(new URLSearchParams(location.search).get('payment')==='return')$('returnMessage').textContent='Zahlung bestätigt: Deine Download-Lizenz ist aktiv und der Windows-Download ist freigeschaltet.';
+      return true;
+    }
+  }catch(error){
+    if(new URLSearchParams(location.search).get('payment')==='return')$('returnMessage').textContent=error.message;
+  }
+  return false;
+}
+checkDownloadLicense();
+if(new URLSearchParams(location.search).get('payment')==='return'){
+  let checks=0;
+  const timer=setInterval(async()=>{if(++checks>24||await checkDownloadLicense())clearInterval(timer)},5000)
+}
 
-$('downloadWindows').onclick=async event=>{event.preventDefault();const button=$('downloadWindows');button.textContent='Download wird vorbereitet …';try{const response=await fetch('/api/v1/download/windows',{headers:{Authorization:'Bearer '+token}});if(!response.ok){const problem=await response.json().catch(()=>({}));throw Error(problem.error||'Download fehlgeschlagen')}const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='Bringness-POS-Setup-0.1.0.exe';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}catch(error){alert(error.message)}finally{button.textContent='Windows-Kasse herunterladen'}};
+$('downloadWindows').onclick=async event=>{
+  event.preventDefault();
+  const button=$('downloadWindows');
+  button.textContent='Download wird vorbereitet …';
+  try{
+    if(!token)throw Error('Bitte zuerst anmelden.');
+    if(!downloadAccess)await checkDownloadLicense();
+    if(!downloadAccess?.release?.protectedDownloadPath)throw Error('Die Download-Lizenz ist noch nicht freigeschaltet.');
+    const response=await fetch(downloadAccess.release.protectedDownloadPath,{headers:{Authorization:'Bearer '+token}});
+    if(!response.ok){const problem=await response.json().catch(()=>({}));throw Error(problem.error||'Download fehlgeschlagen')}
+    const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;
+    link.download='Bringness-POS-Setup-'+(downloadAccess.release.version||'current')+'.exe';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(error){alert(error.message)}finally{button.textContent=downloadAccess?.release?.version?'Windows-Kasse '+downloadAccess.release.version+' herunterladen':'Windows-Kasse herunterladen'}
+};
