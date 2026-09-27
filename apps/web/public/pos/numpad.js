@@ -32,7 +32,8 @@
 
   function updateDisplay(){
     const out=document.querySelector('.bn-keypad-value');
-    if(out) out.textContent=buffer||'0';
+    const value=buffer||'0';
+    if(out && out.textContent!==value) out.textContent=value;
   }
 
   function redraw(){
