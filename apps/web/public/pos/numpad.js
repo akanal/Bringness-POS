@@ -4,11 +4,12 @@
     .bn-cart-tools{border-top:1px solid #dce5ee;margin-top:10px;padding-top:10px}
     .bn-cart-actions{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
     .bn-cart-actions button,.bn-keypad-toggle{min-height:38px;border:1px solid #cfd9e3;border-radius:10px;background:#fff;font-weight:800;padding:7px 10px;cursor:pointer}
-    .bn-keypad{display:none;grid-template-columns:repeat(3,minmax(52px,1fr));gap:7px;margin-top:8px;max-width:260px}
-    .bn-keypad.open{display:grid}
+    .bn-keypad-panel{display:none;margin-top:8px}
+    .bn-keypad-panel.open{display:block}
+    .bn-keypad{display:grid;grid-template-columns:repeat(3,minmax(52px,1fr));gap:7px;margin-top:8px;max-width:260px}
     .bn-keypad button{min-height:46px;border:1px solid #cfd9e3;border-radius:10px;background:#f8fafc;font-size:18px;font-weight:900;cursor:pointer}
     .bn-keypad button.bn-ok{background:#102235;color:#fff}
-    .bn-keypad-display{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+    .bn-keypad-display{display:flex;align-items:center;justify-content:space-between;gap:8px;max-width:260px}
     .bn-keypad-value{font-variant-numeric:tabular-nums;font-size:20px;font-weight:900;min-width:90px;text-align:right}
     .bn-cart-selected{outline:2px solid #102235;outline-offset:2px;border-radius:8px}
     .bn-cart-hint{font-size:12px;color:#607080;margin-top:6px}
@@ -53,6 +54,15 @@
     redraw();
   }
 
+  function setKeypadOpen(tools,open){
+    const panel=tools.querySelector('.bn-keypad-panel');
+    const toggle=tools.querySelector('[data-keypad-toggle]');
+    if(!panel||!toggle) return;
+    panel.classList.toggle('open',open);
+    toggle.setAttribute('aria-expanded',String(open));
+    toggle.textContent=open?'Zahlenfeld schließen':'Zahlenfeld öffnen';
+  }
+
   function decorate(){
     const cartEl=document.getElementById('cart');
     if(!cartEl) return;
@@ -74,20 +84,25 @@
           <button type="button" data-cart-minus>− Menge</button>
           <button type="button" data-cart-plus>+ Menge</button>
           <button type="button" data-cart-delete>Artikel löschen</button>
-          <button type="button" class="bn-keypad-toggle" data-keypad-toggle>Zahlenfeld</button>
+          <button type="button" class="bn-keypad-toggle" data-keypad-toggle aria-expanded="false">Zahlenfeld öffnen</button>
         </div>
-        <div class="bn-keypad-display"><span>Menge / Zahl</span><span class="bn-keypad-value">0</span></div>
-        <div class="bn-keypad" aria-label="Numerisches Eingabefeld">
-          <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
-          <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
-          <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button>
-          <button type="button" data-key="clear">C</button><button type="button" data-key="0">0</button><button type="button" data-key="back">⌫</button>
-          <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
+        <div class="bn-keypad-panel" aria-label="Numerische Eingabe">
+          <div class="bn-keypad-display"><span>Menge / Zahl</span><span class="bn-keypad-value">0</span></div>
+          <div class="bn-keypad" aria-label="Numerisches Eingabefeld">
+            <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
+            <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
+            <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button>
+            <button type="button" data-key="clear">C</button><button type="button" data-key="0">0</button><button type="button" data-key="back">⌫</button>
+            <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
+          </div>
         </div>
         <div class="bn-cart-hint">Artikel antippen, dann Menge über +/− oder das Zahlenfeld ändern.</div>`;
       basket.appendChild(tools);
 
-      tools.querySelector('[data-keypad-toggle]').onclick=()=>tools.querySelector('.bn-keypad').classList.toggle('open');
+      tools.querySelector('[data-keypad-toggle]').onclick=()=>{
+        const open=!tools.querySelector('.bn-keypad-panel').classList.contains('open');
+        setKeypadOpen(tools,open);
+      };
       tools.querySelector('[data-cart-minus]').onclick=()=>{
         if(typeof cart==='undefined'||selected<0||!cart[selected]) return;
         cart[selected].qty--;
@@ -117,6 +132,7 @@
         else buffer=(buffer==='0'?'':buffer)+key;
         updateDisplay();
       });
+      setKeypadOpen(tools,false);
     }
     updateDisplay();
   }
