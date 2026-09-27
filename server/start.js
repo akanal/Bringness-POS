@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import http from "node:http";
 import pg from "pg";
 import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./restaurant-owner-features.js";
+import { handlePaymentCheckout } from "./payment-checkout.js";
 
 // Protect the current 399 EUR download-license decision from an obsolete
 // initialization statement that would otherwise reset it to 299 EUR.
@@ -19,9 +20,10 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await handlePaymentCheckout(req,res)) return;
       if (await handleRestaurantOwnerFeature(req,res)) return;
     } catch (error) {
-      console.error("Restaurant-owner feature error:", error);
+      console.error("Modular feature error:", error);
       if (!res.headersSent) {
         res.writeHead(500, {"content-type":"application/json","cache-control":"no-store"});
         return res.end(JSON.stringify({error:"Serverfehler"}));
@@ -44,6 +46,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         // injected into the cash register. POS input stays touch-first and
         // compact; the numeric keypad now lives directly inside the order panel.
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
+        if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
