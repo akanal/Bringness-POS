@@ -1,5 +1,18 @@
 (()=>{
   const src='/assets/bringness-logo.png';
+  const nativeFetch=window.fetch.bind(window);
+
+  window.fetch=(input,init)=>{
+    const url=typeof input==='string'?input:(input&&input.url)||'';
+    const token=localStorage.getItem('bringness-pos-token');
+    if(!token&&url.includes('/api/v1/billing/status')){
+      return Promise.resolve(new Response(JSON.stringify({features:[]}),{
+        status:200,
+        headers:{'content-type':'application/json'}
+      }));
+    }
+    return nativeFetch(input,init);
+  };
 
   function forceVisibleAuthWhenLoggedOut(){
     const token=localStorage.getItem('bringness-pos-token');
@@ -15,6 +28,10 @@
         workspace.style.display='none';
       }
       document.body?.classList.remove('pos-loading');
+      document.documentElement.dataset.posAuthRequired='1';
+    }else{
+      delete document.documentElement.dataset.posAuthRequired;
+      if(workspace)workspace.style.removeProperty('display');
     }
   }
 
