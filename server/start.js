@@ -6,9 +6,9 @@ import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./
 import { handlePaymentCheckout } from "./payment-checkout.js";
 import { handlePaymentReceipt } from "./payment-receipt.js";
 import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
+import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
 
-// Protect the current 399 EUR download-license decision from an obsolete
-// initialization statement that would otherwise reset it to 299 EUR.
+// Protect the current 399 EUR download-license decision from obsolete legacy SQL.
 const originalPoolQuery = pg.Pool.prototype.query;
 pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
   if (typeof text === "string" && text.includes("UPDATE billing_plans SET amount_cents=29900,currency='EUR' WHERE code='download_license' AND amount_cents=39900;")) {
@@ -22,6 +22,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await handleBillingAccess(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
@@ -46,9 +47,6 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       let html = fs.readFileSync(filePath, "utf8");
       if (!html.includes('/brand-logo.js')) html = html.replace("</body>", '<script src="/brand-logo.js"></script></body>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
-        // The former full-screen alphabet keyboard is intentionally no longer
-        // injected into the cash register. POS input stays touch-first and
-        // compact; the numeric keypad now lives directly inside the order panel.
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
@@ -80,7 +78,8 @@ async function migrateWithRetry(){
     try{
       await migrateRestaurantOwnerFeatures();
       await migrateTseIntegration();
-      console.log("Restaurant-owner and TSE preparation schema ready.");
+      await migrateBillingAccess();
+      console.log("Restaurant-owner, TSE and billing access schema ready.");
       return;
     }
     catch(error){
