@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { Readable } from "node:stream";
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -94,53 +95,76 @@ async function latestWindowsRelease(){
   return q.rows[0]?{...q.rows[0],source:"database"}:null;
 }
 
-export async function handleBillingAccess(req,res){
-  const url=new URL(req.url,"http://localhost");
-  if(!["/api/v1/downloads/windows/access","/api/v1/downloads/windows/latest"].includes(url.pathname)) return false;
-  if(req.method!=="GET"){ sendJson(res,405,{error:"Methode nicht erlaubt"}); return true; }
-
+async function licensedContext(req,res){
   const user=await currentUser(req);
-  if(!user){ sendJson(res,401,{error:"Nicht angemeldet"}); return true; }
-
+  if(!user){ sendJson(res,401,{error:"Nicht angemeldet"}); return null; }
   const entitlement=await activeDownloadEntitlement(user.company_id);
   if(!entitlement){
-    sendJson(res,402,{
-      allowed:false,
-      planCode:"download_license",
-      error:"Download erst nach erfolgreicher Zahlung verfügbar.",
-      purchaseRequired:true
-    });
-    return true;
+    sendJson(res,402,{allowed:false,planCode:"download_license",error:"Download erst nach erfolgreicher Zahlung verfügbar.",purchaseRequired:true});
+    return null;
   }
-
   const release=await latestWindowsRelease();
   if(!release){
-    sendJson(res,503,{
-      allowed:true,
-      licenseActive:true,
-      entitlement:{id:entitlement.id,purchasedAt:entitlement.purchased_at},
-      releaseAvailable:false,
-      error:"Die Lizenz ist aktiv, aber aktuell ist noch kein Windows-Installer veröffentlicht."
-    });
+    sendJson(res,503,{allowed:true,licenseActive:true,entitlement:{id:entitlement.id,purchasedAt:entitlement.purchased_at},releaseAvailable:false,error:"Die Lizenz ist aktiv, aber aktuell ist noch kein Windows-Installer veröffentlicht."});
+    return null;
+  }
+  return {user,entitlement,release};
+}
+
+async function auditDownload(ctx,eventType){
+  await pool.query(`
+    INSERT INTO software_download_events(company_id,user_id,entitlement_id,release_id,event_type)
+    VALUES($1,$2,$3,$4,$5)
+  `,[ctx.user.company_id,ctx.user.id,ctx.entitlement.id,ctx.release.id,eventType]);
+}
+
+export async function handleBillingAccess(req,res){
+  const url=new URL(req.url,"http://localhost");
+  const paths=["/api/v1/downloads/windows/access","/api/v1/downloads/windows/latest","/api/v1/downloads/windows/file"];
+  if(!paths.includes(url.pathname)) return false;
+  if(req.method!=="GET"){ sendJson(res,405,{error:"Methode nicht erlaubt"}); return true; }
+
+  const ctx=await licensedContext(req,res);
+  if(!ctx) return true;
+
+  if(url.pathname==="/api/v1/downloads/windows/file"){
+    let upstream;
+    try{
+      upstream=await fetch(ctx.release.file_url,{redirect:"follow"});
+    }catch(error){
+      sendJson(res,502,{error:"Windows-Installer konnte nicht geladen werden."});
+      return true;
+    }
+    if(!upstream.ok||!upstream.body){
+      sendJson(res,502,{error:"Windows-Installer ist beim Release-Speicher nicht verfügbar."});
+      return true;
+    }
+    await auditDownload(ctx,"download_started");
+    const version=String(ctx.release.version||"current").replace(/[^A-Za-z0-9._-]/g,"-");
+    const headers={
+      "content-type":upstream.headers.get("content-type")||"application/octet-stream",
+      "content-disposition":`attachment; filename="Bringness-POS-Setup-${version}.exe"`,
+      "cache-control":"private, no-store"
+    };
+    const length=upstream.headers.get("content-length");
+    if(length) headers["content-length"]=length;
+    res.writeHead(200,headers);
+    Readable.fromWeb(upstream.body).pipe(res);
     return true;
   }
 
-  await pool.query(`
-    INSERT INTO software_download_events(company_id,user_id,entitlement_id,release_id,event_type)
-    VALUES($1,$2,$3,$4,'download_granted')
-  `,[user.company_id,user.id,entitlement.id,release.id]);
-
+  await auditDownload(ctx,"download_access_checked");
   sendJson(res,200,{
     allowed:true,
     licenseActive:true,
     planCode:"download_license",
-    entitlement:{id:entitlement.id,purchasedAt:entitlement.purchased_at},
+    entitlement:{id:ctx.entitlement.id,purchasedAt:ctx.entitlement.purchased_at},
     release:{
-      channel:release.channel,
-      platform:release.platform,
-      version:release.version,
-      downloadUrl:release.file_url,
-      sha256:release.sha256||null
+      channel:ctx.release.channel,
+      platform:ctx.release.platform,
+      version:ctx.release.version,
+      sha256:ctx.release.sha256||null,
+      protectedDownloadPath:"/api/v1/downloads/windows/file"
     }
   });
   return true;
