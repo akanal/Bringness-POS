@@ -1,10 +1,11 @@
 (()=>{
   const src='/assets/bringness-logo.png';
   const nativeFetch=window.fetch.bind(window);
+  const storedToken=()=>{try{return localStorage.getItem('bringness-pos-token')}catch(e){return null}};
 
   window.fetch=(input,init)=>{
     const url=typeof input==='string'?input:(input&&input.url)||'';
-    const token=localStorage.getItem('bringness-pos-token');
+    const token=storedToken();
     if(!token&&url.includes('/api/v1/billing/status')){
       return Promise.resolve(new Response(JSON.stringify({features:[]}),{
         status:200,
@@ -15,10 +16,10 @@
   };
 
   function forceVisibleAuthWhenLoggedOut(){
-    const token=localStorage.getItem('bringness-pos-token');
+    const token=storedToken();
     const auth=document.getElementById('auth');
     const workspace=document.getElementById('workspace');
-    if(!token){
+    if(!token && !(workspace && workspace.classList.contains('show'))){
       if(auth){
         auth.style.display='block';
         auth.hidden=false;
