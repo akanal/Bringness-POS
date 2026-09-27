@@ -6,15 +6,64 @@ const offerings=[
   {code:'table_qr_monthly',title:'Tisch-QR',intro:'QR-Bestellungen direkt am Tisch als Ergänzung.',items:['QR-Code je Tisch','Digitale Speisekarte und Bestellung','Online-Basis und Restaurant-Modul erforderlich']},
   {code:'download_license',title:'Windows-Download',intro:'Einmalige Lizenz für die reine Windows-Kasse.',items:['Windows-Installation','Kasse, Artikel, Mitarbeiter, Belege, Schicht und TSE','Download erst nach bestätigter Zahlung']}
 ];
-let plans=new Map(),selected=null,accountMode='register',token=localStorage.getItem('bringness-pos-token'),downloadAccess=null;
+let plans=new Map(),billingState=null,selected=null,accountMode='register',token=localStorage.getItem('bringness-pos-token'),downloadAccess=null;
 async function request(path,options={}){const response=await fetch('/api/v1'+path,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...options.headers}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Die Anfrage ist fehlgeschlagen.');return data}
 function setMode(mode){accountMode=mode;$('registerMode').classList.toggle('active',mode==='register');$('loginMode').classList.toggle('active',mode==='login');$('nameLabel').hidden=mode!=='register';$('accountName').required=mode==='register';$('accountPassword').autocomplete=mode==='register'?'new-password':'current-password'}
-function card(offer){const plan=plans.get(offer.code);if(!plan)return '';const net=Math.round(Number(plan.amount)*100),vat=Math.round(net*0.19),period=plan.billingType==='monthly'?'/ Monat':'einmalig';return '<article class="plan'+(offer.featured?' featured':'')+'"><div class="eyebrow">'+(plan.billingType==='monthly'?'Monatlicher Tarif':'Einmaliger Kauf')+'</div><h3>'+offer.title+'</h3><div class="price">'+money(net)+' <small>netto '+period+'</small></div><div class="tax">zzgl. 19 % MwSt. ('+money(vat)+') · Gesamt '+money(net+vat)+'</div><p>'+offer.intro+'</p><ul>'+offer.items.map(item=>'<li>'+item+'</li>').join('')+'</ul><button class="btn" type="button" data-plan="'+offer.code+'">'+(offer.code==='download_license'?'Download-Lizenz kaufen':'Jetzt kaufen')+'</button></article>'}
-async function loadPlans(){try{const data=await request('/billing/plans');plans=new Map((data.plans||[]).map(p=>[p.code,p]));$('onlinePlans').innerHTML=offerings.slice(0,3).map(card).join('')||'Tarife sind derzeit nicht verfügbar.';$('downloadPlans').innerHTML=card(offerings[3])||'Lizenz ist derzeit nicht verfügbar.';document.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',()=>choose(button.dataset.plan)))}catch(error){$('onlinePlans').textContent='Preise konnten nicht geladen werden. Bitte versuche es später erneut.';$('downloadPlans').textContent=error.message}}
-function choose(code){const plan=plans.get(code);if(!plan)return;selected=code;const net=Math.round(Number(plan.amount)*100),vat=Math.round(net*0.19);$('selection').textContent=plan.name+' · '+money(net)+' netto'+(plan.billingType==='monthly'?' pro Monat':' einmalig');$('checkoutSummary').textContent='Zu zahlen: '+money(net+vat)+' inkl. '+money(vat)+' MwSt.'+(plan.billingType==='monthly'?' pro Monat':' einmalig');$('purchaseMessage').textContent='';$('kaufen').hidden=false;$('kaufen').scrollIntoView({behavior:'smooth',block:'start'});syncAccount()}
-async function syncAccount(){if(!token){$('accountFields').hidden=false;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=false);$('signedIn').hidden=true;return}try{const data=await request('/billing/profile');$('accountFields').hidden=true;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=true);$('signedIn').hidden=false;const p=data.profile||{};for(const [field,key] of [['company','company_name'],['contact','contact_name'],['street','street'],['postal','postal_code'],['city','city'],['country','country'],['vatId','vat_id']])if(p[key])$(field).value=p[key]}catch(error){token=null;localStorage.removeItem('bringness-pos-token');$('accountFields').hidden=false;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=false);$('signedIn').hidden=true}}
+function planState(code){
+  if(billingState){
+    const state=(billingState.plans||[]).find(item=>item.code===code);
+    if(state)return state;
+  }
+  if(code==='restaurant_monthly')return {active:false,eligible:false,requires:['pos_base_monthly']};
+  if(code==='table_qr_monthly')return {active:false,eligible:false,requires:['pos_base_monthly','restaurant_monthly']};
+  return {active:false,eligible:true,requires:[]};
+}
+function dependencyText(code,state){
+  if(state.active)return 'Aktiv';
+  if(state.eligible)return code==='download_license'?'Kauf möglich':'Jetzt buchbar';
+  if(code==='restaurant_monthly')return 'Zuerst Online-Basis aktivieren';
+  if(code==='table_qr_monthly')return 'Zuerst Online-Basis und Restaurant aktivieren';
+  return 'Derzeit nicht buchbar';
+}
+function buttonText(code,state){
+  if(state.active)return 'Bereits aktiv';
+  if(!state.eligible){
+    if(code==='restaurant_monthly')return 'Erst Online-Basis buchen';
+    if(code==='table_qr_monthly')return 'Erst Restaurant-Modul buchen';
+    return 'Noch nicht buchbar';
+  }
+  return code==='download_license'?'Download-Lizenz kaufen':'Jetzt kaufen';
+}
+function card(offer){
+  const plan=plans.get(offer.code);if(!plan)return '';
+  const state=planState(offer.code),net=Math.round(Number(plan.amount)*100),vat=Math.round(net*0.19),period=plan.billingType==='monthly'?'/ Monat':'einmalig';
+  return '<article class="plan'+(offer.featured?' featured':'')+(state.active?' active-plan':'')+'"><div class="eyebrow">'+(plan.billingType==='monthly'?'Monatlicher Tarif':'Einmaliger Kauf')+'</div><div class="plan-status '+(state.active?'is-active':state.eligible?'is-ready':'is-locked')+'">'+dependencyText(offer.code,state)+'</div><h3>'+offer.title+'</h3><div class="price">'+money(net)+' <small>netto '+period+'</small></div><div class="tax">zzgl. 19 % MwSt. ('+money(vat)+') · Gesamt '+money(net+vat)+'</div><p>'+offer.intro+'</p><ul>'+offer.items.map(item=>'<li>'+item+'</li>').join('')+'</ul><button class="btn" type="button" data-plan="'+offer.code+'" '+((state.active||!state.eligible)?'disabled':'')+'>'+buttonText(offer.code,state)+'</button></article>';
+}
+function renderPlans(){
+  $('onlinePlans').innerHTML=offerings.slice(0,3).map(card).join('')||'Tarife sind derzeit nicht verfügbar.';
+  $('downloadPlans').innerHTML=card(offerings[3])||'Lizenz ist derzeit nicht verfügbar.';
+  document.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',()=>choose(button.dataset.plan)));
+}
+async function loadBillingStatus(){
+  if(!token){billingState=null;return null}
+  try{billingState=await request('/billing/status');return billingState}
+  catch(error){if(/Nicht angemeldet/i.test(error.message)){token=null;localStorage.removeItem('bringness-pos-token')}billingState=null;return null}
+}
+async function loadPlans(){
+  try{
+    const data=await request('/billing/plans');
+    plans=new Map((data.plans||[]).map(p=>[p.code,p]));
+    await loadBillingStatus();
+    renderPlans();
+  }catch(error){$('onlinePlans').textContent='Preise konnten nicht geladen werden. Bitte versuche es später erneut.';$('downloadPlans').textContent=error.message}
+}
+function choose(code){
+  const plan=plans.get(code),state=planState(code);if(!plan)return;
+  if(state.active||!state.eligible)return;
+  selected=code;const net=Math.round(Number(plan.amount)*100),vat=Math.round(net*0.19);$('selection').textContent=plan.name+' · '+money(net)+' netto'+(plan.billingType==='monthly'?' pro Monat':' einmalig');$('checkoutSummary').textContent='Zu zahlen: '+money(net+vat)+' inkl. '+money(vat)+' MwSt.'+(plan.billingType==='monthly'?' pro Monat':' einmalig');$('purchaseMessage').textContent='';$('kaufen').hidden=false;$('kaufen').scrollIntoView({behavior:'smooth',block:'start'});syncAccount()}
+async function syncAccount(){if(!token){$('accountFields').hidden=false;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=false);$('signedIn').hidden=true;return}try{const data=await request('/billing/profile');$('accountFields').hidden=true;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=true);$('signedIn').hidden=false;const p=data.profile||{};for(const [field,key] of [['company','company_name'],['contact','contact_name'],['street','street'],['postal','postal_code'],['city','city'],['country','country'],['vatId','vat_id']])if(p[key])$(field).value=p[key]}catch(error){token=null;localStorage.removeItem('bringness-pos-token');billingState=null;renderPlans();$('accountFields').hidden=false;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=false);$('signedIn').hidden=true}}
 $('registerMode').onclick=()=>setMode('register');$('loginMode').onclick=()=>setMode('login');$('closePurchase').onclick=()=>{$('kaufen').hidden=true;selected=null};
-$('purchaseForm').onsubmit=async event=>{event.preventDefault();if(!selected||!plans.has(selected))return;const button=$('checkoutButton');button.disabled=true;$('purchaseMessage').textContent='Dein Kauf wird vorbereitet …';try{if(!token){const data=await request('/auth/'+accountMode,{method:'POST',body:JSON.stringify({name:$('accountName').value.trim(),email:$('accountEmail').value.trim(),password:$('accountPassword').value})});token=data.token;localStorage.setItem('bringness-pos-token',token)}await request('/billing/profile',{method:'PUT',body:JSON.stringify({company_name:$('company').value.trim(),contact_name:$('contact').value.trim(),street:$('street').value.trim(),postal_code:$('postal').value.trim(),city:$('city').value.trim(),country:$('country').value.trim(),vat_id:$('vatId').value.trim()})});const payment=await request('/billing/checkout',{method:'POST',body:JSON.stringify({planCode:selected})});if(!payment.checkoutUrl||!/^https:\/\//.test(payment.checkoutUrl))throw new Error('Zahlungslink fehlt.');location.assign(payment.checkoutUrl)}catch(error){$('purchaseMessage').textContent=error.message;button.disabled=false;syncAccount()}};
+$('purchaseForm').onsubmit=async event=>{event.preventDefault();if(!selected||!plans.has(selected))return;const button=$('checkoutButton');button.disabled=true;$('purchaseMessage').textContent='Dein Kauf wird vorbereitet …';try{if(!token){const data=await request('/auth/'+accountMode,{method:'POST',body:JSON.stringify({name:$('accountName').value.trim(),email:$('accountEmail').value.trim(),password:$('accountPassword').value})});token=data.token;localStorage.setItem('bringness-pos-token',token)}await loadBillingStatus();renderPlans();const state=planState(selected);if(state.active)throw new Error('Dieses Modul ist bereits aktiv.');if(!state.eligible)throw new Error(dependencyText(selected,state)+'.');await request('/billing/profile',{method:'PUT',body:JSON.stringify({company_name:$('company').value.trim(),contact_name:$('contact').value.trim(),street:$('street').value.trim(),postal_code:$('postal').value.trim(),city:$('city').value.trim(),country:$('country').value.trim(),vat_id:$('vatId').value.trim()})});const payment=await request('/billing/checkout',{method:'POST',body:JSON.stringify({planCode:selected})});if(!payment.checkoutUrl||!/^https:\/\//.test(payment.checkoutUrl))throw new Error('Zahlungslink fehlt.');location.assign(payment.checkoutUrl)}catch(error){$('purchaseMessage').textContent=error.message;button.disabled=false;syncAccount()}};
 if(new URLSearchParams(location.search).get('payment')==='return'){$('returnMessage').hidden=false;$('returnMessage').innerHTML='Du bist von der Zahlung zurückgekehrt. Die Lizenz wird nach bestätigter Zahlung aktiviert. Diese Seite prüft den Status automatisch. <a href="/pos/">Zur Online-Kasse</a>.';$('purchaseForm').hidden=true;$('kaufen').hidden=false}
 loadPlans();
 
@@ -27,6 +76,7 @@ async function checkDownloadLicense(){
       $('licensedDownload').hidden=false;
       $('downloadWindows').textContent='Windows-Kasse '+(result.release.version||'')+' herunterladen';
       if(new URLSearchParams(location.search).get('payment')==='return')$('returnMessage').textContent='Zahlung bestätigt: Deine Download-Lizenz ist aktiv und der Windows-Download ist freigeschaltet.';
+      await loadBillingStatus();renderPlans();
       return true;
     }
   }catch(error){
