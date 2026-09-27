@@ -4,6 +4,7 @@ import http from "node:http";
 import pg from "pg";
 import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./restaurant-owner-features.js";
 import { handlePaymentCheckout } from "./payment-checkout.js";
+import { handlePaymentReceipt } from "./payment-receipt.js";
 
 // Protect the current 399 EUR download-license decision from an obsolete
 // initialization statement that would otherwise reset it to 299 EUR.
@@ -21,6 +22,7 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (await handlePaymentCheckout(req,res)) return;
+      if (await handlePaymentReceipt(req,res)) return;
       if (await handleRestaurantOwnerFeature(req,res)) return;
     } catch (error) {
       console.error("Modular feature error:", error);
