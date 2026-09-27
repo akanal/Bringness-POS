@@ -7,6 +7,7 @@ import { handlePaymentCheckout } from "./payment-checkout.js";
 import { handlePaymentReceipt } from "./payment-receipt.js";
 import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
 import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
+import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 
 // Protect the current 399 EUR download-license decision from obsolete legacy SQL.
 const originalPoolQuery = pg.Pool.prototype.query;
@@ -22,6 +23,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await handleDeviceLicense(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
@@ -79,7 +81,8 @@ async function migrateWithRetry(){
       await migrateRestaurantOwnerFeatures();
       await migrateTseIntegration();
       await migrateBillingAccess();
-      console.log("Restaurant-owner, TSE and billing access schema ready.");
+      await migrateDeviceLicense();
+      console.log("Restaurant-owner, TSE, billing access and device-license schema ready.");
       return;
     }
     catch(error){
