@@ -1,5 +1,6 @@
 import pg from "pg";
 import { ensureTseSchema, createUnconfiguredTseAdapter } from "./tse-core.js";
+import { createSwissbitTseAdapter } from "./tse-swissbit.js";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -125,6 +126,17 @@ async function currentUser(req){
   return q.rows[0]||null;
 }
 
+async function adapterForRestaurant(restaurantId){
+  const q=await pool.query(`
+    SELECT provider,status,certified,serial_number
+    FROM tse_devices WHERE restaurant_id=$1
+  `,[restaurantId]);
+  const device=q.rows[0]||null;
+  const swissbitConfigured=Boolean(process.env.SWISSBIT_TSE_BRIDGE_COMMAND);
+  if(device?.provider==="swissbit" || swissbitConfigured) return createSwissbitTseAdapter();
+  return createUnconfiguredTseAdapter();
+}
+
 export async function handleTseRoutes(req,res){
   const url=new URL(req.url,"http://localhost");
   if(url.pathname!=="/api/v1/fiscal/status" || req.method!=="GET") return false;
@@ -152,7 +164,7 @@ export async function handleTseRoutes(req,res){
     FROM receipts rc JOIN orders o ON o.id=rc.order_id
     WHERE o.restaurant_id=$1
   `,[restaurantId]);
-  const adapter=createUnconfiguredTseAdapter();
+  const adapter=await adapterForRestaurant(restaurantId);
   const status=await adapter.status();
   const t=tx.rows[0],r=receipts.rows[0];
 
@@ -168,7 +180,9 @@ export async function handleTseRoutes(req,res){
     startedTransactions:t.started_transactions,
     signedTransactions:t.signed_transactions,
     failedTransactions:t.failed_transactions,
-    message:"TSE-Transaktionsdaten werden beim Beleg automatisch vorbereitet. Eine echte Signatur erfolgt erst nach Anschluss einer zertifizierten SD-/microSD-TSE."
+    message: status.provider==="swissbit"
+      ? "Swissbit-Adapter ist eingebunden. Echte Signierung wird erst nach Konfiguration des offiziellen Swissbit SDK/Bridge und Hardwaretest aktiviert."
+      : "TSE-Transaktionsdaten werden beim Beleg automatisch vorbereitet. Eine echte Signatur erfolgt erst nach Anschluss einer zertifizierten SD-/microSD-TSE."
   });
   return true;
 }
