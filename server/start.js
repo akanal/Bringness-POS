@@ -5,6 +5,7 @@ import pg from "pg";
 import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./restaurant-owner-features.js";
 import { handlePaymentCheckout } from "./payment-checkout.js";
 import { handlePaymentReceipt } from "./payment-receipt.js";
+import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
 
 // Protect the current 399 EUR download-license decision from an obsolete
 // initialization statement that would otherwise reset it to 299 EUR.
@@ -21,6 +22,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
       if (await handleRestaurantOwnerFeature(req,res)) return;
@@ -74,9 +76,14 @@ await import("./index.js");
 
 async function migrateWithRetry(){
   for(let attempt=1;attempt<=12;attempt++){
-    try{await migrateRestaurantOwnerFeatures();console.log("Restaurant-owner feature schema ready.");return}
+    try{
+      await migrateRestaurantOwnerFeatures();
+      await migrateTseIntegration();
+      console.log("Restaurant-owner and TSE preparation schema ready.");
+      return;
+    }
     catch(error){
-      if(attempt===12){console.error("Restaurant-owner feature migration failed:",error);return}
+      if(attempt===12){console.error("Startup feature migration failed:",error);return}
       await new Promise(r=>setTimeout(r,1000));
     }
   }
