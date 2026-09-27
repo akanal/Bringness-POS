@@ -49,7 +49,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
   if (normalized.includes("/apps/web/public/") && normalized.endsWith(".html")) {
     try {
       let html = fs.readFileSync(filePath, "utf8");
-      if (!html.includes('/brand-logo.js')) html = html.replace("</body>", '<script src="/brand-logo.js"></script></body>');
+      if (!html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js"></script></body>');
