@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { validateBridgeAction, assertStartPayload, assertFinishPayload, normalizeBridgeStatus, validateBridgeFinishResult } from "./tse-bridge-contract.js";
 
 function runBridge(command,args=[],input=null){
   return new Promise((resolve,reject)=>{
@@ -27,6 +28,7 @@ export function createSwissbitTseAdapter(options={}){
   const bridgeArgs=Array.isArray(options.bridgeArgs)?options.bridgeArgs:[];
 
   async function invoke(action,payload={}){
+    validateBridgeAction(action);
     if(!bridgeCommand){
       const error=new Error("Swissbit TSE Bridge ist noch nicht konfiguriert");
       error.code="SWISSBIT_NOT_CONFIGURED";
@@ -41,16 +43,11 @@ export function createSwissbitTseAdapter(options={}){
     certified:null,
     async status(){
       try{
-        const result=await invoke("status");
+        const result=normalizeBridgeStatus(await invoke("status"));
         return {
-          status:result.status||"unknown",
+          ...result,
           architecture:"hardware_sd",
-          connection:result.connection||"local_bridge",
-          certified:Boolean(result.certified),
           provider:"swissbit",
-          serialNumber:result.serialNumber||null,
-          deviceModel:result.deviceModel||null,
-          sdkVersion:result.sdkVersion||null,
           requiresLocalBridge:true
         };
       }catch(error){
@@ -69,6 +66,7 @@ export function createSwissbitTseAdapter(options={}){
       }
     },
     async startTransaction(transaction){
+      assertStartPayload(transaction);
       const result=await invoke("start",transaction);
       if(!result.transactionNumber){
         const error=new Error("Swissbit Bridge lieferte keine Transaktionsnummer");
@@ -78,25 +76,23 @@ export function createSwissbitTseAdapter(options={}){
       return {
         transactionNumber:String(result.transactionNumber),
         startedAt:result.startedAt||new Date().toISOString(),
-        serialNumber:result.serialNumber||null
+        serialNumber:result.serialNumber||null,
+        certified:Boolean(result.certified)
       };
     },
     async finishTransaction(transaction){
-      const result=await invoke("finish",transaction);
-      if(!result.signature || !result.serialNumber){
-        const error=new Error("Swissbit Bridge lieferte keine vollständigen Signaturdaten");
-        error.code="SWISSBIT_INVALID_FINISH_RESPONSE";
-        throw error;
-      }
+      assertFinishPayload(transaction);
+      const result=validateBridgeFinishResult(await invoke("finish",transaction));
       return {
-        transactionNumber:result.transactionNumber||transaction.transactionNumber||null,
+        transactionNumber:String(result.transactionNumber),
         serialNumber:String(result.serialNumber),
         signatureCounter:result.signatureCounter!=null?String(result.signatureCounter):null,
         signatureAlgorithm:result.signatureAlgorithm||null,
         logTimeFormat:result.logTimeFormat||null,
         finishedAt:result.finishedAt||new Date().toISOString(),
         signature:String(result.signature),
-        publicKey:result.publicKey||null
+        publicKey:result.publicKey||null,
+        certified:Boolean(result.certified)
       };
     },
     async cancelTransaction(transaction){
@@ -106,12 +102,12 @@ export function createSwissbitTseAdapter(options={}){
 }
 
 export const SWISSBIT_INTEGRATION_STATUS={
-  state:"adapter_scaffold_ready",
+  state:"adapter_contract_ready",
   missing:[
     "Swissbit SDK package",
     "official SDK/API documentation",
     "real SD or microSD TSE for hardware validation",
     "exact bridge command and native library bindings"
   ],
-  note:"This module intentionally contains no guessed Swissbit SDK calls. The native bridge will be completed only against the official Swissbit SDK documentation."
+  note:"The provider-neutral bridge contract and simulator are ready. No guessed Swissbit SDK calls are used; native bindings will be completed only from official Swissbit documentation."
 };
