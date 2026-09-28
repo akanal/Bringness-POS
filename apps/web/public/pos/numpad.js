@@ -39,7 +39,8 @@
 
   function updateDisplay(){
     const out=document.querySelector('.bn-keypad-value');
-    if(out) out.textContent=(inputMode==='cash'?cashBuffer:buffer)||'0';
+    const value=(inputMode==='cash'?cashBuffer:buffer)||'0';
+    if(out && out.textContent!==value) out.textContent=value;
   }
 
   function redraw(){
@@ -171,5 +172,4 @@
     };
   }
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',decorate):decorate();
-  new MutationObserver(()=>{ if(!wrapping) decorate(); }).observe(document.documentElement,{childList:true,subtree:true});
 })();
