@@ -60,6 +60,50 @@ export async function handlePlatformControl(req,res){
     `);
     send(res,200,{restaurants:q.rows,devices:d.rows,limited:q.rowCount===500||d.rowCount===500});return true;
   }
+  if(p==="/api/v1/platform/control/accounts"&&req.method==="GET"){
+    const q=await pool.query(`SELECT u.id,u.company_id,c.name company_name,u.display_name,u.email,u.role,u.status,u.created_at,
+      EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=u.id AND pa.active=true) platform_admin,
+      (SELECT count(*)::int FROM employees e WHERE e.user_id=u.id AND e.active=true) active_assignments
+      FROM users u JOIN companies c ON c.id=u.company_id
+      ORDER BY c.name,u.created_at LIMIT 500`);
+    send(res,200,{accounts:q.rows,limited:q.rowCount===500});return true;
+  }
+  if(p==="/api/v1/platform/control/audit"&&req.method==="GET"){
+    const q=await pool.query(`SELECT a.id,a.created_at,a.event_type,a.entity_type,a.entity_id,
+      c.name company_name,u.email actor_email
+      FROM audit_log a LEFT JOIN companies c ON c.id=a.company_id
+      LEFT JOIN users u ON u.id=a.actor_user_id
+      ORDER BY a.id DESC LIMIT 200`);
+    send(res,200,{events:q.rows,limited:q.rowCount===200});return true;
+  }
+  const accountStatus=p.match(/^\/api\/v1\/platform\/control\/accounts\/([^/]+)\/status$/);
+  if(accountStatus&&req.method==="PATCH"){
+    if(!uuid.test(accountStatus[1])){send(res,400,{error:"Ungültiges Konto"});return true}
+    let input;try{input=await readBody(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    if(!["active","blocked"].includes(input.status)){send(res,400,{error:"Ungültiger Status"});return true}
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const ownerCompany=(await client.query("SELECT company_id FROM users WHERE id=$1",[accountStatus[1]])).rows[0];
+      if(!ownerCompany){await client.query("ROLLBACK");send(res,404,{error:"Konto nicht gefunden"});return true}
+      await client.query("SELECT id FROM companies WHERE id=$1 FOR UPDATE",[ownerCompany.company_id]);
+      const user=(await client.query("SELECT id,company_id,status,role FROM users WHERE id=$1 FOR UPDATE",[accountStatus[1]])).rows[0];
+      if(!user){await client.query("ROLLBACK");send(res,404,{error:"Konto nicht gefunden"});return true}
+      if(user.id===actor.id){await client.query("ROLLBACK");send(res,409,{error:"Das eigene Admin-Konto kann hier nicht gesperrt werden"});return true}
+      const platform=(await client.query("SELECT 1 FROM platform_admins WHERE user_id=$1 AND active=true",[user.id])).rowCount>0;
+      if(platform){await client.query("ROLLBACK");send(res,409,{error:"Plattformadministratoren können hier nicht gesperrt werden"});return true}
+      if(input.status==="blocked"&&user.role==="owner"&&user.status==="active"){
+        const owners=await client.query("SELECT id FROM users WHERE company_id=$1 AND role='owner' AND status='active' FOR UPDATE",[user.company_id]);
+        if(owners.rowCount<=1){await client.query("ROLLBACK");send(res,409,{error:"Der letzte aktive Inhaber eines Kundenkontos darf nicht gesperrt werden"});return true}
+      }
+      if(user.status!==input.status){
+        await client.query("UPDATE users SET status=$2 WHERE id=$1",[user.id,input.status]);
+        if(input.status==="blocked")await client.query("DELETE FROM sessions WHERE user_id=$1",[user.id]);
+        await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,'platform.account.status','user',$3,$4)",[user.company_id,actor.id,user.id,JSON.stringify({before:user.status,after:input.status})]);
+      }
+      await client.query("COMMIT");send(res,200,{id:user.id,status:input.status});return true;
+    }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
+  }
   const restaurant=p.match(/^\/api\/v1\/platform\/control\/registers\/([^/]+)$/);
   if(restaurant&&req.method==="PATCH"){
     if(!uuid.test(restaurant[1])){send(res,400,{error:"Ungültiger Betrieb"});return true}
