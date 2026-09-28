@@ -141,7 +141,7 @@
       tools.querySelectorAll('[data-key]').forEach(btn=>btn.onclick=()=>{
         const key=btn.dataset.key;
         let value=buffer;
-        if(key==='clear') value='';
+        if(key==='clear'){value='';window.bnCashTenderValue=''}
         else if(key==='back') value=value.slice(0,-1);
         else if(key==='ok') return applyQuantity();
         else if(key===',') {if(!value.includes(',')) value=(value||'0')+','}
