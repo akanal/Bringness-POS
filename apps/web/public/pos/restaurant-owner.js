@@ -22,14 +22,14 @@
     if(!r.ok){const e=await r.json().catch(()=>({}));throw Error(e.error||"QR-Code nicht verfügbar")}
     const svg=await r.text();
     const overlay=document.createElement("div");overlay.style.cssText="position:fixed;inset:0;background:#07182c99;z-index:11000;display:grid;place-items:center;padding:18px";
-    overlay.innerHTML='<div style="background:#fff;border-radius:18px;padding:24px;max-width:360px;text-align:center"><h3 style="margin-top:0">Scanbare Belegnummer</h3><div style="max-width:260px;margin:auto">'+svg+'</div><p><b>'+esc(number)+'</b></p><p class="muted">Der QR-Code enthält die fortlaufende Belegnummer.</p><button type="button">Schließen</button></div>';
+    overlay.innerHTML='<div style="background:#fff;border-radius:18px;padding:24px;max-width:360px;text-align:center"><h3 style="margin-top:0">Digitaler Beleg</h3><div style="max-width:260px;margin:auto">'+svg+'</div><p><b>'+esc(number)+'</b></p><p class="muted">Scannen öffnet den vollständigen Beleg im Browser.</p><button type="button">Schließen</button></div>';
     overlay.querySelector("button").onclick=()=>overlay.remove();overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
   }
   function enhanceReceipts(){
     const area=body();if(!area)return;
     area.querySelectorAll("[data-receipt]").forEach(pdf=>{
       if(pdf.parentElement.querySelector("[data-receipt-qr]"))return;
-      const b=document.createElement("button");b.type="button";b.dataset.receiptQr=pdf.dataset.receipt;b.textContent="QR Belegnummer";b.style.marginLeft="7px";
+      const b=document.createElement("button");b.type="button";b.dataset.receiptQr=pdf.dataset.receipt;b.textContent="QR-Beleg öffnen";b.style.marginLeft="7px";
       b.onclick=()=>receiptQr(pdf.dataset.receipt,pdf.dataset.number).catch(e=>alert(e.message));pdf.parentElement.appendChild(b);
     });
   }
