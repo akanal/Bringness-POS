@@ -126,7 +126,9 @@
     if(!payBtn)return;
     payBtn.onclick=openDialog;
     const method=document.getElementById('paymentMethod');
-    if(method) method.closest('label,div')?.setAttribute('hidden','hidden');
+    if(method) method.hidden=true;
+    const basket=payBtn.closest('.basket');
+    if(basket) basket.hidden=false;
   }
 
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',bind):bind();
