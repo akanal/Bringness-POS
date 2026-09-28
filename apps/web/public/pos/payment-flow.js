@@ -10,7 +10,7 @@
     const total=Math.round(cart.reduce((sum,item)=>sum+Number(item.qty)*Number(item.price),0)*100);
     const given=window.bnCashTenderValue?cents(window.bnCashTenderValue):total;
     if(method==='cash'&&(!Number.isFinite(given)||given<total)){
-      status.textContent='Gegebener Betrag zu niedrig. Bitte Betrag im Zahlenfeld korrigieren oder mit C löschen.';
+      status.textContent='Gegebener Betrag zu niedrig. Bitte Betrag im Zahlenfeld korrigieren oder mit der Rücktaste löschen.';
       return;
     }
     button.disabled=true;
