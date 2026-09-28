@@ -156,6 +156,20 @@ export async function handlePlatformControl(req,res){
     }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
   }
   const device=p.match(/^\/api\/v1\/platform\/control\/devices\/([^/]+)\/sync$/);
+  const deviceDetail=p.match(/^\/api\/v1\/platform\/control\/devices\/([^/]+)$/);
+  if(deviceDetail&&req.method==="GET"){
+    if(!uuid.test(deviceDetail[1])){send(res,400,{error:"Ungültiges Gerät"});return true}
+    const d=(await pool.query(`SELECT d.id,d.company_id,c.name company_name,d.name,d.platform,d.app_version,d.status,d.created_at,d.last_seen_at,
+      bp.name license_name,ce.status license_status,ce.current_period_end license_end
+      FROM devices d JOIN companies c ON c.id=d.company_id
+      LEFT JOIN company_entitlements ce ON ce.id=d.entitlement_id
+      LEFT JOIN billing_plans bp ON bp.id=ce.plan_id WHERE d.id=$1`,[deviceDetail[1]])).rows[0];
+    if(!d){send(res,404,{error:"Gerät nicht gefunden"});return true}
+    const commands=await pool.query(`SELECT dc.id,dc.command,dc.status,dc.created_at,dc.acknowledged_at,u.email created_by
+      FROM device_commands dc LEFT JOIN users u ON u.id=dc.created_by
+      WHERE dc.device_id=$1 ORDER BY dc.created_at DESC LIMIT 30`,[d.id]);
+    send(res,200,{device:d,commands:commands.rows,online:!!d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<300000});return true;
+  }
   if(device&&req.method==="POST"){
     if(!uuid.test(device[1])){send(res,400,{error:"Ungültiges Gerät"});return true}
     const client=await pool.connect();
