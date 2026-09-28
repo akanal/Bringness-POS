@@ -60,6 +60,38 @@ export async function handlePlatformControl(req,res){
     `);
     send(res,200,{restaurants:q.rows,devices:d.rows,limited:q.rowCount===500||d.rowCount===500});return true;
   }
+  if(p==="/api/v1/platform/control/companies"&&req.method==="GET"){
+    const q=await pool.query(`SELECT c.id,c.name,c.created_at,
+      (SELECT email FROM users u WHERE u.company_id=c.id AND u.role='owner' ORDER BY u.created_at LIMIT 1) owner_email,
+      (SELECT count(*)::int FROM restaurants r WHERE r.company_id=c.id) restaurants,
+      (SELECT count(*)::int FROM devices d WHERE d.company_id=c.id) devices
+      FROM companies c ORDER BY c.name LIMIT 500`);
+    send(res,200,{companies:q.rows,limited:q.rowCount===500});return true;
+  }
+  const companyDetail=p.match(/^\/api\/v1\/platform\/control\/companies\/([^/]+)$/);
+  if(companyDetail&&req.method==="GET"){
+    const id=companyDetail[1];if(!uuid.test(id)){send(res,400,{error:"Ungültiges Kundenkonto"});return true}
+    const company=(await pool.query("SELECT id,name,created_at FROM companies WHERE id=$1",[id])).rows[0];
+    if(!company){send(res,404,{error:"Kundenkonto nicht gefunden"});return true}
+    const [users,restaurants,devices,features,licenses,payments]=await Promise.all([
+      pool.query("SELECT id,display_name,email,role,status FROM users WHERE company_id=$1 ORDER BY created_at LIMIT 100",[id]),
+      pool.query(`SELECT r.id,r.name,r.mode,td.provider tse_provider,td.status tse_status,td.certified tse_certified,
+        (SELECT count(*)::int FROM orders o WHERE o.restaurant_id=r.id) orders,
+        (SELECT count(*)::int FROM receipts rc JOIN orders o ON o.id=rc.order_id WHERE o.restaurant_id=r.id) receipts,
+        (SELECT count(*)::int FROM receipts rc JOIN orders o ON o.id=rc.order_id WHERE o.restaurant_id=r.id AND rc.fiscal_status IS DISTINCT FROM 'signed') unsigned_receipts,
+        (SELECT count(*)::int FROM tse_transactions tx WHERE tx.restaurant_id=r.id AND tx.state='failed') failed_tse
+        FROM restaurants r LEFT JOIN tse_devices td ON td.restaurant_id=r.id WHERE r.company_id=$1 ORDER BY r.name LIMIT 100`,[id]),
+      pool.query(`SELECT id,name,platform,app_version,status,last_seen_at,
+        (SELECT count(*)::int FROM device_commands dc WHERE dc.device_id=d.id AND dc.status='pending') pending_commands
+        FROM devices d WHERE company_id=$1 ORDER BY last_seen_at DESC NULLS LAST LIMIT 100`,[id]),
+      pool.query("SELECT feature_code,status,payment_status,ends_at,grace_until FROM company_features WHERE company_id=$1 ORDER BY feature_code",[id]),
+      pool.query(`SELECT bp.name,bp.code,bp.billing_type,ce.status,ce.current_period_end,ce.purchased_at
+        FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 ORDER BY ce.created_at DESC LIMIT 100`,[id]),
+      pool.query(`SELECT bt.id,bp.name plan,bt.status,bt.amount_cents,bt.currency,bt.invoice_number,bt.invoice_date,bt.created_at
+        FROM billing_transactions bt JOIN billing_plans bp ON bp.id=bt.plan_id WHERE bt.company_id=$1 ORDER BY bt.created_at DESC LIMIT 50`,[id])
+    ]);
+    send(res,200,{company,users:users.rows,restaurants:restaurants.rows,devices:devices.rows,features:features.rows,licenses:licenses.rows,payments:payments.rows});return true;
+  }
   if(p==="/api/v1/platform/control/accounts"&&req.method==="GET"){
     const q=await pool.query(`SELECT u.id,u.company_id,c.name company_name,u.display_name,u.email,u.role,u.status,u.created_at,
       EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=u.id AND pa.active=true) platform_admin,
