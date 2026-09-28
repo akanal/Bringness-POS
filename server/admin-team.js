@@ -34,6 +34,26 @@ export async function handleAdminTeam(req,res){
     send(res,201,q.rows[0]);return true;
   }
   const match=p.match(/^\/api\/v1\/admin\/team\/([^/]+)\/status$/);
+  const roleMatch=p.match(/^\/api\/v1\/admin\/team\/([^/]+)\/role$/);
+  if(roleMatch&&req.method==="PATCH"){
+    if(!uuid.test(roleMatch[1])){send(res,400,{error:"Ungültiger Mitarbeiter"});return true}
+    let input;try{input=await read(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    const role=String(input.role||"");
+    if(!["cashier","kitchen","manager"].includes(role)){send(res,400,{error:"Ungültige Rolle"});return true}
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const employee=(await client.query(`SELECT e.id,e.role,e.user_id,e.active FROM employees e
+        JOIN restaurants r ON r.id=e.restaurant_id WHERE e.id=$1 AND r.company_id=$2 FOR UPDATE OF e`,[roleMatch[1],actor.company_id])).rows[0];
+      if(!employee){await client.query("ROLLBACK");send(res,404,{error:"Mitarbeiter nicht gefunden"});return true}
+      if(employee.user_id){await client.query("ROLLBACK");send(res,409,{error:"Die Rolle eines Kontos mit eigener Anmeldung wird hier nicht geändert"});return true}
+      if(employee.role!==role){
+        await client.query("UPDATE employees SET role=$2 WHERE id=$1",[employee.id,role]);
+        await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,'admin.employee.role','employee',$3,$4)",[actor.company_id,actor.id,employee.id,JSON.stringify({before:employee.role,after:role})]);
+      }
+      await client.query("COMMIT");send(res,200,{id:employee.id,role});return true;
+    }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
+  }
   if(match&&req.method==="PATCH"){
     if(!uuid.test(match[1])){send(res,400,{error:"Ungültiger Mitarbeiter"});return true}
     let input;try{input=await read(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
