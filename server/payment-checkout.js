@@ -72,6 +72,11 @@ export async function handlePaymentCheckout(req, res) {
     return true;
   }
 
+  if (payments.some(p => p.method === "card") && body.externalCardConfirmed !== true) {
+    send(res, 400, { error: "Externe Kartenzahlung muss vor dem Verbuchen bestätigt werden" });
+    return true;
+  }
+
   const ids = [...new Set(items.map(i => String(i.productId || "")).filter(Boolean))];
   if (!ids.length || ids.length !== items.length) {
     send(res, 400, { error: "Ungültiger Artikel im Warenkorb" });
