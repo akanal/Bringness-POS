@@ -14,17 +14,14 @@
     .bn-cart-selected{outline:2px solid #102235;outline-offset:2px;border-radius:8px}
     .bn-cart-hint{font-size:12px;color:#607080;margin-top:6px}
     .bn-keypad-toggle[aria-checked="true"]{background:#102235;color:#fff;border-color:#102235}
-    .bn-keypad-modes{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
-    .bn-keypad-modes button{border:1px solid #cfd9e3;background:#fff;border-radius:8px;padding:7px 9px;cursor:pointer}
-    .bn-keypad-modes button[aria-pressed="true"]{background:#102235;color:#fff}
-    .bn-keypad-modes [data-keypad-close]{margin-left:auto;color:#b42318}
+    .bn-cart-menu{position:relative;margin-left:auto}.bn-cart-menu summary{cursor:pointer;list-style:none;padding:4px 8px;font-size:18px}
+    .bn-cart-menu summary::-webkit-details-marker{display:none}.bn-cart-menu>div{position:absolute;right:0;z-index:15;display:grid;min-width:145px;padding:6px;background:#fff;border:1px solid #dce5ee;border-radius:9px;box-shadow:0 8px 22px #10223522}
+    .bn-cart-menu button{text-align:left;background:#fff;padding:8px}.bn-cart-menu button:hover{background:#f1f5f8}
   `;
   document.head.appendChild(style);
 
   let selected=-1;
   let buffer='';
-  let cashBuffer='';
-  let inputMode='quantity';
   let wrapping=false;
 
   const originalRenderCart=typeof renderCart==='function'?renderCart:null;
@@ -33,13 +30,13 @@
     selected=index;
     document.querySelectorAll('#cart .basketline').forEach((el,i)=>el.classList.toggle('bn-cart-selected',i===selected));
     const item=typeof cart!=='undefined'?cart[selected]:null;
-    if(inputMode==='quantity') buffer=item?String(item.qty):'';
+    buffer=item?String(item.qty):'';
     updateDisplay();
   }
 
   function updateDisplay(){
     const out=document.querySelector('.bn-keypad-value');
-    const value=(inputMode==='cash'?cashBuffer:buffer)||'0';
+    const value=buffer||'0';
     if(out && out.textContent!==value) out.textContent=value;
   }
 
@@ -53,20 +50,23 @@
   }
 
   function applyQuantity(){
-    if(inputMode==='cash'){
-      if(!cashBuffer||!/^\d+(,\d{1,2})?$/.test(cashBuffer)) return;
-      window.bnCashTenderValue=cashBuffer;
-      const hint=document.querySelector('.bn-cart-hint');
-      if(hint) hint.textContent='Bargeldbetrag '+cashBuffer+' € wird im Zahlungsfenster übernommen.';
+    const hint=document.querySelector('.bn-cart-hint');
+    if(!buffer){if(hint)hint.textContent='Bitte zuerst eine Zahl eingeben.';return}
+    if(buffer.includes(',')){
+      if(!/^\d+,\d{1,2}$/.test(buffer)) return;
+      window.bnCashTenderValue=buffer;
+      if(hint) hint.textContent='Betrag '+buffer+' € wird im Zahlungsfenster übernommen.';
       return;
     }
-    if(typeof cart==='undefined'||selected<0||!cart[selected]) return;
+    if(typeof cart==='undefined'||!cart.length){if(hint)hint.textContent='Bitte zuerst eine Speise zur Bestellung hinzufügen.';return}
+    if(selected<0||!cart[selected]) selected=cart.length-1;
     const qty=Math.max(0,Math.floor(Number(buffer||0)));
     if(qty<=0) cart.splice(selected,1);
     else cart[selected].qty=qty;
     if(selected>=cart.length) selected=cart.length-1;
     buffer=selected>=0&&cart[selected]?String(cart[selected].qty):'';
     redraw();
+    if(hint) hint.textContent=selected>=0?'Menge übernommen: '+cart[selected].qty:'Artikel entfernt.';
   }
 
   function setKeypadOpen(tools,open){
@@ -77,6 +77,11 @@
     toggle.setAttribute('aria-expanded',String(open));
     toggle.setAttribute('aria-checked',String(open));
     toggle.textContent=open?'Zahlenfeld: Ein':'Zahlenfeld: Aus';
+    if(open){
+      if(typeof cart!=='undefined' && cart.length && (selected<0||!cart[selected])) choose(cart.length-1);
+      buffer='';
+      updateDisplay();
+    }
   }
 
   function decorate(){
@@ -87,8 +92,24 @@
 
     cartEl.querySelectorAll('.basketline').forEach((line,i)=>{
       line.style.cursor='pointer';
-      line.onclick=()=>choose(i);
+      line.onclick=e=>{if(!e.target.closest('.bn-cart-menu')) choose(i)};
       line.classList.toggle('bn-cart-selected',i===selected);
+      if(!line.querySelector('.bn-cart-menu')){
+        const menu=document.createElement('details');
+        menu.className='bn-cart-menu';
+        menu.innerHTML='<summary aria-label="Artikelaktionen">⋮</summary><div><button type="button" data-action="minus">− Menge</button><button type="button" data-action="plus">+ Menge</button><button type="button" data-action="delete">Löschen</button></div>';
+        line.appendChild(menu);
+        menu.querySelectorAll('[data-action]').forEach(btn=>btn.onclick=e=>{
+          e.stopPropagation();choose(i);
+          const action=btn.dataset.action;
+          if(action==='delete')cart.splice(i,1);
+          else if(action==='plus')cart[i].qty++;
+          else if(--cart[i].qty<=0)cart.splice(i,1);
+          selected=Math.min(i,cart.length-1);
+          buffer=selected>=0?String(cart[selected].qty):'';
+          redraw();
+        });
+      }
     });
 
     let tools=basket.querySelector('.bn-cart-tools');
@@ -97,14 +118,10 @@
       tools.className='bn-cart-tools';
       tools.innerHTML=`
         <div class="bn-cart-actions">
-          <button type="button" data-cart-minus>− Menge</button>
-          <button type="button" data-cart-plus>+ Menge</button>
-          <button type="button" data-cart-delete>Artikel löschen</button>
           <button type="button" class="bn-keypad-toggle" data-keypad-toggle role="switch" aria-checked="false" aria-expanded="false">Zahlenfeld: Aus</button>
         </div>
         <div class="bn-keypad-panel" aria-label="Numerische Eingabe">
-          <div class="bn-keypad-modes"><button type="button" data-input-mode="quantity" aria-pressed="true">Menge</button><button type="button" data-input-mode="cash" aria-pressed="false">Bargeld €</button><button type="button" data-keypad-close>Schließen ×</button></div>
-          <div class="bn-keypad-display"><span class="bn-keypad-caption">Menge</span><span class="bn-keypad-value">0</span></div>
+          <div class="bn-keypad-display"><span>Menge eingeben</span><span class="bn-keypad-value">0</span></div>
           <div class="bn-keypad" aria-label="Numerisches Eingabefeld">
             <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
             <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
@@ -114,50 +131,22 @@
             <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
           </div>
         </div>
-        <div class="bn-cart-hint">Artikel antippen, dann Menge über +/− oder das Zahlenfeld ändern.</div>`;
+        <div class="bn-cart-hint">Speise antippen, Zahl eingeben und übernehmen. Komma für Bargeldbetrag.</div>`;
       basket.insertBefore(tools,cartEl);
 
       tools.querySelector('[data-keypad-toggle]').onclick=()=>{
         const open=!tools.querySelector('.bn-keypad-panel').classList.contains('open');
         setKeypadOpen(tools,open);
       };
-      tools.querySelector('[data-keypad-close]').onclick=()=>setKeypadOpen(tools,false);
-      tools.querySelectorAll('[data-input-mode]').forEach(btn=>btn.onclick=()=>{
-        inputMode=btn.dataset.inputMode;
-        tools.querySelectorAll('[data-input-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b===btn)));
-        tools.querySelector('.bn-keypad-caption').textContent=inputMode==='cash'?'Bargeld €':'Menge';
-        updateDisplay();
-      });
-      tools.querySelector('[data-cart-minus]').onclick=()=>{
-        if(typeof cart==='undefined'||selected<0||!cart[selected]) return;
-        cart[selected].qty--;
-        if(cart[selected].qty<=0) cart.splice(selected,1);
-        if(selected>=cart.length) selected=cart.length-1;
-        buffer=selected>=0&&cart[selected]?String(cart[selected].qty):'';
-        redraw();
-      };
-      tools.querySelector('[data-cart-plus]').onclick=()=>{
-        if(typeof cart==='undefined'||selected<0||!cart[selected]) return;
-        cart[selected].qty++;
-        buffer=String(cart[selected].qty);
-        redraw();
-      };
-      tools.querySelector('[data-cart-delete]').onclick=()=>{
-        if(typeof cart==='undefined'||selected<0||!cart[selected]) return;
-        cart.splice(selected,1);
-        if(selected>=cart.length) selected=cart.length-1;
-        buffer=selected>=0&&cart[selected]?String(cart[selected].qty):'';
-        redraw();
-      };
       tools.querySelectorAll('[data-key]').forEach(btn=>btn.onclick=()=>{
         const key=btn.dataset.key;
-        let value=inputMode==='cash'?cashBuffer:buffer;
+        let value=buffer;
         if(key==='clear') value='';
         else if(key==='back') value=value.slice(0,-1);
         else if(key==='ok') return applyQuantity();
-        else if(key===',') {if(inputMode==='cash'&&!value.includes(',')) value=(value||'0')+','}
-        else if(inputMode!=='cash'||!value.includes(',')||value.split(',')[1].length<2) value=(value==='0'?'':value)+key;
-        if(inputMode==='cash') cashBuffer=value; else buffer=value;
+        else if(key===',') {if(!value.includes(',')) value=(value||'0')+','}
+        else if(!value.includes(',')||value.split(',')[1].length<2) value=(value==='0'?'':value)+key;
+        buffer=value;
         updateDisplay();
       });
       setKeypadOpen(tools,false);
