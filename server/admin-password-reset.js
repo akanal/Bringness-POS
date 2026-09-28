@@ -44,6 +44,31 @@ async function sendResetMail(email,token){
 
 export async function handleAdminPasswordReset(req,res){
   const path=new URL(req.url,"http://localhost").pathname;
+  if(path==="/api/v1/admin/password/change"&&req.method==="POST"){
+    const bearer=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
+    if(!bearer){send(res,401,{error:"Bitte anmelden"});return true}
+    const session=await pool.query(`SELECT u.id,u.company_id,u.password_hash FROM sessions s JOIN users u ON u.id=s.user_id
+      WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND u.role IN ('owner','admin')`,[hash(bearer)]);
+    const user=session.rows[0];
+    if(!user){send(res,403,{error:"Kein aktiver Admin-Zugang"});return true}
+    let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    const current=String(input.currentPassword||""),next=String(input.newPassword||"");
+    if(current.length>128||next.length<12||next.length>128){send(res,400,{error:"Neues Passwort muss 12 bis 128 Zeichen enthalten"});return true}
+    const given=Buffer.from(passwordHash(current),"hex"),stored=Buffer.from(user.password_hash,"hex");
+    if(given.length!==stored.length||!crypto.timingSafeEqual(given,stored)){send(res,403,{error:"Bisheriges Passwort ist falsch"});return true}
+    if(current===next){send(res,400,{error:"Bitte ein anderes Passwort wählen"});return true}
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const updated=await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1 AND password_hash=$3",[user.id,passwordHash(next),user.password_hash]);
+      if(!updated.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Passwort wurde inzwischen geändert. Bitte erneut anmelden."});return true}
+      await client.query("DELETE FROM sessions WHERE user_id=$1",[user.id]);
+      await client.query("DELETE FROM password_reset_tokens WHERE user_id=$1",[user.id]);
+      await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id) VALUES($1,$2,'admin.password.changed','user',$3)",[user.company_id,user.id,user.id]);
+      await client.query("COMMIT");
+      send(res,200,{message:"Passwort geändert. Bitte erneut anmelden."});return true;
+    }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
+  }
   if(path==="/api/v1/admin/password/availability"&&req.method==="GET"){
     send(res,200,{emailAvailable:mailConfigured()});return true;
   }
