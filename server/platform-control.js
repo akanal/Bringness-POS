@@ -42,8 +42,13 @@ export async function handlePlatformControl(req,res){
       SELECT r.id,r.company_id,r.name,r.mode,c.name company_name,
         (SELECT count(*)::int FROM orders o WHERE o.restaurant_id=r.id) order_count,
         (SELECT count(*)::int FROM receipts rc JOIN orders o ON o.id=rc.order_id
-          WHERE o.restaurant_id=r.id AND rc.fiscal_status IS DISTINCT FROM 'signed') unsigned_receipts
+          WHERE o.restaurant_id=r.id) receipt_count,
+        (SELECT count(*)::int FROM receipts rc JOIN orders o ON o.id=rc.order_id
+          WHERE o.restaurant_id=r.id AND rc.fiscal_status IS DISTINCT FROM 'signed') unsigned_receipts,
+        td.provider tse_provider,td.status tse_status,td.certified tse_certified,
+        (SELECT count(*)::int FROM tse_transactions tx WHERE tx.restaurant_id=r.id AND tx.state='failed') failed_tse_transactions
       FROM restaurants r JOIN companies c ON c.id=r.company_id
+      LEFT JOIN tse_devices td ON td.restaurant_id=r.id
       ORDER BY c.name,r.name LIMIT 500
     `);
     const d=await pool.query(`
@@ -53,7 +58,7 @@ export async function handlePlatformControl(req,res){
       FROM devices d JOIN companies c ON c.id=d.company_id
       ORDER BY d.last_seen_at DESC NULLS LAST LIMIT 500
     `);
-    send(res,200,{restaurants:q.rows,devices:d.rows});return true;
+    send(res,200,{restaurants:q.rows,devices:d.rows,limited:q.rowCount===500||d.rowCount===500});return true;
   }
   const restaurant=p.match(/^\/api\/v1\/platform\/control\/registers\/([^/]+)$/);
   if(restaurant&&req.method==="PATCH"){
