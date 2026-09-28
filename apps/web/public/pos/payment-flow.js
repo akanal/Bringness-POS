@@ -35,6 +35,7 @@
         payments
       })});
       cart=[];
+      window.bnCashTenderValue='';
       renderCart();
       close(overlay);
       $("saleMsg").textContent='Verkauf gespeichert: '+result.receiptNumber+'. '+extraMessage+' Unter Belege kannst du den PDF-Beleg herunterladen. Ohne TSE-Signatur.';
@@ -83,6 +84,7 @@
     let mode='cash';
     const confirmBtn=overlay.querySelector('[data-confirm]');
     const cashInput=overlay.querySelector('[data-cash-received]');
+    if(window.bnCashTenderValue) cashInput.value=window.bnCashTenderValue;
     const changeOut=overlay.querySelector('[data-change]');
     const splitInput=overlay.querySelector('[data-split-cash]');
     const splitCard=overlay.querySelector('[data-split-card]');
