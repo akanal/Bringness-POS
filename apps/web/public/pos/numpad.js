@@ -13,6 +13,7 @@
     .bn-keypad-value{font-variant-numeric:tabular-nums;font-size:20px;font-weight:900;min-width:90px;text-align:right}
     .bn-cart-selected{outline:2px solid #102235;outline-offset:2px;border-radius:8px}
     .bn-cart-hint{font-size:12px;color:#607080;margin-top:6px}
+    .bn-keypad-toggle[aria-checked="true"]{background:#102235;color:#fff;border-color:#102235}
   `;
   document.head.appendChild(style);
 
@@ -61,7 +62,8 @@
     if(!panel||!toggle) return;
     panel.classList.toggle('open',open);
     toggle.setAttribute('aria-expanded',String(open));
-    toggle.textContent=open?'Zahlenfeld schließen':'Zahlenfeld öffnen';
+    toggle.setAttribute('aria-checked',String(open));
+    toggle.textContent=open?'Zahlenfeld: Ein':'Zahlenfeld: Aus';
   }
 
   function decorate(){
@@ -85,7 +87,7 @@
           <button type="button" data-cart-minus>− Menge</button>
           <button type="button" data-cart-plus>+ Menge</button>
           <button type="button" data-cart-delete>Artikel löschen</button>
-          <button type="button" class="bn-keypad-toggle" data-keypad-toggle aria-expanded="false">Zahlenfeld öffnen</button>
+          <button type="button" class="bn-keypad-toggle" data-keypad-toggle role="switch" aria-checked="false" aria-expanded="false">Zahlenfeld: Aus</button>
         </div>
         <div class="bn-keypad-panel" aria-label="Numerische Eingabe">
           <div class="bn-keypad-display"><span>Menge / Zahl</span><span class="bn-keypad-value">0</span></div>
@@ -98,7 +100,7 @@
           </div>
         </div>
         <div class="bn-cart-hint">Artikel antippen, dann Menge über +/− oder das Zahlenfeld ändern.</div>`;
-      basket.appendChild(tools);
+      basket.insertBefore(tools,cartEl);
 
       tools.querySelector('[data-keypad-toggle]').onclick=()=>{
         const open=!tools.querySelector('.bn-keypad-panel').classList.contains('open');
