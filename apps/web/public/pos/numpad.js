@@ -128,8 +128,7 @@
             <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
             <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
             <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button>
-            <button type="button" data-key="clear">C</button><button type="button" data-key="0">0</button><button type="button" data-key="back">⌫</button>
-            <button type="button" data-key=",">,</button>
+            <button type="button" data-key=",">,</button><button type="button" data-key="0">0</button><button type="button" data-key="back">⌫</button>
             <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
           </div>
         </div>
@@ -147,8 +146,7 @@
       tools.querySelectorAll('[data-key]').forEach(btn=>btn.onclick=()=>{
         const key=btn.dataset.key;
         let value=buffer;
-        if(key==='clear'){value='';if(selected<0)window.bnResetTender()}
-        else if(key==='back') value=value.slice(0,-1);
+        if(key==='back'){value=value.slice(0,-1);if(!value&&selected<0)window.bnResetTender()}
         else if(key==='ok') return applyQuantity();
         else if(key===',') {if(!value.includes(',')) value=(value||'0')+','}
         else if(!value.includes(',')||value.split(',')[1].length<2) value=(value==='0'?'':value)+key;
