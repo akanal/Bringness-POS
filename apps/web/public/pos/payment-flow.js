@@ -23,7 +23,8 @@
       const result=await api('/orders/checkout',{method:'POST',body:JSON.stringify({
         restaurantId:document.getElementById('restaurant').value,
         items:cart.map(item=>({productId:item.id,qty:item.qty})),
-        payments:[{method,amountCents:total}]
+        payments:[{method,amountCents:total}],
+        externalCardConfirmed:method==='card'
       })});
       cart=[];
       renderCart();
