@@ -11,7 +11,7 @@ import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
 import { handleBillingStatus } from "./billing-status.js";
 import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import { handlePlatformControl } from "./platform-control.js";
-import { handleAdminPasswordReset } from "./admin-password-reset.js";
+import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
 import { handleAdminTeam } from "./admin-team.js";
 
 // Protect the current 399 EUR download-license decision from obsolete legacy SQL.
@@ -28,6 +28,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await requireAdminPasswordChange(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
       if (await handleAdminPasswordReset(req,res)) return;
       if (await handleAdminTeam(req,res)) return;
