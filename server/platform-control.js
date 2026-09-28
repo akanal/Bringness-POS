@@ -90,5 +90,21 @@ export async function handlePlatformControl(req,res){
       send(res,202,{command,delivery:"when_online"});return true;
     }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
   }
+  const deviceStatus=p.match(/^\/api\/v1\/platform\/control\/devices\/([^/]+)\/status$/);
+  if(deviceStatus&&req.method==="PATCH"){
+    if(!uuid.test(deviceStatus[1])){send(res,400,{error:"Ungültiges Gerät"});return true}
+    let body;try{body=await readBody(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    if(!["active","blocked"].includes(body.status)){send(res,400,{error:"Ungültiger Gerätestatus"});return true}
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const old=(await client.query("SELECT id,company_id,status FROM devices WHERE id=$1 FOR UPDATE",[deviceStatus[1]])).rows[0];
+      if(!old){await client.query("ROLLBACK");send(res,404,{error:"Gerät nicht gefunden"});return true}
+      const updated=(await client.query("UPDATE devices SET status=$2 WHERE id=$1 RETURNING id,status",[old.id,body.status])).rows[0];
+      await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,'platform.device.status','device',$3,$4)",[old.company_id,actor.id,old.id,JSON.stringify({before:old.status,after:body.status})]);
+      await client.query("COMMIT");
+      send(res,200,{device:updated});return true;
+    }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
+  }
   send(res,404,{error:"Admin-Funktion nicht gefunden"});return true;
 }
