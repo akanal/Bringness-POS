@@ -14,11 +14,17 @@
     .bn-cart-selected{outline:2px solid #102235;outline-offset:2px;border-radius:8px}
     .bn-cart-hint{font-size:12px;color:#607080;margin-top:6px}
     .bn-keypad-toggle[aria-checked="true"]{background:#102235;color:#fff;border-color:#102235}
+    .bn-keypad-modes{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+    .bn-keypad-modes button{border:1px solid #cfd9e3;background:#fff;border-radius:8px;padding:7px 9px;cursor:pointer}
+    .bn-keypad-modes button[aria-pressed="true"]{background:#102235;color:#fff}
+    .bn-keypad-modes [data-keypad-close]{margin-left:auto;color:#b42318}
   `;
   document.head.appendChild(style);
 
   let selected=-1;
   let buffer='';
+  let cashBuffer='';
+  let inputMode='quantity';
   let wrapping=false;
 
   const originalRenderCart=typeof renderCart==='function'?renderCart:null;
@@ -27,14 +33,13 @@
     selected=index;
     document.querySelectorAll('#cart .basketline').forEach((el,i)=>el.classList.toggle('bn-cart-selected',i===selected));
     const item=typeof cart!=='undefined'?cart[selected]:null;
-    buffer=item?String(item.qty):'';
+    if(inputMode==='quantity') buffer=item?String(item.qty):'';
     updateDisplay();
   }
 
   function updateDisplay(){
     const out=document.querySelector('.bn-keypad-value');
-    const value=buffer||'0';
-    if(out && out.textContent!==value) out.textContent=value;
+    if(out) out.textContent=(inputMode==='cash'?cashBuffer:buffer)||'0';
   }
 
   function redraw(){
@@ -47,6 +52,13 @@
   }
 
   function applyQuantity(){
+    if(inputMode==='cash'){
+      if(!cashBuffer||!/^\d+(,\d{1,2})?$/.test(cashBuffer)) return;
+      window.bnCashTenderValue=cashBuffer;
+      const hint=document.querySelector('.bn-cart-hint');
+      if(hint) hint.textContent='Bargeldbetrag '+cashBuffer+' € wird im Zahlungsfenster übernommen.';
+      return;
+    }
     if(typeof cart==='undefined'||selected<0||!cart[selected]) return;
     const qty=Math.max(0,Math.floor(Number(buffer||0)));
     if(qty<=0) cart.splice(selected,1);
@@ -90,12 +102,14 @@
           <button type="button" class="bn-keypad-toggle" data-keypad-toggle role="switch" aria-checked="false" aria-expanded="false">Zahlenfeld: Aus</button>
         </div>
         <div class="bn-keypad-panel" aria-label="Numerische Eingabe">
-          <div class="bn-keypad-display"><span>Menge / Zahl</span><span class="bn-keypad-value">0</span></div>
+          <div class="bn-keypad-modes"><button type="button" data-input-mode="quantity" aria-pressed="true">Menge</button><button type="button" data-input-mode="cash" aria-pressed="false">Bargeld €</button><button type="button" data-keypad-close>Schließen ×</button></div>
+          <div class="bn-keypad-display"><span class="bn-keypad-caption">Menge</span><span class="bn-keypad-value">0</span></div>
           <div class="bn-keypad" aria-label="Numerisches Eingabefeld">
             <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
             <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
             <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button>
             <button type="button" data-key="clear">C</button><button type="button" data-key="0">0</button><button type="button" data-key="back">⌫</button>
+            <button type="button" data-key=",">,</button>
             <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
           </div>
         </div>
@@ -106,6 +120,13 @@
         const open=!tools.querySelector('.bn-keypad-panel').classList.contains('open');
         setKeypadOpen(tools,open);
       };
+      tools.querySelector('[data-keypad-close]').onclick=()=>setKeypadOpen(tools,false);
+      tools.querySelectorAll('[data-input-mode]').forEach(btn=>btn.onclick=()=>{
+        inputMode=btn.dataset.inputMode;
+        tools.querySelectorAll('[data-input-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b===btn)));
+        tools.querySelector('.bn-keypad-caption').textContent=inputMode==='cash'?'Bargeld €':'Menge';
+        updateDisplay();
+      });
       tools.querySelector('[data-cart-minus]').onclick=()=>{
         if(typeof cart==='undefined'||selected<0||!cart[selected]) return;
         cart[selected].qty--;
@@ -129,10 +150,13 @@
       };
       tools.querySelectorAll('[data-key]').forEach(btn=>btn.onclick=()=>{
         const key=btn.dataset.key;
-        if(key==='clear') buffer='';
-        else if(key==='back') buffer=buffer.slice(0,-1);
+        let value=inputMode==='cash'?cashBuffer:buffer;
+        if(key==='clear') value='';
+        else if(key==='back') value=value.slice(0,-1);
         else if(key==='ok') return applyQuantity();
-        else buffer=(buffer==='0'?'':buffer)+key;
+        else if(key===',') {if(inputMode==='cash'&&!value.includes(',')) value=(value||'0')+','}
+        else if(inputMode!=='cash'||!value.includes(',')||value.split(',')[1].length<2) value=(value==='0'?'':value)+key;
+        if(inputMode==='cash') cashBuffer=value; else buffer=value;
         updateDisplay();
       });
       setKeypadOpen(tools,false);
