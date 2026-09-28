@@ -35,9 +35,9 @@ export async function handleAdminTeam(req,res){
     const client=await pool.connect();
     try{
       await client.query("BEGIN");
-      const user=(await client.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role) VALUES($1,$2,$3,$4,'active','admin') RETURNING id,display_name,email,role,status",[actor.company_id,email,passwordHash(password),name])).rows[0];
+      const user=(await client.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role,must_change_password) VALUES($1,$2,$3,$4,'active','admin',true) RETURNING id,display_name,email,role,status",[actor.company_id,email,passwordHash(password),name])).rows[0];
       await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id) VALUES($1,$2,'admin.account.created','user',$3)",[actor.company_id,actor.id,user.id]);
-      await client.query("COMMIT");send(res,201,{admin:user,message:"Admin-Konto angelegt. Startpasswort persönlich übergeben und anschließend im Bereich Sicherheit ändern."});return true;
+      await client.query("COMMIT");send(res,201,{admin:user,message:"Admin-Konto angelegt. Startpasswort persönlich übergeben; beim ersten Login muss es geändert werden."});return true;
     }catch(error){await client.query("ROLLBACK");if(error.code==="23505"){send(res,409,{error:"E-Mail ist bereits vergeben"});return true}throw error}finally{client.release()}
   }
   const adminStatus=p.match(/^\/api\/v1\/admin\/team\/admins\/([^/]+)\/status$/);
