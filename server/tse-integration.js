@@ -171,6 +171,7 @@ export async function handleTseRoutes(req,res){
   sendJson(res,200,{
     ...status,
     integration:"prepared_transaction_flow",
+    salesSigningActive:false,
     dsfinvkExportAvailable:false,
     totalReceipts:r.total_receipts,
     signedReceipts:r.signed_receipts,
