@@ -44,6 +44,14 @@ async function sendResetMail(email,token){
 
 export async function handleAdminPasswordReset(req,res){
   const path=new URL(req.url,"http://localhost").pathname;
+  if(path==="/api/v1/admin/password/first-login"&&req.method==="GET"){
+    const bearer=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
+    if(!bearer){send(res,401,{error:"Bitte anmelden"});return true}
+    const q=await pool.query(`SELECT u.must_change_password FROM sessions s JOIN users u ON u.id=s.user_id
+      WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND u.role IN ('owner','admin')`,[hash(bearer)]);
+    if(!q.rowCount){send(res,403,{error:"Kein aktiver Admin-Zugang"});return true}
+    send(res,200,{required:q.rows[0].must_change_password});return true;
+  }
   if(path==="/api/v1/admin/password/change"&&req.method==="POST"){
     const bearer=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
     if(!bearer){send(res,401,{error:"Bitte anmelden"});return true}
@@ -120,4 +128,18 @@ export async function handleAdminPasswordReset(req,res){
     }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
   }
   return false;
+}
+
+export async function requireAdminPasswordChange(req,res){
+  const path=new URL(req.url,"http://localhost").pathname;
+  if(!path.startsWith("/api/v1/")||[
+    "/api/v1/auth/login","/api/v1/auth/logout","/api/v1/profile/password",
+    "/api/v1/admin/password/change","/api/v1/admin/password/first-login"
+  ].includes(path))return false;
+  const bearer=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
+  if(!bearer)return false;
+  const q=await pool.query(`SELECT u.must_change_password FROM sessions s JOIN users u ON u.id=s.user_id
+    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND u.role='admin'`,[hash(bearer)]);
+  if(!q.rows[0]?.must_change_password)return false;
+  send(res,428,{error:"Bitte zuerst das Startpasswort ändern",mustChangePassword:true});return true;
 }
