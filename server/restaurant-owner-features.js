@@ -3,6 +3,7 @@ import pg from "pg";
 import QRCode from "qrcode";
 import webpush from "web-push";
 import PDFDocument from "pdfkit";
+import { receiptUrl } from "./public-receipt.js";
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -80,11 +81,11 @@ export async function handleRestaurantOwnerFeature(req,res){
   const receiptQr=p.match(/^\/api\/v1\/receipts\/([0-9a-f-]{36})\/number-qr$/i);
   if(receiptQr && req.method==="GET"){
     const u=await user(req); if(!u)return json(res,401,{error:"Nicht angemeldet"});
-    const q=await pool.query(`SELECT rc.receipt_number FROM receipts rc
+    const q=await pool.query(`SELECT rc.receipt_number,rc.public_token FROM receipts rc
       JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id
       WHERE rc.id=$1 AND r.company_id=$2`,[receiptQr[1],u.company_id]);
     if(!q.rowCount)return json(res,404,{error:"Beleg nicht gefunden"});
-    const svg=await QRCode.toString(q.rows[0].receipt_number,{type:"svg",width:260,margin:2,errorCorrectionLevel:"M"});
+    const svg=await QRCode.toString(receiptUrl(req,q.rows[0].public_token),{type:"svg",width:260,margin:2,errorCorrectionLevel:"M"});
     res.writeHead(200,{"content-type":"image/svg+xml; charset=utf-8","cache-control":"private, no-store"});
     res.end(svg); return true;
   }
