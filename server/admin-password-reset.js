@@ -1,0 +1,98 @@
+import crypto from "node:crypto";
+import pg from "pg";
+
+const pool=new pg.Pool({
+  connectionString:process.env.DATABASE_URL,
+  ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false
+});
+const tokenPattern=/^[a-f0-9]{64}$/;
+const emailPattern=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const passwordHash=password=>crypto.scryptSync(password,process.env.PASSWORD_PEPPER||"bringness-pos",64).toString("hex");
+const hash=value=>crypto.createHash("sha256").update(value).digest("hex");
+function send(res,status,value){
+  res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});
+  res.end(JSON.stringify(value));
+}
+async function body(req){
+  let raw="";
+  for await(const chunk of req){
+    raw+=chunk;
+    if(raw.length>8192)throw Error("Anfrage zu groß");
+  }
+  return raw?JSON.parse(raw):{};
+}
+function mailConfigured(){
+  return Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
+}
+async function sendResetMail(email,token){
+  const {default:nodemailer}=await import("nodemailer");
+  const port=Number(process.env.SMTP_PORT||587);
+  if(!Number.isInteger(port)||port<1||port>65535)throw Error("SMTP_PORT ungültig");
+  const origin=(process.env.PUBLIC_BASE_URL||"https://bringness-pos-app-production.up.railway.app").replace(/\/$/,"");
+  if(!origin.startsWith("https://"))throw Error("PUBLIC_BASE_URL muss HTTPS verwenden");
+  const link=origin+"/admin/reset.html#token="+token;
+  const transporter=nodemailer.createTransport({
+    host:process.env.SMTP_HOST,port,secure:port===465,requireTLS:port!==465,
+    auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASSWORD},
+    tls:{rejectUnauthorized:true}
+  });
+  await transporter.sendMail({
+    from:process.env.SMTP_FROM,to:email,subject:"Bringness POS Admin – Passwort zurücksetzen",
+    text:"Öffne diesen Link, um dein Admin-Passwort innerhalb von 30 Minuten neu zu setzen:\n\n"+link+"\n\nWenn du den Reset nicht angefordert hast, ignoriere diese Nachricht."
+  });
+}
+
+export async function handleAdminPasswordReset(req,res){
+  const path=new URL(req.url,"http://localhost").pathname;
+  if(path==="/api/v1/admin/password/availability"&&req.method==="GET"){
+    send(res,200,{emailAvailable:mailConfigured()});return true;
+  }
+  if(path==="/api/v1/admin/password/forgot"&&req.method==="POST"){
+    if(!mailConfigured()){send(res,503,{error:"E-Mail-Versand ist noch nicht eingerichtet. Bitte SMTP im Bringness-Server konfigurieren."});return true}
+    let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    const email=String(input.email||"").trim().toLowerCase();
+    if(email.length>254||!emailPattern.test(email)){send(res,400,{error:"Gültige E-Mail-Adresse erforderlich"});return true}
+    const result=await pool.query("SELECT id FROM users WHERE email=$1 AND role IN ('owner','admin') AND status='active'",[email]);
+    const user=result.rows[0];
+    const generic={message:"Wenn ein aktives Admin-Konto mit dieser E-Mail existiert, erhält es einen Reset-Link."};
+    if(!user){send(res,200,generic);return true}
+    const recent=await pool.query("SELECT 1 FROM password_reset_tokens WHERE user_id=$1 AND created_at>now()-interval '2 minutes' AND used_at IS NULL",[user.id]);
+    if(recent.rowCount){send(res,200,generic);return true}
+    const token=crypto.randomBytes(32).toString("hex"),tokenHash=hash(token);
+    await pool.query("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '30 minutes')",[tokenHash,user.id]);
+    try{await sendResetMail(email,token)}
+    catch(error){
+      await pool.query("DELETE FROM password_reset_tokens WHERE token_hash=$1",[tokenHash]);
+      console.error("Admin password reset mail delivery failed:",error.code||error.name);
+      send(res,503,{error:"Reset-E-Mail konnte nicht versendet werden. Mailkonfiguration prüfen."});return true;
+    }
+    send(res,200,generic);return true;
+  }
+  if(path==="/api/v1/admin/password/reset"&&req.method==="POST"){
+    let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    const token=String(input.token||""),password=String(input.password||"");
+    if(!tokenPattern.test(token)||password.length<12||password.length>128){
+      send(res,400,{error:"Ungültiger Link oder Passwort (mindestens 12 Zeichen)"});return true;
+    }
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const row=(await client.query(`
+        SELECT pr.token_hash,pr.user_id,u.company_id
+        FROM password_reset_tokens pr JOIN users u ON u.id=pr.user_id
+        WHERE pr.token_hash=$1 AND pr.used_at IS NULL AND pr.expires_at>now()
+          AND u.role IN ('owner','admin') AND u.status='active'
+        FOR UPDATE OF pr
+      `,[hash(token)])).rows[0];
+      if(!row){await client.query("ROLLBACK");send(res,400,{error:"Reset-Link ist ungültig oder abgelaufen"});return true}
+      await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1",[row.user_id,passwordHash(password)]);
+      await client.query("UPDATE password_reset_tokens SET used_at=now() WHERE token_hash=$1",[row.token_hash]);
+      await client.query("DELETE FROM password_reset_tokens WHERE user_id=$1 AND token_hash<>$2",[row.user_id,row.token_hash]);
+      await client.query("DELETE FROM sessions WHERE user_id=$1",[row.user_id]);
+      await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id) VALUES($1,$2,'admin.password.reset','user',$3)",[row.company_id,row.user_id,row.user_id]);
+      await client.query("COMMIT");
+      send(res,200,{message:"Passwort geändert. Alle bisherigen Sitzungen wurden abgemeldet."});return true;
+    }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
+  }
+  return false;
+}
