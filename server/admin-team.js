@@ -23,6 +23,44 @@ export async function handleAdminTeam(req,res){
       WHERE r.company_id=$1 ORDER BY r.name,e.display_name LIMIT 500`,[actor.company_id]);
     send(res,200,{employees:q.rows,limited:q.rowCount===500});return true;
   }
+  if(p==="/api/v1/admin/team/admins"&&req.method==="GET"){
+    const q=await pool.query("SELECT id,display_name,email,role,status,created_at,must_change_password FROM users WHERE company_id=$1 AND role IN ('owner','admin') ORDER BY created_at LIMIT 100",[actor.company_id]);
+    send(res,200,{admins:q.rows,canManage:actor.role==="owner"});return true;
+  }
+  if(p==="/api/v1/admin/team/admins"&&req.method==="POST"){
+    if(actor.role!=="owner"){send(res,403,{error:"Nur der Inhaber darf Administratoren anlegen"});return true}
+    let input;try{input=await read(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    const name=String(input.name||"").trim(),email=String(input.email||"").trim().toLowerCase(),password=String(input.password||"");
+    if(name.length<2||name.length>100||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<12||password.length>128){send(res,400,{error:"Name, E-Mail und Erstpasswort mit 12 bis 128 Zeichen erforderlich"});return true}
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const user=(await client.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role) VALUES($1,$2,$3,$4,'active','admin') RETURNING id,display_name,email,role,status",[actor.company_id,email,passwordHash(password),name])).rows[0];
+      await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id) VALUES($1,$2,'admin.account.created','user',$3)",[actor.company_id,actor.id,user.id]);
+      await client.query("COMMIT");send(res,201,{admin:user,message:"Admin-Konto angelegt. Startpasswort persönlich übergeben und anschließend im Bereich Sicherheit ändern."});return true;
+    }catch(error){await client.query("ROLLBACK");if(error.code==="23505"){send(res,409,{error:"E-Mail ist bereits vergeben"});return true}throw error}finally{client.release()}
+  }
+  const adminStatus=p.match(/^\/api\/v1\/admin\/team\/admins\/([^/]+)\/status$/);
+  if(adminStatus&&req.method==="PATCH"){
+    if(actor.role!=="owner"){send(res,403,{error:"Nur der Inhaber darf Administratoren sperren"});return true}
+    if(!uuid.test(adminStatus[1])){send(res,400,{error:"Ungültiger Administrator"});return true}
+    let input;try{input=await read(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    if(!["active","blocked"].includes(input.status)){send(res,400,{error:"Ungültiger Kontostatus"});return true}
+    const client=await pool.connect();
+    try{
+      await client.query("BEGIN");
+      const user=(await client.query("SELECT id,status FROM users WHERE id=$1 AND company_id=$2 AND role='admin' FOR UPDATE",[adminStatus[1],actor.company_id])).rows[0];
+      if(!user){await client.query("ROLLBACK");send(res,404,{error:"Administrator nicht gefunden"});return true}
+      const platform=await client.query("SELECT 1 FROM platform_admins WHERE user_id=$1 AND active=true",[user.id]);
+      if(platform.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Plattformadministrator kann hier nicht gesperrt werden"});return true}
+      if(user.status!==input.status){
+        await client.query("UPDATE users SET status=$2 WHERE id=$1",[user.id,input.status]);
+        if(input.status==="blocked")await client.query("DELETE FROM sessions WHERE user_id=$1",[user.id]);
+        await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,'admin.account.status','user',$3,$4)",[actor.company_id,actor.id,user.id,JSON.stringify({before:user.status,after:input.status})]);
+      }
+      await client.query("COMMIT");send(res,200,{id:user.id,status:input.status});return true;
+    }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
+  }
   if(p==="/api/v1/employees"&&req.method==="POST"){
     let input;try{input=await read(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const name=String(input.name||"").trim(),role=String(input.role||"cashier"),pin=String(input.pin||"");
