@@ -21,8 +21,9 @@
     const r=await fetch("/api/v1/receipts/"+encodeURIComponent(id)+"/number-qr",{headers:{authorization:"Bearer "+token()}});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw Error(e.error||"QR-Code nicht verfügbar")}
     const svg=await r.text();
+    const link=r.headers.get("x-receipt-url");
     const overlay=document.createElement("div");overlay.style.cssText="position:fixed;inset:0;background:#07182c99;z-index:11000;display:grid;place-items:center;padding:18px";
-    overlay.innerHTML='<div style="background:#fff;border-radius:18px;padding:24px;max-width:360px;text-align:center"><h3 style="margin-top:0">Digitaler Beleg</h3><div style="max-width:260px;margin:auto">'+svg+'</div><p><b>'+esc(number)+'</b></p><p class="muted">Scannen öffnet den vollständigen Beleg im Browser.</p><button type="button">Schließen</button></div>';
+    overlay.innerHTML='<div style="background:#fff;border-radius:18px;padding:24px;max-width:360px;text-align:center"><h3 style="margin-top:0">Digitaler Beleg</h3><div style="max-width:260px;margin:auto">'+svg+'</div><p><b>'+esc(number)+'</b></p><p class="muted">Scannen öffnet den vollständigen Beleg im Browser.</p>'+(link?'<p><a href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Beleg im Browser öffnen</a></p>':'')+'<button type="button">Schließen</button></div>';
     overlay.querySelector("button").onclick=()=>overlay.remove();overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
   }
   function enhanceReceipts(){
