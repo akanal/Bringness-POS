@@ -52,16 +52,16 @@ header.poshead{overflow:visible;min-height:62px}header.poshead #mainnav{overflow
 .cash{grid-template-columns:155px minmax(0,1fr) minmax(290px,340px)}
 .cash>.basket{min-width:0;align-self:start;position:sticky;top:78px}
 .cash>.goods{min-width:0}
-.product-options{position:relative;align-self:flex-end;margin:2px 0 0}
+.product-options{position:absolute;top:4px;right:4px;margin:0}
 .product-options summary{list-style:none;cursor:pointer;padding:5px 8px;border-radius:7px;color:#617286;font-size:12px;font-weight:700}
 .product-options summary::-webkit-details-marker{display:none}
 .product-options summary:hover,.product-options[open] summary{background:#edf2f6;color:#10263c}
 .product-options-menu{position:absolute;right:0;top:100%;z-index:20;display:grid;gap:3px;min-width:190px;padding:6px;background:#fff;border:1px solid #dce5ee;border-radius:10px;box-shadow:0 12px 30px #10223520}
 .product-options-menu button{width:100%;text-align:left;background:#fff;color:#263c50;padding:9px 10px;border-radius:7px;font-size:12px}
 .product-options-menu button:hover{background:#f1f5f8}
-.cash>.goods{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}
-.cash>.goods>div{min-width:0}
-.cash>.goods .product{width:100%;min-width:0;min-height:82px;padding:9px;overflow-wrap:anywhere}
+.cash>.goods{grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;padding:10px}
+.cash>.goods>div{position:relative;min-width:0}
+.cash>.goods .product{width:100%;min-width:0;min-height:74px;padding:8px 30px 8px 8px;overflow-wrap:anywhere}
 .cash>.goods .product .pic{font-size:24px}
 .cash>.goods .product b{font-size:13px;line-height:1.2}
 .cash>.goods .product small{font-size:11px}
