@@ -14,9 +14,8 @@
     .bn-cart-selected{outline:2px solid #102235;outline-offset:2px;border-radius:8px}
     .bn-cart-hint{font-size:12px;color:#607080;margin-top:6px}
     .bn-keypad-toggle[aria-checked="true"]{background:#102235;color:#fff;border-color:#102235}
-    .bn-cart-menu{position:relative;margin-left:auto}.bn-cart-menu summary{cursor:pointer;list-style:none;padding:4px 8px;font-size:18px}
-    .bn-cart-menu summary::-webkit-details-marker{display:none}.bn-cart-menu>div{position:absolute;right:0;z-index:15;display:grid;min-width:145px;padding:6px;background:#fff;border:1px solid #dce5ee;border-radius:9px;box-shadow:0 8px 22px #10223522}
-    .bn-cart-menu button{text-align:left;background:#fff;padding:8px}.bn-cart-menu button:hover{background:#f1f5f8}
+    .bn-tender-summary{display:none;border-top:1px solid #dce5ee;padding:9px 0;font-size:13px}
+    .bn-tender-summary.show{display:grid;grid-template-columns:1fr auto;gap:5px}
   `;
   document.head.appendChild(style);
 
@@ -27,12 +26,28 @@
   const originalRenderCart=typeof renderCart==='function'?renderCart:null;
 
   function choose(index){
-    selected=index;
+    selected=selected===index?-1:index;
     document.querySelectorAll('#cart .basketline').forEach((el,i)=>el.classList.toggle('bn-cart-selected',i===selected));
-    const item=typeof cart!=='undefined'?cart[selected]:null;
-    buffer=item?String(item.qty):'';
+    buffer='';
+    updateCaption();
     updateDisplay();
   }
+
+  function updateCaption(){
+    const label=document.querySelector('.bn-keypad-caption');
+    if(label)label.textContent=selected>=0?'Menge':'Betrag €';
+  }
+
+  function updateTender(){
+    const summary=document.querySelector('.bn-tender-summary');
+    if(!summary)return;
+    const given=Number(String(window.bnCashTenderValue||'').replace(',','.'));
+    const total=typeof cart==='undefined'?0:cart.reduce((sum,item)=>sum+item.qty*item.price,0);
+    summary.classList.toggle('show',Number.isFinite(given)&&given>0);
+    summary.querySelector('[data-given]').textContent=given.toLocaleString('de-DE',{style:'currency',currency:'EUR'});
+    summary.querySelector('[data-change]').textContent=Math.max(0,given-total).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
+  }
+  window.bnResetTender=()=>{window.bnCashTenderValue='';updateTender()};
 
   function updateDisplay(){
     const out=document.querySelector('.bn-keypad-value');
@@ -47,19 +62,22 @@
       wrapping=false;
     }
     decorate();
+    updateTender();
   }
 
   function applyQuantity(){
     const hint=document.querySelector('.bn-cart-hint');
     if(!buffer){if(hint)hint.textContent='Bitte zuerst eine Zahl eingeben.';return}
-    if(buffer.includes(',')){
-      if(!/^\d+,\d{1,2}$/.test(buffer)) return;
+    if(selected<0){
+      if(!/^\d+(,\d{1,2})?$/.test(buffer))return;
       window.bnCashTenderValue=buffer;
-      if(hint) hint.textContent='Betrag '+buffer+' € wird im Zahlungsfenster übernommen.';
+      updateTender();
+      if(hint) hint.textContent='Gegeben: '+Number(buffer.replace(',','.')).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
       return;
     }
+    if(buffer.includes(',')){if(hint)hint.textContent='Mengen bitte als ganze Zahl eingeben.';return}
     if(typeof cart==='undefined'||!cart.length){if(hint)hint.textContent='Bitte zuerst eine Speise zur Bestellung hinzufügen.';return}
-    if(selected<0||!cart[selected]) selected=cart.length-1;
+    if(!cart[selected]){if(hint)hint.textContent='Bitte eine Position auswählen.';return}
     const qty=Math.max(0,Math.floor(Number(buffer||0)));
     if(qty<=0) cart.splice(selected,1);
     else cart[selected].qty=qty;
@@ -78,8 +96,8 @@
     toggle.setAttribute('aria-checked',String(open));
     toggle.textContent=open?'Zahlenfeld: Ein':'Zahlenfeld: Aus';
     if(open){
-      if(typeof cart!=='undefined' && cart.length && (selected<0||!cart[selected])) choose(cart.length-1);
       buffer='';
+      updateCaption();
       updateDisplay();
     }
   }
@@ -92,24 +110,8 @@
 
     cartEl.querySelectorAll('.basketline').forEach((line,i)=>{
       line.style.cursor='pointer';
-      line.onclick=e=>{if(!e.target.closest('.bn-cart-menu')) choose(i)};
+      line.onclick=()=>choose(i);
       line.classList.toggle('bn-cart-selected',i===selected);
-      if(!line.querySelector('.bn-cart-menu')){
-        const menu=document.createElement('details');
-        menu.className='bn-cart-menu';
-        menu.innerHTML='<summary aria-label="Artikelaktionen">⋮</summary><div><button type="button" data-action="minus">− Menge</button><button type="button" data-action="plus">+ Menge</button><button type="button" data-action="delete">Löschen</button></div>';
-        line.appendChild(menu);
-        menu.querySelectorAll('[data-action]').forEach(btn=>btn.onclick=e=>{
-          e.stopPropagation();choose(i);
-          const action=btn.dataset.action;
-          if(action==='delete')cart.splice(i,1);
-          else if(action==='plus')cart[i].qty++;
-          else if(--cart[i].qty<=0)cart.splice(i,1);
-          selected=Math.min(i,cart.length-1);
-          buffer=selected>=0?String(cart[selected].qty):'';
-          redraw();
-        });
-      }
     });
 
     let tools=basket.querySelector('.bn-cart-tools');
@@ -121,7 +123,7 @@
           <button type="button" class="bn-keypad-toggle" data-keypad-toggle role="switch" aria-checked="false" aria-expanded="false">Zahlenfeld: Aus</button>
         </div>
         <div class="bn-keypad-panel" aria-label="Numerische Eingabe">
-          <div class="bn-keypad-display"><span>Menge eingeben</span><span class="bn-keypad-value">0</span></div>
+          <div class="bn-keypad-display"><span class="bn-keypad-caption">Betrag €</span><span class="bn-keypad-value">0</span></div>
           <div class="bn-keypad" aria-label="Numerisches Eingabefeld">
             <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
             <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
@@ -131,8 +133,12 @@
             <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
           </div>
         </div>
-        <div class="bn-cart-hint">Speise antippen, Zahl eingeben und übernehmen. Komma für Bargeldbetrag.</div>`;
+        <div class="bn-cart-hint">Betrag eingeben. Für eine Mengenänderung zuerst die Position antippen.</div>`;
       basket.insertBefore(tools,cartEl);
+      const summary=document.createElement('div');
+      summary.className='bn-tender-summary';
+      summary.innerHTML='<span>Gegeben</span><strong data-given>0,00 €</strong><span>Rückgeld</span><strong data-change>0,00 €</strong>';
+      basket.insertBefore(summary,document.getElementById('paymentMethod'));
 
       tools.querySelector('[data-keypad-toggle]').onclick=()=>{
         const open=!tools.querySelector('.bn-keypad-panel').classList.contains('open');
@@ -141,7 +147,7 @@
       tools.querySelectorAll('[data-key]').forEach(btn=>btn.onclick=()=>{
         const key=btn.dataset.key;
         let value=buffer;
-        if(key==='clear'){value='';window.bnCashTenderValue=''}
+        if(key==='clear'){value='';if(selected<0)window.bnResetTender()}
         else if(key==='back') value=value.slice(0,-1);
         else if(key==='ok') return applyQuantity();
         else if(key===',') {if(!value.includes(',')) value=(value||'0')+','}
@@ -152,6 +158,7 @@
       setKeypadOpen(tools,false);
     }
     updateDisplay();
+    updateTender();
   }
 
   if(originalRenderCart){
