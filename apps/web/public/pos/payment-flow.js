@@ -23,7 +23,7 @@
       })});
       cart=[];
       renderCart();
-      window.bnCashTenderValue='';
+      if(window.bnResetTender)window.bnResetTender();
       status.textContent='Verkauf gespeichert: '+result.receiptNumber+'.'+(method==='cash'?' Rückgeld: '+euro(given-total)+'.':' Kartenzahlung erfasst.')+' Beleg unter „Belege“.';
     }catch(error){
       status.textContent='Zahlung nicht gespeichert: '+error.message;
