@@ -11,6 +11,7 @@ import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
 import { handleBillingStatus } from "./billing-status.js";
 import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import { handlePlatformControl } from "./platform-control.js";
+import { handleAdminPasswordReset } from "./admin-password-reset.js";
 
 // Protect the current 399 EUR download-license decision from obsolete legacy SQL.
 const originalPoolQuery = pg.Pool.prototype.query;
@@ -27,6 +28,7 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (await handleDeviceLicense(req,res)) return;
+      if (await handleAdminPasswordReset(req,res)) return;
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;
