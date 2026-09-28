@@ -5,6 +5,7 @@ import pg from "pg";
 import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./restaurant-owner-features.js";
 import { handlePaymentCheckout } from "./payment-checkout.js";
 import { handlePaymentReceipt } from "./payment-receipt.js";
+import { handlePublicReceipt, migratePublicReceipts } from "./public-receipt.js";
 import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
 import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
 import { handleBillingStatus } from "./billing-status.js";
@@ -30,6 +31,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
+      if (await handlePublicReceipt(req,res)) return;
       if (await handleRestaurantOwnerFeature(req,res)) return;
     } catch (error) {
       console.error("Modular feature error:", error);
@@ -81,6 +83,7 @@ async function migrateWithRetry(){
   for(let attempt=1;attempt<=12;attempt++){
     try{
       await migrateRestaurantOwnerFeatures();
+      await migratePublicReceipts();
       await migrateTseIntegration();
       await migrateBillingAccess();
       await migrateDeviceLicense();
