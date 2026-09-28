@@ -85,8 +85,9 @@ export async function handleRestaurantOwnerFeature(req,res){
       JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id
       WHERE rc.id=$1 AND r.company_id=$2`,[receiptQr[1],u.company_id]);
     if(!q.rowCount)return json(res,404,{error:"Beleg nicht gefunden"});
-    const svg=await QRCode.toString(receiptUrl(req,q.rows[0].public_token),{type:"svg",width:260,margin:2,errorCorrectionLevel:"M"});
-    res.writeHead(200,{"content-type":"image/svg+xml; charset=utf-8","cache-control":"private, no-store"});
+    const link=receiptUrl(req,q.rows[0].public_token);
+    const svg=await QRCode.toString(link,{type:"svg",width:260,margin:2,errorCorrectionLevel:"M"});
+    res.writeHead(200,{"content-type":"image/svg+xml; charset=utf-8","cache-control":"private, no-store","x-receipt-url":link});
     res.end(svg); return true;
   }
 
