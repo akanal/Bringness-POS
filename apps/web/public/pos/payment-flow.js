@@ -13,6 +13,10 @@
       status.textContent='Gegebener Betrag zu niedrig. Bitte Betrag im Zahlenfeld korrigieren oder mit der Rücktaste löschen.';
       return;
     }
+    if(method==='card'&&!window.confirm('Wurde die Kartenzahlung über ein externes Terminal erfolgreich bestätigt? Bringness POS löst derzeit keine Terminalzahlung aus.')){
+      status.textContent='Kartenzahlung abgebrochen. Es wurde kein Verkauf gespeichert.';
+      return;
+    }
     button.disabled=true;
     status.textContent='Zahlung wird gespeichert…';
     try{
@@ -24,7 +28,7 @@
       cart=[];
       renderCart();
       if(window.bnResetTender)window.bnResetTender();
-      status.textContent='Verkauf gespeichert: '+result.receiptNumber+'.'+(method==='cash'?' Rückgeld: '+euro(given-total)+'.':' Kartenzahlung erfasst.')+' Beleg unter „Belege“.';
+      status.textContent='Verkauf gespeichert: '+result.receiptNumber+'.'+(method==='cash'?' Rückgeld: '+euro(given-total)+'.':' Zahlungsart Karte vermerkt. Terminalzahlung separat prüfen.')+' Beleg unter „Belege“.';
     }catch(error){
       status.textContent='Zahlung nicht gespeichert: '+error.message;
     }finally{button.disabled=false}
