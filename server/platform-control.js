@@ -68,6 +68,34 @@ export async function handlePlatformControl(req,res){
       FROM companies c ORDER BY c.name LIMIT 500`);
     send(res,200,{companies:q.rows,limited:q.rowCount===500});return true;
   }
+  if(p==="/api/v1/platform/control/search"&&req.method==="GET"){
+    const term=String(url.searchParams.get("q")||"").trim().toLocaleLowerCase("de-DE");
+    if(term.length>100){send(res,400,{error:"Suchbegriff zu lang"});return true}
+    if(term&&term.length<2){send(res,200,{companies:[],restaurants:[],owners:[],employees:[]});return true}
+    if(!term){
+      const recent=await pool.query("SELECT id,name FROM companies ORDER BY created_at DESC LIMIT 25");
+      send(res,200,{companies:recent.rows,restaurants:[],owners:[],employees:[]});return true;
+    }
+    const [companies,restaurants,owners,employees]=await Promise.all([
+      pool.query(`SELECT c.id,c.name FROM companies c WHERE position($1 in lower(c.name))>0
+        OR EXISTS(SELECT 1 FROM users u WHERE u.company_id=c.id AND u.role='owner'
+          AND (position($1 in lower(u.display_name))>0 OR position($1 in lower(u.email))>0))
+        ORDER BY c.name LIMIT 30`,[term]),
+      pool.query(`SELECT r.id,r.name,c.id company_id,c.name company_name FROM restaurants r
+        JOIN companies c ON c.id=r.company_id WHERE position($1 in lower(r.name))>0
+        ORDER BY c.name,r.name LIMIT 30`,[term]),
+      pool.query(`SELECT u.id,u.display_name,u.email,c.id company_id,c.name company_name FROM users u
+        JOIN companies c ON c.id=u.company_id WHERE u.role='owner'
+        AND (position($1 in lower(u.display_name))>0 OR position($1 in lower(u.email))>0)
+        ORDER BY u.display_name LIMIT 30`,[term]),
+      pool.query(`SELECT e.id,e.display_name,e.role,r.name restaurant_name,c.id company_id,c.name company_name,
+        u.email FROM employees e JOIN restaurants r ON r.id=e.restaurant_id
+        JOIN companies c ON c.id=r.company_id LEFT JOIN users u ON u.id=e.user_id
+        WHERE position($1 in lower(e.display_name))>0 OR position($1 in lower(coalesce(u.email,'')))>0
+        ORDER BY e.display_name LIMIT 30`,[term])
+    ]);
+    send(res,200,{companies:companies.rows,restaurants:restaurants.rows,owners:owners.rows,employees:employees.rows});return true;
+  }
   const companyDetail=p.match(/^\/api\/v1\/platform\/control\/companies\/([^/]+)$/);
   if(companyDetail&&req.method==="GET"){
     const id=companyDetail[1];if(!uuid.test(id)){send(res,400,{error:"Ungültiges Kundenkonto"});return true}
