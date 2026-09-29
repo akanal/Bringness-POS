@@ -103,6 +103,7 @@ export async function handleAdminTeam(req,res){
         WHERE e.id=$1 AND r.company_id=$2 FOR UPDATE OF e`,[match[1],actor.company_id])).rows[0];
       if(!e){await client.query("ROLLBACK");send(res,404,{error:"Mitarbeiter nicht gefunden"});return true}
       if(e.user_id===actor.id){await client.query("ROLLBACK");send(res,409,{error:"Eigenen Zugang hier nicht deaktivieren"});return true}
+      if(e.user_id){const account=(await client.query("SELECT role FROM users WHERE id=$1",[e.user_id])).rows[0];if(["owner","admin"].includes(account?.role)){await client.query("ROLLBACK");send(res,409,{error:"Inhaber- und Adminkonten werden nur in der Kontoverwaltung geändert"});return true}}
       if(e.user_id&&input.active){const u=(await client.query("SELECT status FROM users WHERE id=$1 FOR UPDATE",[e.user_id])).rows[0];if(e.role==="waiter"&&u?.status==="disabled")await client.query("UPDATE users SET status='active' WHERE id=$1",[e.user_id]);else if(u?.status!=="active"){await client.query("ROLLBACK");send(res,409,{error:"Bitte zuerst das Benutzerkonto freigeben"});return true}}
       await client.query("UPDATE employees SET active=$2 WHERE id=$1",[e.id,input.active]);
       if(!input.active&&e.user_id){await client.query("DELETE FROM sessions WHERE user_id=$1",[e.user_id]);if(e.role==="waiter")await client.query("UPDATE users SET status='disabled' WHERE id=$1 AND role='waiter'",[e.user_id])}
