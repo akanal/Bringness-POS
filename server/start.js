@@ -13,6 +13,8 @@ import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import { handlePlatformControl } from "./platform-control.js";
 import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
 import { handleAdminTeam } from "./admin-team.js";
+import { handleAdminAuditExport } from "./admin-audit-export.js";
+import { handleBillingTerms, migrateBillingTerms } from "./billing-terms.js";
 
 // Protect the current 399 EUR download-license decision from obsolete legacy SQL.
 const originalPoolQuery = pg.Pool.prototype.query;
@@ -32,6 +34,8 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleDeviceLicense(req,res)) return;
       if (await handleAdminPasswordReset(req,res)) return;
       if (await handleAdminTeam(req,res)) return;
+      if (await handleAdminAuditExport(req,res)) return;
+      if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;
@@ -94,6 +98,7 @@ async function migrateWithRetry(){
       await migrateTseIntegration();
       await migrateBillingAccess();
       await migrateDeviceLicense();
+      await migrateBillingTerms();
       const pricingPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
