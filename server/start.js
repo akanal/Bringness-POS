@@ -13,6 +13,7 @@ import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import { handlePlatformControl } from "./platform-control.js";
 import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
 import { handleAdminTeam } from "./admin-team.js";
+import { handleStaffInvitations, migrateStaffInvitations } from "./staff-invitations.js";
 import { handleAdminAuditExport } from "./admin-audit-export.js";
 import { handleBillingTerms, migrateBillingTerms } from "./billing-terms.js";
 
@@ -34,6 +35,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleDeviceLicense(req,res)) return;
       if (await handleAdminPasswordReset(req,res)) return;
       if (await handleAdminTeam(req,res)) return;
+      if (await handleStaffInvitations(req,res)) return;
       if (await handleAdminAuditExport(req,res)) return;
       if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformControl(req,res)) return;
@@ -99,6 +101,7 @@ async function migrateWithRetry(){
       await migrateBillingAccess();
       await migrateDeviceLicense();
       await migrateBillingTerms();
+      await migrateStaffInvitations();
       const pricingPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
