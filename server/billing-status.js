@@ -34,7 +34,9 @@ export async function handleBillingStatus(req,res){
   if(!user){send(res,401,{error:"Nicht angemeldet"});return true}
 
   const [plans,features,entitlements]=await Promise.all([
-    pool.query(`SELECT code,name,billing_type,amount_cents,currency,active FROM billing_plans ORDER BY code`),
+    pool.query(`SELECT bp.code,bp.name,bp.billing_type,bp.amount_cents,bp.currency,bp.active,
+      t.monthly_net_cents,t.note special_note FROM billing_plans bp
+      LEFT JOIN company_billing_terms t ON t.plan_code=bp.code AND t.company_id=$1 ORDER BY bp.code`,[user.company_id]),
     pool.query(`SELECT feature_code,status,starts_at,ends_at,grace_until,payment_status FROM company_features WHERE company_id=$1`,[user.company_id]),
     pool.query(`SELECT bp.code,ce.status,ce.current_period_end,ce.purchased_at FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 ORDER BY ce.created_at DESC`,[user.company_id])
   ]);
@@ -75,7 +77,9 @@ export async function handleBillingStatus(req,res){
         code:plan.code,
         name:plan.name,
         billingType:plan.billing_type,
-        amount:plan.amount_cents/100,
+        amount:(plan.monthly_net_cents??plan.amount_cents)/100,
+        standardAmount:plan.amount_cents/100,
+        specialNote:plan.special_note||null,
         currency:plan.currency,
         active,
         eligible:active?false:dependency.eligible,
