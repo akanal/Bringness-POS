@@ -57,8 +57,30 @@
   }
   async function renderCompanyDetail(companyId){
     const host=panel('customerDetail');if(!host)return;
-    host.innerHTML='<div class="card"><h2>Kundenansicht</h2><p class="muted">Konto, Betriebe, Kassen, Lizenzen und Zahlungen an einem Ort.</p><label>Kunde suchen <input id="detailSearch" type="search" placeholder="Kundenname oder Inhaber-E-Mail"></label><div id="detailCompanies">Wird geladen…</div><p id="detailMessage" role="status"></p></div><div id="detailContent"></div>';
-    try{const list=await platformRequest('companies');const companies=list.companies||[];const results=host.querySelector('#detailCompanies');results.innerHTML=companies.map(c=>'<button type="button" data-company="'+esc(c.id)+'" data-search="'+esc((c.name+' '+(c.owner_email||'')).toLowerCase())+'" style="margin:4px">'+esc(c.name)+' · '+Number(c.restaurants||0)+' Betriebe</button>').join('')||'<p>Keine Kunden vorhanden.</p>';if(list.limited)host.querySelector('#detailMessage').textContent='Es werden höchstens 500 Kunden angezeigt.';host.querySelector('#detailSearch').oninput=event=>{const term=event.target.value.trim().toLocaleLowerCase('de-DE');results.querySelectorAll('[data-company]').forEach(button=>{button.hidden=!button.dataset.search.includes(term)})};results.querySelectorAll('[data-company]').forEach(button=>button.onclick=()=>loadCompany(button.dataset.company));if(companyId)await loadCompany(companyId)}catch(error){host.querySelector('#detailCompanies').textContent=error.message}
+    host.innerHTML='<div class="card"><h2>Kundenansicht</h2><p class="muted">Kunden, Betriebe, Inhaber und Mitarbeiter suchen. Jeder Treffer öffnet das zugehörige Kundenkonto.</p><label>Suche <input id="detailSearch" type="search" placeholder="Kunde, Betrieb, Inhaber oder Mitarbeiter" autocomplete="off"></label><div id="detailCompanies">Wird geladen…</div><p id="detailMessage" role="status"></p></div><div id="detailContent"></div>';
+    const results=host.querySelector('#detailCompanies'),message=host.querySelector('#detailMessage');
+    let sequence=0,timer;
+    async function search(){
+      const q=host.querySelector('#detailSearch').value.trim(),current=++sequence;
+      if(q.length===1){results.textContent='Bitte mindestens zwei Zeichen eingeben.';message.textContent='';return}
+      results.textContent='Suche läuft…';message.textContent='';
+      try{
+        const data=await platformRequest('search?q='+encodeURIComponent(q));
+        if(current!==sequence)return;
+        const groups=[
+          ['Kundenkonten',data.companies||[],item=>esc(item.name),item=>item.id],
+          ['Betriebe',data.restaurants||[],item=>esc(item.name)+' · '+esc(item.company_name),item=>item.company_id],
+          ['Inhaber',data.owners||[],item=>esc(item.display_name)+' · '+esc(item.email)+' · '+esc(item.company_name),item=>item.company_id],
+          ['Mitarbeiter',data.employees||[],item=>esc(item.display_name)+' · '+esc(item.restaurant_name)+' · '+esc(item.company_name)+(item.email?' · '+esc(item.email):''),item=>item.company_id]
+        ];
+        results.innerHTML=groups.map(([title,items,label,id])=>items.length?'<h3>'+title+'</h3>'+items.map(item=>'<button type="button" data-company="'+esc(id(item))+'" style="display:block;margin:6px 0;text-align:left">'+label(item)+'</button>').join(''):'').join('')||'<p>Keine Treffer gefunden.</p>';
+        if(!q)message.textContent='Die 25 neuesten Kunden. Gib einen Suchbegriff ein, um alle Kunden zu durchsuchen.';
+        else if(groups.some(([,items])=>items.length===30))message.textContent='Es werden höchstens 30 Treffer je Bereich angezeigt. Bitte Suche verfeinern.';
+        results.querySelectorAll('[data-company]').forEach(button=>button.onclick=()=>loadCompany(button.dataset.company));
+      }catch(error){if(current===sequence)results.textContent=error.message}
+    }
+    host.querySelector('#detailSearch').oninput=()=>{clearTimeout(timer);timer=setTimeout(search,250)};
+    await search();if(companyId)await loadCompany(companyId);
   }
   async function loadCompany(id){
     const host=panel('customerDetail'),content=host.querySelector('#detailContent');content.textContent='Kundendaten werden geladen…';
