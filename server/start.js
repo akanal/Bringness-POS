@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import {handleAiPlatform,migrateAiPlatform} from "./ai-platform.js";
 import { Readable } from "node:stream";
 import http from "node:http";
 import pg from "pg";
@@ -32,6 +33,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
       if (await handleSupport(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
@@ -66,7 +68,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
   if (normalized.includes("/apps/web/public/") && normalized.endsWith(".html")) {
     try {
       let html = fs.readFileSync(filePath, "utf8");
-      if (!html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
+      if (!normalized.includes('/ai') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js"></script></body>');
@@ -106,6 +108,7 @@ async function migrateWithRetry(){
       await migrateBillingTerms();
       await migrateStaffInvitations();
       await migrateSupport();
+      await migrateAiPlatform();
       const pricingPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
