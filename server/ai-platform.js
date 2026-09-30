@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';
 import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';
 import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';
 import {supplierRoles,units,uuid,hash,passwordHash,passwordMatches,validPassword,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
@@ -9,7 +10,7 @@ class InputError extends Error{}
 const fail=message=>{throw new InputError(message)};
 function text(value,max=150){const v=String(value||'').trim();if(v.length>max)fail(`Höchstens ${max} Zeichen erlaubt`);return v}
 function id(value){if(!uuid.test(String(value)))fail('Ungültige ID');return value}
-async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>16000)fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
+async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(req.url.split('?')[0].endsWith('/barcodes/csv')?220000:16000))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
 const bearer=req=>String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
 async function actor(req){return (await pool.query("SELECT u.id,u.email,u.name,u.business_name,u.role,u.status,u.city,u.postal_code,u.address,u.delivery_area,u.minimum_order_cents,u.delivery_terms,u.shop_plan FROM ai_sessions s JOIN ai_accounts u ON u.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash(bearer(req))])).rows[0]}
 async function platformActor(req){return (await platformPool.query("SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT COALESCE(u.must_change_password,false)",[hash(bearer(req))])).rows[0]}
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS ai_audit(id bigserial PRIMARY KEY,actor_id uuid NOT N
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -89,6 +90,7 @@ export async function handleAiPlatform(req,res){
   }
   if(p.startsWith('/api/ai/admin')){
    const admin=await platformActor(req);if(!admin)return send(res,403,{error:'Nur Plattformadministratoren haben Zugriff.'});
+   if(p.startsWith('/api/ai/admin/barcodes'))return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,true,url));
    if(p==='/api/ai/admin'&&req.method==='GET'){
     const q=text(url.searchParams.get('q')),users=(await pool.query("SELECT id,email,name,business_name,role,status,shop_plan,city,created_at FROM ai_accounts WHERE $1='' OR email ILIKE '%'||$1||'%' OR name ILIKE '%'||$1||'%' OR business_name ILIKE '%'||$1||'%' ORDER BY created_at DESC LIMIT 200",[q])).rows;
     const totals=(await pool.query("SELECT status,count(*)::int count,COALESCE(sum(net_cents),0)::text net_cents,COALESCE(sum(commission_cents),0)::text commission_cents FROM ai_orders GROUP BY status")).rows;
@@ -105,6 +107,7 @@ export async function handleAiPlatform(req,res){
    return send(res,404,{error:'Adminfunktion nicht gefunden'});
   }
   const u=await actor(req);if(!u)return send(res,401,{error:'Bitte anmelden.'});
+  if(p.startsWith('/api/ai/barcodes')){if(req.method==='POST'&&!await rate('barcodes:'+u.id,300))return send(res,429,{error:'Zu viele Kataloganfragen. Bitte später erneut versuchen.'});return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},u,false,url));}
   const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status'].includes(p)?await body(req):{},u);if(recipeResult)return send(res,200,recipeResult);
   if(p==='/api/ai/logout'&&req.method==='POST'){await pool.query('DELETE FROM ai_sessions WHERE token_hash=$1',[hash(bearer(req))]);return send(res,200,{ok:true})}
   if(p==='/api/ai/me'&&req.method==='GET')return send(res,200,{account:u,launch:await settings()});
