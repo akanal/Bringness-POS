@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "currency": "EUR",
+  "pricesAreNet": true,
+  "phase": "introduction",
+  "introductionEndsAt": null,
+  "transitionRequiresExplicitAgreement": true,
+  "standardTrialDays": 30,
+  "plans": {
+    "restaurant_premium": { "introductionMonthlyCents": 0, "standardMonthlyCents": 2900, "unit": "location" },
+    "supplier_basic": { "introductionMonthlyCents": 0, "introductionCommissionBps": 200, "standardMonthlyCents": 0, "standardCommissionBps": 800 },
+    "supplier_pro": { "introductionMonthlyCents": 0, "introductionCommissionBps": 200, "standardMonthlyCents": 4900, "standardCommissionBps": 200 }
+  },
+  "commissionBasis": "mediated_net_goods_value_after_refunds",
+  "paymentProcessingFees": "not_yet_agreed",
+  "advertising": "individual_offer",
+  "enterpriseAndApi": "individual_offer"
+}
