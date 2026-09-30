@@ -26,8 +26,16 @@ New registrants can set up accounts by default. Order submission defaults to dis
 
 ## Remaining
 
-Recipe consumption, POS/API adapters, weather/events forecasting, CSV product imports, advanced shop design/reporting, partial receipts/returns, payment settlement, commission invoices and subscription collection. Lists currently cap stock/products at 1,000, catalog/admin/orders at 200; stock ledger shows latest 100 moves, admin audit latest 50. Browser visual review blocked by unavailable Chromium download; DOM interactions tested.
+Further POS-provider adapters, weather/events forecasting, CSV product imports, advanced shop design/reporting, partial receipts/returns, payment settlement, commission invoices and subscription collection. Lists currently cap stock/products at 1,000, catalog/admin/orders at 200; stock ledger shows latest 100 moves, admin audit latest 50. Browser visual review blocked by unavailable Chromium download; DOM interactions tested.
 
 ## Shared privacy information
 
 Both products link to `/datenschutz`. The existing page is still an explicit lawyer-review placeholder, not a completed privacy notice. A final common text must cover both products before public launch. Reusing the notice does not merge account, stock or order data.
+
+## Recipes and sales imports
+
+Recipes use exact product codes per AI location and explicit per-sale-unit ingredient quantities. API keys are hashed, scoped to one connector/location and initially paused. POST `/api/ai/import/sales` accepts sale events and full consumption reversals. Idempotency is per connector/event ID; payload conflicts return 409. Missing recipe rejects the entire event. Reversals use saved stock effects, not current recipes, and cannot be repeated under a new key. Negative calculated inventory is retained to expose shortages; manual inventory corrections still accept nonnegative actual counts.
+
+The internal POS adapter requires a current owner/admin session to authorize the specific company/restaurant link, stores only user/company IDs, and checks authorization on each sync. It polls paid sales by completion time every 15 seconds, 200 at a time; cursor advances only after ingestion. Missing recipe pauses progress and displays last_error. Paid sales earlier than connection are not backfilled. Only one active connector per POS restaurant is allowed. No POS payment, TSE or order mutation is made. Automatic financial refund/storno synchronization is not implemented; API reversal is for correcting actual consumption only.
+
+API guide `/ai-api.html`. Outgoing external-provider durable queues and provider-specific adapters remain their integration responsibility; no claim that every POS is already integrated.
