@@ -2,7 +2,7 @@ import {JSDOM} from 'jsdom';import fs from 'node:fs';import assert from 'node:as
 const root=fileURLToPath(new URL('../../',import.meta.url)).replace(/\/$/,'');const db=new PGlite();await db.waitReady;
 async function query(sql,args){if(sql.includes('CREATE TABLE')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}}
 globalThis.aiTestPg={Pool:class{query(...a){return query(...a)}async connect(){return {query,release(){}}}}};
-let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import pg from 'pg';","const pg=globalThis.aiTestPg;").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool(); const aiPool=()=>new globalThis.aiTestPg.Pool(); const ensureAiDatabase=async()=>{}; const copyLegacyAiData=async()=>{};").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
 const {handleAiPlatform,migrateAiPlatform}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const {hash,passwordHash}=await import('file://'+root+'/server/ai-policy.js');await migrateAiPlatform();
 await db.exec('CREATE TABLE users(id uuid primary key,status text,must_change_password boolean);CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE platform_admins(user_id uuid,active boolean);');
