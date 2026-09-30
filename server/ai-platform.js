@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';
 import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';
 import {supplierRoles,units,uuid,hash,passwordHash,passwordMatches,validPassword,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
 const pool={query:(...args)=>aiPool().query(...args),connect:()=>aiPool().connect()};
@@ -32,7 +33,7 @@ CREATE TABLE IF NOT EXISTS ai_audit(id bigserial PRIMARY KEY,actor_id uuid NOT N
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -46,6 +47,7 @@ export async function handleAiPlatform(req,res){
  const url=new URL(req.url,'http://local'),p=url.pathname;if(!p.startsWith('/api/ai/'))return false;
  if(!aiReady)return send(res,503,{error:'Bringness AI wird vorbereitet. Bitte gleich erneut versuchen.'});
  try{
+  if(p==='/api/ai/import/sales'&&req.method==='POST'){const link=await apiSalesToken(bearer(req));if(!link)return send(res,401,{error:'Ungültiger oder pausierter API-Schlüssel'});return send(res,200,await ingestSale(link,await body(req)))}
   if(p==='/api/ai/public'&&req.method==='GET')return send(res,200,{launch:await settings()});
   if(p==='/api/ai/register'&&req.method==='POST'){
    if(!await rate('signup-ip:'+req.socket.remoteAddress,30))return send(res,429,{error:'Bitte später erneut versuchen.'});
@@ -99,6 +101,7 @@ export async function handleAiPlatform(req,res){
    return send(res,404,{error:'Adminfunktion nicht gefunden'});
   }
   const u=await actor(req);if(!u)return send(res,401,{error:'Bitte anmelden.'});
+  const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status'].includes(p)?await body(req):{},u);if(recipeResult)return send(res,200,recipeResult);
   if(p==='/api/ai/logout'&&req.method==='POST'){await pool.query('DELETE FROM ai_sessions WHERE token_hash=$1',[hash(bearer(req))]);return send(res,200,{ok:true})}
   if(p==='/api/ai/me'&&req.method==='GET')return send(res,200,{account:u,launch:await settings()});
   if(p==='/api/ai/profile'&&req.method==='POST'){
@@ -158,5 +161,7 @@ export async function handleAiPlatform(req,res){
    }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
   }
   return send(res,404,{error:'AI-Funktion nicht gefunden'});
- }catch(e){if(e instanceof InputError||/Menge|Nettopreis|Packungen|Bestellwert/.test(e.message))return send(res,400,{error:e.message});console.error('AI API error:',e.code||e.name);return send(res,500,{error:'Aktion fehlgeschlagen. Bitte erneut versuchen.'})}
+ }catch(e){if(e.status)return send(res,e.status,{error:e.message});if(e instanceof InputError||/Menge|Nettopreis|Packungen|Bestellwert/.test(e.message))return send(res,400,{error:e.message});console.error('AI API error:',e.code||e.name);return send(res,500,{error:'Aktion fehlgeschlagen. Bitte erneut versuchen.'})}
 }
+
+setInterval(()=>{if(aiReady)syncPosSales()},15000).unref();
