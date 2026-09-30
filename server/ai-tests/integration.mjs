@@ -2,7 +2,9 @@ import {JSDOM} from 'jsdom';import fs from 'node:fs';import assert from 'node:as
 const root=fileURLToPath(new URL('../../',import.meta.url)).replace(/\/$/,'');const db=new PGlite();await db.waitReady;
 async function query(sql,args){if(sql.includes('CREATE TABLE')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}}
 globalThis.aiTestPg={Pool:class{query(...a){return query(...a)}async connect(){return {query,release(){}}}}};
-let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool(); const aiPool=()=>new globalThis.aiTestPg.Pool(); const ensureAiDatabase=async()=>{}; const copyLegacyAiData=async()=>{};").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+let recipeSource=fs.readFileSync(root+'/server/ai-recipes.js','utf8').replace("import {aiPool,platformPool} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool();const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+const recipeModule=await import('data:text/javascript;base64,'+Buffer.from(recipeSource).toString('base64'));globalThis.aiRecipeModule=recipeModule;
+let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';","const {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales}=globalThis.aiRecipeModule;").replace("import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool(); const aiPool=()=>new globalThis.aiTestPg.Pool(); const ensureAiDatabase=async()=>{}; const copyLegacyAiData=async()=>{};").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
 const {handleAiPlatform,migrateAiPlatform}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const {hash,passwordHash}=await import('file://'+root+'/server/ai-policy.js');await migrateAiPlatform();
 await db.exec('CREATE TABLE users(id uuid primary key,status text,must_change_password boolean);CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE platform_admins(user_id uuid,active boolean);');
@@ -39,6 +41,41 @@ assert.equal((await call('orders/'+second.id+'/cancel',{},tokens.supplier)).stat
 assert.equal(Number((await call('orders',null,tokens.buyer)).orders.find(o=>o.id===second.id).commission_cents),0);
 assert.equal((await call('stock-adjust',{id:st.id,quantity:5,minimum:10,reason:'Inventur'},tokens.other)).status,404);
 assert.equal((await call('stock-adjust',{id:st.id,quantity:5,minimum:10,reason:'Inventur'},tokens.buyer)).status,200);
+
+// Recipe consumption is isolated, idempotent, and reversed from saved effects.
+assert.equal((await call('recipes',{locationId:loc.id,name:'Gericht',productCode:'dish-1',items:[{stockId:st.id,quantity:0.25}]},tokens.other)).status,400);
+assert.equal((await call('recipes',{locationId:loc.id,name:'Gericht',productCode:'dish-1',items:[{stockId:st.id,quantity:0.25}]},tokens.buyer)).status,200);
+const recipe=(await call('recipes',null,tokens.buyer)).recipes[0];const key=await call('connectors',{locationId:loc.id,name:'Testkasse'},tokens.buyer);const link=(await call('connectors',null,tokens.buyer)).connectors[0];
+assert.equal((await call('import/sales',{eventId:'sale-1',items:[{productCode:'dish-1',quantity:4}]},key.token)).status,401);
+await call('connector-status',{id:link.id,active:true},tokens.buyer);
+const sale={eventId:'sale-1',items:[{productCode:'dish-1',quantity:4}]};assert.equal((await call('import/sales',sale,key.token)).status,200);assert.equal((await call('import/sales',sale,key.token)).duplicate,true);
+assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),4);
+assert.equal((await call('import/sales',{...sale,items:[{productCode:'dish-1',quantity:5}]},key.token)).status,409);
+assert.equal((await call('import/sales',{eventId:'missing',items:[{productCode:'unknown',quantity:1}]},key.token)).status,400);
+assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),4);
+await call('recipes',{id:recipe.id,locationId:loc.id,name:'Gericht',productCode:'dish-1',items:[{stockId:st.id,quantity:2}]},tokens.buyer);
+assert.equal((await call('import/sales',{eventId:'reverse-1',type:'reversal',reversesEventId:'sale-1'},key.token)).status,200);
+assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),5);
+assert.equal((await call('import/sales',{eventId:'reverse-2',type:'reversal',reversesEventId:'sale-1'},key.token)).status,409);
+assert.equal((await call('import/sales',{eventId:'sale-2',items:[{productCode:'dish-1',quantity:10}]},key.token)).status,200);
+assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-15);
+await call('connector-status',{id:link.id,active:false},tokens.buyer);assert.equal((await call('import/sales',{eventId:'blocked',items:[{productCode:'dish-1',quantity:1}]},key.token)).status,401);
+
+// POS adapter needs a real owner authorization and imports only linked paid sales.
+await db.exec('ALTER TABLE users ADD COLUMN company_id uuid;ALTER TABLE users ADD COLUMN role text;CREATE TABLE restaurants(id uuid,company_id uuid,name text);CREATE TABLE products(id uuid,restaurant_id uuid,name text,active boolean);CREATE TABLE orders(id uuid,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);CREATE TABLE order_items(order_id uuid,product_id uuid,quantity numeric);');
+const company=crypto.randomUUID(),posOwner=crypto.randomUUID(),restaurant=crypto.randomUUID(),posProduct=crypto.randomUUID(),posOrder=crypto.randomUUID();
+await query("INSERT INTO users VALUES($1,'active',false,$2,'owner')",[posOwner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[hash('pos-owner-token'),posOwner]);await query("INSERT INTO restaurants VALUES($1,$2,'Linked restaurant')",[restaurant,company]);await query("INSERT INTO products VALUES($1,$2,'POS dish',true)",[posProduct,restaurant]);
+assert.equal((await call('pos-link',{posToken:'invalid'},tokens.buyer)).status,403);
+assert.equal((await call('pos-link',{posToken:'pos-owner-token'},tokens.buyer)).restaurants.length,1);
+assert.equal((await call('pos-link',{posToken:'pos-owner-token',restaurantId:crypto.randomUUID(),locationId:loc.id},tokens.buyer)).status,400);
+assert.equal((await call('pos-link',{posToken:'pos-owner-token',restaurantId:restaurant,locationId:loc.id},tokens.buyer)).status,200);
+const posLink=(await call('connectors',null,tokens.buyer)).connectors.find(c=>c.kind==='pos');await call('connector-status',{id:posLink.id,active:true},tokens.buyer);
+await query("INSERT INTO orders VALUES($1,$2,'paid',now()+interval '1 minute',now())",[posOrder,restaurant]);await query('INSERT INTO order_items VALUES($1,$2,2)',[posOrder,posProduct]);
+await recipeModule.syncPosSales();assert.match((await call('connectors',null,tokens.buyer)).connectors.find(c=>c.id===posLink.id).last_error,/Rezept fehlt/);
+await call('recipes',{locationId:loc.id,name:'POS dish',productCode:posProduct,items:[{stockId:st.id,quantity:0.5}]},tokens.buyer);
+await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
+await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
+assert.equal((await call('connectors',null,tokens.buyer)).connectors.find(c=>c.id===posLink.id).last_error,null);
 assert.equal((await call('admin/account',{id:ids.pending,action:'restore'},'admin-token')).status,409);
 assert.equal((await call('admin/account',{id:ids.buyer,action:'suspend'},'admin-token')).status,200);
 assert.equal((await call('me',null,tokens.buyer)).status,401);
