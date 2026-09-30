@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
-import pg from 'pg';
+import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';
 import {supplierRoles,units,uuid,hash,passwordHash,passwordMatches,validPassword,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
-const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==='production'?{rejectUnauthorized:false}:false});
+const pool={query:(...args)=>aiPool().query(...args),connect:()=>aiPool().connect()};
+let aiReady=false;
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
 class InputError extends Error{}
 const fail=message=>{throw new InputError(message)};
@@ -10,9 +11,9 @@ function id(value){if(!uuid.test(String(value)))fail('Ungültige ID');return val
 async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>16000)fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
 const bearer=req=>String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
 async function actor(req){return (await pool.query("SELECT u.id,u.email,u.name,u.business_name,u.role,u.status,u.city,u.postal_code,u.address,u.delivery_area,u.minimum_order_cents,u.delivery_terms,u.shop_plan FROM ai_sessions s JOIN ai_accounts u ON u.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash(bearer(req))])).rows[0]}
-async function platformActor(req){return (await pool.query("SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT COALESCE(u.must_change_password,false)",[hash(bearer(req))])).rows[0]}
+async function platformActor(req){return (await platformPool.query("SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT COALESCE(u.must_change_password,false)",[hash(bearer(req))])).rows[0]}
 async function settings(){return (await pool.query("SELECT value FROM ai_settings WHERE key='launch'")).rows[0].value}
-export async function migrateAiPlatform(){await pool.query(`
+export async function migrateAiPlatform(){await ensureAiDatabase();await pool.query(`
 CREATE TABLE IF NOT EXISTS ai_accounts(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),email text UNIQUE NOT NULL,password_hash text NOT NULL,name text NOT NULL,business_name text NOT NULL,role text NOT NULL CHECK(role IN ('restaurant','dealer','wholesaler','manufacturer')),status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','active','suspended')),city text NOT NULL DEFAULT '',postal_code text NOT NULL DEFAULT '',address text NOT NULL DEFAULT '',delivery_area text NOT NULL DEFAULT '',minimum_order_cents bigint NOT NULL DEFAULT 0,delivery_terms text NOT NULL DEFAULT '',shop_plan text NOT NULL DEFAULT 'basic' CHECK(shop_plan IN ('basic','pro')),created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS ai_sessions(token_hash text PRIMARY KEY,account_id uuid NOT NULL REFERENCES ai_accounts(id) ON DELETE CASCADE,expires_at timestamptz NOT NULL);
 CREATE TABLE IF NOT EXISTS ai_auth_tokens(token_hash text PRIMARY KEY,account_id uuid NOT NULL REFERENCES ai_accounts(id) ON DELETE CASCADE,kind text NOT NULL,expires_at timestamptz NOT NULL,used_at timestamptz);
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS ai_audit(id bigserial PRIMARY KEY,actor_id uuid NOT N
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`)}
+`);await copyLegacyAiData();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -43,6 +44,7 @@ async function email(to,name,token,kind){
 }
 export async function handleAiPlatform(req,res){
  const url=new URL(req.url,'http://local'),p=url.pathname;if(!p.startsWith('/api/ai/'))return false;
+ if(!aiReady)return send(res,503,{error:'Bringness AI wird vorbereitet. Bitte gleich erneut versuchen.'});
  try{
   if(p==='/api/ai/public'&&req.method==='GET')return send(res,200,{launch:await settings()});
   if(p==='/api/ai/register'&&req.method==='POST'){
