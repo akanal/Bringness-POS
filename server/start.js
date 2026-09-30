@@ -12,6 +12,7 @@ import { handleBillingStatus } from "./billing-status.js";
 import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import { handlePlatformControl } from "./platform-control.js";
 import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
+import { handleSupport, migrateSupport } from "./support-center.js";
 import { handleAdminTeam } from "./admin-team.js";
 import { handleStaffInvitations, migrateStaffInvitations } from "./staff-invitations.js";
 import { handleAdminAuditExport } from "./admin-audit-export.js";
@@ -32,6 +33,7 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (await requireAdminPasswordChange(req,res)) return;
+      if (await handleSupport(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
       if (await handleAdminPasswordReset(req,res)) return;
       if (await handleAdminTeam(req,res)) return;
@@ -80,6 +82,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
+        if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js"></script></body>');
         if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js"></script></body>');
       }
       return Readable.from([Buffer.from(html, "utf8")]);
@@ -102,6 +105,7 @@ async function migrateWithRetry(){
       await migrateDeviceLicense();
       await migrateBillingTerms();
       await migrateStaffInvitations();
+      await migrateSupport();
       const pricingPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
