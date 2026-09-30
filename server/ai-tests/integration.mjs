@@ -4,7 +4,10 @@ async function query(sql,args){if(sql.includes('CREATE TABLE')){await db.exec(sq
 globalThis.aiTestPg={Pool:class{query(...a){return query(...a)}async connect(){return {query,release(){}}}}};
 let recipeSource=fs.readFileSync(root+'/server/ai-recipes.js','utf8').replace("import {aiPool,platformPool} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool();const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
 const recipeModule=await import('data:text/javascript;base64,'+Buffer.from(recipeSource).toString('base64'));globalThis.aiRecipeModule=recipeModule;
+let barcodeSource=fs.readFileSync(root+'/server/ai-barcodes.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+globalThis.aiBarcodeModule=await import('data:text/javascript;base64,'+Buffer.from(barcodeSource).toString('base64'));
 let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';","const {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales}=globalThis.aiRecipeModule;").replace("import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool(); const aiPool=()=>new globalThis.aiTestPg.Pool(); const ensureAiDatabase=async()=>{}; const copyLegacyAiData=async()=>{};").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+source=source.replace("import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';","const {migrateAiBarcodes,barcodeRoutes}=globalThis.aiBarcodeModule;");
 const {handleAiPlatform,migrateAiPlatform}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const {hash,passwordHash}=await import('file://'+root+'/server/ai-policy.js');await migrateAiPlatform();
 await db.exec('CREATE TABLE users(id uuid primary key,status text,must_change_password boolean);CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE platform_admins(user_id uuid,active boolean);');
@@ -76,6 +79,35 @@ await call('recipes',{locationId:loc.id,name:'POS dish',productCode:posProduct,i
 await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
 await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
 assert.equal((await call('connectors',null,tokens.buyer)).connectors.find(c=>c.id===posLink.id).last_error,null);
+// Shared barcode data, CSV atomicity, moderation and tenant-private receipts.
+const barcode='4006381333931',entryBody={barcode,name:'Hamburger Patties',unit:'piece',packQuantity:32};
+assert.equal((await call('barcodes',entryBody)).status,401);
+assert.equal((await call('barcodes',{...entryBody,barcode:'4006381333932'},tokens.buyer)).status,400);
+assert.equal((await call('barcodes',{...entryBody,packQuantity:32.5},tokens.buyer)).status,400);
+const barcodeEntry=(await call('barcodes',entryBody,tokens.buyer)).entries[0];
+const shared=await call('barcodes?barcode='+barcode,null,tokens.other);assert.equal(shared.entries[0].id,barcodeEntry.id);assert.equal(shared.entries[0].pack_quantity,'32.000');assert(!('submitted_by' in shared.entries[0]));
+assert.equal((await call('admin/barcodes/review',{id:barcodeEntry.id,action:'approve'},tokens.buyer)).status,403);
+assert.equal((await call('admin/barcodes/review',{id:barcodeEntry.id,action:'approve'},'admin-token')).status,200);
+const csv='barcode;name;unit;packQuantity\n4006381333931;"Patties; alternative";piece;24\n4006381333932;Invalid;piece;32';
+assert.equal((await call('barcodes/csv',{csv},tokens.supplier)).status,400);
+assert.equal((await call('barcodes?barcode='+barcode,null,tokens.other)).entries.length,1);
+const conflicting=(await call('barcodes/csv',{csv:csv.split('\n').slice(0,2).join('\n')},tokens.supplier)).entries[0];
+assert.equal((await call('barcodes?barcode='+barcode,null,tokens.other)).entries[0].id,barcodeEntry.id);
+const receiptBody={entryId:barcodeEntry.id,locationId:loc.id,packs:3,requestKey:crypto.randomUUID(),confirmed:true};
+assert.equal((await call('barcodes/receive',receiptBody,tokens.other)).status,404);
+assert.equal((await call('barcodes/receive',{...receiptBody,stockId:st.id},tokens.buyer)).status,400);
+const receipt=await call('barcodes/receive',receiptBody,tokens.buyer);assert.equal(receipt.status,200);assert.equal(Number(receipt.receipt.delta),96);
+assert.equal((await call('barcodes/receive',receiptBody,tokens.buyer)).duplicate,true);
+assert.equal((await call('barcodes/receive',{...receiptBody,packs:4},tokens.buyer)).status,409);
+const repeatReceipt=await call('barcodes/receive',{...receiptBody,packs:1,requestKey:crypto.randomUUID()},tokens.buyer);assert.equal(repeatReceipt.receipt.stock_id,receipt.receipt.stock_id);
+assert.equal(Number((await call('stock',null,tokens.buyer)).stock.find(x=>x.id===receipt.receipt.stock_id).quantity),128);
+assert(!(await call('stock',null,tokens.other)).stock.some(x=>x.id===receipt.receipt.stock_id));
+await call('admin/barcodes/review',{id:conflicting.id,action:'approve'},'admin-token');
+assert.equal((await call('barcodes?barcode='+barcode,null,tokens.other)).entries[0].id,conflicting.id);
+await call('admin/barcodes/review',{id:conflicting.id,action:'reject'},'admin-token');
+assert.equal((await call('barcodes/receive',{...receiptBody,entryId:conflicting.id,requestKey:crypto.randomUUID()},tokens.buyer)).status,409);
+await call('admin/barcodes/review',{id:barcodeEntry.id,action:'approve'},'admin-token');
+console.log('Barcode API passed: shared 32-piece pack, CSV rollback, review rights/conflicts, 3 packs = 96, idempotency, saved mapping and private stock.');
 assert.equal((await call('admin/account',{id:ids.pending,action:'restore'},'admin-token')).status,409);
 assert.equal((await call('admin/account',{id:ids.buyer,action:'suspend'},'admin-token')).status,200);
 assert.equal((await call('me',null,tokens.buyer)).status,401);
@@ -86,7 +118,7 @@ const reset=crypto.randomBytes(32).toString('hex');await query("INSERT INTO ai_a
 const markup=fs.readFileSync(root+'/apps/web/public/ai-workspace.html','utf8'),script=fs.readFileSync(root+'/apps/web/public/ai-workspace.js','utf8');
 const browser=new JSDOM(markup,{url:'https://example.org/ai-workspace.html',runScripts:'outside-only'});const w=browser.window;w.HTMLElement.prototype.scrollIntoView=function(){};
 w.fetch=async(path,opt={})=>{const result=await call(path.replace('/api/ai/',''),opt.body?JSON.parse(opt.body):undefined,opt.headers?.authorization?.replace('Bearer ',''));const {status,...value}=result;return {ok:status>=200&&status<300,status,json:async()=>value}};
-w.eval(script);const d=w.document;
+w.eval(fs.readFileSync(root+'/apps/web/public/ai-barcodes.js','utf8'));w.eval(script);const d=w.document;
 async function until(test){for(let i=0;i<150;i++){if(test())return;await new Promise(r=>setTimeout(r,10))}throw Error('UI wait timed out: '+d.getElementById('notice').textContent)}
 function submit(kind,values){const form=d.querySelector('[data-form="'+kind+'"]');assert(form,'form '+kind+' exists');for(const [key,value]of Object.entries(values))form.elements.namedItem(key).value=value;form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}))}
 d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'text');d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'password');
@@ -98,5 +130,9 @@ submit('stock',{name:'UI Mehl',quantity:'0',minimum:'5'});await until(()=>d.quer
 d.querySelector('[data-view="catalog"]').click();await until(()=>d.querySelector('[data-form="search"]'));
 submit('search',{q:'Mehl'});await until(()=>d.querySelector('[data-buy]'));assert.equal(d.getElementById('search').value,'Mehl');
 d.querySelector('[data-buy]').click();const buy=d.querySelector('[data-form="buy"]');buy.elements.namedItem('confirmed').checked=true;submit('buy',{packs:'2',deliveryDate:'2026-10-02'});await until(()=>d.querySelector('[data-cancel]'));assert.match(d.getElementById('content').textContent,/Gesendet/);
+d.querySelector('[data-view="barcodes"]').click();await until(()=>d.querySelector('[data-barcode-use]'));
+const barcodeSearch=d.querySelector('[data-barcode-form="search"]');barcodeSearch.elements.barcode.value=barcode;barcodeSearch.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.querySelector('[data-barcode-use]')&&!d.querySelector('[data-barcode-form="search"] [type="submit"]').disabled);
+d.querySelector('[data-barcode-use]').click();const receiptForm=d.querySelector('[data-barcode-form="receive"]');receiptForm.elements.packs.value='3';receiptForm.elements.packs.dispatchEvent(new w.Event('input',{bubbles:true}));assert.match(receiptForm.textContent,/96 Stück Lagerzugang/);receiptForm.elements.confirmed.checked=true;receiptForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.getElementById('barcode-receive').textContent.includes('96 Einheiten gebucht'));
+console.log('Barcode DOM passed: catalog tab, scan input lookup, stored pack size, calculated total and stock receipt.');
 w.close();console.log('DOM workflow passed: eye, role registration, login, location, stock, catalog search and order submission.');
 console.log('Embedded PostgreSQL integration passed: migrations, tenant isolation, catalog, order locks/idempotency, stock receipt, cancellation, admin suspension, verification and reset.');await db.close();
