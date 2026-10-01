@@ -4,7 +4,7 @@ async function query(sql,args){if(sql.includes('CREATE TABLE')){await db.exec(sq
 globalThis.aiTestPg={Pool:class{query(...a){return query(...a)}async connect(){return {query,release(){}}}}};
 let recipeSource=fs.readFileSync(root+'/server/ai-recipes.js','utf8').replace("import {aiPool,platformPool} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool();const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
 const recipeModule=await import('data:text/javascript;base64,'+Buffer.from(recipeSource).toString('base64'));globalThis.aiRecipeModule=recipeModule;
-let barcodeSource=fs.readFileSync(root+'/server/ai-barcodes.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+let barcodeSource=fs.readFileSync(root+'/server/ai-barcodes.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js')).replace("'../apps/web/public/ai-csv-parser.js'",JSON.stringify('file://'+root+'/apps/web/public/ai-csv-parser.js'));
 globalThis.aiBarcodeModule=await import('data:text/javascript;base64,'+Buffer.from(barcodeSource).toString('base64'));
 let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';","const {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales}=globalThis.aiRecipeModule;").replace("import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool(); const aiPool=()=>new globalThis.aiTestPg.Pool(); const ensureAiDatabase=async()=>{}; const copyLegacyAiData=async()=>{};").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
 source=source.replace("import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';","const {migrateAiBarcodes,barcodeRoutes}=globalThis.aiBarcodeModule;");
@@ -107,6 +107,18 @@ assert.equal((await call('barcodes?barcode='+barcode,null,tokens.other)).entries
 await call('admin/barcodes/review',{id:conflicting.id,action:'reject'},'admin-token');
 assert.equal((await call('barcodes/receive',{...receiptBody,entryId:conflicting.id,requestKey:crypto.randomUUID()},tokens.buyer)).status,409);
 await call('admin/barcodes/review',{id:barcodeEntry.id,action:'approve'},'admin-token');
+const internationalCsv='Preis;Adet;Ürün adı;Barkod;Birim;Dil\n9,90;32;Türk köftesi;4006381333931;adet;tr';
+const internationalPayload={csv:internationalCsv,mapping:{barcode:3,name:2,unit:4,packQuantity:1,language:5},language:'de'};
+const beforePreview=(await query('SELECT count(*) FROM ai_barcode_entries')).rows[0].count;
+const preview=await call('barcodes/csv-preview',internationalPayload,tokens.other);assert.equal(preview.status,200);assert.equal(preview.products[0].language,'tr');assert.equal(preview.products[0].packQuantity,32);
+assert.equal((await query('SELECT count(*) FROM ai_barcode_entries')).rows[0].count,beforePreview);
+assert.equal((await call('admin/barcodes/csv-preview',internationalPayload,'admin-token')).status,200);
+const importedInternational=await call('barcodes/csv',internationalPayload,tokens.other);assert.equal(importedInternational.entries[0].language,'tr');assert.equal(importedInternational.entries[0].name,'Türk köftesi');
+assert.equal((await call('barcodes/csv-preview',{...internationalPayload,csv:internationalCsv.replace(';32;',';32 x 100 g;')},tokens.other)).status,400);
+assert.equal((await call('barcodes/csv-preview',{...internationalPayload,mapping:{...internationalPayload.mapping,unit:2}},tokens.other)).status,400);
+const {parseCsvTable,mappedProducts}=await import('file://'+root+'/apps/web/public/ai-csv-parser.js');
+const arabic=mappedProducts(parseCsvTable('\uFEFFbarcode\tname\tunit\tpackQuantity\n4006381333931\t"برغر; أصلي"\tقطع\t32'),undefined,'ar');assert.equal(arabic[0].name,'برغر; أصلي');assert.equal(arabic[0].packQuantity,32);
+assert.throws(()=>mappedProducts(parseCsvTable('barcode,name,unit,packQuantity\n4006381333931,Test,piece,32'),{barcode:0,name:1,unit:2,packQuantity:3,language:9}));
 console.log('Barcode API passed: shared 32-piece pack, CSV rollback, review rights/conflicts, 3 packs = 96, idempotency, saved mapping and private stock.');
 assert.equal((await call('admin/account',{id:ids.pending,action:'restore'},'admin-token')).status,409);
 assert.equal((await call('admin/account',{id:ids.buyer,action:'suspend'},'admin-token')).status,200);
@@ -118,7 +130,7 @@ const reset=crypto.randomBytes(32).toString('hex');await query("INSERT INTO ai_a
 const markup=fs.readFileSync(root+'/apps/web/public/ai-workspace.html','utf8'),script=fs.readFileSync(root+'/apps/web/public/ai-workspace.js','utf8');
 const browser=new JSDOM(markup,{url:'https://example.org/ai-workspace.html',runScripts:'outside-only'});const w=browser.window;w.HTMLElement.prototype.scrollIntoView=function(){};
 w.fetch=async(path,opt={})=>{const result=await call(path.replace('/api/ai/',''),opt.body?JSON.parse(opt.body):undefined,opt.headers?.authorization?.replace('Bearer ',''));const {status,...value}=result;return {ok:status>=200&&status<300,status,json:async()=>value}};
-w.eval(fs.readFileSync(root+'/apps/web/public/ai-barcodes.js','utf8'));w.eval(script);const d=w.document;
+const csvParser=await import('file://'+root+'/apps/web/public/ai-csv-parser.js');w.csvParser=csvParser;w.eval(fs.readFileSync(root+'/apps/web/public/ai-barcodes.js','utf8').replace("import {parseCsvTable,suggestMapping} from './ai-csv-parser.js';","const {parseCsvTable,suggestMapping}=window.csvParser;"));w.eval(script);const d=w.document;
 async function until(test){for(let i=0;i<150;i++){if(test())return;await new Promise(r=>setTimeout(r,10))}throw Error('UI wait timed out: '+d.getElementById('notice').textContent)}
 function submit(kind,values){const form=d.querySelector('[data-form="'+kind+'"]');assert(form,'form '+kind+' exists');for(const [key,value]of Object.entries(values))form.elements.namedItem(key).value=value;form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}))}
 d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'text');d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'password');
@@ -134,5 +146,14 @@ d.querySelector('[data-view="barcodes"]').click();await until(()=>d.querySelecto
 const barcodeSearch=d.querySelector('[data-barcode-form="search"]');barcodeSearch.elements.barcode.value=barcode;barcodeSearch.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.querySelector('[data-barcode-use]')&&!d.querySelector('[data-barcode-form="search"] [type="submit"]').disabled);
 d.querySelector('[data-barcode-use]').click();const receiptForm=d.querySelector('[data-barcode-form="receive"]');receiptForm.elements.packs.value='3';receiptForm.elements.packs.dispatchEvent(new w.Event('input',{bubbles:true}));assert.match(receiptForm.textContent,/96 Stück Lagerzugang/);receiptForm.elements.confirmed.checked=true;receiptForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.getElementById('barcode-receive').textContent.includes('96 Einheiten gebucht'));
 console.log('Barcode DOM passed: catalog tab, scan input lookup, stored pack size, calculated total and stock receipt.');
+const csvForm=d.querySelector('[data-barcode-form="csv"]');csvForm.elements.language.value='tr';
+Object.defineProperty(csvForm.elements.file,'files',{value:[{size:100,text:async()=> 'Artikelnummer;Titel;Einheit;Anzahl\n4006381333931;İstanbul Köfte;adet;32'}]});
+csvForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.querySelector('[data-barcode-form="csv-map"]'));
+const mapForm=d.querySelector('[data-barcode-form="csv-map"]');for(const [key,value]of Object.entries({barcode:0,name:1,unit:2,packQuantity:3}))mapForm.elements.namedItem(key).value=String(value);
+mapForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.querySelector('[data-csv-import]'));assert.match(d.getElementById('csv-preview').textContent,/İstanbul Köfte/);assert.match(d.getElementById('csv-preview').textContent,/tr/);
+mapForm.elements.name.dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal(d.querySelector('[data-csv-import]'),null);
+mapForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.querySelector('[data-csv-import]'));d.querySelector('[data-csv-import]').click();await until(()=>d.getElementById('csv-mapping').textContent==='');
+assert.equal((await call('barcodes?q='+encodeURIComponent('İstanbul Köfte'),null,tokens.other)).entries[0].language,'tr');
+console.log('CSV mapping passed: reordered columns, preview without writes, Unicode product names, language metadata, invalid mapping rejection and DOM preview/import.');
 w.close();console.log('DOM workflow passed: eye, role registration, login, location, stock, catalog search and order submission.');
 console.log('Embedded PostgreSQL integration passed: migrations, tenant isolation, catalog, order locks/idempotency, stock receipt, cancellation, admin suspension, verification and reset.');await db.close();
