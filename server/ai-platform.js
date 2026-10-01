@@ -10,7 +10,7 @@ class InputError extends Error{}
 const fail=message=>{throw new InputError(message)};
 function text(value,max=150){const v=String(value||'').trim();if(v.length>max)fail(`Höchstens ${max} Zeichen erlaubt`);return v}
 function id(value){if(!uuid.test(String(value)))fail('Ungültige ID');return value}
-async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(req.url.split('?')[0].endsWith('/barcodes/csv')?220000:16000))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
+async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(req.url.split('?')[0].match(/\/barcodes\/csv(?:-preview)?$/)?220000:16000))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
 const bearer=req=>String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
 async function actor(req){return (await pool.query("SELECT u.id,u.email,u.name,u.business_name,u.role,u.status,u.city,u.postal_code,u.address,u.delivery_area,u.minimum_order_cents,u.delivery_terms,u.shop_plan FROM ai_sessions s JOIN ai_accounts u ON u.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash(bearer(req))])).rows[0]}
 async function platformActor(req){return (await platformPool.query("SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT COALESCE(u.must_change_password,false)",[hash(bearer(req))])).rows[0]}
