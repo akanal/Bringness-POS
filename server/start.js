@@ -1,5 +1,7 @@
 import fs from "node:fs";
-import {handleAiPlatform,migrateAiPlatform} from "./ai-platform.js";
+import {runtimeMode, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
+const appMode = runtimeMode();
+const aiFeatures = await loadAiFeatures(appMode);
 import { Readable } from "node:stream";
 import http from "node:http";
 import pg from "pg";
@@ -33,7 +35,8 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
-      if (await handleAiPlatform(req,res)) return;
+      if (blockAiRequest(req,res,appMode)) return;
+      if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
       if (await handleSupport(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
@@ -108,7 +111,7 @@ async function migrateWithRetry(){
       await migrateBillingTerms();
       await migrateStaffInvitations();
       await migrateSupport();
-      await migrateAiPlatform();
+      if (aiFeatures) await aiFeatures.migrateAiPlatform();
       const pricingPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
