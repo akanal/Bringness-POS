@@ -1,9 +1,31 @@
 (()=>{
-  const code=new URLSearchParams(location.search).get("code");
+  const params=new URLSearchParams(location.search);
+  const code=params.get("code")||params.get("collection");
   if(!code)return;
   const chosen=new Map();
   const originalFetch=window.fetch.bind(window);
-  let extrasByProduct=new Map();
+  let extrasByProduct=new Map(),locked=!!params.get("collection");
+  const serviceMode=originalFetch("/api/v1/guest/service-mode?code="+encodeURIComponent(code),{cache:"no-store"})
+    .then(async r=>r.ok?(await r.json()).mode:null).catch(()=>null);
+
+  function lockPickup(){
+    locked=true;
+    const next=new URL(location.href);
+    next.searchParams.delete("code");next.searchParams.set("collection",code);
+    history.replaceState(null,"",next.pathname+next.search+next.hash);
+    renderLock();
+  }
+  function renderLock(){
+    if(!locked)return;
+    for(const id of ["menu","basket","total","send","language"]){
+      const el=document.getElementById(id);if(el){el.hidden=true;if(id==="send")el.disabled=true}
+    }
+    const email=document.getElementById("guestReceiptEmail");if(email?.parentElement)email.parentElement.hidden=true;
+    const heading=document.getElementById("heading");
+    if(heading&&heading.textContent!=="Bestellung übermittelt")heading.textContent="Bestellung übermittelt";
+    const status=document.getElementById("status"),message="Für eine neue Bestellung bitte den QR-Code erneut scannen.";
+    if(status&&status.textContent!==message)status.textContent=message;
+  }
 
   function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
   function euro(c){return (Number(c||0)/100).toLocaleString("de-DE",{style:"currency",currency:"EUR"})}
@@ -50,6 +72,7 @@
   window.fetch=async function(input,init={}){
     const url=typeof input==="string"?input:(input?.url||"");
     if(url==="/api/v1/guest/order" || url.endsWith("/api/v1/guest/order")){
+      if(locked)return new Response(JSON.stringify({error:"Bitte den QR-Code erneut scannen."}),{status:409,headers:{"content-type":"application/json"}});
       let body={};try{body=JSON.parse(init.body||"{}")}catch{}
       body.items=(body.items||[]).map(i=>({...i,extraIds:chosen.get(String(i.productId))||[]}));
       body.email=document.getElementById("guestReceiptEmail")?.value.trim()||"";
@@ -58,13 +81,16 @@
         const order=await r.clone().json();
         window.dispatchEvent(new CustomEvent("bringness-guest-order",{detail:{orderId:order.orderId,requestId:body.requestId}}));
         chosen.clear();
+        let mode=await serviceMode;
+        try{const state=await originalFetch("/api/v1/guest/collection?orderId="+encodeURIComponent(order.orderId)+"&requestId="+encodeURIComponent(body.requestId),{cache:"no-store"});if(state.ok)mode=(await state.json()).mode}catch{}
+        if(mode==="pickup")lockPickup();
       }
       return r;
     }
     return originalFetch(input,init);
   };
 
-  const observer=new MutationObserver(()=>{enhanceButtons();addEmail()});
+  const observer=new MutationObserver(()=>{enhanceButtons();addEmail();renderLock()});
   observer.observe(document.documentElement,{subtree:true,childList:true});
-  addEmail();loadExtras();
+  addEmail();renderLock();if(!locked)loadExtras();
 })();
