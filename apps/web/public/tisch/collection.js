@@ -1,5 +1,6 @@
 (()=>{
-  const code=new URLSearchParams(location.search).get("code");
+  const params=new URLSearchParams(location.search);
+  const code=params.get("code")||params.get("collection");
   if(!code)return;
   const key="bringness-collection-"+code;
   let orders=[],audio=null,busy=false,mode="restaurant";
