@@ -5,10 +5,8 @@
   const chosen=new Map();
   const originalFetch=window.fetch.bind(window);
   let extrasByProduct=new Map(),locked=!!params.get("collection");
-  const serviceMode=originalFetch("/api/v1/guest/service-mode?code="+encodeURIComponent(code),{cache:"no-store"})
-    .then(async r=>r.ok?(await r.json()).mode:null).catch(()=>null);
 
-  function lockPickup(){
+  function lockAfterOrder(){
     locked=true;
     const next=new URL(location.href);
     next.searchParams.delete("code");next.searchParams.set("collection",code);
@@ -20,6 +18,8 @@
     for(const id of ["menu","basket","total","send","language"]){
       const el=document.getElementById(id);if(el){el.hidden=true;if(id==="send")el.disabled=true}
     }
+    const basket=document.getElementById("basket");if(basket?.parentElement)basket.parentElement.hidden=true;
+    const language=document.getElementById("language");if(language?.parentElement)language.parentElement.hidden=true;
     const email=document.getElementById("guestReceiptEmail");if(email?.parentElement)email.parentElement.hidden=true;
     const heading=document.getElementById("heading");
     if(heading&&heading.textContent!=="Bestellung übermittelt")heading.textContent="Bestellung übermittelt";
@@ -81,9 +81,7 @@
         const order=await r.clone().json();
         window.dispatchEvent(new CustomEvent("bringness-guest-order",{detail:{orderId:order.orderId,requestId:body.requestId}}));
         chosen.clear();
-        let mode=await serviceMode;
-        try{const state=await originalFetch("/api/v1/guest/collection?orderId="+encodeURIComponent(order.orderId)+"&requestId="+encodeURIComponent(body.requestId),{cache:"no-store"});if(state.ok)mode=(await state.json()).mode}catch{}
-        if(mode==="pickup")lockPickup();
+        lockAfterOrder();
       }
       return r;
     }

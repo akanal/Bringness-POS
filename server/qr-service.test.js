@@ -69,19 +69,6 @@ test("waiter cannot notify a different waiter's table",async()=>{
   assert.equal(result.status,403);
   assert.equal(pool.calls.some(x=>x.sql.startsWith("UPDATE")),false);
 });
-test("repeat guest submissions keep the menu open and use the supplied independent request IDs",async()=>{
-  const events=[],requests=[];
-  const context={
-    location:{search:"?code="+"a".repeat(48)},URLSearchParams,
-    document:{getElementById:id=>id==="guestReceiptEmail"?{value:""}:null,querySelectorAll:()=>[],documentElement:{}},
-    MutationObserver:class{observe(){}},CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail}},
-    window:{async fetch(url,init){requests.push({url,body:init?.body});return {ok:true,async json(){return {extras:[]}},clone(){return {async json(){return {orderId:oid}}}}}},dispatchEvent:e=>events.push(e)},
-  };
-  vm.runInNewContext(fs.readFileSync(new URL("../apps/web/public/tisch/guest-enhancements.js",import.meta.url),"utf8"),context);
-  for(const requestId of [key,rid])await context.window.fetch("/api/v1/guest/order",{body:JSON.stringify({requestId,items:[]})});
-  assert.deepEqual(events.map(e=>e.detail.requestId),[key,rid]);
-  assert.equal(requests.filter(x=>x.url==="/api/v1/guest/order-v2").length,2);
-});
 test("guest collection alerts once without a permission dialog or app registration",async()=>{
   const elements=new Map(),listeners={},timers=[],storage=new Map();
   let vibrations=0,tones=0,ready=false;
@@ -111,7 +98,7 @@ test("guest collection alerts once without a permission dialog or app registrati
   assert.ok(elements.get("guestCollection").children[0].textContent.includes("Bitte am Tresen abholen"));
 });
 
-test("pickup closes ordering until a fresh QR URL is opened; failed orders remain retryable",async()=>{
+test("both service models close ordering until a fresh QR URL is opened; failed orders remain retryable",async()=>{
   function page({collection=false,success=true}={}){
     const code="a".repeat(48),requests=[],events=[],replaced=[];
     const elements=new Map(["menu","basket","total","send","language","heading","status"].map(id=>[id,{hidden:false,disabled:false,textContent:""}]));
@@ -146,4 +133,49 @@ test("pickup closes ordering until a fresh QR URL is opened; failed orders remai
   assert.equal((await submit(failed)).status,503);
   assert.equal((await submit(failed)).status,503);
   assert.equal(failed.replaced.length,0);
+});
+
+test("base guest page locks without enhancement scripts and stays locked on reload",async()=>{
+  async function page(collection=false){
+    const requests=[],listeners={},events=[],replaced=[],code="a".repeat(48);
+    const elements=new Map();
+    for(const id of ["language","heading","restaurant","guestBrandName","guestLogo","status","menu","basket","total","send"]){
+      elements.set(id,{textContent:"",innerHTML:"",hidden:false,disabled:false,options:[{value:"de"}],parentElement:{hidden:false},querySelectorAll:()=>[],removeAttribute(){}});
+    }
+    const context={
+      URL,URLSearchParams,Map,CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail}},
+      location:{search:"?"+(collection?"collection":"code")+"="+code,href:"https://example.test/tisch/?"+(collection?"collection":"code")+"="+code},
+      history:{replaceState:(s,t,u)=>replaced.push(u)},
+      navigator:{language:"de"},localStorage:{getItem(){return null},setItem(){}},
+      sessionStorage:{getItem(){return null},setItem(){}},crypto:{randomUUID:()=>key},
+      document:{title:"",hidden:false,getElementById:id=>elements.get(id),addEventListener(){}},
+      window:{addEventListener:(type,fn)=>listeners[type]=fn,dispatchEvent:e=>events.push(e)},
+      setInterval(){},
+      async fetch(url){
+        requests.push(url);
+        return {ok:true,async json(){return url.includes("/guest/order")?{orderId:oid}:{table:"1",restaurant:"Test",products:[]}}};
+      }
+    };
+    vm.createContext(context);
+    vm.runInContext(fs.readFileSync(new URL("../apps/web/public/tisch/app.js",import.meta.url),"utf8"),context);
+    await new Promise(resolve=>setImmediate(resolve));
+    return {context,elements,requests,listeners,events,replaced};
+  }
+  const first=await page();
+  vm.runInContext('cart.set("product",1)',first.context);
+  await first.elements.get("send").onclick();
+  await first.elements.get("send").onclick();
+  assert.equal(first.requests.filter(u=>u==="/api/v1/guest/order").length,1);
+  assert.equal(first.events[0].detail.requestId,key);
+  assert.equal(first.elements.get("menu").hidden,true);
+  assert.equal(first.elements.get("basket").parentElement.hidden,true);
+  assert.ok(first.elements.get("status").textContent.includes("erneut scannen"));
+  first.listeners.pageshow();
+  assert.equal(first.elements.get("send").disabled,true);
+  const reload=await page(true);
+  await reload.elements.get("send").onclick();
+  assert.equal(reload.requests.length,0);
+  const scan=await page();
+  assert.ok(scan.requests.some(u=>u.includes("/guest/menu")));
+  assert.equal(scan.elements.get("menu").hidden,false);
 });
