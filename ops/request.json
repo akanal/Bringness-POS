@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "connection-check-20261002-2155"
+  "operation": "deploy",
+  "target": "pos",
+  "revision": "6b6a2fda609db2496d79ad945ec4e628d8513716",
+  "requestId": "publish-qr-models-20261002-2157"
 }
