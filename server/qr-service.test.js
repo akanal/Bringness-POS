@@ -110,3 +110,40 @@ test("guest collection alerts once without a permission dialog or app registrati
   assert.equal(vibrations,1);assert.equal(tones,3);
   assert.ok(elements.get("guestCollection").children[0].textContent.includes("Bitte am Tresen abholen"));
 });
+
+test("pickup closes ordering until a fresh QR URL is opened; failed orders remain retryable",async()=>{
+  function page({collection=false,success=true}={}){
+    const code="a".repeat(48),requests=[],events=[],replaced=[];
+    const elements=new Map(["menu","basket","total","send","language","heading","status"].map(id=>[id,{hidden:false,disabled:false,textContent:""}]));
+    elements.set("guestReceiptEmail",{value:"",parentElement:{hidden:false}});
+    const context={
+      URL,URLSearchParams,Response,
+      location:{search:"?"+(collection?"collection":"code")+"="+code,href:"https://example.test/tisch/?"+(collection?"collection":"code")+"="+code},
+      history:{replaceState:(state,title,url)=>replaced.push(url)},
+      document:{getElementById:id=>elements.get(id),querySelectorAll:()=>[],documentElement:{}},
+      MutationObserver:class{observe(){}},CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail}},
+      window:{async fetch(url,init){
+        requests.push(url);
+        if(url==="/api/v1/guest/order-v2")return new Response(JSON.stringify(success?{orderId:oid}:{error:"retry"}),{status:success?200:503});
+        return new Response(JSON.stringify(url.includes("extras")?{extras:[]}:{mode:"pickup"}));
+      },dispatchEvent:e=>events.push(e)}
+    };
+    vm.runInNewContext(fs.readFileSync(new URL("../apps/web/public/tisch/guest-enhancements.js",import.meta.url),"utf8"),context);
+    return {context,requests,events,replaced,elements};
+  }
+  const submit=p=>p.context.window.fetch("/api/v1/guest/order",{body:JSON.stringify({requestId:key,items:[]})});
+  const first=page();
+  assert.equal((await submit(first)).status,200);
+  assert.equal((await submit(first)).status,409);
+  assert.equal(first.requests.filter(u=>u==="/api/v1/guest/order-v2").length,1);
+  assert.ok(first.elements.get("menu").hidden);
+  assert.ok(first.elements.get("send").disabled);
+  assert.ok(first.replaced[0].includes("collection="));
+  assert.ok(!first.replaced[0].includes("?code="));
+  assert.equal((await submit(page({collection:true}))).status,409);
+  assert.equal((await submit(page())).status,200);
+  const failed=page({success:false});
+  assert.equal((await submit(failed)).status,503);
+  assert.equal((await submit(failed)).status,503);
+  assert.equal(failed.replaced.length,0);
+});
