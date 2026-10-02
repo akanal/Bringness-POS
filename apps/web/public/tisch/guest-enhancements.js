@@ -47,15 +47,6 @@
     send.parentElement.insertBefore(p,send);
   }
 
-  function lockAfterOrder(){
-    sessionStorage.setItem("bringness-order-complete-"+code,"1");
-    history.replaceState({},"","/tisch/abgeschlossen");
-    const menu=document.getElementById("menu"),send=document.getElementById("send"),basket=document.getElementById("basket");
-    if(menu)menu.innerHTML='<div style="text-align:center;padding:28px"><h2>Bestellung übermittelt</h2><p>Für eine neue Bestellung bitte den QR-Code am Tisch erneut scannen.</p></div>';
-    if(basket)basket.innerHTML="Bestellung abgeschlossen.";
-    if(send)send.disabled=true;
-  }
-
   window.fetch=async function(input,init={}){
     const url=typeof input==="string"?input:(input?.url||"");
     if(url==="/api/v1/guest/order" || url.endsWith("/api/v1/guest/order")){
@@ -63,7 +54,11 @@
       body.items=(body.items||[]).map(i=>({...i,extraIds:chosen.get(String(i.productId))||[]}));
       body.email=document.getElementById("guestReceiptEmail")?.value.trim()||"";
       const r=await originalFetch("/api/v1/guest/order-v2",{...init,body:JSON.stringify(body)});
-      if(r.ok)setTimeout(lockAfterOrder,50);
+      if(r.ok){
+        const order=await r.clone().json();
+        window.dispatchEvent(new CustomEvent("bringness-guest-order",{detail:{orderId:order.orderId,requestId:body.requestId}}));
+        chosen.clear();
+      }
       return r;
     }
     return originalFetch(input,init);
