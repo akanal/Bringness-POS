@@ -135,8 +135,8 @@ export async function handleRestaurantOwnerFeature(req,res){
     const c=await pool.connect();
     try{
       await c.query("BEGIN");
-      const tq=await c.query(`SELECT t.id,t.restaurant_id,r.company_id,t.name table_name
-        FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.qr_token=$1 FOR UPDATE OF t`,[code]);
+      const tq=await c.query(`SELECT t.id,t.restaurant_id,r.company_id,r.qr_service_mode,t.name table_name
+        FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.qr_token=$1 FOR UPDATE OF t,r`,[code]);
       if(!tq.rowCount){await c.query("ROLLBACK");return json(res,404,{error:"QR-Code ungültig"})}
       const t=tq.rows[0];
       const licensed=await c.query("SELECT 1 FROM company_features WHERE company_id=$1 AND feature_code='table_qr' AND status='active' AND ((ends_at IS NULL OR ends_at>now()) OR (grace_until IS NOT NULL AND grace_until>now()))",[t.company_id]);
@@ -166,7 +166,7 @@ export async function handleRestaurantOwnerFeature(req,res){
       if(total<=0||total>100000000){await c.query("ROLLBACK");return json(res,400,{error:"Ungültiger Betrag"})}
       const email=String(b.email||"").trim().toLowerCase();
       if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){await c.query("ROLLBACK");return json(res,400,{error:"E-Mail-Adresse ist ungültig"})}
-      const o=(await c.query("INSERT INTO orders(restaurant_id,table_id,source,status,total_cents,guest_request_id,guest_email) VALUES($1,$2,'qr','open',$3,$4,$5) RETURNING id",[t.restaurant_id,t.id,total,requestId,email||null])).rows[0];
+      const o=(await c.query("INSERT INTO orders(restaurant_id,table_id,source,status,total_cents,guest_request_id,guest_email,qr_service_mode) VALUES($1,$2,'qr','open',$3,$4,$5,$6) RETURNING id",[t.restaurant_id,t.id,total,requestId,email||null,t.qr_service_mode])).rows[0];
       for(const item of cleaned){
         const snapshot=item.extras.map(x=>({id:x.id,name:x.name,price_cents:Number(x.price_cents)}));
         await c.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,guest_note,extras_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[o.id,item.pr.id,item.pr.name,item.unitPrice,item.pr.tax_rate,item.qty,item.note||null,JSON.stringify(snapshot)]);

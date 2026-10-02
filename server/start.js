@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
 const appMode = runtimeMode();
 const aiFeatures = await loadAiFeatures(appMode);
@@ -38,6 +39,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (blockAiRequest(req,res,appMode)) return;
       if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
+      if (await handleQrService(req,res)) return;
       if (await handleSupport(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
       if (await handleAdminPasswordReset(req,res)) return;
@@ -81,9 +83,11 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/tisch/index.html")) {
+        if (!html.includes("/tisch/collection.js")) html = html.replace("</body>", '<script src="/tisch/collection.js"></script></body>');
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {
+        if (!html.includes("/service/collection.js")) html = html.replace("</body>", '<script src="/service/collection.js"></script></body>');
         if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
@@ -104,6 +108,7 @@ async function migrateWithRetry(){
   for(let attempt=1;attempt<=12;attempt++){
     try{
       await migrateRestaurantOwnerFeatures();
+      await migrateQrService();
       await migratePublicReceipts();
       await migrateTseIntegration();
       await migrateBillingAccess();

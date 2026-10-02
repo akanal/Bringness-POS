@@ -69,6 +69,7 @@ export async function handleBillingStatus(req,res){
 
   send(res,200,{
     features:state,
+    featureRows:features.rows,
     plans:plans.rows.map(plan=>{
       const ent=latestEntitlement.get(plan.code)||null;
       const dependency=dependencyState[plan.code]||{eligible:true,requires:[]};
