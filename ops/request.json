@@ -1,5 +1,1 @@
-{
-  "operation": "status",
-  "target": "all",
-  "requestId": "verify-after-qr-release-20261002"
-}
+{"operation":"status","target":"all","requestId":"prepare-ai-api-v1-20261003"}
