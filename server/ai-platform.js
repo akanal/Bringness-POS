@@ -1,3 +1,4 @@
+import {migrateAiFulfilment,fulfilmentRoutes,ensureOrderReady,resolveOrderProblems} from './ai-fulfilment.js';
 import {migrateAiCollection,collectionRoutes,collectionTick,supplierMayTrade,ensureManualPaymentAllowed} from './ai-collection.js';
 import {migrateAiSettlements,settlementRoutes} from './ai-settlements.js';
 import {migrateAiAds,adRoutes} from './ai-ads.js';
@@ -44,7 +45,7 @@ CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFE
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -108,6 +109,7 @@ export async function handleAiPlatform(req,res){
   }
   if(p.startsWith('/api/ai/admin')){
    const admin=await platformActor(req);if(!admin)return send(res,403,{error:'Nur Plattformadministratoren haben Zugriff.'});
+   if(p==='/api/ai/admin/fulfilment'||p.startsWith('/api/ai/admin/fulfilment/'))return send(res,200,await fulfilmentRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
    if(p==='/api/ai/admin/collection'||p.startsWith('/api/ai/admin/collection/'))return send(res,200,await collectionRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
    if(p==='/api/ai/admin/settlements'||p.startsWith('/api/ai/admin/settlements/'))return send(res,200,await settlementRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
    if(p==='/api/ai/admin/ads'||p.startsWith('/api/ai/admin/ads/'))return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
@@ -139,6 +141,7 @@ export async function handleAiPlatform(req,res){
   const supplierResult=await supplierAccountRoutes(p,req.method,req.method==='POST'&&p.startsWith('/api/ai/supplier-connector')?await body(req):{},u);if(supplierResult)return send(res,200,supplierResult);
   const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status','/api/ai/connector-key'].includes(p)?await body(req):{},u,url);if(recipeResult)return send(res,200,recipeResult);
   if(p==='/api/ai/logout'&&req.method==='POST'){await pool.query('DELETE FROM ai_sessions WHERE token_hash=$1',[hash(bearer(req))]);return send(res,200,{ok:true})}
+  if(p==='/api/ai/order-groups'||p.startsWith('/api/ai/order-groups/')||p.startsWith('/api/ai/fulfilment/'))return send(res,200,await fulfilmentRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
   if(p==='/api/ai/me'&&req.method==='GET')return send(res,200,{account:u,launch:await settings()});
   if(p==='/api/ai/commissions'&&req.method==='GET'){
    if(!supplierRoles.includes(u.role))return send(res,403,{error:'Nur Lieferanten haben ein Provisionskonto.'});
@@ -148,7 +151,7 @@ export async function handleAiPlatform(req,res){
   if(p==='/api/ai/purchasing'&&req.method==='GET'){
    if(u.role!=='restaurant')return send(res,403,{error:'Nur Restaurants haben Einkaufslisten.'});
    const horizon=Number(url.searchParams.get('days')||7);if(!Number.isInteger(horizon)||horizon<1||horizon>30)fail('Planungshorizont: 1 bis 30 Tage');
-   const rows=(await pool.query("SELECT s.*,l.name location_name,COALESCE((SELECT sum(-e.delta) FROM ai_sale_effects e JOIN ai_sale_events v ON v.id=e.event_id WHERE e.stock_id=s.id AND v.created_at>=now()-interval '28 days'),0) consumption,COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted'),0) incoming FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY l.name,s.name LIMIT 1000",[u.id])).rows;
+   const rows=(await pool.query("SELECT s.*,l.name location_name,COALESCE((SELECT sum(-e.delta) FROM ai_sale_effects e JOIN ai_sale_events v ON v.id=e.event_id WHERE e.stock_id=s.id AND v.created_at>=now()-interval '28 days'),0) consumption,COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted' AND NOT o.unavailable),0) incoming FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY l.name,s.name LIMIT 1000",[u.id])).rows;
    const items=[];for(const row of rows){const daily=Math.max(0,Number(row.consumption))/28,target=Math.max(Number(row.minimum),daily*horizon),shortage=Math.ceil(Math.max(0,target-Number(row.quantity)-Number(row.incoming))*1000)/1000;if(!shortage)continue;const offers=(await pool.query("SELECT p.id,p.name,p.pack_quantity,p.price_cents,p.minimum_packs,s.business_name,s.minimum_order_cents,s.delivery_area,s.delivery_terms FROM ai_products p JOIN ai_accounts s ON s.id=p.supplier_id WHERE p.active AND p.available AND s.status='active' AND p.unit=$1 AND lower(p.name)=lower($2) ORDER BY p.price_cents/p.pack_quantity LIMIT 5",[row.unit,row.name])).rows.map(o=>{const packs=Math.max(Number(o.minimum_packs),Math.ceil(shortage/Number(o.pack_quantity)));return {...o,packs,netCents:packs*Number(o.price_cents)}});items.push({...row,daily,target,shortage,offers})}return send(res,200,{days:horizon,historyDays:28,items});
   }
   if(p==='/api/ai/profile'&&req.method==='POST'){
@@ -236,10 +239,11 @@ export async function handleAiPlatform(req,res){
    id(match[1]);const c=await pool.connect();try{await c.query('BEGIN');const o=(await c.query('SELECT * FROM ai_orders WHERE id=$1 FOR UPDATE',[match[1]])).rows[0];if(!o||![o.buyer_id,o.supplier_id].includes(u.id)){await c.query('ROLLBACK');return send(res,404,{error:'Bestellung nicht gefunden'})}
     if(match[2]==='receive'&&u.id===o.buyer_id&&o.status==='received'){await c.query('COMMIT');return send(res,200,{ok:true})}
     if(!mayActOnOrder(u,o,match[2])){await c.query('ROLLBACK');return send(res,409,{error:'Aktion für diesen Status nicht möglich'})}
+    if(['accept','receive'].includes(match[2]))await ensureOrderReady(c,o);
     if(match[2]==='accept'&&!await supplierMayTrade(o.supplier_id)){await c.query('ROLLBACK');return send(res,409,{error:'SEPA-Freigabe erforderlich.'})}
-    const status={accept:'accepted',receive:'received',cancel:'cancelled'}[match[2]];
+    const status={accept:'accepted',receive:'received',cancel:'cancelled'}[match[2]];if(status==='cancelled')await resolveOrderProblems(c,o.id);
     if(status==='received'){const delta=Number(o.pack_quantity)*o.packs;await c.query('UPDATE ai_stock SET quantity=quantity+$2 WHERE id=$1',[o.stock_id,delta]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,order_id) VALUES($1,$2,$3,'Wareneingang',$4)",[o.stock_id,u.id,delta,o.id])}
-    await c.query("UPDATE ai_orders SET status=$2,updated_at=now(),received_at=CASE WHEN $2='received' THEN coalesce(received_at,now()) ELSE received_at END,commission_cents=CASE WHEN $2='cancelled' THEN 0 ELSE commission_cents END WHERE id=$1",[o.id,status]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,$3)',[u.id,o.id,'order_'+status]);await c.query('COMMIT');return send(res,200,{ok:true});
+    await c.query("UPDATE ai_orders SET ordered_packs=coalesce(ordered_packs,packs),original_net_cents=coalesce(original_net_cents,net_cents),confirmed_delivery_date=CASE WHEN $2='accepted' THEN coalesce(confirmed_delivery_date,delivery_date) ELSE confirmed_delivery_date END,delivered_packs=CASE WHEN $2='received' THEN packs ELSE delivered_packs END,status=$2,updated_at=now(),received_at=CASE WHEN $2='received' THEN coalesce(received_at,now()) ELSE received_at END,commission_cents=CASE WHEN $2='cancelled' THEN 0 ELSE commission_cents END WHERE id=$1",[o.id,status]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,$3)',[u.id,o.id,'order_'+status]);await c.query('COMMIT');return send(res,200,{ok:true});
    }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
   }
   return send(res,404,{error:'AI-Funktion nicht gefunden'});

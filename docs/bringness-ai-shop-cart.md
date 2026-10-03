@@ -23,7 +23,7 @@ Der Netto-Warenwert enthält keine vom Lieferanten zusätzlich berechnete Umsatz
 
 ## Noch nicht enthalten
 
-Öffentlich zugängliche Shops ohne Anmeldung, automatische Warenbezahlung, verbindliche Lieferkosten-/Umsatzsteuerberechnung des Lieferanten, Echtzeit-Reservierung von Lieferantenbeständen, automatische Einkaufsfreigaben/Budgets und Produkt-Ersatzwahl sind gesonderte Erweiterungen. Lieferanten erfüllen Bestellpositionen über den bestehenden Ablauf; gruppenweite Sammelaktionen folgen bei Bedarf.
+Öffentlich zugängliche Shops ohne Anmeldung, automatische Warenbezahlung, verbindliche Lieferkosten-/Umsatzsteuerberechnung des Lieferanten, Echtzeit-Reservierung von Lieferantenbeständen, automatische Einkaufsfreigaben/Budgets und Produkt-Ersatzwahl sind gesonderte Erweiterungen. Lieferantenaufträge unterstützen nun gemeinsame Annahme, bestätigte Liefertermine und gemeinsamen finalen Wareneingang. Nichtlieferbarkeit, Ersatzvorschläge und Mindermengen sind in bringness-ai-fulfilment.md beschrieben.
 
 ## Validierung
 
