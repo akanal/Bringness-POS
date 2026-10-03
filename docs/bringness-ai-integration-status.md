@@ -24,7 +24,7 @@ Ein fehlendes Rezept hält den POS-Import an. Nach Korrektur wird dieselbe Beste
 
 | Thema | Vorhanden / noch erforderlich |
 | --- | --- |
-| Lieferantensortimente | CSV und gemeinsamer Barcode-Katalog vorhanden; Lieferanten-API für Preise, Verfügbarkeit und Bestellübermittlung noch offen |
+| Lieferantensortimente | CSV und gemeinsamer Barcode-Katalog vorhanden; Lieferanten-API für Sortiment, Nettopreise, Lieferbarkeit, Bestellabruf, Annahme und Stornierung umgesetzt; konkrete ERP-Adapter und Webhooks noch offen |
 | Fremdkassen-Adapter | Allgemeine API vorhanden; konkrete Adapter brauchen Herstellerdokumentation und Testzugänge |
 | Ketten | Mehrere Standorte und getrennte Verbindungen vorhanden; zentrale Einkaufsfreigaben und feinere Teamrechte noch offen |
 | Einkaufsvorschläge | Verbrauch, Mindestbestände und offene bestätigte Lieferungen vorhanden; Wetter- und Veranstaltungsdaten noch nicht angebunden |
@@ -35,3 +35,9 @@ Ein fehlendes Rezept hält den POS-Import an. Nach Korrektur wird dieselbe Beste
 ## Prüfung
 
 Die Tests verwenden eingebettetes PostgreSQL (PGlite) und eine Browser-DOM. Geprüft werden vollständiger Rollback, wiederholte Importe, Rückbuchungen aus gespeicherten Effekten, Testimporte, Schlüsselrotation, pausierte Zugänge, Standort-/Kontentrennung, Produktzuordnung und erneute Inhaberfreigabe. Der Test der Oberfläche umfasst Erstellung und Erneuerung von Schlüsseln. Das ersetzt keinen Abnahmetest mit einem echten Fremdkassensystem.
+
+## Lieferanten-API
+
+Händler, Großlieferanten und Hersteller verwalten getrennte, lieferantengebundene API-Schlüssel unter „Lieferanten-API“. Produktimporte aktualisieren anhand einer eindeutigen eigenen Artikelnummer bis zu 100 Produkte pro Anfrage atomar. Import-IDs schützen vor doppelten und verspätet wiederholten Schreibvorgängen. Nicht lieferbare Produkte werden aus Angeboten ausgeschlossen; ihre bestehenden Bestellungen bleiben unverändert. Bestellabruf verwendet einen Cursor mit vollständiger PostgreSQL-Zeitpräzision. Lieferanten dürfen eigene offene Bestellungen annehmen oder stornieren; Wareneingang und Provisionszahlung sind darüber nicht möglich. Die vereinbarten 2 % werden als Bestellsnapshot gespeichert.
+
+Dokumentation: `/ai-supplier-api.html`, OpenAPI: `/ai-supplier-openapi.json`. Verfügbarkeit ist eine Kennzeichnung, keine Mengenreservierung. Bestellabruf liefert aktuelle Zustände, keine vollständige Ereignishistorie. Prüfsuite erweitert um Produktimport, Wiederholung, fehlerhaften Batch, Nichtverfügbarkeit, unveränderte Provision, fremde Lieferantenzugriffe, Bestellaktionen, Schlüsselrotation und Lieferantenoberfläche.

@@ -1,0 +1,1434 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Bringness AI Supplier API",
+    "version": "1.0.0",
+    "description": "Lieferantengebundene Schnittstelle. Separaten Schlüssel unter Lieferanten-API erstellen und aktivieren. 600 Anfragen je Verbindung pro 15 Minuten. Produktimport bis 100 Produkte und 220000 Zeichen je Anfrage. Jede neue Änderung braucht eine neue requestId; Netzfehler mit gleicher ID und gleichen Daten wiederholen. API-Schlüssel und Login-Token sind getrennt. Keine Wareneingangsbestätigung, keine Änderung von Provisionen. Verfügbarkeit ist eine Lieferbar-Kennzeichnung, keine Reservierung physischer Bestände."
+  },
+  "servers": [
+    {
+      "url": "https://bringness-ai.com"
+    }
+  ],
+  "security": [
+    {
+      "SupplierKey": []
+    }
+  ],
+  "paths": {
+    "/api/ai/v1/supplier/status": {
+      "get": {
+        "operationId": "supplierStatus",
+        "summary": "Verbindung prüfen",
+        "responses": {
+          "200": {
+            "description": "Aktive Verbindung und fest vereinbarte 2%-Provision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "connectorId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "lastSync": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "commissionBps": {
+                      "type": "integer",
+                      "enum": [
+                        200
+                      ]
+                    },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/products": {
+      "get": {
+        "operationId": "supplierProducts",
+        "summary": "Eigene Produkte exportieren",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bis 100 Produkte. Mit nextAfter fortsetzen; für einen neuen vollständigen Export ohne after starten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Product"
+                      }
+                    },
+                    "nextAfter": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "importSupplierProducts",
+        "summary": "Bis 100 Produkte atomar anlegen oder aktualisieren",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "requestId",
+                  "products"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "products": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "$ref": "#/components/schemas/ProductInput"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wiederholung derselben ID mit identischen Daten übernimmt keine Änderung erneut.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imported": {
+                      "type": "integer"
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "external_code": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 150
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/orders": {
+      "get": {
+        "operationId": "supplierOrders",
+        "summary": "Eigene Bestellungen und Statusänderungen abrufen",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor unverändert speichern und weitergeben. Bis 100 aktuelle Bestellstände; hasMore bedeutet sofort weiterlesen, sonst beim nächsten Abruf fortsetzen. Keine Ereignishistorie.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Order"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/orders/{orderId}/accept": {
+      "post": {
+        "operationId": "supplieraccept",
+        "summary": "Bestellung annehmen",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Identische Wiederholung ohne zweite Statusbuchung.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/orders/{orderId}/cancel": {
+      "post": {
+        "operationId": "suppliercancel",
+        "summary": "Offene Bestellung stornieren",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Identische Wiederholung ohne zweite Statusbuchung.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Keine Teilbuchung; bei 429/500/503 später mit derselben Import-ID wiederholen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SupplierKey": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "ProductInput": {
+        "type": "object",
+        "required": [
+          "externalCode",
+          "name",
+          "unit",
+          "packQuantity",
+          "priceCents"
+        ],
+        "properties": {
+          "externalCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "kg",
+              "l",
+              "piece"
+            ]
+          },
+          "packQuantity": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 1000000,
+            "multipleOf": 0.001,
+            "description": "Bei piece eine ganze Zahl."
+          },
+          "priceCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000,
+            "description": "Nettopreis je Packung in Cent."
+          },
+          "minimumPacks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 1
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          },
+          "available": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "external_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "pack_quantity": {
+            "type": "string",
+            "description": "Dezimalmenge als PostgreSQL-Zeichenfolge."
+          },
+          "price_cents": {
+            "type": "string",
+            "description": "Netto-Cent als PostgreSQL-bigint-Zeichenfolge."
+          },
+          "minimum_packs": {
+            "type": "integer"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "external_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "pack_quantity": {
+            "type": "string"
+          },
+          "packs": {
+            "type": "integer"
+          },
+          "net_cents": {
+            "type": "string"
+          },
+          "commission_bps": {
+            "type": "integer"
+          },
+          "commission_cents": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "accepted",
+              "received",
+              "cancelled"
+            ]
+          },
+          "delivery_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "delivery_address": {
+            "type": "string"
+          },
+          "buyer_email": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}
