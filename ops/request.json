@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "prepare-ai-inventory-monitor-20261003"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "d06509abff8be18ca4a7ab47828f09ff742f6293",
+  "requestId": "deploy-ai-inventory-monitor-20261003"
 }
