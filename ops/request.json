@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "prepare-ai-fulfilment-20261003"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "f7b115f05a013ed23caefc1c649795c941671694",
+  "requestId": "deploy-ai-fulfilment-20261003"
 }
