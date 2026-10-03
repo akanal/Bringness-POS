@@ -1,1 +1,5 @@
-{"operation":"status","target":"all","requestId":"verify-ai-invoices-20261003"}
+{
+  "operation": "status",
+  "target": "all",
+  "requestId": "prepare-ai-shop-cart-20261003"
+}
