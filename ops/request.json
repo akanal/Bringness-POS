@@ -1,1 +1,1 @@
-{"operation":"deploy","target":"ai","revision":"7f86a613c1a581e85c4332eb727f650df1a87c03","requestId":"deploy-ai-invoices-20261003"}
+{"operation":"status","target":"all","requestId":"verify-ai-invoices-20261003"}
