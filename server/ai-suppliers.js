@@ -1,3 +1,4 @@
+import {ensureOrderReady,resolveOrderProblems} from './ai-fulfilment.js';
 import {supplierMayTrade} from './ai-collection.js';
 import crypto from 'node:crypto';
 import {aiPool} from './ai-database.js';
@@ -99,10 +100,11 @@ export async function supplierPublicRoutes(p,method,url,token,b={}){
   if(action&&method==='POST'){
     checkId(action[1]);const c=await pool.connect();
     try{await c.query('BEGIN');if(!(await c.query("SELECT c.id FROM ai_supplier_connectors c JOIN ai_accounts a ON a.id=c.supplier_id WHERE c.id=$1 AND c.token_hash=$2 AND c.active AND a.status='active' FOR UPDATE OF c",[link.id,hash(token)])).rowCount)fail('Anbindung nicht aktiv',403);const o=(await c.query('SELECT * FROM ai_orders WHERE id=$1 AND supplier_id=$2 FOR UPDATE',[action[1],link.supplier_id])).rows[0];if(!o)fail('Bestellung nicht gefunden',404);
-      if(action[2]==='accept'&&!await supplierMayTrade(o.supplier_id))fail('SEPA-Freigabe erforderlich',409);const status=action[2]==='accept'?'accepted':'cancelled';
+      if(action[2]==='accept')await ensureOrderReady(c,o);if(action[2]==='accept'&&!await supplierMayTrade(o.supplier_id))fail('SEPA-Freigabe erforderlich',409);const status=action[2]==='accept'?'accepted':'cancelled';
       if(o.status===status){await c.query('COMMIT');return {ok:true,duplicate:true}}
       if(action[2]==='accept'&&o.status!=='sent'||action[2]==='cancel'&&!['sent','accepted'].includes(o.status))fail('Aktion für diesen Bestellstatus nicht möglich',409);
-      await c.query("UPDATE ai_orders SET status=$2,updated_at=now(),commission_cents=CASE WHEN $2='cancelled' THEN 0 ELSE commission_cents END WHERE id=$1",[o.id,status]);
+      if(status==='cancelled')await resolveOrderProblems(c,o.id);
+      await c.query("UPDATE ai_orders SET confirmed_delivery_date=CASE WHEN $2='accepted' THEN coalesce(confirmed_delivery_date,delivery_date) ELSE confirmed_delivery_date END,status=$2,updated_at=now(),commission_cents=CASE WHEN $2='cancelled' THEN 0 ELSE commission_cents END WHERE id=$1",[o.id,status]);
       await c.query('INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,$3)',[link.supplier_id,o.id,'supplier_api_'+status]);
       await c.query('COMMIT');return {ok:true,duplicate:false};
     }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
