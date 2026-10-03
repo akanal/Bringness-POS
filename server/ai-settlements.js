@@ -1,3 +1,4 @@
+import {ensureManualPaymentAllowed} from './ai-collection.js';
 import {aiPool} from './ai-database.js';
 import {supplierRoles,uuid} from './ai-policy.js';
 const fail=(message,status=400)=>{const e=new Error(message);e.status=status;throw e};
@@ -31,7 +32,7 @@ export async function settlementRoutes(p,method,b,u,url,admin=false){
  if(p===base+'/payment'){
   if(typeof b.reference!=='string'||!b.reference.trim()||b.reference.trim().length>200||!Number.isSafeInteger(b.amountCents)||b.amountCents<=0||b.confirmed!==true)fail('Vollständigen Zahlungseingang mit Betrag und Nachweis bestätigen');
   const c=await aiPool().connect();try{await c.query('BEGIN');const orders=(await c.query(`SELECT o.id,o.commission_cents FROM ai_orders o WHERE ${filter} AND o.supplier_id=$2 AND o.commission_cents>0 ORDER BY o.id FOR UPDATE`,[m,b.supplierId])).rows;
-   const paid=new Set((await c.query('SELECT order_id FROM ai_commission_payments WHERE order_id=ANY($1::uuid[])',[orders.map(o=>o.id)])).rows.map(p=>p.order_id));const pending=orders.filter(o=>!paid.has(o.id));const amount=pending.reduce((n,o)=>n+Number(o.commission_cents),0);if(!amount||amount!==b.amountCents)fail('Offener Betrag geändert. Übersicht neu laden und Zahlung prüfen.',409);
+   await ensureManualPaymentAllowed(c,orders.map(o=>o.id));const paid=new Set((await c.query('SELECT order_id FROM ai_commission_payments WHERE order_id=ANY($1::uuid[])',[orders.map(o=>o.id)])).rows.map(p=>p.order_id));const pending=orders.filter(o=>!paid.has(o.id));const amount=pending.reduce((n,o)=>n+Number(o.commission_cents),0);if(!amount||amount!==b.amountCents)fail('Offener Betrag geändert. Übersicht neu laden und Zahlung prüfen.',409);
    for(const o of pending)await c.query('INSERT INTO ai_commission_payments(order_id,amount_cents,reference,recorded_by) VALUES($1,$2,$3,$4)',[o.id,o.commission_cents,b.reference.trim(),u.id]);
    await c.query("INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$2,'commission_month_payment',$3)",[u.id,b.supplierId,JSON.stringify({month:m,amountCents:amount,reference:b.reference.trim(),orderIds:pending.map(o=>o.id)})]);await c.query('COMMIT');return {ok:true,paidCents:amount};
   }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
