@@ -1,6 +1,5 @@
 {
-  "operation": "deploy",
-  "target": "ai",
-  "revision": "f7b115f05a013ed23caefc1c649795c941671694",
-  "requestId": "deploy-ai-fulfilment-20261003"
+  "operation": "status",
+  "target": "all",
+  "requestId": "verify-ai-fulfilment-20261003"
 }
