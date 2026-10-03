@@ -1,3 +1,4 @@
+import {migrateAiSettlements,settlementRoutes} from './ai-settlements.js';
 import {migrateAiAds,adRoutes} from './ai-ads.js';
 import {migrateAiSuppliers,supplierAccountRoutes,supplierPublicRoutes} from './ai-suppliers.js';
 import crypto from 'node:crypto';
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFE
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -101,6 +102,7 @@ export async function handleAiPlatform(req,res){
   }
   if(p.startsWith('/api/ai/admin')){
    const admin=await platformActor(req);if(!admin)return send(res,403,{error:'Nur Plattformadministratoren haben Zugriff.'});
+   if(p==='/api/ai/admin/settlements'||p.startsWith('/api/ai/admin/settlements/'))return send(res,200,await settlementRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
    if(p==='/api/ai/admin/ads'||p.startsWith('/api/ai/admin/ads/'))return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
    if(p.startsWith('/api/ai/admin/barcodes'))return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,true,url));
    if(p==='/api/ai/admin'&&req.method==='GET'){
@@ -123,6 +125,7 @@ export async function handleAiPlatform(req,res){
    return send(res,404,{error:'Adminfunktion nicht gefunden'});
   }
   const u=await actor(req);if(!u)return send(res,401,{error:'Bitte anmelden.'});
+  if(p==='/api/ai/settlements'||p.startsWith('/api/ai/settlements/'))return send(res,200,await settlementRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
   if(p==='/api/ai/ads'||p.startsWith('/api/ai/ads/')){if(req.method==='POST'&&!await rate('ads:'+u.id,300))return send(res,429,{error:'Zu viele Werbeanfragen. Bitte später erneut versuchen.'});return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));}
   if(p.startsWith('/api/ai/barcodes')){if(req.method==='POST'&&!await rate('barcodes:'+u.id,300))return send(res,429,{error:'Zu viele Kataloganfragen. Bitte später erneut versuchen.'});return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},u,false,url));}
   const supplierResult=await supplierAccountRoutes(p,req.method,req.method==='POST'&&p.startsWith('/api/ai/supplier-connector')?await body(req):{},u);if(supplierResult)return send(res,200,supplierResult);
@@ -193,7 +196,7 @@ export async function handleAiPlatform(req,res){
     if(!mayActOnOrder(u,o,match[2])){await c.query('ROLLBACK');return send(res,409,{error:'Aktion für diesen Status nicht möglich'})}
     const status={accept:'accepted',receive:'received',cancel:'cancelled'}[match[2]];
     if(status==='received'){const delta=Number(o.pack_quantity)*o.packs;await c.query('UPDATE ai_stock SET quantity=quantity+$2 WHERE id=$1',[o.stock_id,delta]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,order_id) VALUES($1,$2,$3,'Wareneingang',$4)",[o.stock_id,u.id,delta,o.id])}
-    await c.query("UPDATE ai_orders SET status=$2,updated_at=now(),commission_cents=CASE WHEN $2='cancelled' THEN 0 ELSE commission_cents END WHERE id=$1",[o.id,status]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,$3)',[u.id,o.id,'order_'+status]);await c.query('COMMIT');return send(res,200,{ok:true});
+    await c.query("UPDATE ai_orders SET status=$2,updated_at=now(),received_at=CASE WHEN $2='received' THEN coalesce(received_at,now()) ELSE received_at END,commission_cents=CASE WHEN $2='cancelled' THEN 0 ELSE commission_cents END WHERE id=$1",[o.id,status]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,$3)',[u.id,o.id,'order_'+status]);await c.query('COMMIT');return send(res,200,{ok:true});
    }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
   }
   return send(res,404,{error:'AI-Funktion nicht gefunden'});
