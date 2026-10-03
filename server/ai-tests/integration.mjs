@@ -2,7 +2,7 @@ import {JSDOM} from 'jsdom';import fs from 'node:fs';import assert from 'node:as
 const root=fileURLToPath(new URL('../../',import.meta.url)).replace(/\/$/,'');const db=new PGlite();await db.waitReady;
 async function query(sql,args){if(sql.includes('CREATE TABLE')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}}
 globalThis.aiTestPg={Pool:class{query(...a){return query(...a)}async connect(){return {query,release(){}}}}};
-let recipeSource=fs.readFileSync(root+'/server/ai-recipes.js','utf8').replace("import {aiPool,platformPool} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool();const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+let recipeSource=fs.readFileSync(root+'/server/ai-recipes.js','utf8').replace("'./ai-sales-contract.js'",JSON.stringify('file://'+root+'/server/ai-sales-contract.js')).replace("import {aiPool,platformPool} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool();const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
 const recipeModule=await import('data:text/javascript;base64,'+Buffer.from(recipeSource).toString('base64'));globalThis.aiRecipeModule=recipeModule;
 let barcodeSource=fs.readFileSync(root+'/server/ai-barcodes.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js')).replace("'../apps/web/public/ai-csv-parser.js'",JSON.stringify('file://'+root+'/apps/web/public/ai-csv-parser.js'));
 globalThis.aiBarcodeModule=await import('data:text/javascript;base64,'+Buffer.from(barcodeSource).toString('base64'));
@@ -61,8 +61,17 @@ assert.equal((await call('recipes',{locationId:loc.id,name:'Gericht',productCode
 const recipe=(await call('recipes',null,tokens.buyer)).recipes[0];const key=await call('connectors',{locationId:loc.id,name:'Testkasse'},tokens.buyer);const link=(await call('connectors',null,tokens.buyer)).connectors[0];
 assert.equal((await call('import/sales',{eventId:'sale-1',items:[{productCode:'dish-1',quantity:4}]},key.token)).status,401);
 await call('connector-status',{id:link.id,active:true},tokens.buyer);
+assert.equal((await call('v1/status',null,key.token)).connectorId,link.id);
+assert.equal((await call('v1/products',null,key.token)).products[0].productCode,'dish-1');
+const beforeDry=Number((await call('stock',null,tokens.buyer)).stock[0].quantity);
+const dry=await call('v1/sales/validate',{eventId:'dry-1',items:[{productCode:'dish-1',quantity:4}]},key.token);assert.equal(dry.dryRun,true);assert.equal(dry.effects[0].delta,-1);assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),beforeDry);assert.equal((await query("SELECT 1 FROM ai_sale_events WHERE external_id='dry-1'")).rowCount,0);
+assert.equal((await call('v1/sales',{eventId:'bad-type',items:[{productCode:'dish-1',quantity:true}]},key.token)).status,400);
+assert.equal((await call('v1/sales',{eventId:'x'.repeat(151),items:[{productCode:'dish-1',quantity:1}]},key.token)).status,400);
+assert.equal((await call('v1/products',null,tokens.other)).status,401);
 const sale={eventId:'sale-1',items:[{productCode:'dish-1',quantity:4}]};assert.equal((await call('import/sales',sale,key.token)).status,200);assert.equal((await call('import/sales',sale,key.token)).duplicate,true);
 assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),4);
+assert.equal((await call('v1/sales',sale,key.token)).duplicate,true);
+const duplicateDry=await call('v1/sales/validate',sale,key.token);assert.equal(duplicateDry.dryRun,true);assert.equal(duplicateDry.duplicate,true);
 assert.equal((await call('import/sales',{...sale,items:[{productCode:'dish-1',quantity:5}]},key.token)).status,409);
 assert.equal((await call('import/sales',{eventId:'missing',items:[{productCode:'unknown',quantity:1}]},key.token)).status,400);
 assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),4);
@@ -73,6 +82,9 @@ assert.equal((await call('import/sales',{eventId:'reverse-2',type:'reversal',rev
 assert.equal((await call('import/sales',{eventId:'sale-2',items:[{productCode:'dish-1',quantity:10}]},key.token)).status,200);
 assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-15);
 await call('connector-status',{id:link.id,active:false},tokens.buyer);assert.equal((await call('import/sales',{eventId:'blocked',items:[{productCode:'dish-1',quantity:1}]},key.token)).status,401);
+
+assert.equal((await call('connector-key',{id:link.id},tokens.other)).status,404);
+const rotated=await call('connector-key',{id:link.id},tokens.buyer);assert.equal(rotated.status,200);await call('connector-status',{id:link.id,active:true},tokens.buyer);assert.equal((await call('v1/status',null,key.token)).status,401);assert.equal((await call('v1/status',null,rotated.token)).status,200);await call('connector-status',{id:link.id,active:false},tokens.buyer);
 
 // POS adapter needs a real owner authorization and imports only linked paid sales.
 await db.exec('ALTER TABLE users ADD COLUMN company_id uuid;ALTER TABLE users ADD COLUMN role text;CREATE TABLE restaurants(id uuid,company_id uuid,name text);CREATE TABLE products(id uuid,restaurant_id uuid,name text,active boolean);CREATE TABLE orders(id uuid,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);CREATE TABLE order_items(order_id uuid,product_id uuid,quantity numeric);');
@@ -88,6 +100,8 @@ await recipeModule.syncPosSales();assert.match((await call('connectors',null,tok
 await call('recipes',{locationId:loc.id,name:'POS dish',productCode:posProduct,items:[{stockId:st.id,quantity:0.5}]},tokens.buyer);
 await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
 await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
+const mapping=await call('pos-products?connectorId='+posLink.id,null,tokens.buyer);assert.equal(mapping.status,200);assert.equal(mapping.unmapped,0);assert.equal(mapping.products[0].id,posProduct);assert.equal((await call('pos-products?connectorId='+posLink.id,null,tokens.other)).status,404);
+await query('UPDATE users SET must_change_password=true WHERE id=$1',[posOwner]);assert.equal((await call('pos-products?connectorId='+posLink.id,null,tokens.buyer)).status,403);await recipeModule.syncPosSales();assert.match((await call('connectors',null,tokens.buyer)).connectors.find(c=>c.id===posLink.id).last_error,/freigabe/i);await query('UPDATE users SET must_change_password=false WHERE id=$1',[posOwner]);await recipeModule.syncPosSales();
 assert.equal((await call('connectors',null,tokens.buyer)).connectors.find(c=>c.id===posLink.id).last_error,null);
 // Shared barcode data, CSV atomicity, moderation and tenant-private receipts.
 const barcode='4006381333931',entryBody={barcode,name:'Hamburger Patties',unit:'piece',packQuantity:32};
@@ -150,6 +164,10 @@ submit('login',{email:'other@example.org',password:'testing-password-123'});awai
 d.querySelector('[data-view="stock"]').click();await until(()=>d.querySelector('[data-form="location"]'));
 submit('location',{name:'UI Teststandort',address:'UI Weg 1'});await until(()=>d.querySelector('#locationId option'));
 submit('stock',{name:'UI Mehl',quantity:'0',minimum:'5'});await until(()=>d.querySelector('[data-adjust]'));
+d.querySelector('[data-view="connections"]').click();await until(()=>d.querySelector('[data-form="connector"]'));
+submit('connector',{name:'UI Connector'});await until(()=>d.querySelector('#connection-extra input[readonly]'));const uiKey=d.querySelector('#connection-extra input').value;
+d.querySelector('[data-view="connections"]').click();await until(()=>d.querySelector('[data-key-rotate]'));w.confirm=()=>true;d.querySelector('[data-key-rotate]').click();await until(()=>d.querySelector('#connection-extra input[readonly]'));assert.notEqual(d.querySelector('#connection-extra input').value,uiKey);assert.match(d.getElementById('connection-extra').textContent,/bisherige Schlüssel/);
+console.log('Connector DOM passed: key creation, visible rotation action and replacement key.');
 d.querySelector('[data-view="catalog"]').click();await until(()=>d.querySelector('[data-form="search"]'));
 submit('search',{q:'Mehl'});await until(()=>d.querySelector('[data-buy]'));assert.equal(d.getElementById('search').value,'Mehl');
 d.querySelector('[data-buy]').click();const buy=d.querySelector('[data-form="buy"]');buy.elements.namedItem('confirmed').checked=true;submit('buy',{packs:'2',deliveryDate:'2026-10-02'});await until(()=>d.querySelector('[data-cancel]'));assert.match(d.getElementById('content').textContent,/Gesendet/);
