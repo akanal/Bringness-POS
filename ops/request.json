@@ -1,1 +1,1 @@
-{"operation":"status","target":"all","requestId":"prepare-ai-api-v1-20261003"}
+{"operation":"deploy","target":"ai","revision":"bad6fedbf924c7c15d5b8fce104df64a6de43ebc","requestId":"publish-ai-api-v1-20261003"}
