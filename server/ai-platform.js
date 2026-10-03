@@ -1,3 +1,4 @@
+import {migrateAiAds,adRoutes} from './ai-ads.js';
 import {migrateAiSuppliers,supplierAccountRoutes,supplierPublicRoutes} from './ai-suppliers.js';
 import crypto from 'node:crypto';
 import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';
@@ -11,9 +12,9 @@ class InputError extends Error{}
 const fail=message=>{throw new InputError(message)};
 function text(value,max=150){const v=String(value||'').trim();if(v.length>max)fail(`Höchstens ${max} Zeichen erlaubt`);return v}
 function id(value){if(!uuid.test(String(value)))fail('Ungültige ID');return value}
-async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(req.url.split('?')[0].match(/\/barcodes\/csv(?:-preview)?$|\/v1\/supplier\/products$/)?220000:16000))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
+async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(req.url.split('?')[0].match(/\/barcodes\/csv(?:-preview)?$|\/v1\/supplier\/products$|\/ads$/)?220000:16000))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
 const bearer=req=>String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-async function actor(req){return (await pool.query("SELECT u.id,u.email,u.name,u.business_name,u.role,u.status,u.city,u.postal_code,u.address,u.delivery_area,u.minimum_order_cents,u.delivery_terms,u.shop_plan FROM ai_sessions s JOIN ai_accounts u ON u.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash(bearer(req))])).rows[0]}
+async function actor(req){return (await pool.query("SELECT u.id,u.email,u.name,u.business_name,u.role,u.status,u.city,u.postal_code,u.address,u.delivery_area,u.minimum_order_cents,u.delivery_terms,u.shop_plan,u.cuisine_type FROM ai_sessions s JOIN ai_accounts u ON u.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash(bearer(req))])).rows[0]}
 async function platformActor(req){return (await platformPool.query("SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT COALESCE(u.must_change_password,false)",[hash(bearer(req))])).rows[0]}
 async function settings(){return (await pool.query("SELECT value FROM ai_settings WHERE key='launch'")).rows[0].value}
 export async function migrateAiPlatform(){await ensureAiDatabase();await pool.query(`
@@ -36,7 +37,7 @@ CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFE
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -100,6 +101,7 @@ export async function handleAiPlatform(req,res){
   }
   if(p.startsWith('/api/ai/admin')){
    const admin=await platformActor(req);if(!admin)return send(res,403,{error:'Nur Plattformadministratoren haben Zugriff.'});
+   if(p==='/api/ai/admin/ads'||p.startsWith('/api/ai/admin/ads/'))return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
    if(p.startsWith('/api/ai/admin/barcodes'))return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,true,url));
    if(p==='/api/ai/admin'&&req.method==='GET'){
     const q=text(url.searchParams.get('q')),users=(await pool.query("SELECT id,email,name,business_name,role,status,shop_plan,city,created_at FROM ai_accounts WHERE $1='' OR email ILIKE '%'||$1||'%' OR name ILIKE '%'||$1||'%' OR business_name ILIKE '%'||$1||'%' ORDER BY created_at DESC LIMIT 200",[q])).rows;
@@ -121,6 +123,7 @@ export async function handleAiPlatform(req,res){
    return send(res,404,{error:'Adminfunktion nicht gefunden'});
   }
   const u=await actor(req);if(!u)return send(res,401,{error:'Bitte anmelden.'});
+  if(p==='/api/ai/ads'||p.startsWith('/api/ai/ads/')){if(req.method==='POST'&&!await rate('ads:'+u.id,300))return send(res,429,{error:'Zu viele Werbeanfragen. Bitte später erneut versuchen.'});return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));}
   if(p.startsWith('/api/ai/barcodes')){if(req.method==='POST'&&!await rate('barcodes:'+u.id,300))return send(res,429,{error:'Zu viele Kataloganfragen. Bitte später erneut versuchen.'});return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},u,false,url));}
   const supplierResult=await supplierAccountRoutes(p,req.method,req.method==='POST'&&p.startsWith('/api/ai/supplier-connector')?await body(req):{},u);if(supplierResult)return send(res,200,supplierResult);
   const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status','/api/ai/connector-key'].includes(p)?await body(req):{},u,url);if(recipeResult)return send(res,200,recipeResult);
@@ -140,7 +143,7 @@ export async function handleAiPlatform(req,res){
   if(p==='/api/ai/profile'&&req.method==='POST'){
    const b=await body(req),name=text(b.name,100),business=text(b.businessName);if(!name||!business)fail('Name und Firmenname erforderlich');
    const minimum=money(b.minimumOrderCents||0);if(!['basic','pro'].includes(b.shopPlan||'basic'))fail('Ungültiger Shop');
-   await pool.query('UPDATE ai_accounts SET name=$2,business_name=$3,city=$4,postal_code=$5,address=$6,delivery_area=$7,minimum_order_cents=$8,delivery_terms=$9,shop_plan=$10 WHERE id=$1',[u.id,name,business,text(b.city,100),text(b.postalCode,20),text(b.address,300),text(b.deliveryArea,1000),minimum,text(b.deliveryTerms,1000),b.shopPlan||'basic']);return send(res,200,{ok:true});
+   await pool.query('UPDATE ai_accounts SET name=$2,business_name=$3,city=$4,postal_code=$5,address=$6,delivery_area=$7,minimum_order_cents=$8,delivery_terms=$9,shop_plan=$10,cuisine_type=$11 WHERE id=$1',[u.id,name,business,text(b.city,100),text(b.postalCode,20),text(b.address,300),text(b.deliveryArea,1000),minimum,text(b.deliveryTerms,1000),b.shopPlan||'basic',text(b.cuisineType||'',80)]);return send(res,200,{ok:true});
   }
   if(p==='/api/ai/locations'){
    if(u.role!=='restaurant')return send(res,403,{error:'Nur Restaurants können Standorte verwalten.'});

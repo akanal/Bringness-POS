@@ -7,7 +7,9 @@ const recipeModule=await import('data:text/javascript;base64,'+Buffer.from(recip
 let barcodeSource=fs.readFileSync(root+'/server/ai-barcodes.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js')).replace("'../apps/web/public/ai-csv-parser.js'",JSON.stringify('file://'+root+'/apps/web/public/ai-csv-parser.js'));
 globalThis.aiBarcodeModule=await import('data:text/javascript;base64,'+Buffer.from(barcodeSource).toString('base64'));
 let supplierSource=fs.readFileSync(root+'/server/ai-suppliers.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));globalThis.aiSupplierModule=await import('data:text/javascript;base64,'+Buffer.from(supplierSource).toString('base64'));
+let adSource=fs.readFileSync(root+'/server/ai-ads.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));globalThis.aiAdModule=await import('data:text/javascript;base64,'+Buffer.from(adSource).toString('base64'));
 let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';","const {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales}=globalThis.aiRecipeModule;").replace("import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool(); const aiPool=()=>new globalThis.aiTestPg.Pool(); const ensureAiDatabase=async()=>{}; const copyLegacyAiData=async()=>{};").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+source=source.replace("import {migrateAiAds,adRoutes} from './ai-ads.js';","const {migrateAiAds,adRoutes}=globalThis.aiAdModule;");
 source=source.replace("import {migrateAiSuppliers,supplierAccountRoutes,supplierPublicRoutes} from './ai-suppliers.js';","const {migrateAiSuppliers,supplierAccountRoutes,supplierPublicRoutes}=globalThis.aiSupplierModule;");
 source=source.replace("import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';","const {migrateAiBarcodes,barcodeRoutes}=globalThis.aiBarcodeModule;");
 const {handleAiPlatform,migrateAiPlatform}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
@@ -20,6 +22,33 @@ const tokens={};
 async function call(path,body,token){const req=Readable.from(body?[JSON.stringify(body)]:[]);Object.assign(req,{url:'/api/ai/'+path,method:body?'POST':'GET',headers:{authorization:token?'Bearer '+token:'','content-type':'application/json'},socket:{remoteAddress:'127.0.0.1'}});let status,out;const res={writeHead(s){status=s},end(x){out=JSON.parse(x)}};assert(await handleAiPlatform(req,res));return {status,...out}}
 for(const r of ['buyer','other','supplier']){const out=await call('login',{email:r+'@example.org',password:'testing-password-123'});assert.equal(out.status,200);tokens[r]=out.token}
 assert.equal((await call('me',null)).status,401);assert.equal((await call('admin',null,tokens.buyer)).status,403);
+const adBody={kind:'brand',title:'Regional einkaufen',description:'Unser Sortiment für Restaurants.'};
+assert.equal((await call('admin/ads',null,tokens.supplier)).status,403);
+assert.equal((await call('ads',adBody,tokens.buyer)).status,403);
+const adCreated=await call('ads',{...adBody,feeCents:1,status:'active'},tokens.supplier);assert.equal(adCreated.status,200);
+const adId=adCreated.id;assert.equal((await call('ads/live?placement=dashboard',null,tokens.buyer)).ads.length,0);
+assert.equal((await call('ads/approve',{id:adId},tokens.supplier)).status,403);
+assert.equal((await call('admin/ads/approve',{id:adId},'admin-token')).status,409);
+const adQuote={id:adId,feeCents:2500,startsAt:new Date(Date.now()-60000).toISOString(),endsAt:new Date(Date.now()+86400000).toISOString(),cities:['Berlin'],postalPrefixes:[],cuisines:[],placement:'dashboard'};
+assert.equal((await call('admin/ads/quote',{...adQuote,cities:[]},'admin-token')).status,400);
+assert.equal((await call('admin/ads/quote',adQuote,'admin-token')).status,200);
+let ad=(await call('ads',null,tokens.supplier)).ads[0];assert.equal(Number(ad.fee_cents),2500);
+assert.equal((await call('ads/accept',{id:adId,version:ad.version,confirmed:false},tokens.supplier)).status,409);
+assert.equal((await call('ads/accept',{id:adId,version:ad.version,confirmed:true},tokens.supplier)).status,200);
+assert.equal((await call('admin/ads/approve',{id:adId},'admin-token')).status,200);
+let adFeed=(await call('ads/live?placement=dashboard',null,tokens.buyer)).ads;assert.equal(adFeed.length,1);assert.equal(adFeed[0].label,'Anzeige');
+assert.equal((await call('ads/live?placement=catalog',null,tokens.buyer)).ads.length,0);
+await query("UPDATE ai_accounts SET city='Hamburg' WHERE id=$1",[ids.other]);assert.equal((await call('ads/live?placement=dashboard&city=Berlin',null,tokens.other)).ads.length,0);
+assert.equal((await call('ads/event',{token:adFeed[0].eventToken,kind:'click'},tokens.other)).status,409);
+for(let i=0;i<2;i++)assert.equal((await call('ads/event',{token:adFeed[0].eventToken,kind:'view'},tokens.buyer)).status,200);
+assert.equal((await call('ads/event',{token:adFeed[0].eventToken,kind:'click'},tokens.buyer)).status,200);
+ad=(await call('admin/ads',null,'admin-token')).ads[0];assert.equal(Number(ad.impressions),1);assert.equal(Number(ad.clicks),1);
+assert.equal((await call('admin/ads/pause',{id:adId},'admin-token')).status,200);assert.equal((await call('ads/live?placement=dashboard',null,tokens.buyer)).ads.length,0);
+assert.equal((await call('admin/ads/resume',{id:adId},'admin-token')).status,200);
+assert.equal((await call('ads',{...adBody,id:adId,title:'Neue Inhalte'},tokens.supplier)).status,200);assert.equal((await call('ads/live?placement=dashboard',null,tokens.buyer)).ads.length,0);
+assert.equal((await call('ads/event',{token:adFeed[0].eventToken,kind:'click'},tokens.buyer)).status,409);
+await query("UPDATE ai_accounts SET city='Berlin' WHERE id=$1",[ids.other]);
+console.log('Advertising API passed: superadmin-only terms and approval, explicit supplier acceptance, regional isolation, deduplicated metrics, pause and content review.');
 const loc=(await call('locations',{name:'Testbetrieb'},tokens.buyer)).location;
 assert.equal((await call('stock',{locationId:loc.id,name:'Fremde Zutat',unit:'kg',quantity:0,minimum:10},tokens.other)).status,404);
 const st=(await call('stock',{locationId:loc.id,name:'Mehl',unit:'kg',quantity:2,minimum:10},tokens.buyer)).stock;
@@ -27,6 +56,21 @@ assert.equal((await call('products',{name:'Mehl',unit:'kg',packQuantity:5,priceC
 const offers=await call('catalog',null,tokens.buyer);assert.equal(offers.products.length,1);const product=offers.products[0];
 assert.equal((await call('catalog?q=Mehl',null,tokens.buyer)).products.length,1);
 const plan=await call('purchasing?days=7',null,tokens.buyer);assert.equal(plan.status,200);assert.equal(plan.items[0].shortage,8);assert.equal(plan.items[0].offers[0].packs,2);assert.equal((await call('purchasing',null,tokens.supplier)).status,403);assert.equal((await call('purchasing?days=99',null,tokens.buyer)).status,400);assert.equal((await call('purchasing',null,tokens.other)).items.length,0);
+const productAd=(await call('ads',{kind:'offer',productId:product.id,title:'Mehl Angebot',description:'Aktuelles Mehlangebot'},tokens.supplier)).id;
+assert.equal((await call('admin/ads/quote',{...adQuote,id:productAd,cuisines:['italienisch']},'admin-token')).status,200);
+let productCampaign=(await call('ads',null,tokens.supplier)).ads.find(a=>a.id===productAd);
+assert.equal((await call('ads/accept',{id:productAd,version:productCampaign.version,confirmed:true},tokens.supplier)).status,200);
+assert.equal((await call('admin/ads/approve',{id:productAd},'admin-token')).status,200);
+assert.equal((await call('ads/live?placement=dashboard',null,tokens.buyer)).ads.length,0);
+await query("UPDATE ai_accounts SET cuisine_type='Italienisch' WHERE id=$1",[ids.buyer]);assert.equal((await call('ads/live?placement=dashboard',null,tokens.buyer)).ads.length,1);
+await query('UPDATE ai_products SET price_cents=price_cents+1 WHERE id=$1',[product.id]);assert.equal((await call('ads/live?placement=dashboard',null,tokens.buyer)).ads.length,0);
+assert.equal((await call('admin/ads/pause',{id:productAd},'admin-token')).status,200);assert.equal((await call('admin/ads/resume',{id:productAd},'admin-token')).status,409);
+await query('UPDATE ai_products SET price_cents=price_cents-1 WHERE id=$1',[product.id]);
+await call('admin/ads/reject',{id:productAd},'admin-token');
+await call('admin/ads/quote',{...adQuote,id:adId,startsAt:new Date(Date.now()+3600000).toISOString()},'admin-token');ad=(await call('ads',null,tokens.supplier)).ads.find(a=>a.id===adId);await call('ads/accept',{id:adId,version:ad.version,confirmed:true},tokens.supplier);await call('admin/ads/approve',{id:adId},'admin-token');assert.equal((await call('ads/live?placement=dashboard',null,tokens.buyer)).ads.length,0);
+assert.equal((await call('admin/ads/payment',{id:adId,reference:'bank-ad-test'},'admin-token')).status,200);assert.equal((await call('admin/ads/payment',{id:adId,reference:'forged'},tokens.supplier)).status,403);
+await call('admin/ads/reject',{id:adId},'admin-token');
+console.log('Advertising product checks passed: cuisine targeting, future scheduling, product snapshot invalidation and separate manual payment evidence.');
 const orderBody={productId:product.id,stockId:st.id,packs:2,requestKey:crypto.randomUUID(),deliveryDate:'2026-10-02',expectedNetCents:2000,confirmed:true};
 assert.equal((await call('orders',orderBody,tokens.buyer)).status,409);
 assert.equal((await call('admin/launch',{onboardingEnabled:true,ordersEnabled:true},'admin-token')).status,200);
@@ -212,7 +256,7 @@ const reset=crypto.randomBytes(32).toString('hex');await query("INSERT INTO ai_a
 const markup=fs.readFileSync(root+'/apps/web/public/ai-workspace.html','utf8'),script=fs.readFileSync(root+'/apps/web/public/ai-workspace.js','utf8');
 const browser=new JSDOM(markup,{url:'https://example.org/ai-workspace.html',runScripts:'outside-only'});const w=browser.window;w.HTMLElement.prototype.scrollIntoView=function(){};
 w.fetch=async(path,opt={})=>{const result=await call(path.replace('/api/ai/',''),opt.body?JSON.parse(opt.body):undefined,opt.headers?.authorization?.replace('Bearer ',''));const {status,...value}=result;return {ok:status>=200&&status<300,status,json:async()=>value}};
-const csvParser=await import('file://'+root+'/apps/web/public/ai-csv-parser.js');w.csvParser=csvParser;w.eval(fs.readFileSync(root+'/apps/web/public/ai-barcodes.js','utf8').replace("import {parseCsvTable,suggestMapping} from './ai-csv-parser.js';","const {parseCsvTable,suggestMapping}=window.csvParser;"));w.eval(script);const d=w.document;
+const csvParser=await import('file://'+root+'/apps/web/public/ai-csv-parser.js');w.csvParser=csvParser;w.eval(fs.readFileSync(root+'/apps/web/public/ai-barcodes.js','utf8').replace("import {parseCsvTable,suggestMapping} from './ai-csv-parser.js';","const {parseCsvTable,suggestMapping}=window.csvParser;"));w.eval(fs.readFileSync(root+'/apps/web/public/ai-ads.js','utf8'));w.eval(script);const d=w.document;
 async function until(test){for(let i=0;i<150;i++){if(test())return;await new Promise(r=>setTimeout(r,10))}throw Error('UI wait timed out: '+d.getElementById('notice').textContent)}
 function submit(kind,values){const form=d.querySelector('[data-form="'+kind+'"]');assert(form,'form '+kind+' exists');for(const [key,value]of Object.entries(values))form.elements.namedItem(key).value=value;form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}))}
 d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'text');d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'password');
@@ -245,6 +289,10 @@ w.localStorage.setItem('bringness-ai-language','de');w.eval(fs.readFileSync(root
 d.querySelector('[data-view="purchasing"]').click();await until(()=>d.querySelector('[data-form="planning"]'));assert.match(d.getElementById('content').textContent,/28 Tage/);
 d.querySelector('[data-action="logout"]').click();await until(()=>d.querySelector('[data-form="login"]'));submit('login',{email:'supplier@example.org',password:'new-testing-password'});await until(()=>d.querySelector('[data-view="commissions"]'));
 d.querySelector('[data-view="supplier-api"]').click();await until(()=>d.querySelector('[data-form="supplier-connector"]'));submit('supplier-connector',{name:'UI supplier ERP'});await until(()=>d.querySelector('#supplier-api-key input'));const uiSupplierKey=d.querySelector('#supplier-api-key input').value;d.querySelector('[data-supplier-key]').click();await until(()=>d.querySelector('#supplier-api-key input')?.value!==uiSupplierKey);assert.match(d.getElementById('supplier-api-key').textContent,/bisherige Schlüssel/);d.querySelector('[data-supplier-status]').click();await until(()=>d.getElementById('notice').textContent==='Lieferanten-Verbindung aktualisiert.');console.log('Supplier DOM passed: key creation, rotation and activation.');
+d.querySelector('[data-view="ads"]').click();await until(()=>d.querySelector('[data-ad-form="submit"]'));
+const adForm=d.querySelector('[data-ad-form="submit"]');adForm.elements.kind.value='brand';adForm.elements.title.value='UI Kampagne';adForm.elements.description.value='Werbung über den Lieferantenbereich';adForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>d.getElementById('content').textContent.includes('UI Kampagne'));assert.match(d.getElementById('content').textContent,/Zur Prüfung/);assert.equal(d.querySelector('[data-ad-action="approve"]'),null);
+await w.BringnessAds.render({api:async(path,body)=>{const r=await call(path,body,'admin-token');if(r.status!==200)throw Error(r.error);return r},admin:true,notice:()=>{}});assert(d.querySelector('[data-ad-form="quote"]'));assert(d.querySelector('[data-ad-action="reject"]'));assert.equal(d.querySelector('[data-ad-form="submit"]'),null);
+console.log('Advertising DOM passed: supplier submission and restricted approval controls.');
 d.querySelector('[data-view="commissions"]').click();await until(()=>d.getElementById('content').textContent.includes('bank-test'));assert.match(d.getElementById('content').textContent,/Bezahlt/);assert.equal(d.querySelector('[data-form="commission-payment"]'),null);
 d.querySelector('[data-view="products"]').click();await until(()=>d.getElementById('product-filter'));const filter=d.getElementById('product-filter');filter.value='xyz';filter.dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal(d.querySelector('#content tbody tr').hidden,true);filter.value='Mehl';filter.dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal([...d.querySelectorAll('#content tbody tr')].find(r=>r.cells[0].textContent==='Mehl').hidden,false);
 const mehlRow=[...d.querySelectorAll('#content tbody tr')].find(r=>r.cells[0].textContent==='Mehl');mehlRow.querySelector('[data-product]').click();const productEdit=d.querySelector('[data-form="product"]');assert.equal(productEdit.elements.namedItem('available').checked,true);productEdit.elements.namedItem('available').checked=false;productEdit.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await until(()=>!d.querySelector('[data-form="product"] input[name="id"]').value);assert.equal((await call('catalog?q=Mehl',null,tokens.other)).products.filter(p=>p.id===product.id).length,0);
