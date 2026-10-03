@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "prepare-ai-shop-cart-20261003"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "933c24e0f2086b1ec6abe942e417786e80e349e1",
+  "requestId": "deploy-ai-shop-cart-20261003"
 }
