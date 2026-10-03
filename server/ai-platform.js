@@ -53,7 +53,14 @@ export async function handleAiPlatform(req,res){
  const url=new URL(req.url,'http://local'),p=url.pathname;if(!p.startsWith('/api/ai/'))return false;
  if(!aiReady)return send(res,503,{error:'Bringness AI wird vorbereitet. Bitte gleich erneut versuchen.'});
  try{
-  if(p==='/api/ai/import/sales'&&req.method==='POST'){const link=await apiSalesToken(bearer(req));if(!link)return send(res,401,{error:'Ungültiger oder pausierter API-Schlüssel'});return send(res,200,await ingestSale(link,await body(req)))}
+  if(['/api/ai/import/sales','/api/ai/v1/sales','/api/ai/v1/sales/validate','/api/ai/v1/status','/api/ai/v1/products'].includes(p)){
+   const link=await apiSalesToken(bearer(req));if(!link)return send(res,401,{error:'Ungültiger oder pausierter API-Schlüssel'});
+   if(!await rate('sales-api:'+link.id,600))return send(res,429,{error:'Importlimit erreicht. Bitte später erneut versuchen.'});
+   if(p==='/api/ai/v1/status'&&req.method==='GET')return send(res,200,{version:'1',connectorId:link.id,locationId:link.location_id,active:true,lastSync:link.last_sync,lastError:link.last_error,permissions:['sales:write','sales:validate','products:read','status:read']});
+   if(p==='/api/ai/v1/products'&&req.method==='GET')return send(res,200,{products:(await pool.query('SELECT external_code AS "productCode",name FROM ai_recipes WHERE account_id=$1 AND location_id=$2 AND active AND EXISTS(SELECT 1 FROM ai_recipe_items WHERE recipe_id=ai_recipes.id) ORDER BY external_code',[link.account_id,link.location_id])).rows});
+   if(['/api/ai/import/sales','/api/ai/v1/sales','/api/ai/v1/sales/validate'].includes(p)&&req.method==='POST')return send(res,200,await ingestSale(link,await body(req),{dryRun:p.endsWith('/validate')}));
+   return send(res,405,{error:'Methode nicht erlaubt'});
+  }
   if(p==='/api/ai/public'&&req.method==='GET')return send(res,200,{launch:await settings()});
   if(p==='/api/ai/register'&&req.method==='POST'){
    if(!await rate('signup-ip:'+req.socket.remoteAddress,30))return send(res,429,{error:'Bitte später erneut versuchen.'});
@@ -113,7 +120,7 @@ export async function handleAiPlatform(req,res){
   }
   const u=await actor(req);if(!u)return send(res,401,{error:'Bitte anmelden.'});
   if(p.startsWith('/api/ai/barcodes')){if(req.method==='POST'&&!await rate('barcodes:'+u.id,300))return send(res,429,{error:'Zu viele Kataloganfragen. Bitte später erneut versuchen.'});return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},u,false,url));}
-  const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status'].includes(p)?await body(req):{},u);if(recipeResult)return send(res,200,recipeResult);
+  const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status','/api/ai/connector-key'].includes(p)?await body(req):{},u,url);if(recipeResult)return send(res,200,recipeResult);
   if(p==='/api/ai/logout'&&req.method==='POST'){await pool.query('DELETE FROM ai_sessions WHERE token_hash=$1',[hash(bearer(req))]);return send(res,200,{ok:true})}
   if(p==='/api/ai/me'&&req.method==='GET')return send(res,200,{account:u,launch:await settings()});
   if(p==='/api/ai/commissions'&&req.method==='GET'){
