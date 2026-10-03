@@ -8,7 +8,7 @@ Die Zahlungsautomatik ist standardmäßig ausgeschaltet. Ein Worker bereitet jed
 - Separater `AI_MOLLIE_API_KEY` mit Live-Zugang sowie SMTP müssen serverseitig vorhanden sein. POS-Zugangsdaten werden nicht stillschweigend wiederverwendet.
 - Lieferant stimmt der Zahlungsvereinbarung ausdrücklich zu und erteilt ein echtes SEPA-Mandat beim Anbieter. Die Checkbox allein ist kein Mandat.
 - Superadmin ordnet die beim Anbieter eingerichteten Kunden- und Mandatsreferenzen zu. Mollie muss gültiges `directdebit` bestätigen; Kunden-E-Mail muss zum Lieferanten passen.
-- Die Rechnung wird derzeit außerhalb dieses Moduls erstellt. Der Superadmin hinterlegt Rechnungsreferenz und tatsächlich geprüften Gesamtbetrag und gibt den Einzug frei. Steuerberechnung, Rechnungsausstellung und Anbieter-Onboarding sind noch nicht automatisiert. Ein vollständig unbeaufsichtigter Monatsabschluss ist deshalb noch nicht freigegeben.
+- Wahlweise erstellt die aktivierte Rechnungsautomatik nach geprüfter deutscher Steuerregelung und Lieferantenprofil den Monatsbeleg und gibt ihn automatisch zum Einzug frei. Alternativ bleibt die externe Rechnung mit Einzelfreigabe verfügbar. Der unterstützte Rechnungsumfang und die HTML-Formatgrenzen stehen in `bringness-ai-automatic-invoices.md`. Anbieter-Onboarding neuer Mandate ist weiterhin separat erforderlich.
 
 ## Automatisierter Zahlungsteil
 
