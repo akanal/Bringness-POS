@@ -90,7 +90,7 @@ await call('admin/ads/quote',{...adQuote,id:adId,startsAt:new Date(Date.now()+36
 assert.equal((await call('admin/ads/payment',{id:adId,reference:'bank-ad-test'},'admin-token')).status,200);assert.equal((await call('admin/ads/payment',{id:adId,reference:'forged'},tokens.supplier)).status,403);
 await call('admin/ads/reject',{id:adId},'admin-token');
 console.log('Advertising product checks passed: cuisine targeting, future scheduling, product snapshot invalidation and separate manual payment evidence.');
-const orderBody={productId:product.id,stockId:st.id,packs:2,requestKey:crypto.randomUUID(),deliveryDate:'2026-10-02',expectedNetCents:2000,confirmed:true};
+const orderBody={productId:product.id,stockId:st.id,packs:2,requestKey:crypto.randomUUID(),deliveryDate:new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin'}).format(new Date()),expectedNetCents:2000,confirmed:true};
 assert.equal((await call('orders',orderBody,tokens.buyer)).status,409);
 assert.equal((await call('admin/launch',{onboardingEnabled:true,ordersEnabled:true},'admin-token')).status,200);
 assert.equal((await call('orders',{...orderBody,expectedNetCents:1},tokens.buyer)).status,400);
@@ -109,7 +109,19 @@ await query("UPDATE ai_orders SET confirmed_delivery_date=(now() AT TIME ZONE 'E
 assert.equal((await call('purchasing?days=7',null,tokens.buyer)).items.length,0);
 await query("UPDATE ai_orders SET confirmed_delivery_date=(now() AT TIME ZONE 'Europe/Berlin')::date WHERE id=$1",[placed.order.id]);
 assert.equal((await call('purchasing?days=1',null,tokens.buyer)).items.length,0);
+
+await query("UPDATE ai_orders SET confirmed_delivery_date=(now() AT TIME ZONE 'Europe/Berlin')::date-1 WHERE id=$1",[placed.order.id]);
+assert.equal((await call('purchasing?days=7',null,tokens.buyer)).items.find(x=>x.id===st.id).shortage,8);
+const overdueGroup=(await call('order-groups',null,tokens.buyer)).groups.find(g=>g.orders.some(o=>o.id===placed.order.id));
+assert.equal(overdueGroup.orders.find(o=>o.id===placed.order.id).delivery_overdue,true);
+assert.equal((await call('order-groups/'+overdueGroup.id+'/accept',{requestKey:crypto.randomUUID(),confirmed:true,deliveryDate:'2000-01-01'},tokens.supplier)).status,400);
 await query('UPDATE ai_orders SET confirmed_delivery_date=NULL WHERE id=$1',[placed.order.id]);
+const unresolvedReplacement=(await query("INSERT INTO ai_order_replacements(order_id,snapshot,reason) VALUES($1,'{}'::jsonb,'Pending choice') RETURNING id",[placed.order.id])).rows[0].id;
+assert.equal((await call('purchasing?days=7',null,tokens.buyer)).items.find(x=>x.id===st.id).shortage,8);
+await query("UPDATE ai_order_replacements SET status='rejected' WHERE id=$1",[unresolvedReplacement]);
+assert.equal((await call('purchasing?days=7',null,tokens.buyer)).items.length,0);
+
+
 
 assert.equal((await call('orders/'+placed.order.id+'/receive',{},tokens.buyer)).status,200);
 assert.equal((await call('orders/'+placed.order.id+'/receive',{},tokens.buyer)).status,200);

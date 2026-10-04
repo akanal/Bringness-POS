@@ -44,3 +44,23 @@ Bestehende Einzelaktions- und Lieferanten-API-Annahmen prüfen ebenfalls Nichtli
 ## Validierung
 
 Embedded PostgreSQL und JSDOM prüfen Meldung/Lesestatus, Rollen/Mandantentrennung, Sperren auch in bisherigen APIs, Ersatzablehnung und explizite Zustimmung, Angebotsänderungen, gruppenweiten Liefertermin, abweichende Packungen, Null-Lieferung, atomare Fehler, exakt einmaligen Lagerzugang, 2 % auf tatsächlichen Warenwert und dessen Übernahme in eine simulierte Provisionsrechnung. Separater Browserablauf prüft Lieferant → Adminmeldung → Restaurantzustimmung → Liefertermin → Wareneingang. Keine realen Nachrichten oder Abbuchungen in den Tests.
+
+
+## Eindeutige Lieferregeln (4. Oktober 2026)
+
+Alle Datumsgrenzen gelten für Kalendertage in Europe/Berlin. Heute ist Tag 1 eines Planungshorizonts. Der letzte Planungstag zählt mit. Ein Termin bezeichnet einen Liefertag, kein Zeitfenster und keine Ankunftsgarantie.
+
+| Situation | Planung und Lager | Nächste Aktion |
+| --- | --- | --- |
+| Gesendet | Keine Anrechnung als zugesagter Zugang; kein Lagerzugang. | Lieferant nimmt an und bestätigt den Termin. |
+| Angenommen, rechtzeitig | Packungsinhalt mal bestellte Packungen zählt als erwarteter Zugang im jeweiligen Planungshorizont. | Restaurant bestätigt erst tatsächlich empfangene Mengen. |
+| Bestätigter Termin geändert | Bestätigtes Datum hat Vorrang vor Wunschdatum; keine Lagerbuchung durch Änderung. | Lieferant bestätigt den neuen Termin; Restaurant sieht ihn im Auftrag. |
+| Termin nach dem Planungshorizont | Kein erwarteter Zugang für diesen Zeitraum. | Bedarf prüfen und mit Lieferant abstimmen. |
+| Termin vor heute, noch offen | Als überfällig gekennzeichnet; weder Einkauf, Sieben-Tage-Monitor noch Tagesprognose rechnen ihn als rechtzeitigen Zugang an. Keine automatische Stornierung. | Liefertermin klären. Vor einer zusätzlichen Bestellung offene Lieferung abstimmen. Tatsächlicher Wareneingang kann weiterhin bestätigt werden. |
+| Nicht lieferbar oder Ersatz offen | Keine Anrechnung; Annahme und Wareneingang bleiben bis Klärung gesperrt. | Restaurant entscheidet über Ersatz oder storniert betroffene Position. |
+| Ersatz angenommen | Geänderte Position geht zurück auf gesendet; bestätigter Termin wird gelöscht. | Lieferant nimmt den geänderten Auftrag erneut an. |
+| Mindermenge | Nur tatsächlicher Inhalt und anteiliger Warenwert werden gebucht; Position endgültig abgeschlossen. | Fehlbedarf erneut prüfen; keine automatische Restbestellung. |
+| Null-Lieferung | Position storniert; kein Lagerzugang, kein Warenwert und keine Provision. | Fehlbedarf prüfen. |
+| Storniert / abgeschlossen | Kein offener erwarteter Zugang; keine erneute Buchung. | Bei neuem Bedarf eigenständige neue Bestellung. |
+
+Für neue Sammelbestätigungen sind Termine vor heute gesperrt. Historische Datumswerte werden nicht umgeschrieben. Bei älteren positionsweisen Annahmen ohne bestätigten Termin gilt das gespeicherte Wunschdatum, das denselben Datumsgrenzen unterliegt. Vorschläge sind keine Bestellungen: Weder Überfälligkeit noch Fehlmengen lösen automatisch Bestellungen oder Zahlungen aus.

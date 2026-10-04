@@ -30,7 +30,7 @@ async function inventoryWrite(path,b,u){
 export async function refreshMonitor(accountId){
  const c=await pool.connect();try{await c.query('BEGIN');await c.query('INSERT INTO ai_monitor_state(account_id) VALUES($1) ON CONFLICT DO NOTHING',[accountId]);await c.query('SELECT account_id FROM ai_monitor_state WHERE account_id=$1 FOR UPDATE',[accountId]);const account=(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active'",[accountId])).rows[0];if(!account){await c.query('ROLLBACK');return}
  const stock=(await c.query(`SELECT s.*,l.name location_name,
- COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted' AND NOT o.unavailable),0) incoming
+ COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted' AND NOT o.unavailable AND COALESCE(o.confirmed_delivery_date,o.delivery_date)>=(now() AT TIME ZONE 'Europe/Berlin')::date AND NOT EXISTS(SELECT 1 FROM ai_order_replacements r WHERE r.order_id=o.id AND r.status='pending') AND COALESCE(o.confirmed_delivery_date,o.delivery_date)<=((now() AT TIME ZONE 'Europe/Berlin')::date+6)),0) incoming
  FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY s.id`,[accountId])).rows;
  const sales=(await c.query(`SELECT e.stock_id,
  sum(-e.delta) consumption,
