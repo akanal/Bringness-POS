@@ -68,7 +68,7 @@ jobs:
           node --test server/runtime-mode.test.js server/qr-service.test.js ops/select-operation.test.js
           python3 ops/netcup-command.test.py
           node server/ai-policy.test.js
-          node --test server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js
+          node --test server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js
           if [ "${{ steps.request.outputs.target }}" = "ai" ]; then
             npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
             node server/ai-tests/integration.mjs
