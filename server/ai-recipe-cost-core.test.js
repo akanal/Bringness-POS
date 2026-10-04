@@ -20,3 +20,9 @@ test('no shortage needs no price, free goods remain valid',()=>{
  const r=purchaseEstimate([{stockId:'a',suggestedQuantity:0,unitCents:null},{stockId:'b',suggestedQuantity:3,unitCents:0}]);
  assert.equal(r.complete,true);assert.equal(r.netCents,0);assert.throws(()=>purchaseEstimate([{suggestedQuantity:-1}]));
 });
+
+test('whole packs cover shortage and costs, unknown packs stay unavailable',()=>{
+ const r=purchaseEstimate([{stockId:'a',suggestedQuantity:2.3,packQuantity:1,unitCents:200},{stockId:'b',suggestedQuantity:1,unitCents:100}]);
+ assert.equal(r.items[0].packs,3);assert.equal(r.items[0].purchaseQuantity,3);assert.equal(r.items[0].surplusQuantity,.7);assert.equal(r.items[0].estimatedPackNetCents,600);assert.equal(r.packComplete,false);assert.equal(r.knownPackNetCents,600);
+ assert.equal(purchaseEstimate([{suggestedQuantity:.3,packQuantity:.1,unitCents:100}]).items[0].packs,3);
+});
