@@ -69,8 +69,9 @@ jobs:
           python3 ops/netcup-command.test.py
           node server/ai-policy.test.js
           node --test server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js
+          npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
+          node server/ai-tests/language-integration.mjs
           if [ "${{ steps.request.outputs.target }}" = "ai" ]; then
-            npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
             node server/ai-tests/integration.mjs
             node --check server/ai-suppliers.js
             npm ci --ignore-scripts --no-audit --no-fund
@@ -96,4 +97,5 @@ jobs:
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
             root@152.53.196.43 "$command"
+
 
