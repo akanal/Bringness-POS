@@ -342,12 +342,12 @@ assert.equal((await call('admin/account',{id:ids.buyer,action:'suspend'},'admin-
 assert.equal((await call('me',null,tokens.buyer)).status,401);
 assert.equal((await call('admin',null,'admin-token')).status,200);
 const verification=crypto.randomBytes(32).toString('hex');await query("INSERT INTO ai_auth_tokens VALUES($1,$2,'verify',now()+interval '1 hour',NULL)",[hash(verification),ids.pending]);assert.equal((await call('verify',{token:verification})).status,200);assert.equal((await call('verify',{token:verification})).status,400);
-const reset=crypto.randomBytes(32).toString('hex');await query("INSERT INTO ai_auth_tokens VALUES($1,$2,'reset',now()+interval '1 hour',NULL)",[hash(reset),ids.supplier]);assert.equal((await call('reset',{token:reset,password:'new-testing-password'})).status,200);assert.equal((await call('me',null,tokens.supplier)).status,401);assert.equal((await call('reset',{token:reset,password:'new-testing-password'})).status,400);
+const reset=crypto.randomBytes(32).toString('hex');await query("INSERT INTO ai_auth_tokens VALUES($1,$2,'reset',now()+interval '1 hour',NULL)",[hash(reset),ids.supplier]);for(const password of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x'])assert.equal((await call('reset',{token:reset,password})).status,400);assert.equal((await call('reset',{token:reset,password:'Ab1!xy'})).status,200);assert.equal((await call('me',null,tokens.supplier)).status,401);assert.equal((await call('reset',{token:reset,password:'Ab1!xy'})).status,400);
 
 const markup=fs.readFileSync(root+'/apps/web/public/ai-workspace.html','utf8'),script=fs.readFileSync(root+'/apps/web/public/ai-workspace.js','utf8');
 const browser=new JSDOM(markup,{url:'https://example.org/ai-workspace.html',runScripts:'outside-only'});const w=browser.window;w.HTMLElement.prototype.scrollIntoView=function(){};
 w.fetch=async(path,opt={})=>{const result=await call(path.replace('/api/ai/',''),opt.body?JSON.parse(opt.body):undefined,opt.headers?.authorization?.replace('Bearer ',''));const {status,...value}=result;return {ok:status>=200&&status<300,status,json:async()=>value}};
-tokens.supplier=(await call('login',{email:'supplier@example.org',password:'new-testing-password'})).token;
+tokens.supplier=(await call('login',{email:'supplier@example.org',password:'Ab1!xy'})).token;
 // An isolated received-order fixture tests full month payment, stale amounts and Berlin month boundaries.
 const settlementOrder={id:crypto.randomUUID()};await query("INSERT INTO ai_orders(id,buyer_id,supplier_id,stock_id,product_id,product_name,unit,pack_quantity,packs,net_cents,commission_bps,commission_cents,status,request_key,delivery_date,received_at) SELECT $1,buyer_id,supplier_id,stock_id,product_id,product_name,unit,pack_quantity,packs,net_cents,commission_bps,commission_cents,'received',$2,delivery_date,now() FROM ai_orders WHERE id=$3",[settlementOrder.id,crypto.randomUUID(),placed.order.id]);
 monthly=await call('admin/settlements?month='+settlementMonth+'&supplierId='+ids.supplier,null,'admin-token');assert(monthly.rows[0].overdue);const monthlyAmount=Number(monthly.rows[0].outstanding_cents);assert(monthlyAmount>0);
@@ -472,7 +472,7 @@ const csvParser=await import('file://'+root+'/apps/web/public/ai-csv-parser.js')
 async function until(test){for(let i=0;i<150;i++){if(test())return;await new Promise(r=>setTimeout(r,10))}throw Error('UI wait timed out: '+d.getElementById('notice').textContent)}
 function submit(kind,values){const form=d.querySelector('[data-form="'+kind+'"]');assert(form,'form '+kind+' exists');for(const [key,value]of Object.entries(values))form.elements.namedItem(key).value=value;form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}))}
 d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'text');d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'password');
-d.querySelector('[data-auth="register"]').click();assert.equal(d.getElementById('role').options.length,4);d.querySelector('[data-auth="login"]').click();
+d.querySelector('[data-auth="register"]').click();assert.equal(d.getElementById('role').options.length,4);const newInput=d.getElementById('newPassword');for(const password of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x']){newInput.value=password;assert(!newInput.checkValidity())}newInput.value='Ab1!xy';assert(newInput.checkValidity());d.querySelector('[data-auth="login"]').click();
 submit('login',{email:'other@example.org',password:'testing-password-123'});await until(()=>d.querySelector('[data-view="stock"]'));
 d.querySelector('[data-view="stock"]').click();await until(()=>d.querySelector('[data-form="location"]'));
 submit('location',{name:'UI Teststandort',address:'UI Weg 1'});await until(()=>d.querySelector('#locationId option'));
@@ -507,7 +507,7 @@ assert.equal((await call('barcodes?q='+encodeURIComponent('İstanbul Köfte'),nu
 console.log('CSV mapping passed: reordered columns, preview without writes, Unicode product names, language metadata, invalid mapping rejection and DOM preview/import.');
 w.localStorage.setItem('bringness-ai-language','de');w.eval(fs.readFileSync(root+'/apps/web/public/ai-language.js','utf8'));const language=d.getElementById('ai-language');language.value='tr';language.dispatchEvent(new w.Event('change',{bubbles:true}));await until(()=>d.querySelector('[data-view="purchasing"]').textContent==='Satın alma planlaması');assert.equal(d.documentElement.lang,'tr');assert.equal(d.querySelector('[data-view="orders"]').textContent,'Siparişler');language.value='en';language.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(d.querySelector('[data-view="orders"]').textContent,'Orders');language.value='de';language.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(d.querySelector('[data-view="orders"]').textContent,'Bestellungen');
 d.querySelector('[data-view="purchasing"]').click();await until(()=>d.querySelector('[data-form="planning"]'));assert.match(d.getElementById('content').textContent,/28 Tage/);
-d.querySelector('[data-action="logout"]').click();await until(()=>d.querySelector('[data-form="login"]'));submit('login',{email:'supplier@example.org',password:'new-testing-password'});await until(()=>d.querySelector('[data-view="commissions"]'));
+d.querySelector('[data-action="logout"]').click();await until(()=>d.querySelector('[data-form="login"]'));submit('login',{email:'supplier@example.org',password:'Ab1!xy'});await until(()=>d.querySelector('[data-view="commissions"]'));
 d.querySelector('[data-view="supplier-api"]').click();await until(()=>d.querySelector('[data-form="supplier-connector"]'));submit('supplier-connector',{name:'UI supplier ERP'});await until(()=>d.querySelector('#supplier-api-key input'));const uiSupplierKey=d.querySelector('#supplier-api-key input').value;d.querySelector('[data-supplier-key]').click();await until(()=>d.querySelector('#supplier-api-key input')?.value!==uiSupplierKey);assert.match(d.getElementById('supplier-api-key').textContent,/bisherige Schlüssel/);d.querySelector('[data-supplier-status]').click();await until(()=>d.getElementById('notice').textContent==='Lieferanten-Verbindung aktualisiert.');console.log('Supplier DOM passed: key creation, rotation and activation.');
 d.querySelector('[data-view="collection"]').click();await until(()=>d.querySelector('[data-collection="consent"]'));assert.match(d.getElementById('content').textContent,/kein SEPA-Mandat/);assert.equal(d.querySelector('[data-collection="settings"]'),null);assert(d.querySelector('[data-collection="profile"]'));assert(d.querySelector('[data-invoice-download]'));
 d.querySelector('[data-view="settlements"]').click();await until(()=>d.querySelector('[data-settlement="filter"]'));assert.match(d.getElementById('content').textContent,/keine Rechnung/);assert.equal(d.querySelector('[data-settlement="payment"]'),null);
@@ -577,3 +577,16 @@ dw.close();console.log('Delivery notes passed: tenant isolation, review gate, at
 
 console.log('Embedded PostgreSQL integration passed: migrations, tenant isolation, catalog, order locks/idempotency, stock receipt, cancellation, admin suspension, verification and reset.');await db.close();
 
+
+
+// Exercise the real POS mode switch and password-change markup without initializing the register.
+const posDom=new JSDOM(fs.readFileSync(root+'/apps/web/public/pos/index.html','utf8'),{runScripts:'outside-only'}),pw=posDom.window,pd=pw.document;
+const posScript=fs.readFileSync(root+'/apps/web/public/pos/app.js','utf8');
+pw.eval('var $=id=>document.getElementById(id);var mode="login";'+posScript.split('\n').find(line=>line.startsWith('function authMode(')));
+pw.authMode('register');
+for(const value of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x']){pd.getElementById('password').value=value;assert(!pd.getElementById('password').checkValidity())}
+pd.getElementById('password').value='Ab1!xy';assert(pd.getElementById('password').checkValidity());assert(!pd.getElementById('passwordRules').hidden);
+pw.authMode('login');pd.getElementById('password').value='legacy';assert(pd.getElementById('password').checkValidity());assert(pd.getElementById('passwordRules').hidden);
+pw.eval('const openAccount=html=>document.getElementById("auth").innerHTML=html;'+posScript.split('\n').find(line=>line.startsWith('$("passwordBtn").onclick=')));
+pd.getElementById('passwordBtn').click();pd.getElementById('newPass').value='Ab1!xy';assert(pd.getElementById('newPass').checkValidity());pd.getElementById('newPass').value='abcdef';assert(!pd.getElementById('newPass').checkValidity());pw.close();
+console.log('Password flows passed: AI legacy login, reset validation and six-character acceptance, AI registration fields, POS registration/change fields and legacy login.');
