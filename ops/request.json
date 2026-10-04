@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
-  "target": "ai",
+  "target": "pos",
   "revision": "067b7c992ddfa66fdb280923300c958fb9924579",
-  "requestId": "recovery-ai-live-20261004-2301"
+  "requestId": "recovery-pos-live-20261004-2303"
 }
