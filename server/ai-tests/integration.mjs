@@ -21,6 +21,7 @@ deliverySource=deliverySource.replace("new URL('./ai-delivery-worker.js',import.
 globalThis.aiDeliveryModule=await import('data:text/javascript;base64,'+Buffer.from(deliverySource).toString('base64'));
 let procurementSource=fs.readFileSync(root+'/server/ai-procurement.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("import {supplierMayTrade} from './ai-collection.js';","const {supplierMayTrade}=globalThis.aiCollectionModule;").replace("'./ai-planning-core.js'",JSON.stringify('file://'+root+'/server/ai-planning-core.js')).replace("'./ai-procurement-core.js'",JSON.stringify('file://'+root+'/server/ai-procurement-core.js'));globalThis.aiProcurementModule=await import('data:text/javascript;base64,'+Buffer.from(procurementSource).toString('base64'));
 let source=fs.readFileSync(root+'/server/ai-platform.js','utf8').replace("import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';","const {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales}=globalThis.aiRecipeModule;").replace("import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';","const platformPool=new globalThis.aiTestPg.Pool(); const aiPool=()=>new globalThis.aiTestPg.Pool(); const ensureAiDatabase=async()=>{}; const copyLegacyAiData=async()=>{};").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));
+source=source.replace("'./ai-admin-overview.js'",JSON.stringify('file://'+root+'/server/ai-admin-overview.js'));
 source=source.replace("'./ai-mail-health.js'",JSON.stringify('file://'+root+'/server/ai-mail-health.js'));
 source=source.replace("import {migrateDeliveryNotes,deliveryRoutes} from './ai-delivery-notes.js';","const {migrateDeliveryNotes,deliveryRoutes}=globalThis.aiDeliveryModule;");
 source=source.replace("import {purchasingPlan,procurementDraft} from './ai-procurement.js';","const {purchasingPlan,procurementDraft}=globalThis.aiProcurementModule;");
@@ -35,10 +36,10 @@ source=source.replace("import {migrateAiSuppliers,supplierAccountRoutes,supplier
 source=source.replace("import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';","const {migrateAiBarcodes,barcodeRoutes}=globalThis.aiBarcodeModule;");
 const {handleAiPlatform,migrateAiPlatform}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const {hash,passwordHash}=await import('file://'+root+'/server/ai-policy.js');await migrateAiPlatform();
-await db.exec('CREATE TABLE users(id uuid primary key,status text,must_change_password boolean);CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE platform_admins(user_id uuid,active boolean);');
+await db.exec('CREATE TABLE users(id uuid primary key,status text,must_change_password boolean,display_name text);CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE platform_admins(user_id uuid,active boolean);');
 const ids={buyer:crypto.randomUUID(),other:crypto.randomUUID(),supplier:crypto.randomUUID(),admin:crypto.randomUUID(),pending:crypto.randomUUID()};
 for(const role of ['buyer','other','supplier','pending'])await query('INSERT INTO ai_accounts(id,email,password_hash,name,business_name,role,status,address,city) VALUES($1,$2,$3,$4,$4,$5,$6,$7,$8)',[ids[role],role+'@example.org',passwordHash('testing-password-123'),role,role==='supplier'?'wholesaler':'restaurant',role==='pending'?'pending':'active','Testweg 1','Berlin']);
-await query("INSERT INTO users VALUES($1,'active',false)",[ids.admin]);await query('INSERT INTO platform_admins VALUES($1,true)',[ids.admin]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[hash('admin-token'),ids.admin]);
+await query("INSERT INTO users(id,status,must_change_password,display_name) VALUES($1,'active',false,'Test Plattformadmin')",[ids.admin]);await query('INSERT INTO platform_admins VALUES($1,true)',[ids.admin]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[hash('admin-token'),ids.admin]);
 const tokens={};
 async function call(path,body,token){const req=Readable.from(body?[JSON.stringify(body)]:[]);Object.assign(req,{url:'/api/ai/'+path,method:body?'POST':'GET',headers:{authorization:token?'Bearer '+token:'','content-type':'application/json'},socket:{remoteAddress:'127.0.0.1'}});let status,out;const res={writeHead(s){status=s},end(x){out=JSON.parse(x)}};assert(await handleAiPlatform(req,res));return {status,...out}}
 for(const r of ['buyer','other','supplier']){const out=await call('login',{email:r+'@example.org',password:'testing-password-123'});assert.equal(out.status,200);tokens[r]=out.token}
@@ -203,7 +204,7 @@ const rotated=await call('connector-key',{id:link.id},tokens.buyer);assert.equal
 // POS adapter needs a real owner authorization and imports only linked paid sales.
 await db.exec('ALTER TABLE users ADD COLUMN company_id uuid;ALTER TABLE users ADD COLUMN role text;CREATE TABLE restaurants(id uuid,company_id uuid,name text);CREATE TABLE products(id uuid,restaurant_id uuid,name text,active boolean);CREATE TABLE orders(id uuid,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);CREATE TABLE order_items(order_id uuid,product_id uuid,quantity numeric);');
 const company=crypto.randomUUID(),posOwner=crypto.randomUUID(),restaurant=crypto.randomUUID(),posProduct=crypto.randomUUID(),posOrder=crypto.randomUUID();
-await query("INSERT INTO users VALUES($1,'active',false,$2,'owner')",[posOwner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[hash('pos-owner-token'),posOwner]);await query("INSERT INTO restaurants VALUES($1,$2,'Linked restaurant')",[restaurant,company]);await query("INSERT INTO products VALUES($1,$2,'POS dish',true)",[posProduct,restaurant]);
+await query("INSERT INTO users(id,status,must_change_password,company_id,role) VALUES($1,'active',false,$2,'owner')",[posOwner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[hash('pos-owner-token'),posOwner]);await query("INSERT INTO restaurants VALUES($1,$2,'Linked restaurant')",[restaurant,company]);await query("INSERT INTO products VALUES($1,$2,'POS dish',true)",[posProduct,restaurant]);
 assert.equal((await call('pos-link',{posToken:'invalid'},tokens.buyer)).status,403);
 assert.equal((await call('pos-link',{posToken:'pos-owner-token'},tokens.buyer)).restaurants.length,1);
 assert.equal((await call('pos-link',{posToken:'pos-owner-token',restaurantId:crypto.randomUUID(),locationId:loc.id},tokens.buyer)).status,400);
@@ -631,7 +632,7 @@ assert.match(dw.document.getElementById('delivery-review').textContent,/erneut/)
 fakeNote.extraction={...nextDelivery,lines:nextDelivery.lines};await dw.document.querySelector('[data-note]').onclick();assert.equal(dw.document.querySelector('[name="supplier"]').value,'Testlieferant');assert.equal(dw.document.querySelector('[name="reference"]').value,'TEST-200');assert.equal(dw.document.querySelector('[name="deliveryDate"]').value,'2026-10-04');assert.equal(dw.document.querySelectorAll('#delivery-lines tr').length,1);assert.equal(dw.document.querySelector('[data-field="stockId"]').value,deliveryStock);assert.equal(dw.document.querySelector('[data-field="packQuantity"]').value,'1');assert.equal(dw.document.querySelectorAll('#delivery-confirm input[type="checkbox"]').length,1);assert.equal(dw.document.querySelector('[name="confirmed"]').checked,false);
 dw.close();console.log('Delivery notes passed: tenant isolation, review gate, atomic rollback, idempotency, supplier-reference duplicate, missing cost, confirmed net cost and unreadable DOM warning.');
 
-console.log('Embedded PostgreSQL integration passed: migrations, tenant isolation, catalog, order locks/idempotency, stock receipt, cancellation, admin suspension, verification and reset.');await db.close();
+console.log('Embedded PostgreSQL integration passed: migrations, tenant isolation, catalog, order locks/idempotency, stock receipt, cancellation, admin suspension, verification and reset.');
 
 
 
@@ -647,3 +648,43 @@ pw.eval('const openAccount=html=>document.getElementById("auth").innerHTML=html;
 pd.getElementById('passwordBtn').click();pd.getElementById('newPass').value='Ab1!xy';assert(pd.getElementById('newPass').checkValidity());pd.getElementById('newPass').value='abcdef';assert(!pd.getElementById('newPass').checkValidity());pw.close();
 console.log('Password flows passed: AI legacy login, reset validation and six-character acceptance, AI registration fields, POS registration/change fields and legacy login.');
 
+
+
+// Central administration: real SQL aggregation, access controls, stable audit pages and DOM filters.
+for(const path of ['admin/overview','admin/audit'])for(const token of [undefined,tokens.buyer,tokens.supplier])assert.equal((await call(path,null,token)).status,403);
+const overview=await call('admin/overview',null,'admin-token');assert.equal(overview.status,200);
+const expectedOpen=(await query("SELECT coalesce(sum(greatest(o.commission_cents-coalesce(p.amount_cents,0),0)),0)::text amount FROM ai_orders o LEFT JOIN ai_commission_payments p ON p.order_id=o.id WHERE o.status='received'")).rows[0].amount;
+assert.equal(overview.summary.outstandingCommissionCents,expectedOpen);
+assert.equal(overview.summary.pendingVerification,(await query("SELECT count(*)::int n FROM ai_accounts WHERE status='pending'")).rows[0].n);
+assert.equal(overview.summary.unreadDeliveryIssues,(await query('SELECT count(*)::int n FROM ai_fulfilment_alerts WHERE resolved_at IS NULL AND acknowledged_at IS NULL')).rows[0].n);
+assert.equal(overview.summary.adsToReview,(await query("SELECT count(*)::int n FROM ai_ads WHERE status='submitted'")).rows[0].n);
+assert.equal(overview.summary.collectionExceptions,(await query("SELECT count(*)::int n FROM ai_collection_jobs WHERE state='exception'")).rows[0].n);
+assert.equal(overview.summary.overdueOrderLines,(await query("SELECT count(*)::int n FROM ai_orders WHERE status='accepted' AND coalesce(confirmed_delivery_date,delivery_date)<(now() AT TIME ZONE 'Europe/Berlin')::date")).rows[0].n);
+assert(overview.overdue.length<=25);assert(overview.overdue.every(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.delivery_date)));
+for(const filter of ['actor=invalid','action=%27','from=2026-02-30','from=2026-02-03&to=2026-02-02','before=-1','snapshot=9223372036854775808'])assert.equal((await call('admin/audit?'+filter,null,'admin-token')).status,400);
+await query("INSERT INTO ai_audit(actor_id,action,detail) SELECT $1,'admin_test',jsonb_build_object('sequence',n,'nested',jsonb_build_object('apiKey','do-not-expose'),'password','do-not-expose','label','<script>window.compromised=true</script>') FROM generate_series(1,55) n",[ids.admin]);
+await query("INSERT INTO ai_audit(actor_id,action,detail,created_at) VALUES($1,'admin_test_supplier','{}','2026-01-01T23:30:00Z')",[ids.supplier]);
+const firstPage=await call('admin/audit?action=admin_test',null,'admin-token');assert.equal(firstPage.rows.length,50);assert.equal(firstPage.total,'55');assert(firstPage.next);assert.equal(firstPage.rows[0].actor_name,'Test Plattformadmin');assert.equal(firstPage.rows[0].detail.nested.apiKey,'[geschützt]');assert.equal(firstPage.rows[0].detail.password,'[geschützt]');
+await query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'admin_test','{}')",[ids.admin]);
+const secondPage=await call('admin/audit?action=admin_test&snapshot='+firstPage.snapshot+'&before='+firstPage.next,null,'admin-token');assert.equal(secondPage.rows.length,5);assert.equal(secondPage.total,'55');assert.equal(secondPage.next,'');assert.equal(new Set([...firstPage.rows,...secondPage.rows].map(x=>x.id)).size,55);
+assert.equal((await call('admin/audit?action=admin_test',null,'admin-token')).total,'56');
+assert.equal((await call('admin/audit?action=admin_test&q=Plattformadmin',null,'admin-token')).total,'56');
+assert.equal((await call('admin/audit?q=%25',null,'admin-token')).total,'0');
+const berlinDay=await call('admin/audit?action=admin_test_supplier&from=2026-01-02&to=2026-01-02&actor='+ids.supplier,null,'admin-token');assert.equal(berlinDay.rows.length,1);assert.match(berlinDay.rows[0].actor_name,/supplier/);
+assert.equal((await call('admin/audit?action=admin_test_supplier&from=2026-01-01&to=2026-01-01',null,'admin-token')).rows.length,0);
+const auditBefore=(await query('SELECT count(*)::text n FROM ai_audit')).rows[0].n;assert.equal((await call('admin/audit',{action:'delete'},'admin-token')).status,404);assert.equal((await query('SELECT count(*)::text n FROM ai_audit')).rows[0].n,auditBefore);
+const launchChange=(await call('admin/audit?action=launch_controls',null,'admin-token')).rows[0];assert(launchChange.detail.before);assert(launchChange.detail.after);
+const statusChange=(await call('admin/audit?action=suspend',null,'admin-token')).rows[0];assert.deepEqual(statusChange.detail.before,{status:'active'});assert.deepEqual(statusChange.detail.after,{status:'suspended'});
+const auditBrowser=new JSDOM(markup,{url:'https://example.org/ai-workspace.html?admin=1',runScripts:'outside-only'}),auditWindow=auditBrowser.window;
+auditWindow.fetch=w.fetch;auditWindow.sessionStorage.setItem('bringness-ai-admin-session','admin-token');auditWindow.eval(script);
+await until(()=>auditWindow.document.querySelector('[data-admin-refresh]'));assert.match(auditWindow.document.getElementById('content').textContent,/Offene erfasste Provision/);
+auditWindow.document.querySelector('[data-view="audit"]').click();await until(()=>auditWindow.document.querySelector('[data-form="audit-search"]'));
+let auditForm=auditWindow.document.querySelector('[data-form="audit-search"]');assert(auditForm.checkValidity());auditForm.elements.action.value='admin_test';auditForm.dispatchEvent(new auditWindow.Event('submit',{bubbles:true,cancelable:true}));
+await until(()=>auditWindow.document.getElementById('content').textContent.includes('56 passende Einträge'));assert.equal(auditWindow.document.querySelector('#content script'),null);assert.equal(auditWindow.compromised,undefined);assert(!auditWindow.document.getElementById('content').textContent.includes('do-not-expose'));
+auditWindow.document.querySelector('[data-audit-next]').click();await until(()=>!auditWindow.document.querySelector('[data-audit-back]').disabled);assert.equal(auditWindow.document.querySelectorAll('#content tbody tr').length,6);
+auditWindow.document.querySelector('[data-audit-back]').click();await until(()=>auditWindow.document.querySelector('[data-audit-back]').disabled);assert.equal(auditWindow.document.querySelectorAll('#content tbody tr').length,50);
+auditForm=auditWindow.document.querySelector('[data-form="audit-search"]');auditForm.elements.q.value='no-match';auditForm.dispatchEvent(new auditWindow.Event('submit',{bubbles:true,cancelable:true}));await until(()=>auditWindow.document.getElementById('content').textContent.includes('0 passende Einträge'));
+auditWindow.document.querySelector('[data-audit-clear]').click();await until(()=>auditWindow.document.querySelector('[data-form="audit-search"]').elements.q.value==='');auditWindow.close();
+console.log('Admin overview/audit passed: restricted access, received-only commissions, operational counts, input validation, Berlin dates, actor search, escaped wildcard, immutable keyset pages, secret redaction, before/after and DOM filtering/pagination.');
+
+await db.close();
