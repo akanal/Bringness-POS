@@ -71,6 +71,8 @@ jobs:
           node --test server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
           npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
           node server/ai-tests/language-integration.mjs
+          node --test server/smtp-mail.test.js server/ai-mail-health.test.js
+          node server/ai-tests/admin-reset-integration.mjs
           if [ "${{ steps.request.outputs.target }}" = "ai" ]; then
             node server/ai-tests/integration.mjs
             node --check server/ai-suppliers.js
@@ -97,5 +99,6 @@ jobs:
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
             root@152.53.196.43 "$command"
+
 
 

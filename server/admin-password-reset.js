@@ -1,3 +1,6 @@
+import {sendSmtpMail} from './smtp-mail.js';
+import {createMailProbe} from './ai-mail-health.js';
+const adminMailStatus=createMailProbe();
 import {validPassword,passwordMessage} from "./password-policy.js";
 import crypto from "node:crypto";
 import pg from "pg";
@@ -25,20 +28,14 @@ async function body(req){
 function mailConfigured(){
   return Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
 }
-async function sendResetMail(email,token){
-  const {default:nodemailer}=await import("nodemailer");
-  const port=Number(process.env.SMTP_PORT||587);
-  if(!Number.isInteger(port)||port<1||port>65535)throw Error("SMTP_PORT ungültig");
-  const origin=(process.env.PUBLIC_BASE_URL||"https://bringness-pos-app-production.up.railway.app").replace(/\/$/,"");
-  if(!origin.startsWith("https://"))throw Error("PUBLIC_BASE_URL muss HTTPS verwenden");
-  const link=origin+"/admin/reset.html#token="+token;
-  const transporter=nodemailer.createTransport({
-    host:process.env.SMTP_HOST,port,secure:port===465,requireTLS:port!==465,
-    auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASSWORD},
-    tls:{rejectUnauthorized:true}
-  });
-  await transporter.sendMail({
+async function sendResetMail(email,token,returnTo){
+  const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness-pos.de')).replace(/\/$/,"");
+  if(new URL(origin).protocol!=="https:")throw Error("Öffentliche Adresse muss HTTPS verwenden");
+  const link=origin+"/admin/reset.html"+(returnTo==='ai'?"?returnTo=ai":"")+"#token="+token;
+  const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  await sendSmtpMail({
     from:process.env.SMTP_FROM,to:email,subject:"Bringness POS Admin – Passwort zurücksetzen",
+    html:`<h1>Admin-Passwort zurücksetzen</h1><p><a href="${escape(link)}" style="display:inline-block;background:#183d35;color:#fff;padding:16px 24px;border-radius:24px;text-decoration:none">Neues Passwort festlegen</a></p><p>Der Button ist 30 Minuten gültig. Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p>`,
     text:"Öffne diesen Link, um dein Admin-Passwort innerhalb von 30 Minuten neu zu setzen:\n\n"+link+"\n\nWenn du den Reset nicht angefordert hast, ignoriere diese Nachricht."
   });
 }
@@ -79,7 +76,7 @@ export async function handleAdminPasswordReset(req,res){
     }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
   }
   if(path==="/api/v1/admin/password/availability"&&req.method==="GET"){
-    send(res,200,{emailAvailable:mailConfigured()});return true;
+    const state=await adminMailStatus();send(res,200,{emailAvailable:state.available,status:state.status});return true;
   }
   if(path==="/api/v1/admin/password/forgot"&&req.method==="POST"){
     if(!mailConfigured()){send(res,503,{error:"E-Mail-Versand ist noch nicht eingerichtet. Bitte SMTP im Bringness-Server konfigurieren."});return true}
@@ -94,7 +91,7 @@ export async function handleAdminPasswordReset(req,res){
     if(recent.rowCount){send(res,200,generic);return true}
     const token=crypto.randomBytes(32).toString("hex"),tokenHash=hash(token);
     await pool.query("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '30 minutes')",[tokenHash,user.id]);
-    try{await sendResetMail(email,token)}
+    try{await sendResetMail(email,token,input.returnTo==='ai'?'ai':'pos')}
     catch(error){
       await pool.query("DELETE FROM password_reset_tokens WHERE token_hash=$1",[tokenHash]);
       console.error("Admin password reset mail delivery failed:",error.code||error.name);
@@ -144,4 +141,5 @@ export async function requireAdminPasswordChange(req,res){
   if(!q.rows[0]?.must_change_password)return false;
   send(res,428,{error:"Bitte zuerst das Startpasswort ändern",mustChangePassword:true});return true;
 }
+
 

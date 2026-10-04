@@ -1,6 +1,5 @@
 {
-  "operation": "deploy",
-  "target": "ai",
-  "revision": "0f1b683b1520da9d2e96881c87841424cfb427e1",
-  "requestId": "ai-admin-overview-live-20261004-2020"
+  "operation": "status",
+  "target": "all",
+  "requestId": "recovery-minimums-review-20261004"
 }

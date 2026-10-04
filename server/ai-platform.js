@@ -1,3 +1,4 @@
+import {sendSmtpMail} from './smtp-mail.js';
 import {adminOverview,adminAudit,safeAuditDetail} from './ai-admin-overview.js';
 import {purchasingPlan,procurementDraft} from './ai-procurement.js';
 import {registrationMailStatus} from './ai-mail-health.js';
@@ -60,14 +61,12 @@ async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_att
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
  const origin=(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL||'').replace(/\/$/,'');if(!origin.startsWith('https://'))throw Error('HTTPS-Adresse fehlt');
- const {default:nodemailer}=await import('nodemailer');const port=Number(process.env.SMTP_PORT||587);
- const transport=nodemailer.createTransport({host:process.env.SMTP_HOST,port,secure:port===465,requireTLS:port!==465,auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASSWORD},tls:{rejectUnauthorized:true},connectionTimeout:10000,socketTimeout:15000});
  const address=process.env.SMTP_FROM.match(/<([^>]+)>/)?.[1]||process.env.SMTP_FROM;
  const verify=kind==='verify',label=verify?'E-Mail bestätigen':'Neues Passwort festlegen';
  const link=`${origin}/ai-workspace.html#${kind}=${token}`;
  const escapeHtml=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const html=`<!doctype html><html lang="de"><body style="margin:0;background:#f4f2e9;font-family:Arial,sans-serif;color:#183d35"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fffdf6;border-radius:16px"><tr><td style="padding:32px"><p style="font-size:22px;font-weight:bold;margin:0 0 28px">Bringness AI</p><h1 style="font-size:26px;margin:0 0 16px">${verify?'Ein Klick genügt.':'Dein neues Passwort.'}</h1><p style="line-height:1.6;margin:0 0 26px">${verify?'Bestätige deine E-Mail-Adresse und starte mit Bringness AI.':'Öffne den Button und lege dein neues Passwort fest.'}</p><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#183d35" style="border-radius:28px"><a href="${escapeHtml(link)}" style="display:inline-block;padding:16px 26px;border:1px solid #183d35;border-radius:28px;color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold">${label}</a></td></tr></table><p style="font-size:12px;line-height:1.6;color:#536a61;margin:24px 0 0">${verify?'Der Button ist 48 Stunden gültig.':'Der Button ist eine Stunde gültig.'}<br>Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p></td></tr></table></td></tr></table></body></html>`;
- await transport.sendMail({from:{name:'Bringness AI',address},to,subject:verify?'Bringness AI – E-Mail bestätigen':'Bringness AI – Passwort zurücksetzen',html,text:`${label}:\n${link}\n\n${verify?'Gültig für 48 Stunden.':'Gültig für eine Stunde.'} Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.`});
+ await sendSmtpMail({from:{name:'Bringness AI',address},to,subject:verify?'Bringness AI – E-Mail bestätigen':'Bringness AI – Passwort zurücksetzen',html,text:`${label}:\n${link}\n\n${verify?'Gültig für 48 Stunden.':'Gültig für eine Stunde.'} Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.`});
 }
 export async function handleAiPlatform(req,res){
  const url=new URL(req.url,'http://local'),p=url.pathname;if(!p.startsWith('/api/ai/'))return false;
@@ -95,8 +94,8 @@ export async function handleAiPlatform(req,res){
    const c=await pool.connect();try{await c.query('BEGIN');const u=(await c.query('INSERT INTO ai_accounts(email,password_hash,name,business_name,role) VALUES($1,$2,$3,$4,$5) RETURNING id',[emailAddress,passwordHash(b.password),name,business,role])).rows[0];const token=crypto.randomBytes(32).toString('hex');await c.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'verify',now()+interval '48 hours',NULL)",[hash(token),u.id]);await c.query("INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$1,'introduction_agreed',$2)",[u.id,JSON.stringify({monthlyCents:0,commissionBps:supplierRoles.includes(role)?200:0,version:1})]);await email(emailAddress,name,token,'verify');await c.query('COMMIT');return send(res,201,{message:'Bestätigung versendet. Bitte prüfe auch deinen Spamordner.'})}catch(e){await c.query('ROLLBACK');console.error('AI registration failed:',e.code||e.name);return send(res,503,{error:'Bestätigung konnte nicht versendet werden. Bitte später erneut registrieren.'})}finally{c.release()}
   }
   if(p==='/api/ai/resend'&&req.method==='POST'){
-   const b=await body(req),address=text(b.email,254).toLowerCase();if(!await rate('resend:'+address,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
-   const u=(await pool.query("SELECT id,name FROM ai_accounts WHERE email=$1 AND status='pending'",[address])).rows[0];if(u){const token=crypto.randomBytes(32).toString('hex');try{await pool.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'verify',now()+interval '48 hours',NULL)",[hash(token),u.id]);await email(address,u.name,token,'verify')}catch(e){console.error('AI resend failed:',e.code||e.name)}}return send(res,200,{message:'Wenn eine Bestätigung aussteht, erhältst du einen neuen Link.'});
+   const b=await body(req),address=text(b.email,254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))fail('Gültige E-Mail-Adresse erforderlich');if(!await rate('resend:'+address,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
+   const u=(await pool.query("SELECT id,name FROM ai_accounts WHERE email=$1 AND status='pending'",[address])).rows[0];if(u){const token=crypto.randomBytes(32).toString('hex');try{await pool.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'verify',now()+interval '48 hours',NULL)",[hash(token),u.id]);await email(address,u.name,token,'verify')}catch(e){await pool.query('DELETE FROM ai_auth_tokens WHERE token_hash=$1',[hash(token)]);console.error('AI resend failed:',e.code||e.name);return send(res,503,{error:'Bestätigungs-E-Mail konnte nicht versendet werden. Bitte erneut versuchen.'})}}return send(res,200,{message:'Wenn eine Bestätigung aussteht, erhältst du einen neuen Link.'});
   }
   if(p==='/api/ai/verify'&&req.method==='POST'){
    const b=await body(req);if(!/^[a-f0-9]{64}$/.test(String(b.token)))fail('Ungültiger Link');
@@ -110,9 +109,9 @@ export async function handleAiPlatform(req,res){
    const token=crypto.randomBytes(32).toString('hex');await pool.query("INSERT INTO ai_sessions VALUES($1,$2,now()+interval '12 hours')",[hash(token),u.id]);await pool.query('DELETE FROM ai_auth_attempts WHERE key=$1',[hash('login:'+emailAddress)]);return send(res,200,{token});
   }
   if(p==='/api/ai/forgot'&&req.method==='POST'){
-   const b=await body(req),emailAddress=text(b.email,254).toLowerCase();if(!await rate('reset:'+emailAddress,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
+   const b=await body(req),emailAddress=text(b.email,254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress))fail('Gültige E-Mail-Adresse erforderlich');if(!await rate('reset:'+emailAddress,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
    const u=(await pool.query("SELECT id,name FROM ai_accounts WHERE email=$1 AND status IN ('active','pending')",[emailAddress])).rows[0];
-   if(u){const token=crypto.randomBytes(32).toString('hex');try{await pool.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'reset',now()+interval '1 hour',NULL)",[hash(token),u.id]);await email(emailAddress,u.name,token,'reset')}catch(e){console.error('AI reset mail failed:',e.code||e.name)}}return send(res,200,{message:'Wenn ein Konto besteht, erhältst du eine E-Mail zum Zurücksetzen.'});
+   if(u){const token=crypto.randomBytes(32).toString('hex');try{await pool.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'reset',now()+interval '1 hour',NULL)",[hash(token),u.id]);await email(emailAddress,u.name,token,'reset')}catch(e){await pool.query('DELETE FROM ai_auth_tokens WHERE token_hash=$1',[hash(token)]);console.error('AI reset mail failed:',e.code||e.name);return send(res,503,{error:'Reset-E-Mail konnte nicht versendet werden. Bitte erneut versuchen.'})}}return send(res,200,{message:'Wenn ein Konto besteht, erhältst du eine E-Mail zum Zurücksetzen.'});
   }
   if(p==='/api/ai/reset'&&req.method==='POST'){
    const b=await body(req);if(!validPassword(b.password)||!/^[a-f0-9]{64}$/.test(String(b.token)))fail('Neues Passwort erforderlich. '+passwordMessage);
@@ -205,9 +204,15 @@ export async function handleAiPlatform(req,res){
    const where=" FROM ai_products p JOIN ai_accounts u ON u.id=p.supplier_id WHERE p.active AND p.available AND u.status='active' AND ($1='' OR p.name ILIKE '%'||$1||'%' OR p.category ILIKE '%'||$1||'%' OR u.business_name ILIKE '%'||$1||'%' OR u.delivery_area ILIKE '%'||$1||'%') AND ($2='' OR p.unit=$2) AND ($3::text IS NULL OR p.supplier_id=$3::text::uuid) AND ($4='' OR COALESCE(NULLIF(p.category,''),'Sonstiges')=$4)",args=[q,unit,supplier||null,category];
    const products=(await pool.query('SELECT p.*,u.business_name,u.city,u.delivery_area,u.minimum_order_cents,u.delivery_terms'+where+' ORDER BY p.name,p.id LIMIT 40 OFFSET $5',[...args,offset])).rows;
    const total=Number((await pool.query('SELECT count(*)'+where,args)).rows[0].count);
-   const suppliers=(await pool.query("SELECT DISTINCT u.id,u.business_name FROM ai_accounts u JOIN ai_products p ON p.supplier_id=u.id WHERE u.status='active' AND p.active AND p.available ORDER BY u.business_name,u.id")).rows;
+   const suppliers=(await pool.query("SELECT DISTINCT u.id,u.business_name,u.minimum_order_cents,u.delivery_area,u.delivery_terms FROM ai_accounts u JOIN ai_products p ON p.supplier_id=u.id WHERE u.status='active' AND p.active AND p.available ORDER BY u.business_name,u.id")).rows;
    const categories=(await pool.query("SELECT DISTINCT COALESCE(NULLIF(p.category,''),'Sonstiges') category FROM ai_products p JOIN ai_accounts u ON u.id=p.supplier_id WHERE p.active AND p.available AND u.status='active' ORDER BY category")).rows.map(x=>x.category);
    return send(res,200,{products,total,offset,suppliers,categories});
+  }
+  if(p==='/api/ai/cart/requirements'&&req.method==='POST'){
+   if(u.role!=='restaurant')return send(res,403,{error:'Nur Restaurants können bestellen.'});
+   const b=await body(req);if(!Array.isArray(b.productIds)||b.productIds.length>50)fail('Höchstens 50 Produkte erforderlich');const ids=[...new Set(b.productIds.map(value=>id(value)))];
+   const products=(await pool.query("SELECT p.id,p.supplier_id,p.name,p.unit,p.pack_quantity,p.price_cents,p.minimum_packs,s.business_name,s.minimum_order_cents FROM ai_products p JOIN ai_accounts s ON s.id=p.supplier_id WHERE p.id=ANY($1::uuid[]) AND p.active AND p.available AND s.status='active'",[ids])).rows;
+   return send(res,200,{products});
   }
   if(['/api/ai/cart/preview','/api/ai/cart/checkout'].includes(p)&&req.method==='POST'){
    if(u.role!=='restaurant')return send(res,403,{error:'Nur Restaurants können bestellen.'});
@@ -271,6 +276,7 @@ setInterval(()=>{if(aiReady)collectionTick().catch(()=>console.error('AI collect
 setInterval(()=>{if(aiReady)monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
 
 setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
+
 
 
 
