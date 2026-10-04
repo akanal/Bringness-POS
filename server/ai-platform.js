@@ -1,3 +1,4 @@
+import {migrateDeliveryNotes,deliveryRoutes} from './ai-delivery-notes.js';
 import {migrateAiPlanning,planningRoutes} from './ai-planning.js';
 import {migrateAiForecast,forecastRoutes,forecastTick} from './ai-forecast.js';
 import {migrateAiInventory,inventoryRoutes,monitorTick} from './ai-inventory.js';
@@ -18,7 +19,7 @@ class InputError extends Error{}
 const fail=message=>{throw new InputError(message)};
 function text(value,max=150){const v=String(value||'').trim();if(v.length>max)fail(`Höchstens ${max} Zeichen erlaubt`);return v}
 function id(value){if(!uuid.test(String(value)))fail('Ungültige ID');return value}
-async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(req.url.split('?')[0].match(/\/barcodes\/csv(?:-preview)?$|\/v1\/supplier\/products$|\/ads$|\/products$|\/cart\/(preview|checkout)$|\/inventory\/count$/)?220000:16000))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
+async function body(req){let raw='';const limit=req.url.split('?')[0]==='/api/ai/delivery-notes/upload'?12*1024*1024:null;for await(const chunk of req){raw+=chunk;if(raw.length>(limit||(req.url.split('?')[0].match(/\/barcodes\/csv(?:-preview)?$|\/v1\/supplier\/products$|\/ads$|\/products$|\/cart\/(preview|checkout)$|\/inventory\/count$/)?220000:16000)))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
 const bearer=req=>String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
 async function actor(req){return (await pool.query("SELECT u.id,u.email,u.name,u.business_name,u.role,u.status,u.city,u.postal_code,u.address,u.delivery_area,u.minimum_order_cents,u.delivery_terms,u.shop_plan,u.cuisine_type FROM ai_sessions s JOIN ai_accounts u ON u.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash(bearer(req))])).rows[0]}
 async function platformActor(req){return (await platformPool.query("SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT COALESCE(u.must_change_password,false)",[hash(bearer(req))])).rows[0]}
@@ -48,7 +49,7 @@ CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFE
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateAiForecast();await migrateAiPlanning();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateAiForecast();await migrateAiPlanning();await migrateDeliveryNotes();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -142,6 +143,7 @@ export async function handleAiPlatform(req,res){
   if(p==='/api/ai/settlements'||p.startsWith('/api/ai/settlements/'))return send(res,200,await settlementRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
   if(p==='/api/ai/ads'||p.startsWith('/api/ai/ads/')){if(req.method==='POST'&&!await rate('ads:'+u.id,300))return send(res,429,{error:'Zu viele Werbeanfragen. Bitte später erneut versuchen.'});return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));}
   if(p.startsWith('/api/ai/barcodes')){if(req.method==='POST'&&!await rate('barcodes:'+u.id,300))return send(res,429,{error:'Zu viele Kataloganfragen. Bitte später erneut versuchen.'});return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},u,false,url));}
+  if(p==='/api/ai/delivery-notes'||p.startsWith('/api/ai/delivery-notes/')){if(req.method==='POST'&&!await rate('delivery-notes:'+u.id,30))return send(res,429,{error:'Zu viele Dokumentanfragen. Bitte später erneut versuchen.'});return send(res,200,await deliveryRoutes(p,req.method,req.method==='POST'?await body(req):{},u));}
   const supplierResult=await supplierAccountRoutes(p,req.method,req.method==='POST'&&p.startsWith('/api/ai/supplier-connector')?await body(req):{},u);if(supplierResult)return send(res,200,supplierResult);
   const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status','/api/ai/connector-key'].includes(p)?await body(req):{},u,url);if(recipeResult)return send(res,200,recipeResult);
   if(p==='/api/ai/logout'&&req.method==='POST'){await pool.query('DELETE FROM ai_sessions WHERE token_hash=$1',[hash(bearer(req))]);return send(res,200,{ok:true})}
@@ -264,3 +266,4 @@ setInterval(()=>{if(aiReady)collectionTick().catch(()=>console.error('AI collect
 setInterval(()=>{if(aiReady)monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
 
 setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
+

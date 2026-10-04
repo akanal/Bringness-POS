@@ -73,6 +73,8 @@ jobs:
             npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
             node server/ai-tests/integration.mjs
             node --check server/ai-suppliers.js
+            npm ci --ignore-scripts --no-audit --no-fund
+            node --test server/ai-delivery-core.test.js server/ai-delivery-ocr.test.js
           fi
       - name: Run authenticated server operation
         if: steps.connection.outputs.ready == 'true'
@@ -94,3 +96,4 @@ jobs:
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
             root@152.53.196.43 "$command"
+

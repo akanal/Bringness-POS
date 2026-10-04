@@ -11,10 +11,14 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@napi-rs/canvas": "1.0.10",
+    "@tesseract.js-data/deu": "1.0.0",
+    "nodemailer": "^10.0.0",
+    "pdfjs-dist": "6.4.299",
+    "pdfkit": "^0.17.2",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
-    "web-push": "^3.6.7",
-    "pdfkit": "^0.17.2",
-    "nodemailer": "^10.0.0"
+    "tesseract.js": "7.0.0",
+    "web-push": "^3.6.7"
   }
 }
