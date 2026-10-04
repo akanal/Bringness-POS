@@ -1,5 +1,5 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "verify-ai-inventory-monitor-20261003"
+  "operation": "deploy",
+  "target": "ai",
+  "requestId": "ai-approximate-day-forecast-20261004"
 }

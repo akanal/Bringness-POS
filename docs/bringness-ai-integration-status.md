@@ -27,7 +27,7 @@ Ein fehlendes Rezept hält den POS-Import an. Nach Korrektur wird dieselbe Beste
 | Lieferantensortimente | CSV und gemeinsamer Barcode-Katalog vorhanden; Lieferanten-API für Sortiment, Nettopreise, Lieferbarkeit, Bestellabruf, Annahme und Stornierung umgesetzt; konkrete ERP-Adapter und Webhooks noch offen |
 | Fremdkassen-Adapter | Allgemeine API vorhanden; konkrete Adapter brauchen Herstellerdokumentation und Testzugänge |
 | Ketten | Mehrere Standorte und getrennte Verbindungen vorhanden; zentrale Einkaufsfreigaben und feinere Teamrechte noch offen |
-| Einkaufsvorschläge | Verbrauch, Mindestbestände und offene bestätigte Lieferungen vorhanden; Wetter- und Veranstaltungsdaten noch nicht angebunden |
+| Einkaufsvorschläge | Verbrauch, Mindestbestände und offene bestätigte Lieferungen vorhanden; grobe POS-Tagesprognose und rezeptbasierte Vorbereitungsmengen ergänzt; Wetter- und Veranstaltungsdaten noch nicht angebunden |
 | Provision | 2 % vom vermittelten Netto-Warenwert in beiden Einführungsmodellen; Zahlungsnachweise vorhanden, automatische Abbuchung und Provisionsrechnungen noch offen |
 | AI Premium | 30 kostenlose Testtage geplant; vollständige Paketfreischaltung und endgültige Preise noch offen |
 | Trennung von POS | Eigene AI-Datenbank vorhanden; AI-Server läuft derzeit noch im kombinierten Runtime-Modus und nutzt eine POS-Datenbankbrücke für Inhaberfreigabe und Verkaufsabfrage |
@@ -41,3 +41,7 @@ Die Tests verwenden eingebettetes PostgreSQL (PGlite) und eine Browser-DOM. Gepr
 Händler, Großlieferanten und Hersteller verwalten getrennte, lieferantengebundene API-Schlüssel unter „Lieferanten-API“. Produktimporte aktualisieren anhand einer eindeutigen eigenen Artikelnummer bis zu 100 Produkte pro Anfrage atomar. Import-IDs schützen vor doppelten und verspätet wiederholten Schreibvorgängen. Nicht lieferbare Produkte werden aus Angeboten ausgeschlossen; ihre bestehenden Bestellungen bleiben unverändert. Bestellabruf verwendet einen Cursor mit vollständiger PostgreSQL-Zeitpräzision. Lieferanten dürfen eigene offene Bestellungen annehmen oder stornieren; Wareneingang und Provisionszahlung sind darüber nicht möglich. Die vereinbarten 2 % werden als Bestellsnapshot gespeichert.
 
 Dokumentation: `/ai-supplier-api.html`, OpenAPI: `/ai-supplier-openapi.json`. Verfügbarkeit ist eine Kennzeichnung, keine Mengenreservierung. Bestellabruf liefert aktuelle Zustände, keine vollständige Ereignishistorie. Prüfsuite erweitert um Produktimport, Wiederholung, fehlerhaften Batch, Nichtverfügbarkeit, unveränderte Provision, fremde Lieferantenzugriffe, Bestellaktionen, Schlüsselrotation und Lieferantenoberfläche.
+
+## Grobe Tagesprognose
+
+Standortbezogene POS-Tagesprognose mit Wochentags- und Vorjahresvergleich, Originalzahlungszeit, Stundenständen und groben Vorbereitungsmengen: siehe `bringness-ai-day-forecast.md`. Keine zusätzliche Gästeerfassung. Wetter und regionale Veranstaltungstermine sind noch nicht angebunden.
