@@ -1,3 +1,4 @@
+import {adminOverview,adminAudit,safeAuditDetail} from './ai-admin-overview.js';
 import {purchasingPlan,procurementDraft} from './ai-procurement.js';
 import {registrationMailStatus} from './ai-mail-health.js';
 import {migrateDeliveryNotes,deliveryRoutes} from './ai-delivery-notes.js';
@@ -47,6 +48,9 @@ ALTER TABLE ai_orders ADD COLUMN IF NOT EXISTS delivery_address text NOT NULL DE
 ALTER TABLE ai_orders ADD COLUMN IF NOT EXISTS buyer_email text NOT NULL DEFAULT '';
 ALTER TABLE ai_orders ADD COLUMN IF NOT EXISTS supplier_terms text NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS ai_audit(id bigserial PRIMARY KEY,actor_id uuid NOT NULL,target_id uuid,action text NOT NULL,detail jsonb NOT NULL DEFAULT '{}',created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS ai_audit_actor_id_idx ON ai_audit(actor_id,id DESC);
+CREATE INDEX IF NOT EXISTS ai_audit_action_id_idx ON ai_audit(action,id DESC);
+CREATE INDEX IF NOT EXISTS ai_audit_created_idx ON ai_audit(created_at,id DESC);
 CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFERENCES ai_orders(id),amount_cents bigint NOT NULL CHECK(amount_cents>0),reference text NOT NULL,recorded_by uuid NOT NULL,recorded_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
@@ -116,6 +120,8 @@ export async function handleAiPlatform(req,res){
   }
   if(p.startsWith('/api/ai/admin')){
    const admin=await platformActor(req);if(!admin)return send(res,403,{error:'Nur Plattformadministratoren haben Zugriff.'});
+   if(p==='/api/ai/admin/overview'&&req.method==='GET')return send(res,200,await adminOverview(pool));
+   if(p==='/api/ai/admin/audit'&&req.method==='GET')return send(res,200,await adminAudit(pool,platformPool,url));
    if(p==='/api/ai/admin/monitor')return send(res,200,await inventoryRoutes(p,req.method,{},admin,url,true));
    if(p==='/api/ai/admin/fulfilment'||p.startsWith('/api/ai/admin/fulfilment/'))return send(res,200,await fulfilmentRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
    if(p==='/api/ai/admin/collection'||p.startsWith('/api/ai/admin/collection/'))return send(res,200,await collectionRoutes(p,req.method,req.method==='POST'?await body(req):{},admin,url,true));
@@ -125,7 +131,7 @@ export async function handleAiPlatform(req,res){
    if(p==='/api/ai/admin'&&req.method==='GET'){
     const q=text(url.searchParams.get('q')),users=(await pool.query("SELECT id,email,name,business_name,role,status,shop_plan,city,created_at FROM ai_accounts WHERE $1='' OR email ILIKE '%'||$1||'%' OR name ILIKE '%'||$1||'%' OR business_name ILIKE '%'||$1||'%' ORDER BY created_at DESC LIMIT 200",[q])).rows;
     const totals=(await pool.query("SELECT status,count(*)::int count,COALESCE(sum(net_cents),0)::text net_cents,COALESCE(sum(commission_cents),0)::text commission_cents FROM ai_orders GROUP BY status")).rows;
-    const audit=(await pool.query('SELECT * FROM ai_audit ORDER BY id DESC LIMIT 50')).rows;return send(res,200,{users,totals,audit,launch:await settings()});
+    const audit=(await pool.query('SELECT * FROM ai_audit ORDER BY id DESC LIMIT 50')).rows.map(row=>({...row,detail:safeAuditDetail(row.detail)}));return send(res,200,{users,totals,audit,launch:await settings()});
    }
    if(p==='/api/ai/admin/commissions'&&req.method==='GET')return send(res,200,{commissions:(await pool.query("SELECT o.id,o.supplier_id,s.business_name supplier_name,o.net_cents,o.commission_cents,o.created_at,p.reference,p.recorded_at FROM ai_orders o JOIN ai_accounts s ON s.id=o.supplier_id LEFT JOIN ai_commission_payments p ON p.order_id=o.id WHERE o.status='received' ORDER BY o.created_at DESC LIMIT 1000")).rows});
    if(p==='/api/ai/admin/commission-payment'&&req.method==='POST'){
@@ -133,11 +139,11 @@ export async function handleAiPlatform(req,res){
    }
    if(p==='/api/ai/admin/account'&&req.method==='POST'){
     const b=await body(req);id(b.id);if(!['suspend','restore'].includes(b.action))fail('Ungültige Aktion');
-    const c=await pool.connect();try{await c.query('BEGIN');const changed=await c.query("UPDATE ai_accounts SET status=$2 WHERE id=$1 AND status=$3 RETURNING id",[b.id,b.action==='suspend'?'suspended':'active',b.action==='suspend'?'active':'suspended']);if(!changed.rowCount){await c.query('ROLLBACK');return send(res,409,{error:'Statuswechsel nicht möglich. Unbestätigte Konten können nicht aktiviert werden.'})}await c.query('DELETE FROM ai_sessions WHERE account_id=$1',[b.id]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,$3)',[admin.id,b.id,b.action]);await c.query('COMMIT');return send(res,200,{ok:true})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+    const c=await pool.connect();try{await c.query('BEGIN');const changed=await c.query("UPDATE ai_accounts SET status=$2 WHERE id=$1 AND status=$3 RETURNING id",[b.id,b.action==='suspend'?'suspended':'active',b.action==='suspend'?'active':'suspended']);if(!changed.rowCount){await c.query('ROLLBACK');return send(res,409,{error:'Statuswechsel nicht möglich. Unbestätigte Konten können nicht aktiviert werden.'})}await c.query('DELETE FROM ai_sessions WHERE account_id=$1',[b.id]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$2,$3,$4::jsonb)',[admin.id,b.id,b.action,JSON.stringify({before:{status:b.action==='suspend'?'active':'suspended'},after:{status:b.action==='suspend'?'suspended':'active'},sessionsRevoked:true})]);await c.query('COMMIT');return send(res,200,{ok:true})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
    }
    if(p==='/api/ai/admin/launch'&&req.method==='POST'){
     const b=await body(req);if(typeof b.onboardingEnabled!=='boolean'||typeof b.ordersEnabled!=='boolean')fail('Schalter erforderlich');
-    const c=await pool.connect();try{await c.query('BEGIN');await c.query("UPDATE ai_settings SET value=jsonb_set(jsonb_set(value,'{onboardingEnabled}',$1::jsonb),'{ordersEnabled}',$2::jsonb) WHERE key='launch'",[JSON.stringify(b.onboardingEnabled),JSON.stringify(b.ordersEnabled)]);await c.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'launch_controls',$2)",[admin.id,JSON.stringify(b)]);await c.query('COMMIT');return send(res,200,{ok:true})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+    const c=await pool.connect();try{await c.query('BEGIN');const previous=(await c.query("SELECT value FROM ai_settings WHERE key='launch' FOR UPDATE")).rows[0].value;await c.query("UPDATE ai_settings SET value=jsonb_set(jsonb_set(value,'{onboardingEnabled}',$1::jsonb),'{ordersEnabled}',$2::jsonb) WHERE key='launch'",[JSON.stringify(b.onboardingEnabled),JSON.stringify(b.ordersEnabled)]);await c.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'launch_controls',$2)",[admin.id,JSON.stringify({before:{onboardingEnabled:previous.onboardingEnabled,ordersEnabled:previous.ordersEnabled},after:{onboardingEnabled:b.onboardingEnabled,ordersEnabled:b.ordersEnabled}})]);await c.query('COMMIT');return send(res,200,{ok:true})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
    }
    return send(res,404,{error:'Adminfunktion nicht gefunden'});
   }
@@ -265,5 +271,6 @@ setInterval(()=>{if(aiReady)collectionTick().catch(()=>console.error('AI collect
 setInterval(()=>{if(aiReady)monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
 
 setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
+
 
 

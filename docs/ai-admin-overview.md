@@ -1,0 +1,11 @@
+# Bringness AI administration
+
+The platform administrator enters `/ai-workspace.html?admin=1` using a POS platform-admin session. AI restaurant and supplier sessions cannot access the administration endpoints.
+
+`GET /api/ai/admin/overview` reports active participants, pending email verification, submitted and accepted advertisements, unresolved and unread delivery issues, accepted order lines with a delivery date before today in Europe/Berlin, collection exceptions and recorded audit events in the last 24 hours. Open commission is the sum of received orders' commission less documented payments, clamped at zero per order. It is not an account balance or tax invoice. The dashboard lists the earliest 25 overdue lines and links to existing administration workflows; it does not activate accounts or collect payments.
+
+`GET /api/ai/admin/audit` accepts `q`, `actor`, `action`, `from`, `to`, `snapshot` and `before`. Dates use inclusive Berlin calendar days. Search matches the action, actor or target IDs and actor names/businesses, with literal wildcard characters. AI actor names come from the AI database; POS administrator names are separately resolved through the platform database. Missing names fall back to their IDs. The API returns at most 50 rows, a frozen maximum-ID snapshot and a next-page cursor. Refresh starts a new snapshot, preventing new inserts from moving existing pages.
+
+Structured sensitive fields (passwords, tokens, keys, SMTP credentials, bank identifiers and mandate identifiers) are redacted in responses. Details are escaped in the browser. New account status and launch-control changes include before/after values within their existing transaction. Historical events retain their original information; missing historical values are not reconstructed. The API offers no audit editing or deleting endpoint. This is an operational log, not a cryptographically tamper-proof record; database administrators retain database access. It covers actions that existing modules record in `ai_audit`.
+
+Validation: `node server/ai-tests/integration.mjs` exercises aggregation, permissions, date and filter validation, stable pagination, actor resolution, redaction, transaction details and browser navigation against embedded PostgreSQL and JSDOM, alongside existing AI workflows.

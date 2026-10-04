@@ -1,1 +1,5 @@
-{"operation":"deploy","target":"ai","requestId":"ai-procurement-paths-20261004"}
+{
+  "operation": "status",
+  "target": "all",
+  "requestId": "ai-admin-overview-review-20261004"
+}
