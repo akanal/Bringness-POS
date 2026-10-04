@@ -1,3 +1,4 @@
+import {validPassword,passwordMessage} from "./password-policy.js";
 import crypto from "node:crypto";
 import pg from "pg";
 
@@ -61,7 +62,7 @@ export async function handleAdminPasswordReset(req,res){
     if(!user){send(res,403,{error:"Kein aktiver Admin-Zugang"});return true}
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const current=String(input.currentPassword||""),next=String(input.newPassword||"");
-    if(current.length>128||next.length<12||next.length>128){send(res,400,{error:"Neues Passwort muss 12 bis 128 Zeichen enthalten"});return true}
+    if(current.length>128||!validPassword(next)){send(res,400,{error:passwordMessage});return true}
     const given=Buffer.from(passwordHash(current),"hex"),stored=Buffer.from(user.password_hash,"hex");
     if(given.length!==stored.length||!crypto.timingSafeEqual(given,stored)){send(res,403,{error:"Bisheriges Passwort ist falsch"});return true}
     if(current===next){send(res,400,{error:"Bitte ein anderes Passwort wählen"});return true}
@@ -104,8 +105,8 @@ export async function handleAdminPasswordReset(req,res){
   if(path==="/api/v1/admin/password/reset"&&req.method==="POST"){
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const token=String(input.token||""),password=String(input.password||"");
-    if(!tokenPattern.test(token)||password.length<12||password.length>128){
-      send(res,400,{error:"Ungültiger Link oder Passwort (mindestens 12 Zeichen)"});return true;
+    if(!tokenPattern.test(token)||!validPassword(password)){
+      send(res,400,{error:"Ungültiger Link oder Passwort. "+passwordMessage});return true;
     }
     const client=await pool.connect();
     try{
@@ -143,3 +144,4 @@ export async function requireAdminPasswordChange(req,res){
   if(!q.rows[0]?.must_change_password)return false;
   send(res,428,{error:"Bitte zuerst das Startpasswort ändern",mustChangePassword:true});return true;
 }
+

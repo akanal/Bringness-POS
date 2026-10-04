@@ -8,7 +8,7 @@ const offerings=[
 ];
 let plans=new Map(),billingState=null,selected=null,selectedQuotedNet=null,accountMode='register',token=localStorage.getItem('bringness-pos-token'),downloadAccess=null;
 async function request(path,options={}){const response=await fetch('/api/v1'+path,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...options.headers}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Die Anfrage ist fehlgeschlagen.');return data}
-function setMode(mode){accountMode=mode;$('registerMode').classList.toggle('active',mode==='register');$('loginMode').classList.toggle('active',mode==='login');$('nameLabel').hidden=mode!=='register';$('accountName').required=mode==='register';$('accountPassword').autocomplete=mode==='register'?'new-password':'current-password'}
+function setMode(mode){accountMode=mode;$('registerMode').classList.toggle('active',mode==='register');$('loginMode').classList.toggle('active',mode==='login');$('nameLabel').hidden=mode!=='register';$('accountName').required=mode==='register';$('accountPassword').autocomplete=mode==='register'?'new-password':'current-password';const input=$("accountPassword"),isNew=mode==="register";if(isNew){input.minLength=6;input.pattern="(?=.*\\p{Lu})(?=.*\\p{Ll})(?=.*\\p{Nd})(?=.*[^\\p{L}\\p{N}\\s]).{6,128}";input.title="Mindestens 6 Zeichen, ein Gro\u00dfbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)."}else{input.removeAttribute("minlength");input.removeAttribute("pattern");input.removeAttribute("title")}$("passwordRules").hidden=!isNew}
 function planState(code){
   if(billingState){
     const state=(billingState.plans||[]).find(item=>item.code===code);
@@ -109,3 +109,4 @@ $('downloadWindows').onclick=async event=>{
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }catch(error){alert(error.message)}finally{button.textContent=downloadAccess?.release?.version?'Windows-Kasse '+downloadAccess.release.version+' herunterladen':'Windows-Kasse herunterladen'}
 };
+

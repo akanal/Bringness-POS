@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';
 import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';
 import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';
-import {supplierRoles,units,uuid,hash,passwordHash,passwordMatches,validPassword,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
+import {supplierRoles,units,uuid,hash,passwordHash,passwordMatches,validPassword,passwordMessage,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
 const pool={query:(...args)=>aiPool().query(...args),connect:()=>aiPool().connect()};
 let aiReady=false;
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
@@ -82,7 +82,7 @@ export async function handleAiPlatform(req,res){
   if(p==='/api/ai/register'&&req.method==='POST'){
    if(!await rate('signup-ip:'+req.socket.remoteAddress,30))return send(res,429,{error:'Bitte später erneut versuchen.'});
    const b=await body(req),emailAddress=text(b.email,254).toLowerCase(),name=text(b.name,100),business=text(b.businessName),role=b.role;
-   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)||!name||!business||![...supplierRoles,'restaurant'].includes(role)||!validPassword(b.password))fail('Name, Firma, gültige E-Mail und Passwort mit 10 bis 128 Zeichen erforderlich');
+   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)||!name||!business||![...supplierRoles,'restaurant'].includes(role)||!validPassword(b.password))fail('Name, Firma und gültige E-Mail erforderlich. '+passwordMessage);
    if(b.acceptTerms!==true)fail('Bitte die Einführungskonditionen bestätigen');
    if(!(await settings()).onboardingEnabled)return send(res,409,{error:'Neue Registrierungen sind vorübergehend pausiert.'});
    if(!await rate('register:'+emailAddress,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
@@ -98,7 +98,7 @@ export async function handleAiPlatform(req,res){
    const r=await pool.query("WITH t AS (UPDATE ai_auth_tokens SET used_at=now() WHERE token_hash=$1 AND kind='verify' AND used_at IS NULL AND expires_at>now() RETURNING account_id) UPDATE ai_accounts SET status='active' WHERE id=(SELECT account_id FROM t) AND status='pending' RETURNING id",[hash(b.token)]);return send(res,r.rowCount?200:400,r.rowCount?{message:'E-Mail bestätigt. Du kannst dich anmelden.'}:{error:'Link ungültig oder abgelaufen.'});
   }
   if(p==='/api/ai/login'&&req.method==='POST'){
-   const b=await body(req),emailAddress=text(b.email,254).toLowerCase();if(!validPassword(b.password))fail('E-Mail und Passwort erforderlich');if(!await rate('login:'+emailAddress))return send(res,429,{error:'Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.'});
+   const b=await body(req),emailAddress=text(b.email,254).toLowerCase();if(typeof b.password!=='string'||!b.password.length||b.password.length>128)fail('E-Mail und Passwort erforderlich');if(!await rate('login:'+emailAddress))return send(res,429,{error:'Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.'});
    const u=(await pool.query('SELECT * FROM ai_accounts WHERE email=$1',[emailAddress])).rows[0];
    const stored=u?.password_hash||'00000000000000000000000000000000:'+ '0'.repeat(128);
    if(!passwordMatches(b.password,stored)||u?.status!=='active')return send(res,401,{error:'Anmeldung nicht möglich. Prüfe deine Zugangsdaten und E-Mail-Bestätigung.'});
@@ -110,7 +110,7 @@ export async function handleAiPlatform(req,res){
    if(u){const token=crypto.randomBytes(32).toString('hex');try{await pool.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'reset',now()+interval '1 hour',NULL)",[hash(token),u.id]);await email(emailAddress,u.name,token,'reset')}catch(e){console.error('AI reset mail failed:',e.code||e.name)}}return send(res,200,{message:'Wenn ein Konto besteht, erhältst du eine E-Mail zum Zurücksetzen.'});
   }
   if(p==='/api/ai/reset'&&req.method==='POST'){
-   const b=await body(req);if(!validPassword(b.password)||!/^[a-f0-9]{64}$/.test(String(b.token)))fail('Neues Passwort mit 10 bis 128 Zeichen erforderlich');
+   const b=await body(req);if(!validPassword(b.password)||!/^[a-f0-9]{64}$/.test(String(b.token)))fail('Neues Passwort erforderlich. '+passwordMessage);
    const c=await pool.connect();try{await c.query('BEGIN');const t=(await c.query("SELECT account_id FROM ai_auth_tokens WHERE token_hash=$1 AND kind='reset' AND used_at IS NULL AND expires_at>now() FOR UPDATE",[hash(b.token)])).rows[0];if(!t){await c.query('ROLLBACK');return send(res,400,{error:'Link ungültig oder abgelaufen.'})}await c.query('UPDATE ai_accounts SET password_hash=$2 WHERE id=$1',[t.account_id,passwordHash(b.password)]);await c.query("UPDATE ai_auth_tokens SET used_at=now() WHERE account_id=$1 AND kind='reset'",[t.account_id]);await c.query('DELETE FROM ai_sessions WHERE account_id=$1',[t.account_id]);await c.query('COMMIT');return send(res,200,{message:'Passwort geändert. Bitte neu anmelden.'})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
   }
   if(p.startsWith('/api/ai/admin')){
@@ -268,4 +268,5 @@ setInterval(()=>{if(aiReady)collectionTick().catch(()=>console.error('AI collect
 setInterval(()=>{if(aiReady)monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
 
 setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
+
 

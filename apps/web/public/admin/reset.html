@@ -10,7 +10,7 @@
 </head>
 <body>
 <header><a class="brand home" href="/">Bringness <span>POS Admin</span></a></header>
-<main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p>Neues Passwort mit mindestens 12 Zeichen eingeben.</p><form id="resetForm"><label for="newPassword">Neues Passwort</label><input id="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><label for="repeatPassword">Passwort wiederholen</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
+<main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p>Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label for="newPassword">Neues Passwort</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><label for="repeatPassword">Passwort wiederholen</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
 <script>
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
@@ -21,3 +21,4 @@ form.addEventListener('submit',async event=>{event.preventDefault();const passwo
 </script>
 </body>
 </html>
+
