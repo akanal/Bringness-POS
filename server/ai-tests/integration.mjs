@@ -474,7 +474,13 @@ function submit(kind,values){const form=d.querySelector('[data-form="'+kind+'"]'
 d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'text');d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').type,'password');
 d.querySelector('[data-auth="register"]').click();assert.equal(d.getElementById('role').options.length,4);const newInput=d.getElementById('newPassword');for(const password of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x']){newInput.value=password;assert(!newInput.checkValidity())}newInput.value='Ab1!xy';assert(newInput.checkValidity());d.querySelector('[data-auth="login"]').click();
 submit('login',{email:'other@example.org',password:'testing-password-123'});await until(()=>d.querySelector('[data-view="stock"]'));
-d.querySelector('[data-view="stock"]').click();await until(()=>d.querySelector('[data-form="location"]'));
+assert.equal(d.querySelectorAll('#tabs > button').length,1);assert.equal(d.querySelectorAll('#tabs > details').length,4);
+const navViews=[...d.querySelectorAll('#tabs [data-view]')].map(button=>button.dataset.view);assert.equal(navViews.length,17);assert.equal(new Set(navViews).size,17);
+let menu=d.querySelector('#tabs details');menu.querySelector('summary').click();assert(menu.open);menu.querySelector('summary').focus();menu.querySelector('summary').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert(!menu.open);assert.equal(d.activeElement,menu.querySelector('summary'));
+menu.open=true;d.getElementById('content').click();assert(!menu.open);
+menu.open=true;d.querySelectorAll('#tabs details')[1].querySelector('summary').click();assert(!menu.open);assert(d.querySelectorAll('#tabs details')[1].open);
+
+d.querySelector('[data-view="stock"]').click();await until(()=>d.querySelector('[data-form="location"]'));assert(!d.querySelector('#tabs details[open]'));assert(d.querySelector('#tabs [data-view="stock"]').hasAttribute('aria-current'));assert(d.querySelector('#tabs details summary').classList.contains('active'));
 submit('location',{name:'UI Teststandort',address:'UI Weg 1'});await until(()=>d.querySelector('#locationId option'));
 submit('stock',{name:'UI Mehl',quantity:'0',minimum:'5'});await until(()=>d.querySelector('[data-adjust]'));
 await until(()=>[...d.querySelectorAll('#content tbody tr')].some(row=>row.cells[0].textContent==='UI Mehl'));const inventoryUiStock=(await call('stock',null,tokens.other)).stock.find(s=>s.name==='UI Mehl');
