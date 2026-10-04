@@ -1,3 +1,4 @@
+import {validPassword,passwordMessage} from "./password-policy.js";
 import crypto from "node:crypto";
 import pg from "pg";
 
@@ -31,7 +32,7 @@ export async function handleAdminTeam(req,res){
     if(actor.role!=="owner"){send(res,403,{error:"Nur der Inhaber darf Administratoren anlegen"});return true}
     let input;try{input=await read(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const name=String(input.name||"").trim(),email=String(input.email||"").trim().toLowerCase(),password=String(input.password||"");
-    if(name.length<2||name.length>100||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<12||password.length>128){send(res,400,{error:"Name, E-Mail und Erstpasswort mit 12 bis 128 Zeichen erforderlich"});return true}
+    if(name.length<2||name.length>100||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!validPassword(password)){send(res,400,{error:"Name und E-Mail erforderlich. "+passwordMessage});return true}
     const client=await pool.connect();
     try{
       await client.query("BEGIN");
@@ -113,3 +114,4 @@ export async function handleAdminTeam(req,res){
   }
   send(res,404,{error:"Admin-Funktion nicht gefunden"});return true;
 }
+
