@@ -19,3 +19,7 @@ Prüfung: reine Berechnungstests (dünne Historie, Wochentage, Vorjahr, Tagesver
 ## Forecast versus recipe consumption
 
 The first snapshot in each Berlin calendar hour is immutable. Each new snapshot stores its ingredient forecast and recipe quantities. History compares the earliest ready snapshot per day with currently paid POS positions, using those captured recipe quantities rather than later recipe edits. Today is provisional; later bookings can revise historical actuals. Calculated consumption excludes inventory differences, spoilage, unmapped products and personnel costs. Legacy snapshots without ingredient quantities show an explicit unavailable comparison. No forecasts are reconstructed retroactively and no orders are submitted.
+
+## Indicative purchase costs
+
+Shortages display net cost estimates at the latest confirmed receipt price for the same stock, account, and unit. Receipt dates remain visible. Missing prices produce an incomplete subtotal; zero shortages need no price. Figures are quantity estimates before supplier pack rounding, minimum order thresholds, delivery costs and VAT, and are not current offers. No automatic purchase or personnel accounting. Estimates are captured with hourly snapshots.
