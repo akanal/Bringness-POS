@@ -1,3 +1,4 @@
+import {handleLanguageCatalog,ensureLanguageDatabase} from "./language-catalog.js";
 import fs from "node:fs";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
@@ -36,6 +37,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await handleLanguageCatalog(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
       if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
@@ -103,6 +105,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
 };
 
 await import("./index.js");
+ensureLanguageDatabase().catch(error=>console.error("Language database startup:",error.code||error.name));
 
 async function migrateWithRetry(){
   for(let attempt=1;attempt<=12;attempt++){
@@ -178,3 +181,4 @@ async function applyAvailabilityRules() {
 }
 setTimeout(applyAvailabilityRules, 3000);
 setInterval(applyAvailabilityRules, 60000).unref();
+
