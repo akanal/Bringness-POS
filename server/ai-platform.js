@@ -1,3 +1,4 @@
+import {registrationMailStatus} from './ai-mail-health.js';
 import {migrateDeliveryNotes,deliveryRoutes} from './ai-delivery-notes.js';
 import {migrateAiPlanning,planningRoutes} from './ai-planning.js';
 import {migrateAiForecast,forecastRoutes,forecastTick} from './ai-forecast.js';
@@ -76,6 +77,7 @@ export async function handleAiPlatform(req,res){
    if(['/api/ai/import/sales','/api/ai/v1/sales','/api/ai/v1/sales/validate'].includes(p)&&req.method==='POST')return send(res,200,await ingestSale(link,await body(req),{dryRun:p.endsWith('/validate')}));
    return send(res,405,{error:'Methode nicht erlaubt'});
   }
+  if(p==='/api/ai/registration-status'&&req.method==='GET')return send(res,200,await registrationMailStatus());
   if(p==='/api/ai/public'&&req.method==='GET')return send(res,200,{launch:await settings()});
   if(p==='/api/ai/register'&&req.method==='POST'){
    if(!await rate('signup-ip:'+req.socket.remoteAddress,30))return send(res,429,{error:'Bitte später erneut versuchen.'});

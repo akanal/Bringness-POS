@@ -74,7 +74,7 @@ jobs:
             node server/ai-tests/integration.mjs
             node --check server/ai-suppliers.js
             npm ci --ignore-scripts --no-audit --no-fund
-            node --test server/ai-delivery-core.test.js server/ai-delivery-ocr.test.js server/ai-delivery-suggestions.test.js
+            node --test server/ai-delivery-core.test.js server/ai-delivery-ocr.test.js server/ai-delivery-suggestions.test.js server/ai-mail-health.test.js
           fi
       - name: Run authenticated server operation
         if: steps.connection.outputs.ready == 'true'
