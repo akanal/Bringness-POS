@@ -1,3 +1,4 @@
+import {purchasingPlan,procurementDraft} from './ai-procurement.js';
 import {registrationMailStatus} from './ai-mail-health.js';
 import {migrateDeliveryNotes,deliveryRoutes} from './ai-delivery-notes.js';
 import {migrateAiPlanning,planningRoutes} from './ai-planning.js';
@@ -159,12 +160,8 @@ export async function handleAiPlatform(req,res){
    const commissions=(await pool.query("SELECT o.id,o.product_name,o.net_cents,o.commission_bps,o.commission_cents,o.status,o.created_at,p.reference,p.recorded_at FROM ai_orders o LEFT JOIN ai_commission_payments p ON p.order_id=o.id WHERE o.supplier_id=$1 ORDER BY o.created_at DESC LIMIT 1000",[u.id])).rows;
    const totals=(await pool.query("SELECT COALESCE(sum(o.commission_cents) FILTER(WHERE o.status IN ('sent','accepted')),0)::text pending,COALESCE(sum(o.commission_cents) FILTER(WHERE o.status='received' AND p.order_id IS NULL),0)::text outstanding,COALESCE(sum(p.amount_cents),0)::text paid FROM ai_orders o LEFT JOIN ai_commission_payments p ON p.order_id=o.id WHERE o.supplier_id=$1",[u.id])).rows[0];return send(res,200,{commissions,totals,commissionBps:200});
   }
-  if(p==='/api/ai/purchasing'&&req.method==='GET'){
-   if(u.role!=='restaurant')return send(res,403,{error:'Nur Restaurants haben Einkaufslisten.'});
-   const horizon=Number(url.searchParams.get('days')||7);if(!Number.isInteger(horizon)||horizon<1||horizon>30)fail('Planungshorizont: 1 bis 30 Tage');
-   const rows=(await pool.query("SELECT s.*,l.name location_name,COALESCE((SELECT sum(-e.delta) FROM ai_sale_effects e JOIN ai_sale_events v ON v.id=e.event_id WHERE e.stock_id=s.id AND v.created_at>=now()-interval '28 days'),0) consumption,COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted' AND NOT o.unavailable AND COALESCE(o.confirmed_delivery_date,o.delivery_date)>=(now() AT TIME ZONE 'Europe/Berlin')::date AND NOT EXISTS(SELECT 1 FROM ai_order_replacements r WHERE r.order_id=o.id AND r.status='pending') AND COALESCE(o.confirmed_delivery_date,o.delivery_date)<=((now() AT TIME ZONE 'Europe/Berlin')::date+($2::int-1))),0) incoming FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY l.name,s.name LIMIT 1000",[u.id,horizon])).rows;
-   const items=[];for(const row of rows){const daily=Math.max(0,Number(row.consumption))/28,target=Math.max(Number(row.minimum),daily*horizon),shortage=Math.ceil(Math.max(0,target-Number(row.quantity)-Number(row.incoming))*1000)/1000;if(!shortage)continue;const offers=(await pool.query("SELECT p.id,p.name,p.pack_quantity,p.price_cents,p.minimum_packs,s.business_name,s.minimum_order_cents,s.delivery_area,s.delivery_terms FROM ai_products p JOIN ai_accounts s ON s.id=p.supplier_id WHERE p.active AND p.available AND s.status='active' AND p.unit=$1 AND lower(p.name)=lower($2) ORDER BY p.price_cents/p.pack_quantity LIMIT 5",[row.unit,row.name])).rows.map(o=>{const packs=Math.max(Number(o.minimum_packs),Math.ceil(shortage/Number(o.pack_quantity)));return {...o,packs,netCents:packs*Number(o.price_cents)}});items.push({...row,daily,target,shortage,offers})}return send(res,200,{days:horizon,historyDays:28,items});
-  }
+  if(p==='/api/ai/purchasing'&&req.method==='GET')return send(res,200,await purchasingPlan(u,Number(url.searchParams.get('days')||7),{offers:url.searchParams.get('mode')!=='self'}));
+  if(p==='/api/ai/procurement-draft'&&req.method==='POST')return send(res,200,await procurementDraft(u,await body(req)));
   if(p==='/api/ai/profile'&&req.method==='POST'){
    const b=await body(req),name=text(b.name,100),business=text(b.businessName);if(!name||!business)fail('Name und Firmenname erforderlich');
    const minimum=money(b.minimumOrderCents||0);if(!['basic','pro'].includes(b.shopPlan||'basic'))fail('Ungültiger Shop');
