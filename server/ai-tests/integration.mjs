@@ -101,6 +101,16 @@ assert.equal((await call('orders/'+placed.order.id+'/accept',{},tokens.buyer)).s
 assert.equal((await call('orders/'+placed.order.id+'/receive',{},tokens.other)).status,404);
 assert.equal((await call('orders/'+placed.order.id+'/accept',{},tokens.supplier)).status,200);
 assert.equal((await call('purchasing',null,tokens.buyer)).items.length,0);
+// Confirmed delivery timing overrides the requested date. Seven days include today.
+await query("UPDATE ai_orders SET confirmed_delivery_date=(now() AT TIME ZONE 'Europe/Berlin')::date+7 WHERE id=$1",[placed.order.id]);
+assert.equal((await call('purchasing?days=7',null,tokens.buyer)).items.find(x=>x.id===st.id).shortage,8);
+assert.equal((await call('purchasing?days=8',null,tokens.buyer)).items.length,0);
+await query("UPDATE ai_orders SET confirmed_delivery_date=(now() AT TIME ZONE 'Europe/Berlin')::date+6 WHERE id=$1",[placed.order.id]);
+assert.equal((await call('purchasing?days=7',null,tokens.buyer)).items.length,0);
+await query("UPDATE ai_orders SET confirmed_delivery_date=(now() AT TIME ZONE 'Europe/Berlin')::date WHERE id=$1",[placed.order.id]);
+assert.equal((await call('purchasing?days=1',null,tokens.buyer)).items.length,0);
+await query('UPDATE ai_orders SET confirmed_delivery_date=NULL WHERE id=$1',[placed.order.id]);
+
 assert.equal((await call('orders/'+placed.order.id+'/receive',{},tokens.buyer)).status,200);
 assert.equal((await call('orders/'+placed.order.id+'/receive',{},tokens.buyer)).status,200);
 const ledger=await call('commissions',null,tokens.supplier);assert.equal(Number(ledger.totals.outstanding),40);assert.equal(ledger.commissionBps,200);
