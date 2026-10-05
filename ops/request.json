@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "ai-confirmation-review-20261005-1427"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "744fc5f93c4a069413d7b88b183dcebe060f81a5",
+  "requestId": "ai-confirmation-live-20261005-1426"
 }
