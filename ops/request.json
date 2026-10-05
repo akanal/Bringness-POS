@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "ai-tariffs-review-20261005"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "c61f78a04ff7c55c83933d3132766d228ae9d78f",
+  "requestId": "ai-tariffs-live-20261005-0834"
 }
