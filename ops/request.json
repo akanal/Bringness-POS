@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "ai-purchasing-review-20261005-1415"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "f2abebf8d4fec01f664d7297a7e7b078ac72a2bc",
+  "requestId": "ai-purchasing-live-20261005-1415"
 }
