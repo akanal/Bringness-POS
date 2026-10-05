@@ -1,6 +1,5 @@
 {
-  "operation": "deploy",
-  "target": "ai",
-  "revision": "07533fafcb30f5b0b77e05f32d979cceeade9b31",
-  "requestId": "ai-subscriptions-live-20261005-0930"
+  "operation": "status",
+  "target": "all",
+  "requestId": "pos-recovery-review-20261005"
 }
