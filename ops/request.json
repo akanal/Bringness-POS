@@ -1,6 +1,5 @@
 {
-  "operation": "deploy",
-  "target": "pos",
-  "revision": "4efc72e6baf112d47596500563b947ba61b6581b",
-  "requestId": "pos-recovery-live-20261005-1023"
+  "operation": "status",
+  "target": "all",
+  "requestId": "ai-cart-review-20261005"
 }
