@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "ai-supplier-orders-review-20261005-1530"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "e1e019f763d525506bbe074b1cdc881561a2ae10",
+  "requestId": "ai-supplier-orders-live-20261005-1532"
 }
