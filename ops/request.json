@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "ai-subscriptions-review-20261005"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "07533fafcb30f5b0b77e05f32d979cceeade9b31",
+  "requestId": "ai-subscriptions-live-20261005-0930"
 }
