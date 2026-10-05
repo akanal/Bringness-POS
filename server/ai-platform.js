@@ -266,6 +266,7 @@ export async function handleAiPlatform(req,res){
     if(match[2]==='receive'&&u.id===o.buyer_id&&o.status==='received'){await c.query('COMMIT');return send(res,200,{ok:true})}
     if(!mayActOnOrder(u,o,match[2])){await c.query('ROLLBACK');return send(res,409,{error:'Aktion für diesen Status nicht möglich'})}
     if(['accept','receive'].includes(match[2]))await ensureOrderReady(c,o);
+    if(match[2]==='receive'&&(await c.query('SELECT id FROM ai_delivery_notes WHERE account_id=$1 AND supplier_order_id=$2',[u.id,o.supplier_order_id||o.id])).rowCount)throw Object.assign(new Error('Verknüpften Lieferschein im gemeinsamen Wareneingang des Auftrags bestätigen'),{status:409});
     if(match[2]==='accept'&&!await supplierMayTrade(o.supplier_id)){await c.query('ROLLBACK');return send(res,409,{error:'SEPA-Freigabe erforderlich.'})}
     const status={accept:'accepted',receive:'received',cancel:'cancelled'}[match[2]];if(status==='cancelled')await resolveOrderProblems(c,o.id);
     if(status==='received'){const delta=Number(o.pack_quantity)*o.packs;await c.query('UPDATE ai_stock SET quantity=quantity+$2 WHERE id=$1',[o.stock_id,delta]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,order_id) VALUES($1,$2,$3,'Wareneingang',$4)",[o.stock_id,u.id,delta,o.id])}

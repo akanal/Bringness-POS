@@ -1,6 +1,5 @@
 {
-  "operation": "deploy",
-  "target": "ai",
-  "revision": "619bf8dc4abc3bc2cd699ce1dd5575004135b09a",
-  "requestId": "ai-layout-live-20261005-1550"
+  "operation": "status",
+  "target": "all",
+  "requestId": "linked-receipts-status-20261005"
 }
