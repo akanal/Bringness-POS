@@ -1,3 +1,4 @@
+import {centerPushConfiguration,saveGuestSubscription} from './center-guest-push.js';
 import {exportCenterTableQr} from './center-table-qr.js';
 import {visibleCenterProducts} from './center-availability.js';
 import crypto from 'node:crypto';
@@ -33,6 +34,22 @@ export function createCenterHandler(pool) {
     const guest = p.startsWith('/api/v1/guest/center/');
     if (!guest && p !== '/api/v1/centers' && !p.startsWith('/api/v1/centers/')) return false;
     if (guest) {
+      if(p==='/api/v1/guest/center/notification-config'){
+       if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
+       const config=centerPushConfiguration();return send(res,200,{available:!!config,...(config||{})});
+      }
+      if(p==='/api/v1/guest/center/notifications'){
+       if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
+       if(!centerPushConfiguration())return send(res,503,{error:'Gastbenachrichtigungen sind noch nicht eingerichtet.'});
+       let data;try{data=await body(req);}catch{return send(res,400,{error:'Ungültige Eingabe'});}
+       try{
+        const saved=await saveGuestSubscription(pool,data.token,data.subscription,data.consent);
+        return saved?send(res,200,{subscribed:true}):send(res,404,{error:'Bestellung nicht gefunden'});
+       }catch(error){
+        if(error.message.startsWith('INVALID_')||error instanceof TypeError)return send(res,400,{error:'Benachrichtigungsfreigabe oder Gerät ungültig.'});
+        throw error;
+       }
+      }
       if(p==='/api/v1/guest/center/status'){
         if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
         const statusToken=url.searchParams.get('token')||'';
