@@ -155,3 +155,29 @@ test('guest notification enrollment requires a click and binds the status token'
  assert.equal(saved.action,'disable');assert.equal(await page.evaluate(()=>window.permissionCalls),1);assert.equal(await page.locator('#notify').isVisible(),true);
  }finally{await browser.close();}
 });
+
+test('Center invitation requires login and explicit acceptance and rejects malformed links',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ let accepts=0;
+ await page.route('https://center.test/**',async route=>{
+ const req=route.request(),url=new URL(req.url());
+ if(url.pathname==='/center/join.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/join.html',import.meta.url),'utf8')});
+ assert.equal(url.pathname,'/api/v1/centers/invitations/accept');
+ assert.equal(req.method(),'POST');assert.equal(req.headers().authorization,'Bearer operator');
+ assert.deepEqual(req.postDataJSON(),{token:'a'.repeat(64)});accepts++;
+ return route.fulfill({contentType:'application/json',body:JSON.stringify({joined:true})});
+ });
+ await page.goto('https://center.test/center/join.html#token=invalid');
+ assert.equal(await page.locator('#accept').isDisabled(),true);assert.equal(accepts,0);
+ await page.goto('https://center.test/center/join.html#token='+'a'.repeat(64));
+ await page.locator('#accept').click();
+ await page.locator('#status').getByText('Bitte zuerst mit dem Betreiberkonto in der Kasse anmelden.',{exact:true}).waitFor();
+ assert.equal(accepts,0);
+ await page.evaluate(()=>localStorage.setItem('bringness-pos-token','operator'));
+ await page.locator('#accept').click();
+ await page.locator('#status').getByText('Dein Restaurant ist dem Center zugeordnet. Die Händleranbindung wird separat eingerichtet.',{exact:true}).waitFor();
+ assert.equal(accepts,1);assert.equal(await page.locator('#accept').isVisible(),false);assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
