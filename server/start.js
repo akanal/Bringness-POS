@@ -1,8 +1,9 @@
 import {handleLanguageCatalog,ensureLanguageDatabase} from "./language-catalog.js";
 import fs from "node:fs";
 import {handleQrService,migrateQrService} from "./qr-service.js";
-import {runtimeMode, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
+import {runtimeMode, configurePosOrigin, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
 const appMode = runtimeMode();
+configurePosOrigin(process.env, appMode);
 const aiFeatures = await loadAiFeatures(appMode);
 import { Readable } from "node:stream";
 import http from "node:http";
@@ -181,4 +182,5 @@ async function applyAvailabilityRules() {
 }
 setTimeout(applyAvailabilityRules, 3000);
 setInterval(applyAvailabilityRules, 60000).unref();
+
 
