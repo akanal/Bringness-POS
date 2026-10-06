@@ -33,7 +33,7 @@ export function createCenterHandler(pool) {
         if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
         const statusToken=url.searchParams.get('token')||'';
         if(!/^[a-f0-9]{64}$/.test(statusToken))return send(res,404,{error:'Bestellung nicht gefunden'});
-        const order=(await pool.query(`SELECT o.status,r.name restaurant_name,cp.ready_at
+        const order=(await pool.query(`SELECT o.status,r.name restaurant_name,cp.paid_at,cp.released_at,cp.preparation_started_at,cp.ready_at
           FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id JOIN restaurants r ON r.id=cp.restaurant_id
           WHERE cp.guest_status_token=$1 AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
         return order?send(res,200,{order}):send(res,404,{error:'Bestellung nicht gefunden'});
