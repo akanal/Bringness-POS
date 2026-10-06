@@ -1,3 +1,4 @@
+import {exportCenterTableQr} from './center-table-qr.js';
 import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
 import {recoverGuestPayment} from './center-payment-recovery.js';
 import {saveGuestSubscription,manageGuestSubscription,dispatchCenterGuestPush} from './center-guest-push.js';
@@ -278,5 +279,23 @@ test('database migration and delegated setup lifecycle',async()=>{
  await assert.rejects(acceptCenterInvitation(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},conflictToken),error=>error.code==='23505');
  assert.equal((await db.query('SELECT center_id FROM center_restaurants WHERE restaurant_id=$1',[otherRestaurant])).rows[0].center_id,created.data.center.id);
  assert.equal((await db.query('SELECT accepted_at FROM center_restaurant_invitations WHERE token_hash=$1',[crypto.createHash('sha256').update(conflictToken).digest('hex')])).rows[0].accepted_at,null);
+
+ // The first invited operator can receive setup delegation across companies.
+ const setupRestaurant=crypto.randomUUID();
+ await db.query('INSERT INTO restaurants VALUES($1,$2,$3)',[setupRestaurant,otherCompany,'Setup Restaurant']);
+ const setupInvite=await inviteCenterRestaurant(pool,{id:owner,company_id:company,role:'owner'},secondCenter,setupRestaurant);
+ await acceptCenterInvitation(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},new URL(setupInvite.invitationUrl,'https://example.test').hash.slice('#token='.length));
+ const sc='/'+secondCenter;
+ assert.equal((await call(sc+'/setup','PUT','admin',{action:'approve',userId:otherOwner,restaurantId:setupRestaurant})).status,200);
+ const setupTable=(await call(sc+'/tables','POST','foreign-owner',{name:'Delegated table'})).data.table;
+ assert.ok(setupTable.id);
+ const qrEnv={CENTER_PUBLIC_ORIGIN:'https://pos.example.test'},renderQr=async value=>'<svg>'+value+'</svg>';
+ const delegatedUser={id:otherOwner,company_id:otherCompany,role:'owner'};
+ assert.equal((await exportCenterTableQr(pool,delegatedUser,secondCenter,setupTable.id,qrEnv,renderQr)).status,404);
+ assert.equal((await call(sc+'/setup','PUT','foreign-owner',{action:'complete'})).status,200);
+ const exported=await exportCenterTableQr(pool,delegatedUser,secondCenter,setupTable.id,qrEnv,renderQr);
+ assert.equal(exported.status,200);assert.ok(exported.svg.includes(setupTable.qr_token));
+ assert.equal((await exportCenterTableQr(pool,{id:crypto.randomUUID(),company_id:otherCompany},secondCenter,setupTable.id,qrEnv,renderQr)).status,404);
+ assert.equal((await call(sc+'/tables','POST','foreign-owner',{name:'After delegated lock'})).status,403);
  }finally{await db.close();}
 });
