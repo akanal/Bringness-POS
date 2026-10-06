@@ -1,3 +1,5 @@
+import {configurePosStockLink,processPosStockCommands,syncPosStockAvailability} from './pos-stock-bridge-core.js';
+import {kitchenAction,recipeAvailability} from './ai-stock-lifecycle.js';
 import {blockUnavailableRecipes} from './ai-stock-lifecycle.js';
 import crypto from 'node:crypto';
 import {recipeCost} from './ai-recipe-cost-core.js';
@@ -53,9 +55,23 @@ export async function recipeRoutes(p,method,b,u,url=new URL("http://local")){
  if(p==='/api/ai/pos-products'&&method==='GET'){const connectorId=checkId(url.searchParams.get('connectorId'));const link=(await pool.query("SELECT * FROM ai_connectors WHERE id=$1 AND account_id=$2 AND kind='pos'",[connectorId,u.id])).rows[0];if(!link){const e=new Error('Kassenanbindung nicht gefunden');e.status=404;throw e}if(!(await platformPool.query("SELECT 1 FROM users u JOIN restaurants r ON r.company_id=u.company_id WHERE u.id=$1 AND r.id=$2 AND u.company_id=$3 AND u.status='active' AND u.role IN ('owner','admin') AND NOT COALESCE(u.must_change_password,false)",[link.pos_user_id,link.pos_restaurant_id,link.pos_company_id])).rowCount){const e=new Error('Inhaberfreigabe der Kasse nicht mehr gültig');e.status=403;throw e}const products=(await platformPool.query('SELECT id,name FROM products WHERE restaurant_id=$1 AND active ORDER BY name,id',[link.pos_restaurant_id])).rows;const recipes=(await pool.query('SELECT external_code,id,name FROM ai_recipes WHERE account_id=$1 AND location_id=$2 AND active AND EXISTS(SELECT 1 FROM ai_recipe_items WHERE recipe_id=ai_recipes.id)',[u.id,link.location_id])).rows;return {connectorId,locationId:link.location_id,products:products.map(p=>({...p,recipeId:recipes.find(r=>r.external_code===p.id)?.id||null})),unmapped:products.filter(p=>!recipes.some(r=>r.external_code===p.id)).length}}
  if(p==='/api/ai/connector-status'&&method==='POST'){
   checkId(b.id);if(typeof b.active!=='boolean')fail('Status erforderlich');if(b.consumptionMode!==undefined&&!['sales','lifecycle'].includes(b.consumptionMode))fail('Ungültiger Verbrauchsmodus');
+  const preview=(await pool.query('SELECT * FROM ai_connectors WHERE id=$1 AND account_id=$2',[b.id,u.id])).rows[0];if(!preview)fail('Anbindung nicht gefunden');
+  const previewMode=b.consumptionMode??preview.consumption_mode;
+  if(preview.kind==='pos'&&(previewMode==='lifecycle'||preview.consumption_mode==='lifecycle')){
+   if(!(await platformPool.query("SELECT 1 FROM users WHERE id=$1 AND company_id=$2 AND status='active' AND role IN ('owner','admin') AND NOT coalesce(must_change_password,false)",[preview.pos_user_id,preview.pos_company_id])).rowCount)fail('Inhaberfreigabe der Kasse nicht mehr gültig');
+   if(previewMode!==preview.consumption_mode&&(await pool.query('SELECT 1 FROM ai_kitchen_orders WHERE connector_id=$1 UNION ALL SELECT 1 FROM ai_sale_events WHERE connector_id=$1 LIMIT 1',[preview.id])).rowCount)fail('Verbrauchsmodus nach ersten Buchungen nicht wechselbar. Neue Verbindung anlegen');
+   if(b.active&&previewMode==='lifecycle'){
+    const products=(await platformPool.query('SELECT id FROM products WHERE restaurant_id=$1 AND active',[preview.pos_restaurant_id])).rows;
+    const mapped=(await pool.query('SELECT external_code FROM ai_recipes WHERE account_id=$1 AND location_id=$2 AND active AND EXISTS(SELECT 1 FROM ai_recipe_items WHERE recipe_id=ai_recipes.id)',[u.id,preview.location_id])).rows;
+    if(products.some(p=>!mapped.some(r=>r.external_code===p.id)))fail('Zuerst alle aktiven Kassenartikel mit einem Rezept zuordnen');
+    if((await pool.query("SELECT 1 FROM ai_connectors WHERE account_id=$1 AND location_id=$2 AND active AND id<>$3 LIMIT 1",[u.id,preview.location_id,preview.id])).rowCount)fail('Für diesen Lagerablauf nur eine aktive Standortanbindung verwenden');
+   }
+   await configurePosStockLink(platformPool,preview,b.active&&previewMode==='lifecycle');
+  }
   const c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);const link=(await c.query('SELECT * FROM ai_connectors WHERE id=$1 AND account_id=$2 FOR UPDATE',[b.id,u.id])).rows[0];if(!link)fail('Anbindung nicht gefunden');
-   const mode=b.consumptionMode??link.consumption_mode;if(link.kind==='pos'&&mode==='lifecycle')fail('Die bestehende POS-Synchronisierung unterstützt derzeit nur abgeschlossene Verkäufe');
+   const mode=b.consumptionMode??link.consumption_mode;
    if(link.consumption_mode!==mode&&(await c.query('SELECT 1 FROM ai_kitchen_orders WHERE connector_id=$1 UNION ALL SELECT 1 FROM ai_sale_events WHERE connector_id=$1 LIMIT 1',[link.id])).rowCount)fail('Verbrauchsmodus nach ersten Buchungen nicht wechselbar. Neue Verbindung anlegen');
+   if(b.active&&(await c.query("SELECT 1 FROM ai_connectors WHERE account_id=$1 AND location_id=$2 AND id<>$3 AND active AND ($4='lifecycle' OR consumption_mode='lifecycle') LIMIT 1",[u.id,link.location_id,link.id,mode])).rowCount)fail('Reservierung & Zubereitung benötigt eine eindeutige Standortanbindung');
    if(b.active&&mode==='sales'&&(await c.query("SELECT 1 FROM ai_kitchen_orders WHERE account_id=$1 AND location_id=$2 AND state='accepted' LIMIT 1",[u.id,link.location_id])).rowCount)fail('Offene Küchenreservierungen zuerst bearbeiten oder stornieren');
    await c.query('UPDATE ai_connectors SET active=$3,consumption_mode=$4 WHERE id=$1 AND account_id=$2',[link.id,u.id,b.active,mode]);await c.query('COMMIT');return {ok:true};
   }catch(e){await c.query('ROLLBACK');if(e.code==='23505')fail('Diese Kasse hat bereits eine aktive Anbindung');throw e}finally{c.release()}
@@ -82,3 +98,8 @@ export async function syncPosSales(){if(running)return;running=true;try{
  }catch(e){console.error('AI sales sync failed:',e.code||e.name)}finally{running=false}}
 
 
+
+let kitchenSyncRunning=false;
+export async function syncPosKitchen(){if(kitchenSyncRunning)return;kitchenSyncRunning=true;try{await processPosStockCommands(platformPool,aiPool(),kitchenAction);
+ await syncPosStockAvailability(platformPool,aiPool(),recipeAvailability);
+}catch(e){console.error('AI kitchen sync failed:',e.code||e.name)}finally{kitchenSyncRunning=false}}

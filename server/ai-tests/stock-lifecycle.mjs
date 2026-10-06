@@ -14,7 +14,7 @@ CREATE TABLE ai_locations(id uuid PRIMARY KEY,account_id uuid REFERENCES ai_acco
 CREATE TABLE ai_stock(id uuid PRIMARY KEY,account_id uuid REFERENCES ai_accounts(id),location_id uuid REFERENCES ai_locations(id),name text,unit text,quantity numeric(15,3),minimum numeric(15,3));
 CREATE TABLE ai_recipes(id uuid PRIMARY KEY,account_id uuid REFERENCES ai_accounts(id),location_id uuid REFERENCES ai_locations(id),external_code text,name text,active boolean DEFAULT true);
 CREATE TABLE ai_recipe_items(recipe_id uuid REFERENCES ai_recipes(id),stock_id uuid REFERENCES ai_stock(id),quantity numeric(15,3));
-CREATE TABLE ai_connectors(id uuid PRIMARY KEY,account_id uuid,location_id uuid,active boolean);
+CREATE TABLE ai_connectors(id uuid PRIMARY KEY,account_id uuid,location_id uuid,active boolean,kind text);
 CREATE TABLE ai_stock_moves(id bigserial PRIMARY KEY,stock_id uuid,actor_id uuid,delta numeric(15,3),reason text,kind text,quantity_before numeric(15,3),quantity_after numeric(15,3),created_at timestamptz DEFAULT now());
 CREATE TABLE ai_audit(id bigserial PRIMARY KEY,actor_id uuid,target_id uuid,action text,detail jsonb);
 `);

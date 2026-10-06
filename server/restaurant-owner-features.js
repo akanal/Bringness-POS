@@ -145,7 +145,7 @@ export async function handleRestaurantOwnerFeature(req,res){
       if(existing.rowCount){await c.query("COMMIT");return json(res,200,{orderId:existing.rows[0].id,totalCents:existing.rows[0].total_cents,alreadyReceived:true})}
       const recent=await c.query("SELECT count(*)::int n FROM orders WHERE table_id=$1 AND source='qr' AND created_at>now()-interval '60 seconds'",[t.id]);
       if(recent.rows[0].n>=3){await c.query("ROLLBACK");return json(res,429,{error:"Zu viele Bestellungen für diesen Tisch. Bitte eine Minute warten oder das Personal ansprechen."})}
-      const pq=await c.query("SELECT id,name,price_cents,tax_rate FROM products WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND active=true",[ids,t.restaurant_id]);
+      const pq=await c.query("SELECT id,name,price_cents,tax_rate FROM products WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND active=true AND ai_stock_available=true",[ids,t.restaurant_id]);
       if(pq.rowCount!==ids.length){await c.query("ROLLBACK");return json(res,400,{error:"Artikel nicht verfügbar"})}
       const pm=new Map(pq.rows.map(z=>[z.id,z])); let total=0; const cleaned=[];
       for(const item of items){

@@ -17,7 +17,7 @@ import {migrateAiAds,adRoutes} from './ai-ads.js';
 import {migrateAiSuppliers,supplierAccountRoutes,supplierPublicRoutes} from './ai-suppliers.js';
 import crypto from 'node:crypto';
 import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';
-import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales} from './ai-recipes.js';
+import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales,syncPosKitchen} from './ai-recipes.js';
 import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';
 import {supplierRoles,units,uuid,hash,passwordHash,passwordMatches,validPassword,passwordMessage,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
 const pool={query:(...args)=>aiPool().query(...args),connect:()=>aiPool().connect()};
@@ -293,3 +293,5 @@ setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast 
 
 
 
+
+setInterval(()=>{if(aiReady)syncPosKitchen()},3000).unref();

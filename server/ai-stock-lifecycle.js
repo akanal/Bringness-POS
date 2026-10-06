@@ -27,7 +27,9 @@ export async function kitchenAction(pool,u,b,connector=null){
  const locationId=connector?connector.location_id:id(b.locationId),externalId=label(b.orderId);
  const why=String(b.reason||'').trim();if(why.length>500||(['cancel','return'].includes(action)&&!why))fail('Begründung erforderlich');
  if(action==='return'&&b.confirmed!==true)fail('Unverbrauchte Zutaten ausdrücklich bestätigen');
- const fingerprint=crypto.createHash('sha256').update(JSON.stringify({action,locationId,externalId,connectorId:connector?.id||null,items:b.items,lines:b.lines,reason:why})).digest('hex'),c=await pool.connect();
+ const normalizedItems=action==='accept'&&Array.isArray(b.items)?b.items.map(i=>({productCode:label(i.productCode),quantity:stockUnits(i.quantity)/1000})).sort((a,z)=>a.productCode.localeCompare(z.productCode)):undefined;
+ const normalizedLines=action==='return'&&Array.isArray(b.lines)?b.lines.map(i=>({stockId:id(i.stockId),quantity:stockUnits(i.quantity)/1000})).sort((a,z)=>a.stockId.localeCompare(z.stockId)):undefined;
+ const fingerprint=crypto.createHash('sha256').update(JSON.stringify({action,locationId,externalId,connectorId:connector?.id||null,items:normalizedItems,lines:normalizedLines,reason:why})).digest('hex'),c=await pool.connect();
  try{
   await c.query('BEGIN');const account=(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active' FOR UPDATE",[u.id])).rows[0];if(!account)fail('Restaurantkonto nicht aktiv',403);
   if(connector&&!(await c.query("SELECT 1 FROM ai_connectors WHERE id=$1 AND account_id=$2 AND location_id=$3 AND active AND consumption_mode='lifecycle'",[connector.id,u.id,locationId])).rowCount)fail('Anbindung nicht aktiv',403);
@@ -35,7 +37,7 @@ export async function kitchenAction(pool,u,b,connector=null){
   if(!(await c.query('SELECT 1 FROM ai_locations WHERE id=$1 AND account_id=$2',[locationId,u.id])).rowCount)fail('Standort nicht gefunden',404);
   let order=(await c.query('SELECT * FROM ai_kitchen_orders WHERE account_id=$1 AND location_id=$2 AND connector_id IS NOT DISTINCT FROM $3::uuid AND external_id=$4 FOR UPDATE',[u.id,locationId,connector?.id||null,externalId])).rows[0];
   if(action==='accept'){
-   if(!connector&&(await c.query("SELECT 1 FROM ai_connectors WHERE account_id=$1 AND location_id=$2 AND active AND consumption_mode='sales'",[u.id,locationId])).rowCount)fail('Manuelle Küchenbuchung würde den aktiven Verkaufsimport doppeln. Zuerst einen eindeutigen Buchungsweg wählen.',409);
+   if(!connector&&(await c.query("SELECT 1 FROM ai_connectors WHERE account_id=$1 AND location_id=$2 AND active AND (consumption_mode='sales' OR kind='pos')",[u.id,locationId])).rowCount)fail('Manuelle Küchenbuchung würde die aktive Kassenanbindung doppeln. Zuerst einen eindeutigen Buchungsweg wählen.',409);
    if(!Array.isArray(b.items)||!b.items.length||b.items.length>100)fail('1 bis 100 Gerichte erforderlich');
    const items=b.items.map(i=>({productCode:label(i.productCode),quantity:stockUnits(i.quantity)/1000})).sort((a,z)=>a.productCode.localeCompare(z.productCode));if(items.some(i=>i.quantity<=0))fail('Positive Portionsmenge erforderlich');
    if(order){if(JSON.stringify(order.items)!==JSON.stringify(items))fail('Bestellung bereits mit anderen Positionen erfasst',409)}
@@ -63,7 +65,10 @@ export async function kitchenRoutes(pool,path,method,b,u,url){
  if(!['/api/ai/kitchen-orders','/api/ai/recipe-availability','/api/ai/recipe-release'].includes(path))return null;
  if(u.role!=='restaurant')fail('Nur Restaurantinhaber haben Zugriff',403);
  if(path==='/api/ai/kitchen-orders'&&method==='GET')return {orders:(await pool.query('SELECT o.*,l.name location_name FROM ai_kitchen_orders o JOIN ai_locations l ON l.id=o.location_id WHERE o.account_id=$1 ORDER BY o.created_at DESC LIMIT 200',[u.id])).rows};
- if(path==='/api/ai/kitchen-orders'&&method==='POST')return kitchenAction(pool,u,b);
+ if(path==='/api/ai/kitchen-orders'&&method==='POST'){
+  if(b.connectorId){if(b.action!=='return')fail('Kassenauftrag wird in der Kasse gesteuert',403);const link=(await pool.query("SELECT * FROM ai_connectors WHERE id=$1 AND account_id=$2 AND active AND consumption_mode='lifecycle'",[id(b.connectorId),u.id])).rows[0];if(!link)fail('Lageranbindung nicht aktiv',403);return kitchenAction(pool,u,b,link)}
+  return kitchenAction(pool,u,b);
+ }
  if(path==='/api/ai/recipe-availability'&&method==='GET')return {recipes:await recipeAvailability(pool,u.id)};
  if(path==='/api/ai/recipe-release'&&method==='POST'){
   const recipeId=id(b.id),c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);const r=(await c.query('SELECT * FROM ai_recipes WHERE id=$1 AND account_id=$2 FOR UPDATE',[recipeId,u.id])).rows[0];if(!r)fail('Rezept nicht gefunden',404);const ingredients=(await c.query('SELECT i.quantity,s.quantity stock_quantity,s.reserved_quantity,s.id FROM ai_recipe_items i JOIN ai_stock s ON s.id=i.stock_id WHERE i.recipe_id=$1 AND s.account_id=$2 AND s.location_id=$3 ORDER BY s.id FOR UPDATE OF s',[recipeId,u.id,r.location_id])).rows;if(!ingredients.length||ingredients.some(i=>Number(i.stock_quantity)-Number(i.reserved_quantity)<Number(i.quantity)))fail('Zutaten reichen weiterhin nicht für eine Portion',409);await c.query('UPDATE ai_recipes SET stock_blocked=false WHERE id=$1',[recipeId]);await c.query("INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,'recipe_released')",[u.id,recipeId]);await c.query('COMMIT');return {ok:true}}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
