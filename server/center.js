@@ -88,6 +88,7 @@ export async function migrateCenter() {
       subscription jsonb NOT NULL,endpoint_hash text NOT NULL,
       updated_at timestamptz NOT NULL DEFAULT now()
     );
+    ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS provider_status text;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS preparation_started_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS ready_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS guest_status_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');
