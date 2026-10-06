@@ -1,6 +1,20 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="status" role="status">Status wird geladen …</p><button id="refresh">Aktualisieren</button><p>Bitte diese Seite geöffnet lassen. Bei geschlossener Seite erfolgt über diese Anzeige keine Benachrichtigung.</p></main><script type="module">
-const token=new URLSearchParams(location.hash.slice(1)).get('token')||'';const state=document.getElementById('status');let timer;
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="status" role="status">Status wird geladen …</p><p id="connection" role="status"></p><button id="refresh">Aktualisieren</button><p>Bitte diese Seite geöffnet lassen. Bei geschlossener Seite erfolgt über diese Anzeige keine Benachrichtigung.</p></main><script type="module">
+const token=new URLSearchParams(location.hash.slice(1)).get('token')||'';const state=document.getElementById('status');const connection=document.getElementById('connection');let timer,loading=false,finished=false;
 const labels={payment_pending:'Zahlung wird geprüft.',kitchen:'Deine Bestellung wartet auf die Zubereitung.',preparing:'Deine Bestellung wird zubereitet.',ready:'Deine Bestellung ist abholbereit.',cancelled:'Deine Bestellung wurde storniert.'};
-async function load(){clearTimeout(timer);try{const r=await fetch('/api/v1/guest/center/status?token='+encodeURIComponent(token),{cache:'no-store',referrerPolicy:'no-referrer'});const data=await r.json();if(!r.ok)throw Error(data.error||'Status nicht verfügbar');document.getElementById('restaurant').textContent=data.order.restaurant_name;state.textContent=labels[data.order.status]||'Status wird geprüft.';if(!['ready','cancelled'].includes(data.order.status))timer=setTimeout(load,10000);}catch(e){state.textContent=e.message;}}
+async function load(){
+ if(loading)return;clearTimeout(timer);loading=true;
+ try{
+  const r=await fetch('/api/v1/guest/center/status?token='+encodeURIComponent(token),{cache:'no-store',referrerPolicy:'no-referrer'});
+  const data=await r.json();
+  if(!r.ok){if(r.status===404||r.status===410)finished=true;throw Error(data.error||'Status nicht verfügbar');}
+  document.getElementById('restaurant').textContent=data.order.restaurant_name;
+  state.textContent=labels[data.order.status]||'Status wird geprüft.';
+  connection.textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE');
+  finished=['ready','cancelled'].includes(data.order.status);
+ }catch(e){connection.textContent=finished?e.message:'Verbindung unterbrochen. Der angezeigte Status kann veraltet sein. Wir versuchen es automatisch erneut.';}
+ finally{loading=false;if(!finished&&!document.hidden)timer=setTimeout(load,10000);}
+}
+document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(!document.hidden&&!finished)load();});
+window.addEventListener('online',()=>{if(!finished&&!document.hidden)load();});
 document.getElementById('refresh').onclick=load;await load();
 </script></body></html>
