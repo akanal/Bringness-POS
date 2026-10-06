@@ -1,4 +1,4 @@
-import {centerPushConfiguration,saveGuestSubscription} from './center-guest-push.js';
+import {centerPushConfiguration,saveGuestSubscription,manageGuestSubscription} from './center-guest-push.js';
 import {exportCenterTableQr} from './center-table-qr.js';
 import {visibleCenterProducts} from './center-availability.js';
 import crypto from 'node:crypto';
@@ -40,9 +40,15 @@ export function createCenterHandler(pool) {
       }
       if(p==='/api/v1/guest/center/notifications'){
        if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
-       if(!centerPushConfiguration())return send(res,503,{error:'Gastbenachrichtigungen sind noch nicht eingerichtet.'});
+
        let data;try{data=await body(req);}catch{return send(res,400,{error:'Ungültige Eingabe'});}
        try{
+        if(['status','disable'].includes(data.action)){
+         const result=await manageGuestSubscription(pool,data.token,data.subscription,data.action);
+         return result.found?send(res,200,{subscribed:result.subscribed}):send(res,404,{error:'Bestellung nicht gefunden'});
+        }
+        if(data.action)return send(res,400,{error:'Unbekannte Benachrichtigungsaktion'});
+        if(!centerPushConfiguration())return send(res,503,{error:'Gastbenachrichtigungen sind noch nicht eingerichtet.'});
         const saved=await saveGuestSubscription(pool,data.token,data.subscription,data.consent);
         return saved?send(res,200,{subscribed:true}):send(res,404,{error:'Bestellung nicht gefunden'});
        }catch(error){
