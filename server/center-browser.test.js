@@ -21,7 +21,7 @@ test('center management hides table creation until approval and after completion
  if(req.method()==='PUT'){assert.equal(req.postDataJSON().action,'complete');locked=true;data={ok:true};}
  else data={setup:{can_setup:approved,can_export_qr:locked,setup_completed_at:locked?'now':null},canApprove:false};
  }else if(url.pathname.endsWith('/tables')){
- if(req.method()==='POST'){assert.equal(approved&&!locked,true);tables.push({id:'22222222-2222-4222-8222-222222222222',name:req.postDataJSON().name,qr_token:'a'.repeat(48)});data={table:tables.at(-1)};}else data={tables};
+ if(req.method()==='POST'){assert.equal(approved&&!locked,true);tables.push({id:'22222222-2222-4222-8222-222222222222',name:req.postDataJSON().name,active:true,qr_token:'a'.repeat(48)});data={table:tables.at(-1)};}else data={tables};
  }else throw Error('Unexpected request '+url.pathname);
  return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
  });
