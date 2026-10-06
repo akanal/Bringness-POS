@@ -11,3 +11,10 @@ test('reconciliation matches checkout, order, merchant profile and amount',()=>{
  const match={id:'tr_match',profileId:'pfl_restaurant',amount:{value:'12.50',currency:'EUR'},metadata:{bringnessOrderId:'order',bringnessCheckoutId:'attempt'}};
  assert.equal(matchingCheckoutPayments([match,{...match,profileId:'pfl_other'},{...match,metadata:{bringnessOrderId:'other',bringnessCheckoutId:'attempt'}}],attempt).length,1);
 });
+
+for(const terminal of [{status:'kitchen'},{status:'preparing'},{status:'ready'},{released_at:'now'},...['failed','canceled','expired'].map(provider_status=>({provider_status}))]){
+ test('completed payment retry opens status: '+JSON.stringify(terminal),async()=>{
+ const result=await createCenterMollieCheckout({query:async()=>({rows:[{...terminal,checkout_url:'https://www.mollie.com/checkout/old',guest_status_token:'a'.repeat(64)}]})},'attempt',env,()=>{throw Error('no provider call');});
+ assert.equal(result.statusUrl,'/center/status.html#token='+'a'.repeat(64));assert.equal(result.checkoutUrl,undefined);
+ });
+}
