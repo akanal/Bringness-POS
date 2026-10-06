@@ -303,3 +303,38 @@ test('late '+delayed+' response cannot restore the previous Center view',async()
  }finally{release();await browser.close();}
 });
 }
+
+for(const action of ['invitation','connect']){
+test('late '+action+' result cannot affect another Center selection',async()=>{
+ const browser=await chromium.launch({headless:true});let release;const gate=new Promise(resolve=>{release=resolve;});
+ try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));let mark;const started=new Promise(resolve=>{mark=resolve;});
+ await page.addInitScript(()=>localStorage.setItem('bringness-pos-token','operator'));
+ await page.route('https://center.test/**',async route=>{
+ const url=new URL(route.request().url());let data;
+ if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
+ if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
+ else if(url.pathname==='/api/v1/centers')data={centers:[{id:'old',name:'Vorheriges Center',can_manage:true},{id:'new',name:'Aktuelles Center',can_manage:false}]};
+ else if(url.pathname.endsWith('/restaurants'))data={restaurants:[{id:'restaurant',name:'Restaurant',can_manage:true,contract_status:'signed',payment_status:'verified'}]};
+ else if(url.pathname.endsWith('/setup'))data={setup:{setup_completed_at:'now',can_setup:false,can_export_qr:false},canApprove:false};
+ else if(url.pathname.endsWith('/tables'))data={tables:[]};
+ else if(url.pathname.endsWith('/invitations')||url.pathname.endsWith('/connect')){
+ assert.ok(url.pathname.includes('/old/'));mark();await gate;
+ data=action==='invitation'?{invitationUrl:'/center/join.html#token='+'a'.repeat(64)}:{authorizationUrl:'https://provider.test/authorize'};
+ }else throw Error('Unexpected request');
+ return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/manage.html');
+ await page.locator('#setupStatus').getByText('Ersteinrichtung abgeschlossen.',{exact:true}).waitFor();
+ if(action==='invitation'){await page.locator('#invite input').fill('11111111-1111-4111-8111-111111111111');await page.locator('#invite button').click();}
+ else await page.getByRole('button',{name:'Mollie verbinden'}).click();
+ await started;await page.locator('#centers').selectOption('new');
+ await page.waitForFunction(()=>document.getElementById('setupStatus').textContent==='Ersteinrichtung abgeschlossen.'&&document.getElementById('inviteSection').hidden);
+ const response=page.waitForResponse(r=>r.request().method()==='POST');release();await (await response).finished();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ assert.equal(page.url(),'https://center.test/center/manage.html');
+ assert.equal(await page.locator('#centers').inputValue(),'new');assert.equal(await page.locator('#inviteLink a').count(),0);
+ assert.notEqual(await page.locator('#status').textContent(),'Gespeichert.');assert.deepEqual(errors,[]);
+ }finally{release();await browser.close();}
+});
+}
