@@ -14,7 +14,7 @@
   };
 
   document.documentElement.dataset.bringnessEdition="download";
-  document.title="Bringness POS – Download-Kasse";
+  document.title="Bringness – Download-Kasse";
   sanitizeView();
 
   const apply=()=>{
@@ -25,7 +25,7 @@
     hide('#moreMenu a[href="/#downloads"]');
 
     const eyebrow=document.querySelector('#auth .eyebrow');
-    if(eyebrow) eyebrow.textContent="Bringness POS – Download-Kasse";
+    if(eyebrow) eyebrow.textContent="Bringness – Download-Kasse";
 
     const waiter=document.querySelector('#employeeRole option[value="waiter"]');
     if(waiter) waiter.remove();
@@ -48,3 +48,4 @@
   const observer=new MutationObserver(apply);
   observer.observe(document.documentElement,{subtree:true,childList:true});
 })();
+
