@@ -13,7 +13,7 @@
       status.textContent='Gegebener Betrag zu niedrig. Bitte Betrag im Zahlenfeld korrigieren oder mit der Rücktaste löschen.';
       return;
     }
-    if(method==='card'&&!window.confirm('Wurde die Kartenzahlung über ein externes Terminal erfolgreich bestätigt? Bringness POS löst derzeit keine Terminalzahlung aus.')){
+    if(method==='card'&&!window.confirm('Wurde die Kartenzahlung über ein externes Terminal erfolgreich bestätigt? Bringness löst derzeit keine Terminalzahlung aus.')){
       status.textContent='Kartenzahlung abgebrochen. Es wurde kein Verkauf gespeichert.';
       return;
     }
@@ -46,3 +46,4 @@
   }
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',bind):bind();
 })();
+
