@@ -126,6 +126,10 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>{throw Error('no duplicate release')})).alreadyReleased,true);
  assert.equal((await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'preparing')).ok,true);
  assert.equal((await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'ready')).ok,true);
+ const paidRetry=await guestCenterCheckout(pool,guestRequest,guestEnv,()=>{throw Error('paid retry must not call provider');});
+ assert.match(paidRetry.statusUrl,/^\/center\/status.html#token=[a-f0-9]{64}$/);
+ assert.equal(paidRetry.checkoutUrl,undefined);assert.equal(paidRetry.orderId,guestResult.orderId);
+
  const guestToken=(await db.query('SELECT guest_status_token FROM center_order_payments WHERE order_id=$1',[guestResult.orderId])).rows[0].guest_status_token;
  const statusReq=Readable.from([]);Object.assign(statusReq,{url:'/api/v1/guest/center/status?token='+guestToken,method:'GET',headers:{}});
  const statusRes={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};await handler(statusReq,statusRes);
