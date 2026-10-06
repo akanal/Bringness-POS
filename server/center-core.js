@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {verifyAndReleaseMolliePayment} from './center-mollie-payment.js';
 import {verifyMerchantProfile} from './center-mollie-merchant.js';
 import {completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import {beginRestaurantPaymentConnect} from './center-payment-providers.js';
@@ -74,6 +75,13 @@ export function createCenterHandler(pool) {
       const nonce=String(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith('center-mollie-nonce='))?.slice('center-mollie-nonce='.length)||'';
       const {status,...data}=await completeRestaurantMollieConnect(pool,Object.fromEntries(url.searchParams),nonce);
       res.setHeader('set-cookie','center-mollie-nonce=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/centers/mollie/callback; Max-Age=0');return send(res,status,data);
+    }
+    if(p==='/api/v1/centers/mollie/webhook'){
+      if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
+      let rawBody='';for await(const part of req){rawBody+=part;if(Buffer.byteLength(rawBody)>1024)return send(res,413,{error:'Anfrage zu groß'});}
+      const paymentId=new URLSearchParams(rawBody).get('id');
+      try{const result=await verifyAndReleaseMolliePayment(pool,paymentId);return send(res,200,{received:true});}
+      catch{return send(res,503,{error:'Zahlungsprüfung vorübergehend nicht verfügbar'});}
     }
     const raw = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     const user = raw && (await pool.query(`SELECT u.id,u.company_id,u.role,

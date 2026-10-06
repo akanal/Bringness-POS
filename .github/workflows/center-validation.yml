@@ -38,7 +38,7 @@ jobs:
       - name: Install Chromium
         run: node "$RUNNER_TEMP/center-deps/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Run authorization checks
-        run: node --test server/center-core.test.js server/center-payment-core.test.js server/center-mollie-connect.test.js
+        run: node --test server/center-core.test.js server/center-payment-core.test.js server/center-mollie-connect.test.js server/center-mollie-payment.test.js
       - name: Verify migration and lifecycle on PostgreSQL
         env:
           CENTER_TEST_DATABASE_URL: postgres://center_test:center_test@localhost:5432/center_test
