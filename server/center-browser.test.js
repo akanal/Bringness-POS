@@ -104,6 +104,7 @@ test('guest status retains milestones through an outage and recovers online',asy
  await page.route('https://center.test/**',async route=>{
  const url=new URL(route.request().url());
  if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
+ if(url.pathname==='/api/v1/guest/center/notification-config')return route.fulfill({contentType:'application/json',body:JSON.stringify({available:false})});
  if(url.pathname!=='/api/v1/guest/center/status')throw Error('Unexpected request');
  if(offline)return route.abort('internetdisconnected');
  return route.fulfill({contentType:'application/json',body:JSON.stringify({order:{restaurant_name:'Restaurant',collection_number:'BN-2026-000042',status:ready?'ready':'preparing',paid_at:'2026-10-06T12:00:00Z',preparation_started_at:'2026-10-06T12:01:00Z',ready_at:ready?'2026-10-06T12:05:00Z':null}})});
