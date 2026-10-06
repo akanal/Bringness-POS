@@ -1,4 +1,4 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="notify" hidden>Bei Abholbereitschaft benachrichtigen</button><p id="notifyStatus" role="status"></p><button id="refresh">Aktualisieren</button><p>Ohne aktivierte Abholbenachrichtigung bitte diese Seite geöffnet lassen. Die Zustellung hängt von Gerät und Benachrichtigungseinstellungen ab.</p></main><script type="module">
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="notify" hidden>Bei Abholbereitschaft benachrichtigen</button><button id="notifyOff" hidden>Abholbenachrichtigung abschalten</button><p id="notifyStatus" role="status"></p><button id="refresh">Aktualisieren</button><p>Ohne aktivierte Abholbenachrichtigung bitte diese Seite geöffnet lassen. Die Zustellung hängt von Gerät und Benachrichtigungseinstellungen ab.</p></main><script type="module">
 async function request(url,options={}){
  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
  try{const response=await fetch(url,{...options,signal:controller.signal});const data=await response.json();return {ok:response.ok,status:response.status,json:async()=>data};}
@@ -32,7 +32,7 @@ async function load(){
 document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(!document.hidden&&!finished)load();});
 window.addEventListener('online',()=>{if(!finished&&!document.hidden)load();});
 
-const notify=document.getElementById('notify'),notifyStatus=document.getElementById('notifyStatus');
+const notifyOff=document.getElementById('notifyOff'),notify=document.getElementById('notify'),notifyStatus=document.getElementById('notifyStatus');
 let pushConfig,pushRegistration;
 async function preparePush(){
  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){
@@ -43,6 +43,8 @@ async function preparePush(){
   const config=await response.json();if(!response.ok||!config.available)return;
   pushConfig=config;pushRegistration=await navigator.serviceWorker.register('/center/sw.js',{scope:'/center/'});
   notify.hidden=false;
+  const existing=await pushRegistration.pushManager.getSubscription();
+  if(existing){const data=await notificationAction('status',existing);notify.hidden=data.subscribed===true;notifyOff.hidden=!data.subscribed;}
  }catch{notifyStatus.textContent='Benachrichtigungen momentan nicht verfügbar. Die Statusanzeige bleibt nutzbar.';}
 }
 notify.onclick=async()=>{
@@ -56,9 +58,22 @@ notify.onclick=async()=>{
   const subscription=await pushRegistration.pushManager.getSubscription()||await pushRegistration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
   const response=await request('/api/v1/guest/center/notifications',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,subscription:subscription.toJSON(),consent:true})});
   const data=await response.json();if(!response.ok)throw Error(data.error||'Anmeldung fehlgeschlagen.');
-  notifyStatus.textContent='Abholbenachrichtigung für diese Bestellung aktiviert.';notify.hidden=true;
+  notifyStatus.textContent='Abholbenachrichtigung für diese Bestellung aktiviert.';notify.hidden=true;notifyOff.hidden=false;
  }catch(e){notifyStatus.textContent=e.message||'Benachrichtigung konnte nicht aktiviert werden.';}
  finally{notify.disabled=false;}
+};
+async function notificationAction(action,subscription){
+ const response=await request('/api/v1/guest/center/notifications',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,subscription:subscription.toJSON(),action})});
+ const data=await response.json();if(!response.ok)throw Error(data.error||'Anfrage fehlgeschlagen.');return data;
+}
+notifyOff.onclick=async()=>{
+ notifyOff.disabled=true;
+ try{
+  const subscription=await pushRegistration.pushManager.getSubscription();
+  if(!subscription)throw Error('Gerätezugang nicht mehr verfügbar.');
+  await notificationAction('disable',subscription);
+  notifyOff.hidden=true;notify.hidden=false;notifyStatus.textContent='Abholbenachrichtigung für diese Bestellung abgeschaltet.';
+ }catch(e){notifyStatus.textContent=e.message;}finally{notifyOff.disabled=false;}
 };
 preparePush();
 document.getElementById('refresh').onclick=load;await load();
