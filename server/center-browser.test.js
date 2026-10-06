@@ -267,3 +267,39 @@ test('management shows merchant controls only for owned restaurants and Center a
  assert.equal(await page.getByRole('button',{name:'Mollie verbinden'}).count(),1);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+
+for(const delayed of ['restaurants','setup']){
+test('late '+delayed+' response cannot restore the previous Center view',async()=>{
+ const browser=await chromium.launch({headless:true});
+ let release;const gate=new Promise(resolve=>{release=resolve;});
+ try{
+ const page=await browser.newPage();let mark;const started=new Promise(resolve=>{mark=resolve;});
+ await page.addInitScript(()=>localStorage.setItem('bringness-pos-token','operator'));
+ await page.route('https://center.test/**',async route=>{
+ const url=new URL(route.request().url());const old=url.pathname.includes('/old/');
+ if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
+ let data;
+ if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
+ else if(url.pathname==='/api/v1/centers')data={centers:[{id:'old',name:'Vorheriges Center',can_manage:true},{id:'new',name:'Aktuelles Center',can_manage:false}]};
+ else if(url.pathname.endsWith('/restaurants'))data={restaurants:[{id:old?'old-restaurant':'new-restaurant',name:old?'Vorheriges Restaurant':'Aktuelles Restaurant',can_manage:true,contract_status:'signed',payment_status:'verified'}]};
+ else if(url.pathname.endsWith('/setup'))data={setup:{can_setup:old,can_export_qr:old,setup_completed_at:old?null:'now'},canApprove:old};
+ else if(url.pathname.endsWith('/tables'))data={tables:[{id:'table',name:old?'Alter Tisch':'Aktueller Tisch',active:true,qr_token:'a'.repeat(48)}]};
+ else throw Error('Unexpected request');
+ if(old&&url.pathname.endsWith('/'+delayed)){mark();await gate;}
+ return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/manage.html');await started;
+ await page.locator('#centers').selectOption('new');
+ await page.locator('#setupStatus').getByText('Ersteinrichtung abgeschlossen.',{exact:true}).waitFor();
+ const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/centers/old/'+delayed);
+ release();await (await response).finished();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ assert.equal(await page.getByRole('heading',{name:'Aktuelles Restaurant',exact:true}).count(),1);
+ assert.equal(await page.getByRole('heading',{name:'Vorheriges Restaurant',exact:true}).count(),0);
+ assert.equal(await page.locator('#newTable').isVisible(),false);assert.equal(await page.locator('#setupApproval').isVisible(),false);
+ assert.equal(await page.locator('#inviteSection').isVisible(),false);
+ assert.equal(await page.getByRole('button',{name:'QR-Bild herunterladen',exact:true}).count(),0);
+ assert.match(await page.locator('#tables').textContent(),/Aktueller Tisch/);
+ }finally{release();await browser.close();}
+});
+}
