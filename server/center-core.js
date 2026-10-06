@@ -1,3 +1,4 @@
+import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
 import {recoverGuestPayment} from './center-payment-recovery.js';
 import {centerPushConfiguration,saveGuestSubscription,manageGuestSubscription} from './center-guest-push.js';
 import {exportCenterTableQr} from './center-table-qr.js';
@@ -166,6 +167,17 @@ export function createCenterHandler(pool) {
     let b = {};
     if (['POST', 'PUT'].includes(req.method)) {
       try { b = await body(req); } catch { return send(res, 400, {error: 'Ungültige Eingabe'}); }
+    }
+    if(p==='/api/v1/centers/invitations/accept'){
+     if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
+     try{return send(res,200,await acceptCenterInvitation(pool,user,b.token));}
+     catch(error){if(error.code==='23505')return send(res,409,{error:'Dieses Restaurant gehört bereits zu einem anderen Center.'});if(error.message==='INVITATION_NOT_ALLOWED')return send(res,403,{error:'Einladung ungültig, abgelaufen oder nicht für deinen Betrieb bestimmt.'});throw error;}
+    }
+    const invitation=p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/invitations$/i);
+    if(invitation){
+     if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
+     try{return send(res,201,await inviteCenterRestaurant(pool,user,invitation[1],b.restaurantId));}
+     catch(error){if(error.message==='INVITATION_NOT_ALLOWED')return send(res,403,{error:'Einladung nicht möglich. Center und Restaurant-Kennung prüfen.'});throw error;}
     }
     const name = String(b.name || '').trim();
     if (p === '/api/v1/centers' && req.method === 'POST') {
