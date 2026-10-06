@@ -130,14 +130,14 @@ test('guest status retains milestones through an outage and recovers online',asy
  if(url.pathname==='/api/v1/guest/center/notification-config')return route.fulfill({contentType:'application/json',body:JSON.stringify({available:false})});
  if(url.pathname!=='/api/v1/guest/center/status')throw Error('Unexpected request');
  if(offline)return route.abort('internetdisconnected');
- return route.fulfill({contentType:'application/json',body:JSON.stringify({order:{restaurant_name:'Restaurant',collection_number:'BN-2026-000042',status:ready?'ready':'preparing',paid_at:'2026-10-06T12:00:00Z',preparation_started_at:'2026-10-06T12:01:00Z',ready_at:ready?'2026-10-06T12:05:00Z':null}})});
+ return route.fulfill({contentType:'application/json',body:JSON.stringify({order:{restaurant_name:'Restaurant',collection_number:'BN-2026-000042',status:ready?'ready':'preparing',receipt_url:ready?'/beleg/11111111-1111-4111-8111-111111111111':null,paid_at:'2026-10-06T12:00:00Z',preparation_started_at:'2026-10-06T12:01:00Z',ready_at:ready?'2026-10-06T12:05:00Z':null}})});
  });
  await page.goto('https://center.test/center/status.html#token='+ 'a'.repeat(64));
- await page.locator('#status').getByText('Deine Bestellung wird zubereitet.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),2);
+ await page.locator('#status').getByText('Deine Bestellung wird zubereitet.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),2);assert.equal(await page.locator('#receipt').isVisible(),false);
  offline=true;await page.locator('#refresh').click();await page.locator('#connection').getByText(/veraltet/).waitFor();
  assert.equal(await page.locator('#status').textContent(),'Deine Bestellung wird zubereitet.');assert.equal(await page.locator('#history li').count(),2);
  offline=false;ready=true;await page.evaluate(()=>window.dispatchEvent(new Event('online')));
- await page.locator('#status').getByText('Deine Bestellung ist abholbereit.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),3);assert.equal(await page.locator('#collection').textContent(),'Abholnummer: BN-2026-000042');assert.equal(await page.locator('#restaurant').textContent(),'Restaurant');assert.deepEqual(errors,[]);
+ await page.locator('#status').getByText('Deine Bestellung ist abholbereit.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),3);assert.equal(await page.locator('#collection').textContent(),'Abholnummer: BN-2026-000042');assert.equal(await page.locator('#restaurant').textContent(),'Restaurant');assert.equal(await page.locator('#receipt').isVisible(),true);assert.equal(await page.locator('#receipt').getAttribute('href'),'/beleg/11111111-1111-4111-8111-111111111111');assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
 
@@ -402,3 +402,22 @@ test('late menu '+staleResult+' cannot change the selected restaurant or locked 
  }finally{release();await browser.close();}
 });
 }
+
+test('guest status rejects an external or malformed digital receipt URL',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();let receiptUrl='https://outside.test/beleg/11111111-1111-4111-8111-111111111111';
+ await page.route('https://center.test/**',async route=>{
+ const url=new URL(route.request().url());
+ if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
+ const data=url.pathname.endsWith('/status')?{order:{status:'ready',restaurant_name:'Restaurant',receipt_url:receiptUrl}}:{available:false};
+ return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/status.html#token='+'a'.repeat(64));
+ await page.locator('#status').getByText('Deine Bestellung ist abholbereit.',{exact:true}).waitFor();
+ assert.equal(await page.locator('#receipt').isVisible(),false);assert.equal(await page.locator('#receipt').getAttribute('href'),null);
+ receiptUrl='/beleg/invalid';const response=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/status'));await page.locator('#refresh').click();await (await response).finished();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ assert.equal(await page.locator('#receipt').getAttribute('href'),null);
+ }finally{await browser.close();}
+});
