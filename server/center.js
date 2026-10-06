@@ -32,5 +32,17 @@ export async function migrateCenter() {
     ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_approved_by uuid REFERENCES users(id);
     ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_approved_at timestamptz;
     ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_completed_at timestamptz;
+    CREATE TABLE IF NOT EXISTS center_order_payments (
+      payment_id text PRIMARY KEY,
+      order_id uuid UNIQUE NOT NULL REFERENCES orders(id),
+      center_id uuid NOT NULL,
+      restaurant_id uuid NOT NULL,
+      merchant_reference text NOT NULL,
+      amount_cents integer NOT NULL CHECK(amount_cents>0),
+      currency text NOT NULL CHECK(currency='EUR'),
+      paid_at timestamptz,
+      released_at timestamptz,
+      FOREIGN KEY(center_id,restaurant_id) REFERENCES center_restaurants(center_id,restaurant_id)
+    );
   `);
 }

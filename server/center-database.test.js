@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {Readable} from 'node:stream';
+import {releaseCenterPayment,centerKitchenQueue} from './center-payment-release.js';
 import {createCenterHandler} from './center-core.js';
 const dependency=process.env.CENTER_TEST_PGLITE || '@electric-sql/pglite';
 const engine=await import(process.env.CENTER_TEST_DATABASE_URL ? (process.env.CENTER_TEST_PG || 'pg') : dependency);
@@ -11,6 +12,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  if(process.env.CENTER_TEST_DATABASE_URL){db.exec=sql=>db.query(sql);db.close=()=>db.end();}
  try {
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
+ CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,total_cents integer,status text);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
  CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
  CREATE TABLE platform_admins(user_id uuid,active boolean);`);
@@ -37,5 +39,19 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await call(c+'/setup','PUT','admin',{action:'approve',userId:owner,restaurantId:restaurant})).status,409);
  assert.equal((await call(c+'/tables','POST','admin',{name:'Admin maintenance'})).status,201);
  assert.equal((await call(c+'/tables','GET','owner')).data.tables.length,2);
+ await db.query("UPDATE center_restaurants SET merchant_reference='merchant-1',payment_status='verified',contract_status='signed'");
+ const order=crypto.randomUUID();
+ await db.query("INSERT INTO orders VALUES($1,$2,1250,'payment_pending')",[order,restaurant]);
+ await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('pay-1',$1,$2,$3,'merchant-1',1250,'EUR')",[order,created.data.center.id,restaurant]);
+ const pool={connect:async()=>({query:(...args)=>db.query(...args),release(){}}),query:(...args)=>db.query(...args)};
+ const payment={paymentId:'pay-1',orderId:order,merchantReference:'merchant-1',amountCents:1250,currency:'EUR',status:'paid',refundedCents:0,chargedBackCents:0,paidAt:new Date().toISOString()};
+ assert.equal((await releaseCenterPayment(pool,'pay-1',async()=>({...payment,amountCents:1}))).released,false);
+ assert.equal((await db.query('SELECT status FROM orders WHERE id=$1',[order])).rows[0].status,'payment_pending');
+ await assert.rejects(releaseCenterPayment(pool,'pay-1',async()=>{throw Error('provider unavailable')}),/provider unavailable/);
+ assert.equal((await releaseCenterPayment(pool,'pay-1',async()=>payment)).released,true);
+ assert.equal((await releaseCenterPayment(pool,'pay-1',async()=>{throw Error('must not reverify')})).alreadyReleased,true);
+ assert.equal((await centerKitchenQueue(pool,restaurant)).length,1);
+ assert.equal((await centerKitchenQueue(pool,crypto.randomUUID())).length,0);
+
  }finally{await db.close();}
 });
