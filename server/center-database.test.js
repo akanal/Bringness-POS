@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {ensureTseSchema} from './tse-core.js';
 import {guestCenterCheckout} from './center-guest-checkout.js';
 import {createCenterMollieCheckout,reconcileCenterCheckout} from './center-mollie-checkout.js';
 import {withMerchantToken,verifyMerchantProfile} from './center-mollie-merchant.js';
@@ -135,6 +136,22 @@ test('database migration and delegated setup lifecycle',async()=>{
  await db.query('ALTER TABLE receipts_unavailable RENAME TO receipts');
  assert.equal((await db.query('SELECT status FROM orders WHERE id=$1',[failedReceiptOrder])).rows[0].status,'payment_pending');
  assert.equal((await db.query('SELECT count(*)::int n FROM payments WHERE order_id=$1',[failedReceiptOrder])).rows[0].n,0);
+ // Run the existing production TSE trigger against a center payment.
+ await db.exec(`ALTER TABLE receipts ADD COLUMN id uuid UNIQUE NOT NULL DEFAULT gen_random_uuid();
+ ALTER TABLE orders ADD COLUMN closed_at timestamptz;
+ ALTER TABLE order_items ADD COLUMN id uuid DEFAULT gen_random_uuid();
+ ALTER TABLE payments ADD COLUMN id uuid DEFAULT gen_random_uuid();
+ ALTER TABLE payments ADD COLUMN created_at timestamptz DEFAULT now();`);
+ await ensureTseSchema({query:sql=>db.exec(sql)});
+ const tseSource=await readFile(new URL('./tse-integration.js',import.meta.url),'utf8');
+ const trigger=tseSource.match(/await pool.query\(`([\s\S]*?)`\)/)[1];await db.exec(trigger);
+ const fiscalOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[fiscalOrder,restaurant]);
+ await db.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,'Gericht',1250,19,1)",[fiscalOrder,product]);
+ await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('tr_fiscal',$1,$2,$3,'org_restaurant',1250,'EUR')",[fiscalOrder,created.data.center.id,restaurant]);
+ assert.equal((await releaseCenterPayment(pool,'tr_fiscal',async()=>({...verifiedGuestPayment,paymentId:'tr_fiscal',orderId:fiscalOrder,amountCents:1250}))).released,true);
+ const fiscal=(await db.query('SELECT state,process_data FROM tse_transactions WHERE order_id=$1',[fiscalOrder])).rows[0];assert.equal(fiscal.state,'prepared');assert.equal(fiscal.process_data.totalsMatch,true);assert.equal(fiscal.process_data.payments[0].method,'mollie_center');assert.equal(fiscal.process_data.totalCents,1250);
+ assert.equal((await db.query('SELECT fiscal_status FROM receipts WHERE order_id=$1',[fiscalOrder])).rows[0].fiscal_status,'prepared');
+
 
 
 
