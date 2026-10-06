@@ -25,7 +25,7 @@ A Center owner/admin creates an invitation in management using the target restau
 
 ## Table QR export
 
-Management includes an authenticated SVG download for each active table, available after delegated setup is locked. The export checks the table and center against the acting company and encodes the existing fixed guest token. Configure a root HTTPS public origin using `CENTER_PUBLIC_ORIGIN`, `PUBLIC_BASE_URL` or `PUBLIC_URL`. Request host headers are not used to choose the QR destination. Endpoint: `GET /api/v1/centers/:centerId/tables/:tableId/qr`.
+Management includes an authenticated SVG download for each active table, available after delegated setup is locked. The server requires completed setup and authorizes either the Center's company or the specifically approved setup user, including a delegated operator from another company. Other members do not gain QR export rights through membership alone. The export encodes the existing fixed guest token. Configure a root HTTPS public origin using `CENTER_PUBLIC_ORIGIN`, `PUBLIC_BASE_URL` or `PUBLIC_URL`. Request host headers are not used to choose the QR destination. Endpoint: `GET /api/v1/centers/:centerId/tables/:tableId/qr`.
 
 ## Entry points
 
