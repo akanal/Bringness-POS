@@ -1,3 +1,4 @@
+import {saveGuestSubscription,manageGuestSubscription,dispatchCenterGuestPush} from './center-guest-push.js';
 import test from 'node:test';
 import {signPreparedTse} from './tse-signing-worker.js';
 import {ensureTseSchema} from './tse-core.js';
@@ -131,6 +132,35 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.match(guestReceipt.receipt_number,/^BN-\d{4}-\d{6}$/);assert.equal(guestReceipt.fiscal_status,'pending');assert.equal(guestReceipt.merchant_snapshot.restaurantName,'Restaurant');
  assert.equal((await db.query('SELECT count(*)::int n FROM payments WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
  assert.equal((await db.query('SELECT count(*)::int n FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
+
+ // Verify durable guest push with real SQL and a simulated push transport.
+ const pushSubscription={endpoint:'https://fcm.googleapis.com/fcm/send/center-integration',
+  keys:{p256dh:Buffer.alloc(65,1).toString('base64url'),auth:Buffer.alloc(16,2).toString('base64url')}};
+ assert.equal(statusRes.data.order.collection_number,guestReceipt.receipt_number);
+ assert.equal((await db.query('SELECT count(*)::int n FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
+ await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'ready');
+ assert.equal((await db.query('SELECT count(*)::int n FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
+ assert.equal(await saveGuestSubscription(pool,'f'.repeat(64),pushSubscription,true),false);
+ assert.equal(await saveGuestSubscription(pool,guestToken,pushSubscription,true),true);
+ assert.equal(await saveGuestSubscription(pool,guestToken,pushSubscription,true),true);
+ assert.equal((await db.query('SELECT count(*)::int n FROM center_guest_push WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
+ assert.equal((await manageGuestSubscription(pool,guestToken,pushSubscription,'status')).subscribed,true);
+ await manageGuestSubscription(pool,guestToken,pushSubscription,'disable');
+ assert.equal(await dispatchCenterGuestPush(pool,async()=>{throw Error('revoked subscription must not send');}),0);
+ assert.equal(await saveGuestSubscription(pool,guestToken,pushSubscription,true),true);
+ let sendCalls=0;
+ assert.equal(await dispatchCenterGuestPush(pool,async()=>{sendCalls++;throw Object.assign(Error('temporary push outage'),{statusCode:503});}),1);
+ assert.equal((await db.query('SELECT state FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0].state,'pending');
+ let delivered;
+ assert.equal(await dispatchCenterGuestPush(pool,async(subscription,payload)=>{sendCalls++;assert.equal(subscription.endpoint,pushSubscription.endpoint);delivered=JSON.parse(payload);}),1);
+ assert.equal(sendCalls,2);assert.match(delivered.body,new RegExp(guestReceipt.receipt_number));assert.match(delivered.title,/Restaurant/);
+ assert.equal((await db.query('SELECT state FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0].state,'sent');
+ assert.equal(await dispatchCenterGuestPush(pool,async()=>{throw Error('already sent must not repeat');}),0);
+ await db.query("UPDATE orders SET created_at=now()-interval '25 hours' WHERE id=$1",[guestResult.orderId]);
+ await dispatchCenterGuestPush(pool,async()=>{throw Error('expired order must not send');});
+ assert.equal((await db.query('SELECT count(*)::int n FROM center_guest_push WHERE order_id=$1',[guestResult.orderId])).rows[0].n,0);
+ assert.equal(await saveGuestSubscription(pool,guestToken,pushSubscription,true),false);
+
  const failedReceiptOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[failedReceiptOrder,restaurant]);
  await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('tr_receiptfail',$1,$2,$3,'org_restaurant',1250,'EUR')",[failedReceiptOrder,created.data.center.id,restaurant]);
  await db.query('ALTER TABLE receipts RENAME TO receipts_unavailable');
