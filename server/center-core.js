@@ -23,6 +23,15 @@ export function createCenterHandler(pool) {
     const guest = p.startsWith('/api/v1/guest/center/');
     if (!guest && p !== '/api/v1/centers' && !p.startsWith('/api/v1/centers/')) return false;
     if (guest) {
+      if(p==='/api/v1/guest/center/status'){
+        if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
+        const statusToken=url.searchParams.get('token')||'';
+        if(!/^[a-f0-9]{64}$/.test(statusToken))return send(res,404,{error:'Bestellung nicht gefunden'});
+        const order=(await pool.query(`SELECT o.status,r.name restaurant_name,cp.ready_at
+          FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id JOIN restaurants r ON r.id=cp.restaurant_id
+          WHERE cp.guest_status_token=$1 AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
+        return order?send(res,200,{order}):send(res,404,{error:'Bestellung nicht gefunden'});
+      }
       if (p === '/api/v1/guest/center/order') {
         // Never reuse the unpaid restaurant-order endpoint for center checkout.
         return send(res, 503, {error: 'Online-Zahlung für diesen Center-Betrieb ist noch nicht eingerichtet.'});

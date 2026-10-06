@@ -69,3 +69,10 @@ test('delegated table creation locks center row and checks completion atomically
 test('kitchen endpoint denies an unassigned restaurant before reading its queue',async()=>{
  const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({id,company_id:id,role:'kitchen'});assert.match(sql,/e.user_id=\$4/);assert.match(sql,/r.company_id=\$2/);return rows();},'/api/v1/centers/kitchen?restaurantId='+id,'GET',undefined,true);assert.equal(r.status,403);
 });
+
+test('guest status rejects a table token or malformed token without reading orders',async()=>{
+ const r=await request(()=>{throw Error('no database read allowed')},'/api/v1/guest/center/status?token='+code);assert.equal(r.status,404);
+});
+test('guest status query exposes only status and restaurant with expiry',async()=>{
+ const r=await request(async(sql,args)=>{assert.match(sql,/guest_status_token=\$1/);assert.match(sql,/24 hours/);assert.doesNotMatch(sql,/guest_email|merchant_reference|total_cents/);assert.equal(args[0],'a'.repeat(64));return rows({status:'ready',restaurant_name:'Restaurant',ready_at:'now'});},'/api/v1/guest/center/status?token='+'a'.repeat(64));assert.equal(r.status,200);assert.equal(r.data.order.status,'ready');
+});

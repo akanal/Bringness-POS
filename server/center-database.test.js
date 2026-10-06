@@ -12,7 +12,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  if(process.env.CENTER_TEST_DATABASE_URL){db.exec=sql=>db.query(sql);db.close=()=>db.end();}
  try {
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
- CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,total_cents integer,status text);
+ CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,total_cents integer,status text,created_at timestamptz DEFAULT now());
  CREATE TABLE order_items(order_id uuid,product_name_snapshot text,quantity numeric);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
  CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
@@ -42,7 +42,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await call(c+'/tables','GET','owner')).data.tables.length,2);
  await db.query("UPDATE center_restaurants SET merchant_reference='merchant-1',payment_status='verified',contract_status='signed'");
  const order=crypto.randomUUID();
- await db.query("INSERT INTO orders VALUES($1,$2,1250,'payment_pending')",[order,restaurant]);
+ await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[order,restaurant]);
  await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('pay-1',$1,$2,$3,'merchant-1',1250,'EUR')",[order,created.data.center.id,restaurant]);
  const pool={connect:async()=>({query:(...args)=>db.query(...args),release(){}}),query:(...args)=>db.query(...args)};
  const payment={paymentId:'pay-1',orderId:order,merchantReference:'merchant-1',amountCents:1250,currency:'EUR',status:'paid',refundedCents:0,chargedBackCents:0,paidAt:new Date().toISOString()};
@@ -54,7 +54,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await centerKitchenQueue(pool,restaurant)).length,1);
  assert.equal((await centerKitchenQueue(pool,crypto.randomUUID())).length,0);
  const later=crypto.randomUUID();
- await db.query("INSERT INTO orders VALUES($1,$2,1250,'payment_pending')",[later,restaurant]);
+ await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[later,restaurant]);
  await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('pay-2',$1,$2,$3,'merchant-1',1250,'EUR')",[later,created.data.center.id,restaurant]);
  assert.equal((await releaseCenterPayment(pool,'pay-2',async()=>({...payment,paymentId:'pay-2',orderId:later,paidAt:new Date(Date.parse(payment.paidAt)+1000).toISOString()}))).released,true);
  assert.equal((await advanceCenterKitchen(pool,restaurant,later,'preparing')).reason,'earlier_order_waiting');
