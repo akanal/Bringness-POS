@@ -15,3 +15,11 @@ test('stock, overnight hours and seasonal wraparound are checked at request time
  assert.equal(centerProductAvailable({availability_rule:'broken'}),false);
  assert.deepEqual(visibleCenterProducts([{id,ai_stock_available:true,availability_rule:null}]),[{id}]);
 });
+
+import {guestCheckoutError} from './center-guest-checkout.js';
+test('only known pre-payment failures allow cart edits; unknown failures keep the payment attempt',()=>{
+ assert.equal(guestCheckoutError(Error('PRODUCT_UNAVAILABLE')).cartEditable,true);
+ const uncertain=guestCheckoutError(Error('provider secret detail'));
+ assert.equal(uncertain.cartEditable,false);assert.equal(uncertain.status,503);
+ assert.ok(!uncertain.error.includes('secret'));
+});

@@ -1,6 +1,6 @@
 import {visibleCenterProducts} from './center-availability.js';
 import crypto from 'node:crypto';
-import {guestCenterCheckout} from './center-guest-checkout.js';
+import {guestCenterCheckout,guestCheckoutError} from './center-guest-checkout.js';
 import {verifyAndReleaseMolliePayment} from './center-mollie-payment.js';
 import {verifyMerchantProfile} from './center-mollie-merchant.js';
 import {completeRestaurantMollieConnect} from './center-mollie-connect.js';
@@ -42,7 +42,7 @@ export function createCenterHandler(pool) {
         if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
         if(process.env.CENTER_CHECKOUT_ENABLED!=='true')return send(res,503,{error:'Center-Onlinezahlungen sind noch nicht freigeschaltet.'});
         let b;try{b=await body(req);}catch{return send(res,400,{error:'Ungültige Eingabe'});}
-        try{return send(res,200,await guestCenterCheckout(pool,b));}catch{return send(res,409,{error:'Bestellung konnte nicht abgeschlossen werden. Bitte Verfügbarkeit und Zahlungsstatus prüfen.'});}
+        try{return send(res,200,await guestCenterCheckout(pool,b));}catch(error){const {status,...data}=guestCheckoutError(error);return send(res,status,data);}
       }
       if (req.method !== 'GET') return send(res, 405, {error: 'Methode nicht erlaubt'});
       const code = url.searchParams.get('code') || '';

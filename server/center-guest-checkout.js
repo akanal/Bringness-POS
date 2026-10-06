@@ -38,3 +38,16 @@ export async function guestCenterCheckout(pool,b,env=process.env,fetcher=fetch){
  if(checkout.reconciliationRequired)checkout=await reconcileCenterCheckout(pool,attempt.id,env,fetcher);
  return {...checkout,orderId:attempt.order_id};
 }
+
+export function guestCheckoutError(error) {
+ const messages={
+  PRODUCT_UNAVAILABLE:'Ein Gericht ist inzwischen nicht mehr verfügbar. Bitte den Warenkorb anpassen.',
+  INVALID_CART:'Bitte Artikel und Mengen im Warenkorb prüfen.',
+  INVALID_TOTAL:'Die Bestellsumme ist nicht zulässig. Bitte den Warenkorb anpassen.',
+  TABLE_UNAVAILABLE:'Dieser Tisch ist momentan nicht für Bestellungen verfügbar.',
+  MERCHANT_NOT_READY:'Dieses Restaurant kann momentan keine Online-Zahlungen annehmen.',
+  CENTER_CHECKOUT_DISABLED:'Online-Bestellungen sind noch nicht freigeschaltet.'
+ };
+ if(messages[error?.message])return {status:409,error:messages[error.message],cartEditable:true};
+ return {status:503,error:'Der Zahlungsstatus ist noch unklar. Bitte denselben Vorgang erneut versuchen.',cartEditable:false};
+}
