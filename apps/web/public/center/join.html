@@ -1,0 +1,13 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Center-Einladung</title><style>body{font:20px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}button{font:inherit;padding:16px}</style></head><body><main><h1>Center-Einladung</h1><p>Bestätige den Beitritt mit dem Betreiberkonto des eingeladenen Restaurants. Der Beitritt aktiviert keine Zahlungen und gibt niemandem Zugriff auf dein Händlerkonto.</p><a href="/pos/" target="_blank" rel="noopener">In der Kasse anmelden</a><p id="status" role="status"></p><button id="accept">Beitritt bestätigen</button></main><script type="module">
+const token=new URLSearchParams(location.hash.slice(1)).get('token')||'',button=document.getElementById('accept'),status=document.getElementById('status');
+button.onclick=async()=>{
+ const auth=localStorage.getItem('bringness-pos-token');if(!auth){status.textContent='Bitte zuerst mit dem Betreiberkonto in der Kasse anmelden.';return;}
+ button.disabled=true;
+ try{
+  const response=await fetch('/api/v1/centers/invitations/accept',{method:'POST',headers:{authorization:'Bearer '+auth,'content-type':'application/json'},body:JSON.stringify({token}),signal:AbortSignal.timeout(15000)});
+  const data=await response.json();if(!response.ok)throw Error(data.error||'Beitritt fehlgeschlagen.');
+  status.textContent='Dein Restaurant ist dem Center zugeordnet. Die Händleranbindung wird separat eingerichtet.';button.hidden=true;
+ }catch(e){status.textContent=e.message;button.disabled=false;}
+};
+if(!/^[a-f0-9]{64}$/.test(token)){button.disabled=true;status.textContent='Einladung ungültig.';}
+</script></body></html>
