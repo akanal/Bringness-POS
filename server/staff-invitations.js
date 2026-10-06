@@ -27,7 +27,7 @@ export async function handleStaffInvitations(req,res){
   const b=await input(req),name=String(b.name||'').trim(),email=String(b.email||'').trim().toLowerCase(),restaurantId=String(b.restaurantId||'');
   if(name.length<2||name.length>100||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!/^[a-f0-9-]{36}$/i.test(restaurantId))return reply(res,400,{error:'Name, Betrieb und gültige E-Mail erforderlich'});
   const pin=String(crypto.randomInt(0,1000000)).padStart(6,'0'),token=crypto.randomBytes(32).toString('hex');
-  const origin=(process.env.PUBLIC_BASE_URL||'https://bringness-pos-app-production.up.railway.app').replace(/\/$/,'');
+  const origin=(process.env.PUBLIC_BASE_URL||'https://bringness.de').replace(/\/$/,'');
   if(!origin.startsWith('https://'))return reply(res,503,{error:'Öffentliche HTTPS-Adresse fehlt'});
   const port=Number(process.env.SMTP_PORT||587);if(!Number.isInteger(port)||port<1||port>65535)return reply(res,503,{error:'SMTP-Port ungültig'});
   const c=await pool.connect();
@@ -40,8 +40,9 @@ export async function handleStaffInvitations(req,res){
     await c.query("INSERT INTO staff_invitations(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '48 hours')",[sha(token),user.id]);
     const {default:nodemailer}=await import('nodemailer');
     const transport=nodemailer.createTransport({host:process.env.SMTP_HOST,port,secure:port===465,requireTLS:port!==465,auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASSWORD},tls:{rejectUnauthorized:true}});
-    await transport.sendMail({from:process.env.SMTP_FROM,to:email,subject:'Bringness POS – Kellnerzugang bestätigen',text:`Hallo ${name},\n\n${r.rows[0].name} hat dich zum Bringness-Service eingeladen. Bestätige deine E-Mail innerhalb von 48 Stunden:\n${origin}/service/#activate=${token}\n\nDein sechsstelliger Erstcode: ${pin}\nNach der Bestätigung melde dich mit dieser E-Mail und dem Erstcode an. Danach legst du einen eigenen sechsstelligen Code fest.\n\nFalls du keine Einladung erwartet hast, ignoriere diese E-Mail.`});
+    await transport.sendMail({from:process.env.SMTP_FROM,to:email,subject:'Bringness – Kellnerzugang bestätigen',text:`Hallo ${name},\n\n${r.rows[0].name} hat dich zum Bringness-Service eingeladen. Bestätige deine E-Mail innerhalb von 48 Stunden:\n${origin}/service/#activate=${token}\n\nDein sechsstelliger Erstcode: ${pin}\nNach der Bestätigung melde dich mit dieser E-Mail und dem Erstcode an. Danach legst du einen eigenen sechsstelligen Code fest.\n\nFalls du keine Einladung erwartet hast, ignoriere diese E-Mail.`});
     await c.query('COMMIT');
     return reply(res,201,{waiter:{...employee,email,status:'pending'},message:'Einladung und Erstcode wurden per E-Mail versendet. Der Zugang wird nach Bestätigung freigeschaltet.'});
   }catch(error){await c.query('ROLLBACK');if(error.code==='23505')return reply(res,409,{error:'E-Mail ist bereits vergeben'});console.error('Staff invitation failed:',error.message);return reply(res,503,{error:'Einladung konnte nicht versendet werden. Konto wurde nicht angelegt.'})}finally{c.release()}
 }
+
