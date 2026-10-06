@@ -258,7 +258,7 @@ export function createCenterHandler(pool) {
     const match = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/(tables|restaurants)$/i);
     if (!match || !uuid.test(match[1])) return send(res, 404, {error: 'Nicht gefunden'});
     const centerId = match[1];
-    const owned = (await pool.query('SELECT id FROM centers WHERE id=$1 AND (company_id=$2 OR setup_user_id=$4 OR ($3::boolean AND EXISTS(SELECT 1 FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=centers.id AND cr.active=true AND r.company_id=$2)))', [centerId, user.company_id,req.method==='GET',user.id])).rowCount;
+    const owned = (await pool.query('SELECT id FROM centers WHERE id=$1 AND (company_id=$2 OR setup_user_id=$4 OR ($3::boolean AND EXISTS(SELECT 1 FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=centers.id AND cr.active=true AND r.company_id=$2)))', [centerId, user.company_id,req.method==='GET',match[2]==='tables'?user.id:null])).rowCount;
     if (!owned) return send(res, 404, {error: 'Center nicht gefunden'});
     if (match[2] === 'tables') {
       if (req.method === 'GET') return send(res, 200, {tables: (await pool.query('SELECT id,name,qr_token,active FROM center_tables WHERE center_id=$1 ORDER BY name,id', [centerId])).rows});
