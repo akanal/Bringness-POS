@@ -41,3 +41,19 @@ test("HTTP isolation blocks AI routes and assets but preserves POS routes", asyn
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+
+const { configurePosOrigin } = await import('./runtime-mode.js');
+test('production POS moves legacy public links to bringness.de and preserves other runtimes', () => {
+  for (const old of ['', 'https://bringness-pos.de/', 'https://www.bringness-pos.de', 'https://bringness-pos-app-production.up.railway.app']) {
+    const env = { NODE_ENV: 'production', PUBLIC_BASE_URL: old, PUBLIC_URL: old };
+    configurePosOrigin(env, 'pos');
+    assert.equal(env.PUBLIC_BASE_URL, 'https://bringness.de');
+    assert.equal(env.PUBLIC_URL, 'https://bringness.de');
+  }
+  for (const [mode, nodeEnv, url] of [['combined','production','https://bringness-ai.com'], ['pos','development','http://localhost:3000'], ['pos','production','https://custom.example']]) {
+    const env = { NODE_ENV: nodeEnv, PUBLIC_BASE_URL: url, PUBLIC_URL: url };
+    configurePosOrigin(env, mode);
+    assert.equal(env.PUBLIC_BASE_URL, url); assert.equal(env.PUBLIC_URL, url);
+  }
+});
