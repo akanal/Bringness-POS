@@ -36,6 +36,10 @@ Management includes an authenticated SVG download for each active table, availab
 - Public discovery: `GET /api/v1/guest/center/restaurants` and `GET /api/v1/guest/center/menu`.
 - Guest checkout: `POST /api/v1/guest/center/order`; the server rejects checkout unless `CENTER_CHECKOUT_ENABLED=true`. This flag is not rollout authorization and must stay disabled pending production readiness.
 
+## Checkout reload recovery
+
+Before submitting, the guest page saves the cart and request ID in sessionStorage, keyed to the table token. Reloading the same tab restores the locked cart and retries the existing server-idempotent request. No new checkout is sent if storage cannot be written or an existing saved attempt cannot be read. An explicit server response permitting cart editing clears the saved attempt. This recovery is limited to the same browser tab; closing it or clearing browser storage loses this local checkpoint. It does not prove a physical QR rescan or authorize rollout.
+
 ## Guest notifications
 
 The status page offers push enrollment only when explicitly enabled and configured. Consent is requested on a button click. An order-specific status token authorizes subscription storage for 24 hours. The ready transition writes an outbox entry in its transaction. A worker claims entries, sends restaurant and receipt-based collection number, removes expired endpoints and bounds retries. Delivery is at least once: a lost acknowledgement can repeat a push, with a stable per-order notification tag. Provider acceptance does not prove device display. Subscriptions expire with status access; no live push delivery has been verified.
