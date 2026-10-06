@@ -1,3 +1,4 @@
+import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
 import {recoverGuestPayment} from './center-payment-recovery.js';
 import {saveGuestSubscription,manageGuestSubscription,dispatchCenterGuestPush} from './center-guest-push.js';
 import test from 'node:test';
@@ -239,5 +240,24 @@ test('database migration and delegated setup lifecycle',async()=>{
 
 
 
+
+ const otherCompany=crypto.randomUUID(),otherOwner=crypto.randomUUID(),otherRestaurant=crypto.randomUUID();
+ await db.query('INSERT INTO companies(id) VALUES($1)',[otherCompany]);
+ await db.query("INSERT INTO users(id,company_id,role,status) VALUES($1,$2,'owner','active')",[otherOwner,otherCompany]);
+ await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[otherOwner,crypto.createHash('sha256').update('foreign-owner').digest('hex')]);
+ await db.query('INSERT INTO restaurants VALUES($1,$2,$3)',[otherRestaurant,otherCompany,'Foreign Restaurant']);
+ const invitation=await inviteCenterRestaurant(pool,{id:owner,company_id:company,role:'owner'},created.data.center.id,otherRestaurant);
+ const invitationToken=new URL(invitation.invitationUrl,'https://example.test').hash.slice('#token='.length);
+ await assert.rejects(acceptCenterInvitation(pool,{id:owner,company_id:company,role:'owner'},invitationToken),/INVITATION_NOT_ALLOWED/);
+ const joined=await acceptCenterInvitation(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},invitationToken);
+ assert.equal(joined.joined,true);assert.equal(joined.restaurantId,otherRestaurant);
+ await assert.rejects(acceptCenterInvitation(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},invitationToken),/INVITATION_NOT_ALLOWED/);
+ const foreignCenters=await call('','GET','foreign-owner');assert.equal(foreignCenters.status,200);
+ assert.equal(foreignCenters.data.centers.some(center=>center.id===created.data.center.id),true);
+ const foreignRestaurants=await call(c+'/restaurants','GET','foreign-owner');assert.equal(foreignRestaurants.status,200);
+ assert.deepEqual(foreignRestaurants.data.restaurants.map(r=>r.id),[otherRestaurant]);
+ assert.equal((await call(c+'/restaurants/'+restaurant+'/onboarding','PUT','foreign-owner',{contractStatus:'signed',merchantReference:'org_try'})).status,404);
+ const foreignConnect=await beginRestaurantMollieConnect(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},created.data.center.id,otherRestaurant,env);assert.equal(foreignConnect.status,200);
+ await assert.rejects(inviteCenterRestaurant(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},created.data.center.id,restaurant),/INVITATION_NOT_ALLOWED/);
  }finally{await db.close();}
 });
