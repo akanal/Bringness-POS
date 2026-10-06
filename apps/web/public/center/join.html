@@ -1,4 +1,5 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Center-Einladung</title><style>body{font:20px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}button{font:inherit;padding:16px}</style></head><body><main><h1>Center-Einladung</h1><p>Bestätige den Beitritt mit dem Betreiberkonto des eingeladenen Restaurants. Der Beitritt aktiviert keine Zahlungen und gibt niemandem Zugriff auf dein Händlerkonto.</p><a href="/pos/" target="_blank" rel="noopener">In der Kasse anmelden</a><p id="status" role="status"></p><button id="accept">Beitritt bestätigen</button></main><script type="module">
+window.addEventListener('hashchange',()=>location.reload());
 const token=new URLSearchParams(location.hash.slice(1)).get('token')||'',button=document.getElementById('accept'),status=document.getElementById('status');
 button.onclick=async()=>{
  const auth=localStorage.getItem('bringness-pos-token');if(!auth){status.textContent='Bitte zuerst mit dem Betreiberkonto in der Kasse anmelden.';return;}
