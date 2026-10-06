@@ -1,3 +1,4 @@
+import {exportCenterTableQr} from './center-table-qr.js';
 import {visibleCenterProducts} from './center-availability.js';
 import crypto from 'node:crypto';
 import {guestCenterCheckout,guestCheckoutError} from './center-guest-checkout.js';
@@ -183,6 +184,14 @@ export function createCenterHandler(pool) {
         return q.rowCount ? send(res,200,{ok:true}) : send(res,409,{error:'Einrichtung nicht abschließbar oder bereits gesperrt'});
       }
       return send(res,400,{error:'Unbekannte Einrichtungsaktion'});
+    }
+    const qrExport=p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/tables\/([0-9a-f-]{36})\/qr$/i);
+    if(qrExport){
+      if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
+      const result=await exportCenterTableQr(pool,user,qrExport[1],qrExport[2]);
+      if(result.status!==200)return send(res,result.status,{error:result.error});
+      res.writeHead(200,{'content-type':'image/svg+xml; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-disposition':'attachment; filename="'+result.filename+'"'});
+      res.end(result.svg);return true;
     }
     const match = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/(tables|restaurants)$/i);
     if (!match || !uuid.test(match[1])) return send(res, 404, {error: 'Nicht gefunden'});
