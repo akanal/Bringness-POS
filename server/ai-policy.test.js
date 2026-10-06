@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {passwordHash,passwordMatches,validPassword,quantity,orderAmounts,mayActOnOrder} from './ai-policy.js';
+const saved=passwordHash('sicheres-test-passwort');
+assert(passwordMatches('sicheres-test-passwort',saved));
+assert(!passwordMatches('anderes-passwort',saved));
+assert.notEqual(passwordHash('sicheres-test-passwort'),saved);
+assert(validPassword('Ab1!xy'));assert(validPassword('Äb1!xy'));
+for(const value of ['Ab1!x','abcdef','ABCDEF','Abcdef','abc1!x','ABC1!X','Abcd!x','Ab123x','Ab12 x','A1!'+ 'x'.repeat(126),null,123456])assert(!validPassword(value),String(value));
+assert(validPassword('A1!'+ 'x'.repeat(125)));
+assert.equal(quantity('1.125'),1.125);
+for(const x of [-1,NaN,Infinity,1.0001])assert.throws(()=>quantity(x));
+assert.deepEqual(orderAmounts(1250,4),{netCents:5000,commissionCents:100});
+assert.deepEqual(orderAmounts(999,1),{netCents:999,commissionCents:20});
+assert.throws(()=>orderAmounts(100,1.5));assert.throws(()=>orderAmounts(100,-1));
+const order={buyer_id:'buyer',supplier_id:'supplier',status:'sent'};
+assert(mayActOnOrder({id:'supplier'},order,'accept'));
+assert(!mayActOnOrder({id:'buyer'},order,'accept'));
+assert(!mayActOnOrder({id:'other'},order,'cancel'));
+assert(!mayActOnOrder({id:'buyer'},order,'receive'));
+order.status='accepted';assert(mayActOnOrder({id:'buyer'},order,'receive'));
+order.status='received';assert(!mayActOnOrder({id:'buyer'},order,'receive'));assert(!mayActOnOrder({id:'supplier'},order,'cancel'));
+console.log('AI policy checks passed: password hashing, quantities, commission and order access.');
+

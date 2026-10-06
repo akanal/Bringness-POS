@@ -1,0 +1,1 @@
+window.BringnessI18n.mount({system:"ai",storageKey:"bringness-ai-language",selectorId:"ai-language",nodes:"button,label,h1,h2,h3[data-i18n],span[data-i18n],th,p,small,.metric,td[data-i18n],#notice,footer a,option",attributes:"[placeholder],[aria-label]"});
