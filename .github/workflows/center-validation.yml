@@ -1,0 +1,47 @@
+name: Center validation
+on:
+  pull_request:
+    paths:
+      - 'server/center*'
+      - 'apps/web/public/center/**'
+      - '.github/workflows/center-validation.yml'
+  push:
+    branches: ['feat/center-mode-foundation']
+    paths:
+      - 'server/center*'
+      - 'apps/web/public/center/**'
+      - '.github/workflows/center-validation.yml'
+permissions:
+  contents: read
+jobs:
+  center-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: center_test
+          POSTGRES_PASSWORD: center_test
+          POSTGRES_DB: center_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U center_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated test dependencies
+        run: npm install --prefix "$RUNNER_TEMP/center-deps" --no-save pg@8.13.1 playwright@1.62.1
+      - name: Install Chromium
+        run: node "$RUNNER_TEMP/center-deps/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Run authorization checks
+        run: node --test server/center-core.test.js
+      - name: Verify migration and lifecycle on PostgreSQL
+        env:
+          CENTER_TEST_DATABASE_URL: postgres://center_test:center_test@localhost:5432/center_test
+        run: CENTER_TEST_PG="$RUNNER_TEMP/center-deps/node_modules/pg/lib/index.js" node --test server/center-database.test.js
+      - name: Verify management UI in Chromium
+        run: CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node --test server/center-browser.test.js

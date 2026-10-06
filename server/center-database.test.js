@@ -5,9 +5,10 @@ import {readFile} from 'node:fs/promises';
 import {Readable} from 'node:stream';
 import {createCenterHandler} from './center-core.js';
 const dependency=process.env.CENTER_TEST_PGLITE || '@electric-sql/pglite';
-const {PGlite}=await import(dependency);
+const engine=await import(process.env.CENTER_TEST_DATABASE_URL ? (process.env.CENTER_TEST_PG || 'pg') : dependency);
 test('database migration and delegated setup lifecycle',async()=>{
- const db=new PGlite();
+ const db=process.env.CENTER_TEST_DATABASE_URL ? new engine.default.Pool({connectionString:process.env.CENTER_TEST_DATABASE_URL}) : new engine.PGlite();
+ if(process.env.CENTER_TEST_DATABASE_URL){db.exec=sql=>db.query(sql);db.close=()=>db.end();}
  try {
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
