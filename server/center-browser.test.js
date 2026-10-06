@@ -6,18 +6,21 @@ test('center management hides table creation until approval and after completion
  const browser=await chromium.launch({headless:true});
  try{
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
- let approved=false,locked=false,tables=[];
+ let approved=false,locked=false,tables=[],qrRequests=0;
  await page.route('https://center.test/**',async route=>{
  const req=route.request(),url=new URL(req.url());let data;
  if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
  if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
  else if(url.pathname==='/api/v1/centers')data={centers:[{id:'test-center',name:'Center'}]};
- else if(url.pathname.endsWith('/restaurants'))data={restaurants:[]};
+ else if(url.pathname.endsWith('/qr')){
+ assert.equal(req.headers().authorization,'Bearer test');assert.equal(locked,true);qrRequests++;
+ return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="white"/></svg>'});
+ }else if(url.pathname.endsWith('/restaurants'))data={restaurants:[]};
  else if(url.pathname.endsWith('/setup')){
  if(req.method()==='PUT'){assert.equal(req.postDataJSON().action,'complete');locked=true;data={ok:true};}
  else data={setup:{can_setup:approved,setup_completed_at:locked?'now':null},canApprove:false};
  }else if(url.pathname.endsWith('/tables')){
- if(req.method()==='POST'){assert.equal(approved&&!locked,true);tables.push({name:req.postDataJSON().name,qr_token:'a'.repeat(48)});data={table:tables.at(-1)};}else data={tables};
+ if(req.method()==='POST'){assert.equal(approved&&!locked,true);tables.push({id:'22222222-2222-4222-8222-222222222222',name:req.postDataJSON().name,qr_token:'a'.repeat(48)});data={table:tables.at(-1)};}else data={tables};
  }else throw Error('Unexpected request '+url.pathname);
  return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
  });
@@ -30,7 +33,12 @@ test('center management hides table creation until approval and after completion
  await page.locator('#tables').getByText('Gastzugang öffnen').waitFor();
  await page.locator('#setupComplete button').click();
  await page.locator('#setupStatus').getByText('Ersteinrichtung abgeschlossen.',{exact:true}).waitFor();
- assert.equal(await page.locator('#newTable').isVisible(),false);assert.equal(await page.locator('#setupComplete').isVisible(),false);assert.deepEqual(errors,[]);
+ assert.equal(await page.locator('#newTable').isVisible(),false);assert.equal(await page.locator('#setupComplete').isVisible(),false);
+ const downloadEvent=page.waitForEvent('download');
+ await page.getByRole('button',{name:'QR-Bild herunterladen',exact:true}).click();
+ const download=await downloadEvent;
+ assert.equal(download.suggestedFilename(),'center-tisch-22222222-2222-4222-8222-222222222222.svg');
+ assert.equal(await download.failure(),null);assert.equal(qrRequests,1);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
 test('guest cart keeps the same payment attempt after an uncertain response',async()=>{
