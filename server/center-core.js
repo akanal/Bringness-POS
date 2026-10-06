@@ -56,6 +56,22 @@ export function createCenterHandler(pool) {
         throw error;
        }
       }
+      if(p==='/api/v1/guest/center/manifest'){
+       if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
+       const statusToken=url.searchParams.get('token')||'';
+       if(!/^[a-f0-9]{64}$/.test(statusToken))return send(res,404,{error:'Bestellung nicht gefunden'});
+       const order=(await pool.query(`SELECT o.id FROM orders o
+        LEFT JOIN center_checkout_attempts a ON a.order_id=o.id
+        LEFT JOIN center_order_payments cp ON cp.order_id=o.id
+        WHERE (a.guest_status_token=$1 OR cp.guest_status_token=$1)
+        AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
+       if(!order)return send(res,404,{error:'Bestellung nicht gefunden'});
+       res.writeHead(200,{'content-type':'application/manifest+json','cache-control':'no-store','referrer-policy':'no-referrer'});
+       res.end(JSON.stringify({id:'/center/status.html',name:'Bringness Abholung',short_name:'Abholung',
+        start_url:'/center/status.html#token='+statusToken,scope:'/center/',display:'standalone',
+        theme_color:'#d35c13',background_color:'#f7f4f0',
+        icons:[{src:'/assets/bringness-logo.png',type:'image/png'}]}));return true;
+      }
       if(p==='/api/v1/guest/center/status'){
         if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
         const statusToken=url.searchParams.get('token')||'';
