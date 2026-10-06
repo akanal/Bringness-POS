@@ -89,3 +89,22 @@ test('kitchen blocks later starts while allowing parallel preparations to finish
  assert.equal(actions,1);assert.equal(await later.getByRole('button').isDisabled(),true);assert.equal(await first.getByRole('button').isEnabled(),true);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+test('guest status retains milestones through an outage and recovers online',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));let offline=false,ready=false;
+ await page.route('https://center.test/**',async route=>{
+ const url=new URL(route.request().url());
+ if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
+ if(url.pathname!=='/api/v1/guest/center/status')throw Error('Unexpected request');
+ if(offline)return route.abort('internetdisconnected');
+ return route.fulfill({contentType:'application/json',body:JSON.stringify({order:{restaurant_name:'Restaurant',status:ready?'ready':'preparing',paid_at:'2026-10-06T12:00:00Z',preparation_started_at:'2026-10-06T12:01:00Z',ready_at:ready?'2026-10-06T12:05:00Z':null}})});
+ });
+ await page.goto('https://center.test/center/status.html#token='+ 'a'.repeat(64));
+ await page.locator('#status').getByText('Deine Bestellung wird zubereitet.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),2);
+ offline=true;await page.locator('#refresh').click();await page.locator('#connection').getByText(/veraltet/).waitFor();
+ assert.equal(await page.locator('#status').textContent(),'Deine Bestellung wird zubereitet.');assert.equal(await page.locator('#history li').count(),2);
+ offline=false;ready=true;await page.evaluate(()=>window.dispatchEvent(new Event('online')));
+ await page.locator('#status').getByText('Deine Bestellung ist abholbereit.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),3);assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
