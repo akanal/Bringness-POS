@@ -338,3 +338,29 @@ test('late '+action+' result cannot affect another Center selection',async()=>{
  }finally{release();await browser.close();}
 });
 }
+
+test('creating the first Center loads its management view',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>localStorage.setItem('bringness-pos-token','operator'));
+ await page.route('https://center.test/**',async route=>{
+ const req=route.request(),url=new URL(req.url());let data;
+ if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
+ if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
+ else if(url.pathname==='/api/v1/centers'){
+ if(req.method()==='POST'){assert.equal(req.postDataJSON().name,'Mein Center');data={center:{id:'first',name:'Mein Center'}};}else data={centers:[]};
+ }else if(url.pathname==='/api/v1/centers/first/restaurants')data={restaurants:[]};
+ else if(url.pathname==='/api/v1/centers/first/tables')data={tables:[]};
+ else if(url.pathname==='/api/v1/centers/first/setup')data={setup:{can_setup:false,can_export_qr:false,setup_completed_at:null},canApprove:false};
+ else throw Error('Unexpected request');
+ return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/manage.html');
+ await page.locator('#status').getByText('Noch kein Center angelegt.',{exact:true}).waitFor();
+ await page.locator('#newCenter input').fill('Mein Center');await page.locator('#newCenter button').click();
+ await page.locator('#setupStatus').getByText('Ersteinrichtung offen.',{exact:true}).waitFor();
+ assert.equal(await page.locator('#centers').inputValue(),'first');assert.equal(await page.locator('#inviteSection').isVisible(),true);
+ assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
