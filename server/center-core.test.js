@@ -99,3 +99,10 @@ test('menu ordering requires both rollout authorization and provider readiness',
  assert.equal(centerOrderingAvailable('true',{CENTER_CHECKOUT_ENABLED:'true'}),false);
  assert.equal(centerOrderingAvailable(true,{CENTER_CHECKOUT_ENABLED:'true'}),true);
 });
+
+test('home-screen manifest preserves the protected order link and expires with the order',async()=>{
+ const r=await request(async(sql,args)=>{assert.match(sql,/24 hours/);assert.equal(args[0],'a'.repeat(64));return rows({id});},'/api/v1/guest/center/manifest?token='+'a'.repeat(64));
+ assert.equal(r.status,200);assert.equal(r.data.display,'standalone');assert.equal(r.data.start_url,'/center/status.html#token='+'a'.repeat(64));assert.equal(r.data.scope,'/center/');
+ const expired=await request(async()=>rows(),'/api/v1/guest/center/manifest?token='+'a'.repeat(64));assert.equal(expired.status,404);
+ const invalid=await request(()=>{throw Error('must not query');},'/api/v1/guest/center/manifest?token=bad');assert.equal(invalid.status,404);
+});
