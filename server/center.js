@@ -71,6 +71,16 @@ export async function migrateCenter() {
       guest_status_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-',''),
       FOREIGN KEY(center_id,restaurant_id) REFERENCES center_restaurants(center_id,restaurant_id)
     );
+    CREATE TABLE IF NOT EXISTS center_guest_notifications (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      order_id uuid NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+      event_type text NOT NULL CHECK(event_type='ready'),
+      state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','sending','sent','failed')),
+      attempts integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      sent_at timestamptz,
+      UNIQUE(order_id,event_type)
+    );
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS preparation_started_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS ready_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS guest_status_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');
