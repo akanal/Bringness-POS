@@ -23,6 +23,9 @@ async function body(req) {
   }
   return raw ? JSON.parse(raw) : {};
 }
+export function centerOrderingAvailable(providerReady,env=process.env){
+ return env.CENTER_CHECKOUT_ENABLED==='true'&&providerReady===true;
+}
 export function createCenterHandler(pool) {
   return async (req, res) => {
     const url = new URL(req.url, 'http://local');
@@ -56,14 +59,18 @@ export function createCenterHandler(pool) {
       if (!table) return send(res, 404, {error: 'Center-Code ungültig'});
       const restaurantId = url.searchParams.get('restaurantId');
       if (p === '/api/v1/guest/center/restaurants') {
-        const restaurants = (await pool.query(`SELECT r.id,r.name,r.logo_data
+        const restaurants = (await pool.query(`SELECT r.id,r.name,r.logo_data,(cr.contract_status='signed' AND cr.payment_status='verified' AND EXISTS(
+          SELECT 1 FROM center_mollie_credentials mc WHERE mc.restaurant_id=r.id
+          AND mc.verified_at IS NOT NULL AND mc.profile_id IS NOT NULL AND mc.organization_id=cr.merchant_reference)) provider_ready
           FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id
           WHERE cr.center_id=$1 AND cr.active=true ORDER BY r.name,r.id`, [table.center_id])).rows;
-        return send(res, 200, {center: table.center_name, table: table.name, restaurants, orderingAvailable: false});
+        return send(res, 200, {center: table.center_name, table: table.name, restaurants:restaurants.map(({provider_ready,...restaurant})=>({...restaurant,orderingAvailable:centerOrderingAvailable(provider_ready)})), orderingAvailable:process.env.CENTER_CHECKOUT_ENABLED==='true'});
       }
       if (p !== '/api/v1/guest/center/menu') return send(res, 404, {error: 'Nicht gefunden'});
       if (!uuid.test(restaurantId || '')) return send(res, 404, {error: 'Restaurant nicht gefunden'});
-      const restaurant = (await pool.query(`SELECT r.id,r.name,r.logo_data FROM center_restaurants cr
+      const restaurant = (await pool.query(`SELECT r.id,r.name,r.logo_data,(cr.contract_status='signed' AND cr.payment_status='verified' AND EXISTS(
+          SELECT 1 FROM center_mollie_credentials mc WHERE mc.restaurant_id=r.id
+          AND mc.verified_at IS NOT NULL AND mc.profile_id IS NOT NULL AND mc.organization_id=cr.merchant_reference)) provider_ready FROM center_restaurants cr
         JOIN restaurants r ON r.id=cr.restaurant_id
         WHERE cr.center_id=$1 AND cr.restaurant_id=$2 AND cr.active=true`, [table.center_id, restaurantId])).rows[0];
       if (!restaurant) return send(res, 404, {error: 'Restaurant nicht gefunden'});
@@ -75,7 +82,7 @@ export function createCenterHandler(pool) {
         FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN product_translations av ON av.product_id=p.id AND av.language_code='avl'
         LEFT JOIN product_translations pt ON pt.product_id=p.id AND pt.language_code=$2
         WHERE p.restaurant_id=$1 AND p.active=true ORDER BY c.sort_order,p.name,p.id`, [restaurantId, /^[a-z]{2,3}$/.test(lang) ? lang : 'de'])).rows;
-      return send(res, 200, {center: table.center_name, table: table.name, restaurant, products: visibleCenterProducts(products), orderingAvailable: false});
+      return send(res, 200, {center: table.center_name, table: table.name, restaurant:{id:restaurant.id,name:restaurant.name,logo_data:restaurant.logo_data}, products: visibleCenterProducts(products), orderingAvailable:centerOrderingAvailable(restaurant.provider_ready)});
     }
     if(p==='/api/v1/centers/mollie/callback'){
       if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
