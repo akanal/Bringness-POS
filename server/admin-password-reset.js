@@ -32,12 +32,12 @@ function mailConfigured(){
   return Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
 }
 async function sendResetMail(email,token,returnTo){
-  const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness-pos.de')).replace(/\/$/,"");
+  const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness.de')).replace(/\/$/,"");
   if(new URL(origin).protocol!=="https:")throw Error("Öffentliche Adresse muss HTTPS verwenden");
   const link=origin+"/admin/reset.html"+(returnTo==='ai'?"?returnTo=ai":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   await sendSmtpMail({
-    from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness POS – Passwort zurücksetzen":"Bringness POS Admin – Passwort zurücksetzen",
+    from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
     html:`<h1>Passwort zurücksetzen</h1><p><a href="${escape(link)}" style="display:inline-block;background:#183d35;color:#fff;padding:16px 24px;border-radius:24px;text-decoration:none">Neues Passwort festlegen</a></p><p>Der Button ist 30 Minuten gültig. Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p>`,
     text:"Öffne diesen Link, um dein Passwort innerhalb von 30 Minuten neu zu setzen:\n\n"+link+"\n\nWenn du den Reset nicht angefordert hast, ignoriere diese Nachricht."
   });
@@ -148,6 +148,7 @@ export async function requireAdminPasswordChange(req,res){
   if(!q.rows[0]?.must_change_password)return false;
   send(res,428,{error:"Bitte zuerst das Startpasswort ändern",mustChangePassword:true});return true;
 }
+
 
 
 
