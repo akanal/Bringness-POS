@@ -1,6 +1,7 @@
 import {handlePosStockBridge,migratePosStockEvents} from './pos-stock-bridge.js';
 import {handleLanguageCatalog,ensureLanguageDatabase} from "./language-catalog.js";
 import fs from "node:fs";
+import {handleCenter,migrateCenter} from "./center.js";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
 const appMode = runtimeMode();
@@ -45,6 +46,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
       if (await handlePosStockBridge(req,res)) return;
+      if (await handleCenter(req,res)) return;
       if (await handleQrService(req,res)) return;
       if (await handleSupport(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
@@ -118,6 +120,7 @@ async function migrateWithRetry(){
       await migrateRestaurantOwnerFeatures();
       await migrateQrService();
       await migratePosStockEvents();
+      await migrateCenter();
       await migratePublicReceipts();
       await migrateTseIntegration();
       await migrateBillingAccess();

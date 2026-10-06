@@ -1,4 +1,5 @@
 import pg from "pg";
+import {processPreparedTse} from "./tse-signing-worker.js";
 import { ensureTseSchema, createUnconfiguredTseAdapter } from "./tse-core.js";
 import { createSwissbitTseAdapter } from "./tse-swissbit.js";
 
@@ -187,3 +188,10 @@ export async function handleTseRoutes(req,res){
   });
   return true;
 }
+
+let signingBusy=false;
+export async function tseSigningTick(){
+ if(process.env.TSE_AUTOSIGN_ENABLED!=='true'||signingBusy)return;
+ signingBusy=true;try{await processPreparedTse(pool,adapterForRestaurant);}finally{signingBusy=false;}
+}
+const signingTimer=setInterval(()=>tseSigningTick().catch(()=>console.error('TSE signing worker failed')),10000);signingTimer.unref();
