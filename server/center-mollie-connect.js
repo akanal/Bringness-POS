@@ -55,7 +55,8 @@ export async function completeRestaurantMollieConnect(pool,params,browserNonce,e
  JOIN center_restaurants cr ON cr.restaurant_id=r.id
  WHERE cr.center_id=$1 AND r.id=$2 AND cr.active=true AND r.company_id=u.company_id
  AND u.status='active' AND u.role IN ('owner','admin') AND NOT coalesce(u.must_change_password,false)
- ON CONFLICT(restaurant_id) DO UPDATE SET token_envelope=EXCLUDED.token_envelope,expires_at=EXCLUDED.expires_at,updated_at=now()
+ ON CONFLICT(restaurant_id) DO UPDATE SET token_envelope=EXCLUDED.token_envelope,expires_at=EXCLUDED.expires_at,
+ profile_id=NULL,organization_id=NULL,verified_at=NULL,updated_at=now()
  RETURNING restaurant_id) UPDATE center_restaurants cr SET payment_status='pending',merchant_reference=NULL
  FROM stored WHERE cr.restaurant_id=stored.restaurant_id AND cr.center_id=$1 RETURNING cr.restaurant_id`,[state.center_id,state.restaurant_id,encrypted,tokens.expires_in,state.user_id]);
  if(!q.rows.length)return {status:403,error:'Restaurantfreigabe nicht mehr gültig'};
