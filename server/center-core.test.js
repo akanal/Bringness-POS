@@ -42,3 +42,13 @@ test('owner cannot add another company restaurant',async()=>{
 test('guests see only active center memberships and no internal table tokens',async()=>{
   const r=await request(async(sql)=>{if(sql.includes('FROM center_tables'))return rows({center_id:id,center_name:'Center',name:'1'});assert.match(sql,/cr.active=true/);assert.doesNotMatch(sql,/qr_token/);return rows({id,name:'Restaurant'});},'/api/v1/guest/center/restaurants?code='+code);assert.equal(r.status,200);assert.equal(r.data.orderingAvailable,false);assert.equal(r.data.restaurants[0].name,'Restaurant');
 });
+
+test('restaurant owner cannot create fixed center tables without delegated approval',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:false});if(sql.includes('FROM centers'))return rows({id});throw Error('must not create table');},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,403);
+});
+test('superadmin can create a fixed table within the scoped center',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:true});if(sql.includes('FROM centers'))return rows({id});assert.match(sql,/INSERT INTO center_tables/);return rows({id,name:'Tisch 1'});},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,201);
+});
+test('superadmin table creation still checks center ownership',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:true});if(sql.includes('FROM centers'))return rows();throw Error('must not create table');},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,404);
+});

@@ -57,10 +57,11 @@ export function createCenterHandler(pool) {
       return send(res, 200, {center: table.center_name, table: table.name, restaurant, products, orderingAvailable: false});
     }
     const raw = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    const user = raw && (await pool.query(`SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id
+    const user = raw && (await pool.query(`SELECT u.id,u.company_id,u.role,
+      EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=u.id AND pa.active=true) platform_admin FROM sessions s JOIN users u ON u.id=s.user_id
       WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND coalesce(u.must_change_password,false)=false`, [crypto.createHash('sha256').update(raw).digest('hex')])).rows[0];
     if (!user) return send(res, 401, {error: 'Nicht angemeldet'});
-    if (!['owner', 'admin'].includes(user.role)) return send(res, 403, {error: 'Nur Besitzer können Center verwalten'});
+    if (!user.platform_admin && !['owner', 'admin'].includes(user.role)) return send(res, 403, {error: 'Nur Besitzer können Center verwalten'});
     if (p === '/api/v1/centers' && req.method === 'GET') {
       return send(res, 200, {centers: (await pool.query('SELECT id,name,active FROM centers WHERE company_id=$1 ORDER BY name,id', [user.company_id])).rows});
     }
@@ -98,6 +99,7 @@ export function createCenterHandler(pool) {
     if (match[2] === 'tables') {
       if (req.method === 'GET') return send(res, 200, {tables: (await pool.query('SELECT id,name,qr_token,active FROM center_tables WHERE center_id=$1 ORDER BY name,id', [centerId])).rows});
       if (req.method !== 'POST') return send(res, 405, {error: 'Methode nicht erlaubt'});
+      if (!user.platform_admin) return send(res, 403, {error: 'Feste Center-Tische dürfen nur vom Superadmin eingerichtet werden. Die delegierte Ersteinrichtung ist noch nicht freigeschaltet.'});
       if (!name || name.length > 80) return send(res, 400, {error: 'Tischname erforderlich (maximal 80 Zeichen)'});
       const table = (await pool.query('INSERT INTO center_tables(center_id,name,qr_token) VALUES($1,$2,$3) RETURNING id,name,qr_token,active', [centerId, name, crypto.randomBytes(24).toString('hex')])).rows[0];
       return send(res, 201, {table});
