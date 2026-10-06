@@ -42,6 +42,8 @@ export async function dispatchCenterGuestPush(pool,sender){
  JOIN center_order_payments cp ON cp.order_id=n.order_id`)).rows;
  for(const job of jobs){
   try{
+   const active=await pool.query('SELECT 1 FROM center_guest_push WHERE order_id=$1 AND endpoint_hash=$2',[job.order_id,job.endpoint_hash]);
+   if(!active.rows.length){await pool.query("UPDATE center_guest_notifications SET state='pending' WHERE id=$1",[job.id]);continue;}
    const subscription=validateGuestSubscription(job.subscription);
    await sender(subscription,JSON.stringify({title:job.restaurant_name+' · Abholbereit',
     body:'Deine Bestellung '+(job.collection_number||'')+' ist abholbereit.',
@@ -56,4 +58,21 @@ export async function dispatchCenterGuestPush(pool,sender){
  // Order-specific consent and subscriptions expire with the guest status link.
  await pool.query("DELETE FROM center_guest_push s USING orders o WHERE o.id=s.order_id AND o.created_at<=now()-interval '24 hours'");
  return jobs.length;
+}
+
+export async function manageGuestSubscription(pool,token,subscription,action){
+ if(!/^[a-f0-9]{64}$/.test(token||'')||!['status','disable'].includes(action))throw Error('INVALID_PUSH_ACTION');
+ const safe=validateGuestSubscription(subscription),hash=crypto.createHash('sha256').update(safe.endpoint).digest('hex');
+ const order=(await pool.query(`SELECT o.id FROM orders o
+ LEFT JOIN center_checkout_attempts a ON a.order_id=o.id
+ LEFT JOIN center_order_payments cp ON cp.order_id=o.id
+ WHERE (a.guest_status_token=$1 OR cp.guest_status_token=$1)
+ AND o.created_at>now()-interval '24 hours'`,[token])).rows[0];
+ if(!order)return {found:false};
+ if(action==='disable'){
+  await pool.query('DELETE FROM center_guest_push WHERE order_id=$1 AND endpoint_hash=$2',[order.id,hash]);
+  return {found:true,subscribed:false};
+ }
+ const q=await pool.query('SELECT 1 FROM center_guest_push WHERE order_id=$1 AND endpoint_hash=$2',[order.id,hash]);
+ return {found:true,subscribed:!!q.rows.length};
 }
