@@ -1,4 +1,4 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="status" role="status">Status wird geladen …</p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="refresh">Aktualisieren</button><p>Bitte diese Seite geöffnet lassen. Bei geschlossener Seite erfolgt über diese Anzeige keine Benachrichtigung.</p></main><script type="module">
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="refresh">Aktualisieren</button><p>Bitte diese Seite geöffnet lassen. Bei geschlossener Seite erfolgt über diese Anzeige keine Benachrichtigung.</p></main><script type="module">
 async function request(url,options={}){
  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
  try{const response=await fetch(url,{...options,signal:controller.signal});const data=await response.json();return {ok:response.ok,status:response.status,json:async()=>data};}
@@ -21,6 +21,7 @@ async function load(){
   const data=await r.json();
   if(!r.ok){if(r.status===404||r.status===410)finished=true;throw Error(data.error||'Status nicht verfügbar');}
   document.getElementById('restaurant').textContent=data.order.restaurant_name;
+  const collection=document.getElementById('collection');collection.hidden=!data.order.collection_number;collection.textContent=data.order.collection_number?'Abholnummer: '+data.order.collection_number:'';
   state.textContent=labels[data.order.status]||'Status wird geprüft.';
   renderHistory(data.order);
   connection.textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE');
