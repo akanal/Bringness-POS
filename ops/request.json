@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "54256eaf3e59e026a176ff5b307d820df7fa16a0",
-  "requestId": "bringness-service-brand-live-20261006"
+  "revision": "544e6370cfd46a28bde921c38e495243eef22fec",
+  "requestId": "bringness-legacy-redirect-live-20261006"
 }
