@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import {beginRestaurantPaymentConnect} from './center-payment-providers.js';
 import {centerKitchenQueue,advanceCenterKitchen} from './center-payment-release.js';
 
@@ -67,6 +68,12 @@ export function createCenterHandler(pool) {
         WHERE p.restaurant_id=$1 AND p.active=true ORDER BY c.sort_order,p.name,p.id`, [restaurantId, /^[a-z]{2,3}$/.test(lang) ? lang : 'de'])).rows;
       return send(res, 200, {center: table.center_name, table: table.name, restaurant, products, orderingAvailable: false});
     }
+    if(p==='/api/v1/centers/mollie/callback'){
+      if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
+      const nonce=String(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith('center-mollie-nonce='))?.slice('center-mollie-nonce='.length)||'';
+      const {status,...data}=await completeRestaurantMollieConnect(pool,Object.fromEntries(url.searchParams),nonce);
+      res.setHeader('set-cookie','center-mollie-nonce=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/centers/mollie/callback; Max-Age=0');return send(res,status,data);
+    }
     const raw = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     const user = raw && (await pool.query(`SELECT u.id,u.company_id,u.role,
       EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=u.id AND pa.active=true) platform_admin FROM sessions s JOIN users u ON u.id=s.user_id
@@ -106,7 +113,7 @@ export function createCenterHandler(pool) {
     if(connect){
       if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
       if(!uuid.test(connect[1])||!uuid.test(connect[2]))return send(res,404,{error:'Nicht gefunden'});
-      const {status,...data}=await beginRestaurantPaymentConnect(pool,user,connect[1],connect[2],b.provider);return send(res,status,data);
+      const {status,browserNonce,...data}=await beginRestaurantPaymentConnect(pool,user,connect[1],connect[2],b.provider);if(browserNonce)res.setHeader('set-cookie','center-mollie-nonce='+browserNonce+'; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/centers/mollie/callback; Max-Age=600');return send(res,status,data);
     }
     const onboarding = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/onboarding$/i);
     if (onboarding) {

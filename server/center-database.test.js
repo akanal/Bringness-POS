@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {beginRestaurantMollieConnect,completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -66,6 +67,15 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await advanceCenterKitchen(pool,restaurant,order,'ready')).ok,true);
  assert.equal((await advanceCenterKitchen(pool,restaurant,order,'ready')).alreadyApplied,true);
  assert.equal((await advanceCenterKitchen(pool,restaurant,order,'preparing')).ok,false);
+ const env={CENTER_MOLLIE_CLIENT_ID:'app_test',CENTER_MOLLIE_CLIENT_SECRET:'test-secret',CENTER_MOLLIE_REDIRECT_URI:'https://example.test/api/v1/centers/mollie/callback',CENTER_MOLLIE_TOKEN_KEY:'b'.repeat(64)};
+ const begun=await beginRestaurantMollieConnect(pool,{id:owner,company_id:company},created.data.center.id,restaurant,env);assert.equal(begun.status,200);
+ const params={state:new URL(begun.authorizationUrl).searchParams.get('state'),code:'test-code'};
+ const provider=async()=>({ok:true,json:async()=>({access_token:'test-access',refresh_token:'test-refresh',expires_in:3600})});
+ assert.equal((await completeRestaurantMollieConnect(pool,params,begun.browserNonce,env,provider)).connected,true);
+ assert.equal((await completeRestaurantMollieConnect(pool,params,begun.browserNonce,env,provider)).status,400);
+ assert.equal((await db.query('SELECT payment_status FROM center_restaurants')).rows[0].payment_status,'pending');
+ assert.equal((await db.query('SELECT token_envelope FROM center_mollie_credentials')).rows[0].token_envelope.includes('test-access'),false);
+
 
 
  }finally{await db.close();}

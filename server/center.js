@@ -37,6 +37,11 @@ export async function migrateCenter() {
       center_id uuid NOT NULL,restaurant_id uuid NOT NULL,expires_at timestamptz NOT NULL,
       FOREIGN KEY(center_id,restaurant_id) REFERENCES center_restaurants(center_id,restaurant_id)
     );
+    ALTER TABLE center_mollie_oauth_states ADD COLUMN IF NOT EXISTS browser_hash text;
+    CREATE TABLE IF NOT EXISTS center_mollie_credentials (
+      restaurant_id uuid PRIMARY KEY REFERENCES restaurants(id),token_envelope text NOT NULL,
+      expires_at timestamptz NOT NULL,updated_at timestamptz NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS center_order_payments (
       payment_id text PRIMARY KEY,
       order_id uuid UNIQUE NOT NULL REFERENCES orders(id),
