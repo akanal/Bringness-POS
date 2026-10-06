@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'server/center*'
+      - 'server/public-receipt*.js'
       - 'server/ai-*'
       - 'server/pos-stock-*'
       - 'server/tse-*'
@@ -15,6 +16,7 @@ on:
     branches: ['feat/center-mode-foundation']
     paths:
       - 'server/center*'
+      - 'server/public-receipt*.js'
       - 'server/ai-*'
       - 'server/pos-stock-*'
       - 'server/tse-*'
