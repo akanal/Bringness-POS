@@ -1,1 +1,0 @@
-window.BringnessI18n.mount({system:'pos',storageKey:'bringness-pos-language',selectorId:'pos-language',nodes:'#auth button,#auth label,#auth h2,#auth p,#auth small,#auth a,#mainnav button,#userMenu button,#userMenu a,[data-i18n]',attributes:'#auth [aria-label],#auth [placeholder],#mainnav [aria-label],#userMenu [aria-label]'});

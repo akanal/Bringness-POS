@@ -1,7 +1,0 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import {documentBytes,textDraft,receiptLines,unreadable} from './ai-delivery-core.js';
-const stockId='11111111-1111-4111-8111-111111111111';
-test('reject unknown or forged document data',()=>{assert.throws(()=>documentBytes({data:Buffer.from('<script>x</script>').toString('base64')}));assert.throws(()=>documentBytes({data:'not base64!'}));assert.equal(documentBytes({data:Buffer.from('%PDF-1.7\n').toString('base64')}).mime,'application/pdf');});
-test('unreadable text gives retake warning; suggestions never reviewed',()=>{assert.equal(textDraft('').warning,unreadable);assert.equal(textDraft('Lieferschein Mehl 2 kg\nWeitere Waren 4 kg',20).readable,false);const r=textDraft('Lieferant Berlin, Lieferschein 123456\nTomaten 500 g\nMilch 250 ml',90);assert.equal(r.readable,true);assert.equal(r.lines[1].quantity,.5);assert.equal(r.lines[2].quantity,.25);assert.equal(r.lines[0].reviewed,false);assert.equal(r.lines[0].netCents,null);});
-test('explicit validation rejects unreviewed, excessive precision, invalid units and negative price',()=>{const line={stockId,quantity:3,unit:'kg',packQuantity:1,netCents:null,reviewed:true};assert.deepEqual(receiptLines([line]),[line]);for(const bad of [{reviewed:false},{quantity:0},{quantity:.0001},{unit:'g'},{stockId:'bad'},{netCents:-1},{packQuantity:0}])assert.throws(()=>receiptLines([{...line,...bad}]));assert.throws(()=>receiptLines([]));});

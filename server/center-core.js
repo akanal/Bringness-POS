@@ -108,8 +108,13 @@ export function createCenterHandler(pool) {
     // Cross-company enrollment requires an invitation/approval flow; never attach someone else's business.
     const restaurant = (await pool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2', [b.restaurantId, user.company_id])).rows[0];
     if (!restaurant) return send(res, 403, {error: 'Restaurant gehört nicht zu Ihrem Konto'});
-    await pool.query(`INSERT INTO center_restaurants(center_id,restaurant_id,active) VALUES($1,$2,$3)
-      ON CONFLICT(center_id,restaurant_id) DO UPDATE SET active=EXCLUDED.active`, [centerId, restaurant.id, b.active]);
+    try {
+      await pool.query(`INSERT INTO center_restaurants(center_id,restaurant_id,active) VALUES($1,$2,$3)
+        ON CONFLICT(center_id,restaurant_id) DO UPDATE SET active=EXCLUDED.active`, [centerId, restaurant.id, b.active]);
+    } catch (error) {
+      if (error.code === '23505') return send(res,409,{error:'Dieses Restaurant ist bereits einem anderen Center zugeordnet.'});
+      throw error;
+    }
     return send(res, 200, {ok: true});
   };
 }

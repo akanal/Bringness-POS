@@ -4,6 +4,9 @@ import {Readable} from 'node:stream';
 import {createCenterHandler} from './center-core.js';
 const id='11111111-1111-4111-8111-111111111111',code='a'.repeat(48);
 const rows=(...rows)=>({rows,rowCount:rows.length});
+test('restaurant cannot be enrolled into a second center even concurrently',async()=>{
+  const r=await request(async(sql)=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id});if(sql.startsWith('SELECT'))return rows({id});throw Object.assign(Error('unique restaurant membership'),{code:'23505'});},'/api/v1/centers/'+id+'/restaurants','PUT',{restaurantId:id,active:true},true);assert.equal(r.status,409);
+});
 test('manual onboarding cannot claim verified payment',async()=>{
   const r=await request(async()=>rows({role:'owner',company_id:id}),'/api/v1/centers/'+id+'/restaurants/'+id+'/onboarding','PUT',{contractStatus:'signed',merchantReference:'org_example',paymentStatus:'verified'},true);assert.equal(r.status,400);
 });
