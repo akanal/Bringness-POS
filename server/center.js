@@ -52,6 +52,10 @@ export async function migrateCenter() {
       attempted_at timestamptz,request_payload jsonb,payment_id text UNIQUE,checkout_url text,
       FOREIGN KEY(center_id,restaurant_id) REFERENCES center_restaurants(center_id,restaurant_id)
     );
+    ALTER TABLE center_checkout_attempts ADD COLUMN IF NOT EXISTS table_id uuid REFERENCES center_tables(id);
+    ALTER TABLE center_checkout_attempts ADD COLUMN IF NOT EXISTS request_id uuid;
+    ALTER TABLE center_checkout_attempts ADD COLUMN IF NOT EXISTS cart_hash text;
+    CREATE UNIQUE INDEX IF NOT EXISTS center_checkout_request_idx ON center_checkout_attempts(table_id,request_id);
     CREATE TABLE IF NOT EXISTS center_order_payments (
       payment_id text PRIMARY KEY,
       order_id uuid UNIQUE NOT NULL REFERENCES orders(id),
