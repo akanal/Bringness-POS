@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {verifyMerchantProfile} from './center-mollie-merchant.js';
 import {completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import {beginRestaurantPaymentConnect} from './center-payment-providers.js';
 import {centerKitchenQueue,advanceCenterKitchen} from './center-payment-release.js';
@@ -108,6 +109,14 @@ export function createCenterHandler(pool) {
       if (!name || name.length > 120) return send(res, 400, {error: 'Centername erforderlich (maximal 120 Zeichen)'});
       const center = (await pool.query('INSERT INTO centers(company_id,name) VALUES($1,$2) RETURNING id,name,active', [user.company_id, name])).rows[0];
       return send(res, 201, {center});
+    }
+    const verify=p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/verify-payment$/i);
+    if(verify){
+      if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
+      const owned=(await pool.query(`SELECT r.id FROM restaurants r JOIN center_restaurants cr ON cr.restaurant_id=r.id
+        JOIN centers c ON c.id=cr.center_id WHERE c.id=$1 AND r.id=$2 AND c.company_id=$3 AND r.company_id=$3 AND cr.active=true`,[verify[1],verify[2],user.company_id])).rows[0];
+      if(!owned)return send(res,404,{error:'Restaurant nicht gefunden'});
+      try{return send(res,200,await verifyMerchantProfile(pool,verify[2],b.profileId));}catch{return send(res,502,{error:'Zahlungsprofil konnte nicht bestätigt werden. Verbindung und Mollie-Profil prüfen.'});}
     }
     const connect=p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/connect$/i);
     if(connect){

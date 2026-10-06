@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {withMerchantToken,verifyMerchantProfile} from './center-mollie-merchant.js';
 import {beginRestaurantMollieConnect,completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -75,6 +76,15 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await completeRestaurantMollieConnect(pool,params,begun.browserNonce,env,provider)).status,400);
  assert.equal((await db.query('SELECT payment_status FROM center_restaurants')).rows[0].payment_status,'pending');
  assert.equal((await db.query('SELECT token_envelope FROM center_mollie_credentials')).rows[0].token_envelope.includes('test-access'),false);
+ await db.query("UPDATE center_mollie_credentials SET expires_at=now()-interval '1 minute'");
+ let refreshes=0;
+ const refreshed=await withMerchantToken(pool,restaurant,async token=>token,env,async(url,options)=>{refreshes++;assert.equal(options.body.get('grant_type'),'refresh_token');return {ok:true,json:async()=>({access_token:'renewed-access',refresh_token:'renewed-refresh',expires_in:3600})};});
+ assert.equal(refreshed,'renewed-access');assert.equal(refreshes,1);
+ assert.equal(await withMerchantToken(pool,restaurant,async token=>token,env,()=>{throw Error('no extra refresh')}),'renewed-access');
+ const merchantApi=async url=>({ok:true,json:async()=>url.endsWith('/organizations/me')?{id:'org_restaurant'}:url.endsWith('/onboarding/me')?{canReceivePayments:true,canReceiveSettlements:true}:{id:'pfl_restaurant',status:'verified'}});
+ assert.equal((await verifyMerchantProfile(pool,restaurant,'pfl_restaurant',env,merchantApi)).ready,true);
+ assert.equal((await db.query('SELECT payment_status FROM center_restaurants')).rows[0].payment_status,'verified');
+
 
 
 

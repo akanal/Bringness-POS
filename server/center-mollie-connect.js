@@ -18,7 +18,7 @@ export async function beginRestaurantMollieConnect(pool,user,centerId,restaurant
  RETURNING state_hash`,[hash,user.id,centerId,restaurantId,user.company_id,browserHash]);
  if(!q.rows.length)return {status:404,error:'Restaurant nicht gefunden'};
  const url=new URL('https://my.mollie.com/oauth2/authorize');
- for(const [key,value] of Object.entries({client_id:config.clientId,redirect_uri:config.redirectUri,state,scope:'organizations.read profiles.read payments.read payments.write',response_type:'code',locale:'de_DE'}))url.searchParams.set(key,value);
+ for(const [key,value] of Object.entries({client_id:config.clientId,redirect_uri:config.redirectUri,state,scope:'organizations.read onboarding.read profiles.read payments.read payments.write',response_type:'code',locale:'de_DE'}))url.searchParams.set(key,value);
  return {status:200,authorizationUrl:url.href,browserNonce};
 }
 function encryptionKey(env){if(!/^[a-f0-9]{64}$/i.test(env.CENTER_MOLLIE_TOKEN_KEY||''))throw Error('TOKEN_KEY_MISSING');return Buffer.from(env.CENTER_MOLLIE_TOKEN_KEY,'hex');}
