@@ -13,6 +13,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  try {
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
  CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,total_cents integer,status text);
+ CREATE TABLE order_items(order_id uuid,product_name_snapshot text,quantity numeric);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
  CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
  CREATE TABLE platform_admins(user_id uuid,active boolean);`);

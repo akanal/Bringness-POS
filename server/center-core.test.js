@@ -65,3 +65,7 @@ test('setup completion requires delegated identity and at least one active table
 test('delegated table creation locks center row and checks completion atomically',async()=>{
  const r=await request(async(sql,args)=>{if(sql.includes('FROM sessions'))return rows({id,role:'owner',company_id:id});if(sql.startsWith('SELECT'))return rows({id});assert.match(sql,/FOR UPDATE/);assert.match(sql,/setup_user_id=\$6 AND setup_completed_at IS NULL/);assert.equal(args[5],id);return rows({id,name:'Tisch 1'});},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,201);
 });
+
+test('kitchen endpoint denies an unassigned restaurant before reading its queue',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({id,company_id:id,role:'kitchen'});assert.match(sql,/e.user_id=\$4/);assert.match(sql,/r.company_id=\$2/);return rows();},'/api/v1/centers/kitchen?restaurantId='+id,'GET',undefined,true);assert.equal(r.status,403);
+});

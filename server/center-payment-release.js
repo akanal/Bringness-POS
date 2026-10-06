@@ -22,7 +22,9 @@ export async function releaseCenterPayment(pool,paymentId,verifyPayment){
  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
 export async function centerKitchenQueue(pool,restaurantId){
- return (await pool.query(`SELECT o.id,o.status,cp.paid_at FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id
+ return (await pool.query(`SELECT o.id,o.status,cp.paid_at,
+ (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
+ FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id
  WHERE cp.restaurant_id=$1 AND cp.released_at IS NOT NULL AND o.status IN ('kitchen','preparing')
  ORDER BY cp.paid_at,cp.payment_id`,[restaurantId])).rows;
 }
