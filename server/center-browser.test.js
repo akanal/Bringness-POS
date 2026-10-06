@@ -127,7 +127,7 @@ test('guest notification enrollment requires a click and binds the status token'
   Object.defineProperty(window,'Notification',{configurable:true,value:{requestPermission:async()=>{window.permissionCalls++;return 'granted';}}});
   Object.defineProperty(window,'PushManager',{configurable:true,value:function(){}});
   const subscription={toJSON:()=>({endpoint:'https://fcm.googleapis.com/fcm/send/test',keys:{p256dh:'test',auth:'test'}})};
-  const registration={pushManager:{getSubscription:async()=>null,subscribe:async options=>{if(!options.userVisibleOnly)throw Error('visible push required');return subscription;}}};
+  let current=null;const registration={pushManager:{getSubscription:async()=>current,subscribe:async options=>{if(!options.userVisibleOnly)throw Error('visible push required');current=subscription;return subscription;}}};
   Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{register:async()=>registration,ready:Promise.resolve(registration)}});
  });
  await page.route('https://center.test/**',async route=>{
@@ -135,7 +135,7 @@ test('guest notification enrollment requires a click and binds the status token'
   if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
   let data;
   if(url.pathname.endsWith('/notification-config'))data={available:true,publicKey:Buffer.alloc(65,1).toString('base64url')};
-  else if(url.pathname.endsWith('/notifications')){saved=req.postDataJSON();data={subscribed:true};}
+  else if(url.pathname.endsWith('/notifications')){saved=req.postDataJSON();data={subscribed:saved.action!=='disable'};}
   else if(url.pathname.endsWith('/status'))data={order:{restaurant_name:'Restaurant',status:'preparing'}};
   else throw Error('Unexpected request');
   return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
@@ -147,5 +147,8 @@ test('guest notification enrollment requires a click and binds the status token'
  await page.locator('#notifyStatus').getByText('Abholbenachrichtigung für diese Bestellung aktiviert.',{exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>window.permissionCalls),1);assert.equal(saved.token,'a'.repeat(64));assert.equal(saved.consent,true);
  assert.equal(saved.subscription.endpoint,'https://fcm.googleapis.com/fcm/send/test');
+ await page.locator('#notifyOff').click();
+ await page.locator('#notifyStatus').getByText('Abholbenachrichtigung für diese Bestellung abgeschaltet.',{exact:true}).waitFor();
+ assert.equal(saved.action,'disable');assert.equal(await page.evaluate(()=>window.permissionCalls),1);assert.equal(await page.locator('#notify').isVisible(),true);
  }finally{await browser.close();}
 });
