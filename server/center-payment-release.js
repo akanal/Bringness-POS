@@ -32,7 +32,7 @@ export async function releaseCenterPayment(pool,paymentId,verifyPayment){
  'street',coalesce(b.street,''),'postalCode',coalesce(b.postal_code,''),'city',coalesce(b.city,''),'vatId',coalesce(b.vat_id,''))
  FROM orders o JOIN restaurants r ON r.id=o.restaurant_id JOIN companies co ON co.id=r.company_id
  LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE o.id=rc.order_id) WHERE rc.order_id=$1`,[binding.order_id]);
- await client.query('UPDATE center_order_payments SET paid_at=$2,released_at=now(),provider_status='paid' WHERE payment_id=$1',[paymentId,new Date(paidAt).toISOString()]);
+ await client.query("UPDATE center_order_payments SET paid_at=$2,released_at=now(),provider_status='paid' WHERE payment_id=$1",[paymentId,new Date(paidAt).toISOString()]);
  await client.query('COMMIT');return {released:true,orderId:binding.order_id};
  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
