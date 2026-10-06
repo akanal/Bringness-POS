@@ -57,3 +57,25 @@ test('production POS moves legacy public links to bringness.de and preserves oth
     assert.equal(env.PUBLIC_BASE_URL, url); assert.equal(env.PUBLIC_URL, url);
   }
 });
+
+const { redirectLegacyPosDomain } = await import("./runtime-mode.js");
+test("legacy pages redirect to Bringness with tokens and query intact; APIs remain available", () => {
+  for (const host of ["bringness-pos.de", "www.bringness-pos.de", "BRINGNESS-POS.DE:443"]) {
+    for (const method of ["GET", "HEAD"]) {
+      let status, headers, ended = false;
+      const res = {writeHead(s,h){status=s;headers=h},end(){ended=true}};
+      assert.equal(redirectLegacyPosDomain({method,headers:{host},url:"/tisch/?code=abc%2Bdef&lang=tr"},res,"pos",{NODE_ENV:"production"}),true);
+      assert.equal(status,308);assert.equal(headers.location,"https://bringness.de/tisch/?code=abc%2Bdef&lang=tr");assert(ended);
+    }
+  }
+  for (const [host,method,path,mode,nodeEnv] of [
+    ["bringness-pos.de","POST","/api/v1/mollie/webhook","pos","production"],
+    ["bringness-pos.de","GET","/api/v1/billing/status","pos","production"],
+    ["bringness.de","GET","/pos/","pos","production"],
+    ["bringness-pos.de.evil.test","GET","/pos/","pos","production"],
+    ["bringness-pos.de","GET","/pos/","combined","production"],
+    ["bringness-pos.de","GET","/pos/","pos","development"]
+  ]) {
+    assert.equal(redirectLegacyPosDomain({method,headers:{host},url:path},{writeHead(){throw Error("Unexpected redirect")}} ,mode,{NODE_ENV:nodeEnv}),false);
+  }
+});
