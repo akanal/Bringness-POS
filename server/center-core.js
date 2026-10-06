@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {beginRestaurantPaymentConnect} from './center-payment-providers.js';
 import {centerKitchenQueue,advanceCenterKitchen} from './center-payment-release.js';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -100,6 +101,12 @@ export function createCenterHandler(pool) {
       if (!name || name.length > 120) return send(res, 400, {error: 'Centername erforderlich (maximal 120 Zeichen)'});
       const center = (await pool.query('INSERT INTO centers(company_id,name) VALUES($1,$2) RETURNING id,name,active', [user.company_id, name])).rows[0];
       return send(res, 201, {center});
+    }
+    const connect=p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/connect$/i);
+    if(connect){
+      if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
+      if(!uuid.test(connect[1])||!uuid.test(connect[2]))return send(res,404,{error:'Nicht gefunden'});
+      const {status,...data}=await beginRestaurantPaymentConnect(pool,user,connect[1],connect[2],b.provider);return send(res,status,data);
     }
     const onboarding = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/onboarding$/i);
     if (onboarding) {
