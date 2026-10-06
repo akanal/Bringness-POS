@@ -51,3 +51,11 @@ test('revoked subscriptions are checked again after the dispatch claim',async()=
  await dispatchCenterGuestPush({query:async sql=>({rows:sql.includes('WITH candidates')?[{id:'n',order_id:'order',endpoint_hash:'hash',subscription}]:[]})},async()=>{sends++;});
  assert.equal(sends,0);
 });
+
+test('new guest consent rearms only failed, never accepted notifications',async()=>{
+ let sql;
+ const result=await saveGuestSubscription({query:async(text)=>{sql=text;return {rows:[{order_id:'order'}]};}},'a'.repeat(64),subscription,true);
+ assert.equal(result,true);
+ assert.match(sql,/n.state='failed' AND n.sent_at IS NULL/);
+ assert.match(sql,/state='pending',attempts=0,claimed_at=NULL/);
+});
