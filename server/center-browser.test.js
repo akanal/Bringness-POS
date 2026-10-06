@@ -75,7 +75,7 @@ test('kitchen blocks later starts while allowing parallel preparations to finish
  const browser=await chromium.launch({headless:true});
  try{
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
- const orders=[{id:'started',status:'preparing',items:[]},{id:'first',status:'kitchen',items:[]},{id:'later',status:'kitchen',items:[]}];let actions=0;
+ const orders=[{id:'started',status:'preparing',items:[]},{id:'first',status:'kitchen',collection_number:'BN-2026-000042',items:[]},{id:'later',status:'kitchen',items:[]}];let actions=0;
  await page.route('https://center.test/**',async route=>{
  const req=route.request(),url=new URL(req.url());
  if(url.pathname==='/center/kitchen.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/kitchen.html',import.meta.url),'utf8')});
@@ -91,7 +91,7 @@ test('kitchen blocks later starts while allowing parallel preparations to finish
  const started=page.locator('article').filter({has:page.getByRole('heading',{name:'1. Bestellung started',exact:true})});
  const first=page.locator('article').filter({has:page.getByRole('heading',{name:'2. Bestellung first',exact:true})});
  const later=page.locator('article').filter({has:page.getByRole('heading',{name:'3. Bestellung later',exact:true})});
- await first.getByRole('button').waitFor();assert.equal(await started.getByRole('button').isEnabled(),true);
+ await first.getByRole('button').waitFor();assert.equal(await first.getByText('Abholnummer: BN-2026-000042',{exact:true}).isVisible(),true);assert.equal(await started.getByRole('button').isEnabled(),true);
  assert.equal(await first.getByRole('button').isEnabled(),true);assert.equal(await later.getByRole('button').isDisabled(),true);
  await first.getByRole('button').click();await page.locator('#status').getByText('Lager vorübergehend nicht erreichbar.',{exact:true}).waitFor();
  assert.equal(actions,1);assert.equal(await later.getByRole('button').isDisabled(),true);assert.equal(await first.getByRole('button').isEnabled(),true);assert.deepEqual(errors,[]);
@@ -106,13 +106,13 @@ test('guest status retains milestones through an outage and recovers online',asy
  if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
  if(url.pathname!=='/api/v1/guest/center/status')throw Error('Unexpected request');
  if(offline)return route.abort('internetdisconnected');
- return route.fulfill({contentType:'application/json',body:JSON.stringify({order:{restaurant_name:'Restaurant',status:ready?'ready':'preparing',paid_at:'2026-10-06T12:00:00Z',preparation_started_at:'2026-10-06T12:01:00Z',ready_at:ready?'2026-10-06T12:05:00Z':null}})});
+ return route.fulfill({contentType:'application/json',body:JSON.stringify({order:{restaurant_name:'Restaurant',collection_number:'BN-2026-000042',status:ready?'ready':'preparing',paid_at:'2026-10-06T12:00:00Z',preparation_started_at:'2026-10-06T12:01:00Z',ready_at:ready?'2026-10-06T12:05:00Z':null}})});
  });
  await page.goto('https://center.test/center/status.html#token='+ 'a'.repeat(64));
  await page.locator('#status').getByText('Deine Bestellung wird zubereitet.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),2);
  offline=true;await page.locator('#refresh').click();await page.locator('#connection').getByText(/veraltet/).waitFor();
  assert.equal(await page.locator('#status').textContent(),'Deine Bestellung wird zubereitet.');assert.equal(await page.locator('#history li').count(),2);
  offline=false;ready=true;await page.evaluate(()=>window.dispatchEvent(new Event('online')));
- await page.locator('#status').getByText('Deine Bestellung ist abholbereit.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),3);assert.deepEqual(errors,[]);
+ await page.locator('#status').getByText('Deine Bestellung ist abholbereit.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),3);assert.equal(await page.locator('#collection').textContent(),'Abholnummer: BN-2026-000042');assert.equal(await page.locator('#restaurant').textContent(),'Restaurant');assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
