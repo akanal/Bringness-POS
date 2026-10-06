@@ -2,7 +2,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 export async function exportCenterTableQr(pool,user,centerId,tableId,env=process.env,render){
  if(!uuid.test(centerId)||!uuid.test(tableId))return {status:404,error:'Tisch nicht gefunden'};
  const table=(await pool.query(`SELECT t.name,t.qr_token FROM center_tables t JOIN centers c ON c.id=t.center_id
- WHERE t.id=$1 AND c.id=$2 AND c.company_id=$3 AND t.active=true AND c.active=true`,[tableId,centerId,user.company_id])).rows[0];
+ WHERE t.id=$1 AND c.id=$2 AND (c.company_id=$3 OR c.setup_user_id=$4) AND c.setup_completed_at IS NOT NULL AND t.active=true AND c.active=true`,[tableId,centerId,user.company_id,user.id||null])).rows[0];
  if(!table||!/^[a-f0-9]{48}$/.test(table.qr_token||''))return {status:404,error:'Tisch nicht gefunden'};
  let origin;
  try{
