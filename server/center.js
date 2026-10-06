@@ -33,6 +33,11 @@ export async function migrateCenter() {
     ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_approved_by uuid REFERENCES users(id);
     ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_approved_at timestamptz;
     ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_completed_at timestamptz;
+    CREATE TABLE IF NOT EXISTS center_restaurant_invitations (
+      token_hash text PRIMARY KEY,center_id uuid NOT NULL REFERENCES centers(id),
+      restaurant_id uuid NOT NULL REFERENCES restaurants(id),created_by uuid NOT NULL REFERENCES users(id),
+      expires_at timestamptz NOT NULL,accepted_at timestamptz,accepted_by uuid REFERENCES users(id)
+    );
     CREATE TABLE IF NOT EXISTS center_mollie_oauth_states (
       state_hash text PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),
       center_id uuid NOT NULL,restaurant_id uuid NOT NULL,expires_at timestamptz NOT NULL,
