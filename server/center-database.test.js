@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {createCenterMollieCheckout} from './center-mollie-checkout.js';
 import {withMerchantToken,verifyMerchantProfile} from './center-mollie-merchant.js';
 import {beginRestaurantMollieConnect,completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import assert from 'node:assert/strict';
@@ -84,6 +85,14 @@ test('database migration and delegated setup lifecycle',async()=>{
  const merchantApi=async url=>({ok:true,json:async()=>url.endsWith('/organizations/me')?{id:'org_restaurant'}:url.endsWith('/onboarding/me')?{canReceivePayments:true,canReceiveSettlements:true}:{id:'pfl_restaurant',status:'verified'}});
  assert.equal((await verifyMerchantProfile(pool,restaurant,'pfl_restaurant',env,merchantApi)).ready,true);
  assert.equal((await db.query('SELECT payment_status FROM center_restaurants')).rows[0].payment_status,'verified');
+ const checkoutOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[checkoutOrder,restaurant]);
+ const attempt=(await db.query('INSERT INTO center_checkout_attempts(order_id,center_id,restaurant_id) VALUES($1,$2,$3) RETURNING id',[checkoutOrder,created.data.center.id,restaurant])).rows[0];
+ let creates=0;
+ const checkout=await createCenterMollieCheckout(pool,attempt.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},async(url,options)=>{creates++;const payload=JSON.parse(options.body);assert.equal(payload.amount.value,'12.50');assert.equal(payload.profileId,'pfl_restaurant');assert.equal(payload.metadata.bringnessOrderId,checkoutOrder);return {ok:true,json:async()=>({id:'tr_checkout',profileId:payload.profileId,amount:payload.amount,metadata:payload.metadata,_links:{checkout:{href:'https://www.mollie.com/checkout/test'}}})};});
+ assert.equal(checkout.checkoutUrl,'https://www.mollie.com/checkout/test');
+ assert.equal((await createCenterMollieCheckout(pool,attempt.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},()=>{throw Error('no duplicate')})).alreadyCreated,true);assert.equal(creates,1);
+ assert.equal((await db.query("SELECT payment_id FROM center_order_payments WHERE order_id=$1",[checkoutOrder])).rows[0].payment_id,'tr_checkout');
+
 
 
 

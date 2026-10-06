@@ -45,6 +45,13 @@ export async function migrateCenter() {
     ALTER TABLE center_mollie_credentials ADD COLUMN IF NOT EXISTS profile_id text;
     ALTER TABLE center_mollie_credentials ADD COLUMN IF NOT EXISTS organization_id text;
     ALTER TABLE center_mollie_credentials ADD COLUMN IF NOT EXISTS verified_at timestamptz;
+    CREATE TABLE IF NOT EXISTS center_checkout_attempts (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),order_id uuid UNIQUE NOT NULL REFERENCES orders(id),
+      center_id uuid NOT NULL,restaurant_id uuid NOT NULL,
+      guest_status_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-',''),
+      attempted_at timestamptz,request_payload jsonb,payment_id text UNIQUE,checkout_url text,
+      FOREIGN KEY(center_id,restaurant_id) REFERENCES center_restaurants(center_id,restaurant_id)
+    );
     CREATE TABLE IF NOT EXISTS center_order_payments (
       payment_id text PRIMARY KEY,
       order_id uuid UNIQUE NOT NULL REFERENCES orders(id),
