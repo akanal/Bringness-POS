@@ -11,6 +11,7 @@ on:
       - 'server/start.js'
       - 'server/index.js'
       - 'apps/web/public/center/**'
+      - 'apps/web/public/receipt-print.js'
       - '.github/workflows/center-validation.yml'
   push:
     branches: ['feat/center-mode-foundation']
@@ -24,6 +25,7 @@ on:
       - 'server/start.js'
       - 'server/index.js'
       - 'apps/web/public/center/**'
+      - 'apps/web/public/receipt-print.js'
       - '.github/workflows/center-validation.yml'
 permissions:
   contents: read
