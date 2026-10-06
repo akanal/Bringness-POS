@@ -1,4 +1,4 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="notify" hidden>Bei Abholbereitschaft benachrichtigen</button><button id="notifyOff" hidden>Abholbenachrichtigung abschalten</button><p id="notifyStatus" role="status"></p><button id="refresh">Aktualisieren</button><p>Ohne aktivierte Abholbenachrichtigung bitte diese Seite geöffnet lassen. Die Zustellung hängt von Gerät und Benachrichtigungseinstellungen ab.</p></main><script type="module">
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#d35c13"><meta name="apple-mobile-web-app-capable" content="yes"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="notify" hidden>Bei Abholbereitschaft benachrichtigen</button><button id="notifyOff" hidden>Abholbenachrichtigung abschalten</button><p id="installHint" hidden>Für Abholbenachrichtigungen auf iPhone oder iPad: Diese Seite über „Teilen“ → „Zum Home-Bildschirm“ hinzufügen und dort öffnen.</p><p id="notifyStatus" role="status"></p><button id="refresh">Aktualisieren</button><p>Ohne aktivierte Abholbenachrichtigung bitte diese Seite geöffnet lassen. Die Zustellung hängt von Gerät und Benachrichtigungseinstellungen ab.</p></main><script type="module">
 async function request(url,options={}){
  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
  try{const response=await fetch(url,{...options,signal:controller.signal});const data=await response.json();return {ok:response.ok,status:response.status,json:async()=>data};}
@@ -6,6 +6,13 @@ async function request(url,options={}){
 }
 
 const token=new URLSearchParams(location.hash.slice(1)).get('token')||'';const state=document.getElementById('status');const connection=document.getElementById('connection');let timer,loading=false,finished=false;
+if(/^[a-f0-9]{64}$/.test(token)){
+ const manifest=document.createElement('link');manifest.rel='manifest';
+ manifest.href='/api/v1/guest/center/manifest?token='+encodeURIComponent(token);document.head.append(manifest);
+}
+const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+document.getElementById('installHint').hidden=!ios||standalone;
 const labels={payment_pending:'Zahlung wird geprüft.',kitchen:'Deine Bestellung wartet auf die Zubereitung.',preparing:'Deine Bestellung wird zubereitet.',ready:'Deine Bestellung ist abholbereit.',cancelled:'Deine Bestellung wurde storniert.'};
 function renderHistory(order){
  const history=document.getElementById('history');history.replaceChildren();
