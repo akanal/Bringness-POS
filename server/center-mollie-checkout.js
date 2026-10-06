@@ -1,3 +1,4 @@
+import {molliePaymentMode,molliePaymentReadUrl} from './center-mollie-mode.js';
 import {withMerchantToken} from './center-mollie-merchant.js';
 import {eurCents} from './center-mollie-payment.js';
 export async function createCenterMollieCheckout(pool,attemptId,env=process.env,fetcher=fetch){
@@ -15,7 +16,7 @@ export async function createCenterMollieCheckout(pool,attemptId,env=process.env,
  const credential=(await pool.query('SELECT * FROM center_mollie_credentials WHERE restaurant_id=$1 AND token_envelope=$2',[attempt.restaurant_id,envelope])).rows[0];
  if(!credential?.verified_at||credential.organization_id!==attempt.merchant_reference)throw Error('MERCHANT_NOT_VERIFIED');
  const payload={amount:{currency:'EUR',value:(attempt.total_cents/100).toFixed(2)},description:'Bringness Bestellung '+attempt.order_id,
- profileId:credential.profile_id,metadata:{bringnessOrderId:attempt.order_id,bringnessCheckoutId:attempt.id},
+ profileId:credential.profile_id,testmode:molliePaymentMode(env)==='test',metadata:{bringnessOrderId:attempt.order_id,bringnessCheckoutId:attempt.id},
  redirectUrl:new URL('/center/status.html#token='+attempt.guest_status_token,origin).href,
  webhookUrl:new URL('/api/v1/centers/mollie/webhook',origin).href};
  // Claim BEFORE the external request. A lost response needs reconciliation, not a
@@ -45,10 +46,12 @@ export async function reconcileCenterCheckout(pool,attemptId,env=process.env,fet
  return withMerchantToken(pool,attempt.restaurant_id,async(accessToken,envelope)=>{
  const credential=(await pool.query('SELECT * FROM center_mollie_credentials WHERE restaurant_id=$1 AND token_envelope=$2',[attempt.restaurant_id,envelope])).rows[0];
  if(!credential?.verified_at||credential.profile_id!==attempt.request_payload.profileId)throw Error('MERCHANT_CONNECTION_CHANGED');
- let url=new URL('https://api.mollie.com/v2/payments');url.searchParams.set('profileId',credential.profile_id);url.searchParams.set('limit','250');
+ const mode=attempt.request_payload.testmode===true?'test':'live';
+ let url=molliePaymentReadUrl('/v2/payments',mode);url.searchParams.set('profileId',credential.profile_id);url.searchParams.set('limit','250');
  const matches=[];
  for(let page=0;url&&page<10;page++){
  if(url.origin!=='https://api.mollie.com'||url.pathname!=='/v2/payments')throw Error('INVALID_PAYMENT_PAGE');
+ url=molliePaymentReadUrl(url.href,mode);
  const response=await fetcher(url.href,{headers:{authorization:'Bearer '+accessToken},signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('PAYMENT_RECONCILIATION_FAILED');
  const data=await response.json();if(!Array.isArray(data._embedded?.payments))throw Error('INVALID_PAYMENT_LIST');
  matches.push(...matchingCheckoutPayments(data._embedded.payments,attempt));
