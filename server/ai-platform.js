@@ -1,3 +1,5 @@
+import {migrateStockLifecycle,kitchenRoutes,kitchenAction,recipeAvailability,blockUnavailableRecipes} from './ai-stock-lifecycle.js';
+import {validateStockTargets} from './ai-stock-lifecycle-core.js';
 import {migrateAiSubscriptions,subscriptionRoutes} from './ai-subscriptions.js';
 import {migrateAiTariffs,readAiTariffs,tariffSetupStatus,updateAiTariff} from './ai-tariffs.js';
 import {sendSmtpMail} from './smtp-mail.js';
@@ -58,7 +60,7 @@ CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFE
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateAiForecast();await migrateAiPlanning();await migrateDeliveryNotes();await migrateAiTariffs();await migrateAiSubscriptions();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateStockLifecycle(pool);await migrateAiForecast();await migrateAiPlanning();await migrateDeliveryNotes();await migrateAiTariffs();await migrateAiSubscriptions();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -75,10 +77,12 @@ export async function handleAiPlatform(req,res){
  if(!aiReady)return send(res,503,{error:'Bringness AI wird vorbereitet. Bitte gleich erneut versuchen.'});
  try{
   if(p.startsWith('/api/ai/v1/supplier/'))return send(res,200,await supplierPublicRoutes(p,req.method,url,bearer(req),req.method==='POST'?await body(req):{}));
-  if(['/api/ai/import/sales','/api/ai/v1/sales','/api/ai/v1/sales/validate','/api/ai/v1/status','/api/ai/v1/products'].includes(p)){
+  if(['/api/ai/import/sales','/api/ai/v1/sales','/api/ai/v1/sales/validate','/api/ai/v1/status','/api/ai/v1/products','/api/ai/v1/kitchen-orders','/api/ai/v1/availability'].includes(p)){
    const link=await apiSalesToken(bearer(req));if(!link)return send(res,401,{error:'Ungültiger oder pausierter API-Schlüssel'});
    if(!await rate('sales-api:'+link.id,600))return send(res,429,{error:'Importlimit erreicht. Bitte später erneut versuchen.'});
-   if(p==='/api/ai/v1/status'&&req.method==='GET')return send(res,200,{version:'1',connectorId:link.id,locationId:link.location_id,active:true,lastSync:link.last_sync,lastError:link.last_error,permissions:['sales:write','sales:validate','products:read','status:read']});
+   if(p==='/api/ai/v1/kitchen-orders'&&req.method==='POST')return send(res,200,await kitchenAction(pool,{id:link.account_id,role:'restaurant'},await body(req),link));
+   if(p==='/api/ai/v1/availability'&&req.method==='GET')return send(res,200,{recipes:await recipeAvailability(pool,link.account_id,link.location_id)});
+   if(p==='/api/ai/v1/status'&&req.method==='GET')return send(res,200,{version:'1',connectorId:link.id,locationId:link.location_id,active:true,lastSync:link.last_sync,lastError:link.last_error,permissions:['sales:write','sales:validate','products:read','status:read','kitchen:write','availability:read']});
    if(p==='/api/ai/v1/products'&&req.method==='GET')return send(res,200,{products:(await pool.query('SELECT external_code AS "productCode",name FROM ai_recipes WHERE account_id=$1 AND location_id=$2 AND active AND EXISTS(SELECT 1 FROM ai_recipe_items WHERE recipe_id=ai_recipes.id) ORDER BY external_code',[link.account_id,link.location_id])).rows});
    if(['/api/ai/import/sales','/api/ai/v1/sales','/api/ai/v1/sales/validate'].includes(p)&&req.method==='POST')return send(res,200,await ingestSale(link,await body(req),{dryRun:p.endsWith('/validate')}));
    return send(res,405,{error:'Methode nicht erlaubt'});
@@ -158,6 +162,7 @@ export async function handleAiPlatform(req,res){
   if(p==='/api/ai/ads'||p.startsWith('/api/ai/ads/')){if(req.method==='POST'&&!await rate('ads:'+u.id,300))return send(res,429,{error:'Zu viele Werbeanfragen. Bitte später erneut versuchen.'});return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));}
   if(p.startsWith('/api/ai/barcodes')){if(req.method==='POST'&&!await rate('barcodes:'+u.id,300))return send(res,429,{error:'Zu viele Kataloganfragen. Bitte später erneut versuchen.'});return send(res,200,await barcodeRoutes(p,req.method,req.method==='POST'?await body(req):{},u,false,url));}
   if(p==='/api/ai/delivery-notes'||p.startsWith('/api/ai/delivery-notes/')){if(req.method==='POST'&&!await rate('delivery-notes:'+u.id,30))return send(res,429,{error:'Zu viele Dokumentanfragen. Bitte später erneut versuchen.'});return send(res,200,await deliveryRoutes(p,req.method,req.method==='POST'?await body(req):{},u));}
+  const kitchenResult=await kitchenRoutes(pool,p,req.method,req.method==='POST'&&['/api/ai/kitchen-orders','/api/ai/recipe-release'].includes(p)?await body(req):{},u,url);if(kitchenResult)return send(res,200,kitchenResult);
   const supplierResult=await supplierAccountRoutes(p,req.method,req.method==='POST'&&p.startsWith('/api/ai/supplier-connector')?await body(req):{},u);if(supplierResult)return send(res,200,supplierResult);
   const recipeResult=await recipeRoutes(p,req.method,req.method==='POST'&&['/api/ai/recipes','/api/ai/connectors','/api/ai/pos-link','/api/ai/connector-status','/api/ai/connector-key'].includes(p)?await body(req):{},u,url);if(recipeResult)return send(res,200,recipeResult);
   if(p==='/api/ai/logout'&&req.method==='POST'){await pool.query('DELETE FROM ai_sessions WHERE token_hash=$1',[hash(bearer(req))]);return send(res,200,{ok:true})}
@@ -186,15 +191,15 @@ export async function handleAiPlatform(req,res){
   }
   if(p==='/api/ai/stock'){
    if(u.role!=='restaurant')return send(res,403,{error:'Nur Restaurants können Lager verwalten.'});
-   if(req.method==='GET')return send(res,200,{stock:(await pool.query('SELECT s.*,l.name location_name FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY l.name,s.name LIMIT 1000',[u.id])).rows});
+   if(req.method==='GET')return send(res,200,{stock:(await pool.query('SELECT s.*,greatest(0,s.quantity-s.reserved_quantity) available_quantity,l.name location_name FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY l.name,s.name LIMIT 1000',[u.id])).rows});
    if(req.method==='POST'){
-    const b=await body(req),name=text(b.name);id(b.locationId);if(!name||!units.includes(b.unit))fail('Zutat und Einheit erforderlich');const qty=quantity(b.quantity),minimum=quantity(b.minimum);
-    const c=await pool.connect();try{await c.query('BEGIN');if(!(await c.query('SELECT id FROM ai_locations WHERE id=$1 AND account_id=$2',[b.locationId,u.id])).rowCount){await c.query('ROLLBACK');return send(res,404,{error:'Standort nicht gefunden'})}const s=(await c.query('INSERT INTO ai_stock(account_id,location_id,name,unit,quantity,minimum) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[u.id,b.locationId,name,b.unit,qty,minimum])).rows[0];await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason) VALUES($1,$2,$3,'Anfangsbestand')",[s.id,u.id,qty]);await c.query('COMMIT');return send(res,201,{stock:s})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+    const b=await body(req),name=text(b.name);id(b.locationId);if(!name||!units.includes(b.unit))fail('Zutat und Einheit erforderlich');const qty=quantity(b.quantity),{minimum,target}=validateStockTargets(b.minimum??1,b.target??(Number(b.minimum??1)*3));
+    const c=await pool.connect();try{await c.query('BEGIN');if(!(await c.query('SELECT id FROM ai_locations WHERE id=$1 AND account_id=$2',[b.locationId,u.id])).rowCount){await c.query('ROLLBACK');return send(res,404,{error:'Standort nicht gefunden'})}const s=(await c.query('INSERT INTO ai_stock(account_id,location_id,name,unit,quantity,minimum,target_quantity) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',[u.id,b.locationId,name,b.unit,qty,minimum,target])).rows[0];await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason) VALUES($1,$2,$3,'Anfangsbestand')",[s.id,u.id,qty]);await c.query('COMMIT');return send(res,201,{stock:s})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
    }
   }
   if(p==='/api/ai/stock-adjust'&&req.method==='POST'){
-   if(u.role!=='restaurant')return send(res,403,{error:'Keine Berechtigung'});const b=await body(req);id(b.id);const qty=quantity(b.quantity),minimum=quantity(b.minimum),reason=text(b.reason,500);if(!reason)fail('Grund der Bestandskorrektur erforderlich');
-   const c=await pool.connect();try{await c.query('BEGIN');const s=(await c.query('SELECT * FROM ai_stock WHERE id=$1 AND account_id=$2 FOR UPDATE',[b.id,u.id])).rows[0];if(!s){await c.query('ROLLBACK');return send(res,404,{error:'Zutat nicht gefunden'})}await c.query('UPDATE ai_stock SET quantity=$2,minimum=$3 WHERE id=$1',[s.id,qty,minimum]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after) VALUES($1,$2,$3,$4,'correction',$5,$6)",[s.id,u.id,qty-Number(s.quantity),reason,s.quantity,qty]);await c.query('COMMIT');return send(res,200,{ok:true})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+   if(u.role!=='restaurant')return send(res,403,{error:'Keine Berechtigung'});const b=await body(req);id(b.id);const qty=quantity(b.quantity),{minimum,target}=validateStockTargets(b.minimum,b.target??b.minimum),reason=text(b.reason,500);if(!reason)fail('Grund der Bestandskorrektur erforderlich');
+   const c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);const s=(await c.query('SELECT * FROM ai_stock WHERE id=$1 AND account_id=$2 FOR UPDATE',[b.id,u.id])).rows[0];if(!s){await c.query('ROLLBACK');return send(res,404,{error:'Zutat nicht gefunden'})}await c.query('UPDATE ai_stock SET quantity=$2,minimum=$3,target_quantity=$4 WHERE id=$1',[s.id,qty,minimum,target]);await blockUnavailableRecipes(c,u.id);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after) VALUES($1,$2,$3,$4,'correction',$5,$6)",[s.id,u.id,qty-Number(s.quantity),reason,s.quantity,qty]);await c.query('COMMIT');return send(res,200,{ok:true})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
   }
   if(p==='/api/ai/stock-moves'&&req.method==='GET')return send(res,200,{moves:(await pool.query('SELECT m.*,s.name FROM ai_stock_moves m JOIN ai_stock s ON s.id=m.stock_id WHERE s.account_id=$1 ORDER BY m.id DESC LIMIT 100',[u.id])).rows});
   if(p==='/api/ai/products'){
@@ -284,6 +289,7 @@ setInterval(()=>{if(aiReady)collectionTick().catch(()=>console.error('AI collect
 setInterval(()=>{if(aiReady)monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
 
 setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
+
 
 
 
