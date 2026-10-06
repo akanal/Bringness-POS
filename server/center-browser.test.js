@@ -364,3 +364,41 @@ test('creating the first Center loads its management view',async()=>{
  assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+
+for(const staleResult of ['success','failure']){
+test('late menu '+staleResult+' cannot change the selected restaurant or locked checkout',async()=>{
+ const browser=await chromium.launch({headless:true});let release;const gate=new Promise(resolve=>{release=resolve;});
+ try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const first='11111111-1111-4111-8111-111111111111',second='22222222-2222-4222-8222-222222222222',product='33333333-3333-4333-8333-333333333333';let mark;const started=new Promise(resolve=>{mark=resolve;});let submitted;
+ await page.route('https://center.test/**',async route=>{
+ const req=route.request(),url=new URL(req.url());let data,status=200;
+ if(url.pathname==='/center/')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/index.html',import.meta.url),'utf8')});
+ if(url.pathname.endsWith('/restaurants'))data={center:'Center',table:'1',orderingAvailable:true,restaurants:[{id:first,name:'Erstes Restaurant'},{id:second,name:'Zweites Restaurant'}]};
+ else if(url.pathname.endsWith('/menu')){
+ const old=url.searchParams.get('restaurantId')===first;
+ if(old){mark();await gate;}
+ if(old&&staleResult==='failure'){status=503;data={error:'Alte Speisekarte nicht verfügbar.'};}
+ else data={restaurant:{name:old?'Erstes Restaurant':'Zweites Restaurant'},orderingAvailable:true,products:[{id:product,name:old?'Altes Gericht':'Aktuelles Gericht',price_cents:old?100:1250}]};
+ }else if(url.pathname.endsWith('/order')){submitted=req.postDataJSON();status=503;data={error:'Zahlungsstatus unklar.',cartEditable:false};}
+ else throw Error('Unexpected request');
+ return route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/?code='+'a'.repeat(48));
+ await page.getByRole('button',{name:'Erstes Restaurant',exact:true}).click();await started;
+ await page.getByRole('button',{name:'Zweites Restaurant',exact:true}).click();
+ await page.getByRole('heading',{name:'Zweites Restaurant',exact:true}).waitFor();
+ await page.getByRole('button',{name:'In den Warenkorb'}).click();await page.locator('#checkout').click();
+ await page.locator('#status').getByText(/Zahlungsstatus unklar/).waitFor();
+ const response=page.waitForResponse(r=>new URL(r.url()).searchParams.get('restaurantId')===first);release();await (await response).finished();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ assert.equal(submitted.restaurantId,second);assert.deepEqual(submitted.items,[{productId:product,quantity:1}]);
+ assert.equal(await page.getByRole('heading',{name:'Zweites Restaurant',exact:true}).count(),1);
+ assert.equal(await page.getByRole('heading',{name:'Erstes Restaurant',exact:true}).count(),0);
+ assert.match(await page.locator('#cartItems').textContent(),/Aktuelles Gericht/);
+ assert.match(await page.locator('#cartTotal').textContent(),/12,50/);
+ assert.match(await page.locator('#status').textContent(),/Zahlungsstatus unklar/);
+ assert.equal(await page.getByRole('button',{name:'Entfernen',exact:true}).isDisabled(),true);assert.deepEqual(errors,[]);
+ }finally{release();await browser.close();}
+});
+}
