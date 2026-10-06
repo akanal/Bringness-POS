@@ -25,3 +25,16 @@ export function blockAiRequest(req, res, mode) {
   res.end(JSON.stringify({error: "Nicht gefunden"}));
   return true;
 }
+
+
+// Migrate only the public production Bringness installation, preserving custom installs.
+export function configurePosOrigin(env, mode) {
+  if (mode !== 'pos' || env.NODE_ENV !== 'production') return;
+  for (const key of ['PUBLIC_BASE_URL', 'PUBLIC_URL']) {
+    const value = String(env[key] || '').replace(/\/$/, '');
+    if (!value || /^https:\/\/(?:www\.)?bringness-pos\.de$/i.test(value) ||
+        value === 'https://bringness-pos-app-production.up.railway.app') {
+      env[key] = 'https://bringness.de';
+    }
+  }
+}
