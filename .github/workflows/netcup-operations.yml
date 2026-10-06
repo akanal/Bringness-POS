@@ -1,0 +1,104 @@
+name: Netcup operations
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "apps/web/**"
+      - "db/**"
+      - "package.json"
+      - "package-lock.json"
+      - "ops/request.json"
+      - ".github/workflows/netcup-operations.yml"
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [status, backup, restart, deploy]
+        default: status
+      target:
+        type: choice
+        options: [all, pos, ai]
+        default: all
+permissions:
+  contents: read
+concurrency:
+  group: bringness-netcup-operations
+  cancel-in-progress: false
+jobs:
+  operate:
+    if: github.repository == 'akanal/Bringness-POS' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NETCUP_SSH_KEY: ${{ secrets.NETCUP_SSH_KEY }}
+      NETCUP_KNOWN_HOSTS: ${{ secrets.NETCUP_KNOWN_HOSTS }}
+    steps:
+      - name: Check connection configuration
+        id: connection
+        shell: bash
+        run: |
+          if [[ -n "$NETCUP_SSH_KEY" && -n "$NETCUP_KNOWN_HOSTS" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Prepared but inactive: Netcup connection secrets have not been configured." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        if: steps.connection.outputs.ready == 'true'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.connection.outputs.ready == 'true'
+        with:
+          node-version: 24
+      - name: Select operation
+        id: request
+        if: steps.connection.outputs.ready == 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          INPUT_OPERATION: ${{ inputs.operation }}
+          INPUT_TARGET: ${{ inputs.target }}
+        run: node ops/select-operation.js
+      - name: Verify application tests before deployment
+        if: steps.connection.outputs.ready == 'true' && steps.request.outputs.operation == 'deploy'
+        run: |
+          node --test server/runtime-mode.test.js server/qr-service.test.js ops/select-operation.test.js
+          python3 ops/netcup-command.test.py
+          node server/ai-policy.test.js
+          node --test server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+          npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
+          node server/ai-tests/language-integration.mjs
+          node --test server/smtp-mail.test.js server/ai-mail-health.test.js
+          node server/ai-tests/admin-reset-integration.mjs
+          if [ "${{ steps.request.outputs.target }}" = "ai" ]; then
+            node server/ai-tests/integration.mjs
+            node --check server/ai-suppliers.js
+            npm ci --ignore-scripts --no-audit --no-fund
+            node --test server/ai-delivery-core.test.js server/ai-delivery-ocr.test.js server/ai-delivery-suggestions.test.js server/ai-mail-health.test.js
+          fi
+      - name: Run authenticated server operation
+        if: steps.connection.outputs.ready == 'true'
+        env:
+          OPERATION: ${{ steps.request.outputs.operation }}
+          TARGET: ${{ steps.request.outputs.target }}
+          REVISION: ${{ steps.request.outputs.revision }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          printf '%s\n' "$NETCUP_SSH_KEY" > "$work/key"
+          printf '%s\n' "$NETCUP_KNOWN_HOSTS" > "$work/known_hosts"
+          command="$OPERATION $TARGET"
+          if [[ "$OPERATION" == deploy ]]; then command="$command $REVISION"; fi
+          ssh -T -i "$work/key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
+            -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
+            root@152.53.196.43 "$command"
+
+
+

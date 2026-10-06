@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bringness_pos
+      POSTGRES_USER: bringness
+      POSTGRES_PASSWORD: bringness_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - bringness_pg:/var/lib/postgresql/data
+volumes:
+  bringness_pg:

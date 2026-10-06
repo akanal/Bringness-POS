@@ -1,0 +1,2 @@
+Redeploy trigger for Railway sync check on 2026-09-25.
+Expected deployed main head includes download price 399 EUR net and Mollie payment flow fixes.
