@@ -27,5 +27,10 @@ export async function migrateCenter() {
     ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS contract_status text NOT NULL DEFAULT 'pending' CHECK(contract_status IN ('pending','signed','suspended'));
     ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'not_connected' CHECK(payment_status IN ('not_connected','pending','verified','blocked'));
     ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS merchant_reference text;
+    ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS enrolled_at timestamptz NOT NULL DEFAULT now();
+    ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_user_id uuid REFERENCES users(id);
+    ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_approved_by uuid REFERENCES users(id);
+    ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_approved_at timestamptz;
+    ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_completed_at timestamptz;
   `);
 }

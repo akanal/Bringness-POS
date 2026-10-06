@@ -44,11 +44,24 @@ test('guests see only active center memberships and no internal table tokens',as
 });
 
 test('restaurant owner cannot create fixed center tables without delegated approval',async()=>{
- const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:false});if(sql.includes('FROM centers'))return rows({id});throw Error('must not create table');},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,403);
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:false});if(sql.startsWith('SELECT'))return rows({id});assert.match(sql,/setup_completed_at IS NULL/);return rows();},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,403);
 });
 test('superadmin can create a fixed table within the scoped center',async()=>{
  const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:true});if(sql.includes('FROM centers'))return rows({id});assert.match(sql,/INSERT INTO center_tables/);return rows({id,name:'Tisch 1'});},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,201);
 });
 test('superadmin table creation still checks center ownership',async()=>{
- const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:true});if(sql.includes('FROM centers'))return rows();throw Error('must not create table');},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,404);
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:true});if(sql.includes('FROM centers'))return rows();assert.match(sql,/setup_completed_at IS NULL/);return rows();},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,404);
+});
+
+test('only superadmin can delegate setup',async()=>{
+ const r=await request(async()=>rows({id,role:'owner',company_id:id}),'/api/v1/centers/'+id+'/setup','PUT',{action:'approve',userId:id,restaurantId:id},true);assert.equal(r.status,403);
+});
+test('delegation checks first restaurant, active ownership and permanent lock',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({id,role:'owner',company_id:id,platform_admin:true});assert.match(sql,/ORDER BY cr.enrolled_at,cr.restaurant_id LIMIT 1/);assert.match(sql,/setup_completed_at IS NULL/);assert.match(sql,/setup_approved_at IS NULL/);assert.match(sql,/u.company_id=\$2/);return rows({setup_approved_at:'now'});},'/api/v1/centers/'+id+'/setup','PUT',{action:'approve',userId:id,restaurantId:id},true);assert.equal(r.status,200);
+});
+test('setup completion requires delegated identity and at least one active table',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({id,role:'owner',company_id:id});assert.match(sql,/c.setup_user_id=\$4/);assert.match(sql,/t.active=true/);assert.match(sql,/setup_completed_at IS NULL/);return rows();},'/api/v1/centers/'+id+'/setup','PUT',{action:'complete'},true);assert.equal(r.status,409);
+});
+test('delegated table creation locks center row and checks completion atomically',async()=>{
+ const r=await request(async(sql,args)=>{if(sql.includes('FROM sessions'))return rows({id,role:'owner',company_id:id});if(sql.startsWith('SELECT'))return rows({id});assert.match(sql,/FOR UPDATE/);assert.match(sql,/setup_user_id=\$6 AND setup_completed_at IS NULL/);assert.equal(args[5],id);return rows({id,name:'Tisch 1'});},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,201);
 });

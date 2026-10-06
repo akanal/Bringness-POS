@@ -91,6 +91,38 @@ export function createCenterHandler(pool) {
         RETURNING cr.contract_status,cr.payment_status,cr.merchant_reference`, [onboarding[1],onboarding[2],user.company_id,b.contractStatus,reference||null]);
       return q.rowCount ? send(res,200,{onboarding:q.rows[0],orderingAvailable:false}) : send(res,404,{error:'Center-Restaurant nicht gefunden'});
     }
+    const setup = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/setup$/i);
+    if (setup && uuid.test(setup[1])) {
+      if (req.method === 'GET') {
+        const state = (await pool.query(`SELECT setup_completed_at,
+          ($3::boolean OR setup_user_id=$4) can_setup FROM centers
+          WHERE id=$1 AND company_id=$2`, [setup[1],user.company_id,!!user.platform_admin,user.id])).rows[0];
+        return state ? send(res,200,{setup:state,canApprove:!!user.platform_admin}) : send(res,404,{error:'Center nicht gefunden'});
+      }
+      if (req.method !== 'PUT') return send(res,405,{error:'Methode nicht erlaubt'});
+      if (b.action === 'approve') {
+        if (!user.platform_admin) return send(res,403,{error:'Nur der Superadmin kann die Ersteinrichtung freigeben'});
+        if (!uuid.test(b.userId || '') || !uuid.test(b.restaurantId || '')) return send(res,400,{error:'Restaurant und Benutzer erforderlich'});
+        const q = await pool.query(`UPDATE centers c SET setup_user_id=$3,setup_approved_by=$5,setup_approved_at=now()
+          WHERE c.id=$1 AND c.company_id=$2 AND c.setup_completed_at IS NULL
+          AND c.setup_approved_at IS NULL
+          AND $4::uuid=(SELECT cr.restaurant_id FROM center_restaurants cr WHERE cr.center_id=c.id ORDER BY cr.enrolled_at,cr.restaurant_id LIMIT 1)
+          AND EXISTS(SELECT 1 FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id
+            JOIN users u ON u.company_id=r.company_id WHERE cr.center_id=c.id AND cr.restaurant_id=$4
+            AND cr.active=true AND u.id=$3 AND u.status='active' AND u.role IN ('owner','admin') AND u.company_id=$2)
+          RETURNING setup_approved_at`, [setup[1],user.company_id,b.userId,b.restaurantId,user.id]);
+        return q.rowCount ? send(res,200,{ok:true}) : send(res,409,{error:'Ersteinrichtung nicht freigebbar: erstes Restaurant und berechtigten Benutzer prüfen'});
+      }
+      if (b.action === 'complete') {
+        const q = await pool.query(`UPDATE centers c SET setup_completed_at=now()
+          WHERE c.id=$1 AND c.company_id=$2 AND c.setup_completed_at IS NULL
+          AND ($3::boolean OR c.setup_user_id=$4)
+          AND EXISTS(SELECT 1 FROM center_tables t WHERE t.center_id=c.id AND t.active=true)
+          RETURNING setup_completed_at`, [setup[1],user.company_id,!!user.platform_admin,user.id]);
+        return q.rowCount ? send(res,200,{ok:true}) : send(res,409,{error:'Einrichtung nicht abschließbar oder bereits gesperrt'});
+      }
+      return send(res,400,{error:'Unbekannte Einrichtungsaktion'});
+    }
     const match = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/(tables|restaurants)$/i);
     if (!match || !uuid.test(match[1])) return send(res, 404, {error: 'Nicht gefunden'});
     const centerId = match[1];
@@ -99,9 +131,13 @@ export function createCenterHandler(pool) {
     if (match[2] === 'tables') {
       if (req.method === 'GET') return send(res, 200, {tables: (await pool.query('SELECT id,name,qr_token,active FROM center_tables WHERE center_id=$1 ORDER BY name,id', [centerId])).rows});
       if (req.method !== 'POST') return send(res, 405, {error: 'Methode nicht erlaubt'});
-      if (!user.platform_admin) return send(res, 403, {error: 'Feste Center-Tische dürfen nur vom Superadmin eingerichtet werden. Die delegierte Ersteinrichtung ist noch nicht freigeschaltet.'});
       if (!name || name.length > 80) return send(res, 400, {error: 'Tischname erforderlich (maximal 80 Zeichen)'});
-      const table = (await pool.query('INSERT INTO center_tables(center_id,name,qr_token) VALUES($1,$2,$3) RETURNING id,name,qr_token,active', [centerId, name, crypto.randomBytes(24).toString('hex')])).rows[0];
+      const table = (await pool.query(`WITH allowed AS (
+        SELECT id FROM centers WHERE id=$1 AND company_id=$4
+        AND ($5::boolean OR (setup_user_id=$6 AND setup_completed_at IS NULL)) FOR UPDATE
+      ) INSERT INTO center_tables(center_id,name,qr_token) SELECT id,$2,$3 FROM allowed
+      RETURNING id,name,qr_token,active`, [centerId, name, crypto.randomBytes(24).toString('hex'),user.company_id,!!user.platform_admin,user.id])).rows[0];
+      if (!table) return send(res,403,{error:'Tischverwaltung gesperrt oder Ersteinrichtung nicht freigegeben'});
       return send(res, 201, {table});
     }
     if (req.method === 'GET') return send(res, 200, {restaurants: (await pool.query(`SELECT r.id,r.name,cr.active,cr.contract_status,cr.payment_status,cr.merchant_reference FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=$1 ORDER BY r.name,r.id`, [centerId])).rows});
