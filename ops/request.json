@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "launch-prices-status-20261006"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "8d8f594bca1d49e1811cc0c3d3844b237dc1a7c9",
+  "requestId": "ai-launch-prices-live-20261006"
 }
