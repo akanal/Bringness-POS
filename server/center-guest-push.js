@@ -16,14 +16,18 @@ export function validateGuestSubscription(subscription){
 export async function saveGuestSubscription(pool,token,subscription,consent){
  if(consent!==true||!/^[a-f0-9]{64}$/.test(token||''))throw Error('INVALID_PUSH_CONSENT');
  const safe=validateGuestSubscription(subscription);
- const q=await pool.query(`INSERT INTO center_guest_push(order_id,subscription,endpoint_hash)
+ const q=await pool.query(`WITH stored AS (INSERT INTO center_guest_push(order_id,subscription,endpoint_hash)
  SELECT o.id,$2::jsonb,$3 FROM orders o
  LEFT JOIN center_checkout_attempts a ON a.order_id=o.id
  LEFT JOIN center_order_payments cp ON cp.order_id=o.id
  WHERE (a.guest_status_token=$1 OR cp.guest_status_token=$1)
  AND o.created_at>now()-interval '24 hours' AND o.status<>'cancelled'
  ON CONFLICT(order_id) DO UPDATE SET subscription=EXCLUDED.subscription,endpoint_hash=EXCLUDED.endpoint_hash,updated_at=now()
- RETURNING order_id`,[token,JSON.stringify(safe),crypto.createHash('sha256').update(safe.endpoint).digest('hex')]);
+ RETURNING order_id), rearmed AS (
+ UPDATE center_guest_notifications n SET state='pending',attempts=0,claimed_at=NULL
+ FROM stored s WHERE n.order_id=s.order_id AND n.state='failed' AND n.sent_at IS NULL
+ RETURNING n.id
+ ) SELECT order_id FROM stored`,[token,JSON.stringify(safe),crypto.createHash('sha256').update(safe.endpoint).digest('hex')]);
  return !!q.rows.length;
 }
 export async function dispatchCenterGuestPush(pool,sender){
