@@ -1,5 +1,5 @@
 import test from 'node:test';
-import {createCenterMollieCheckout} from './center-mollie-checkout.js';
+import {createCenterMollieCheckout,reconcileCenterCheckout} from './center-mollie-checkout.js';
 import {withMerchantToken,verifyMerchantProfile} from './center-mollie-merchant.js';
 import {beginRestaurantMollieConnect,completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import assert from 'node:assert/strict';
@@ -92,6 +92,13 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal(checkout.checkoutUrl,'https://www.mollie.com/checkout/test');
  assert.equal((await createCenterMollieCheckout(pool,attempt.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},()=>{throw Error('no duplicate')})).alreadyCreated,true);assert.equal(creates,1);
  assert.equal((await db.query("SELECT payment_id FROM center_order_payments WHERE order_id=$1",[checkoutOrder])).rows[0].payment_id,'tr_checkout');
+ const lostOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[lostOrder,restaurant]);
+ const lost=(await db.query('INSERT INTO center_checkout_attempts(order_id,center_id,restaurant_id) VALUES($1,$2,$3) RETURNING id',[lostOrder,created.data.center.id,restaurant])).rows[0];let externalPayment;
+ await assert.rejects(createCenterMollieCheckout(pool,lost.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},async(url,options)=>{const payload=JSON.parse(options.body);externalPayment={id:'tr_lost',profileId:payload.profileId,amount:payload.amount,metadata:payload.metadata,_links:{checkout:{href:'https://www.mollie.com/checkout/lost'}}};throw Error('lost response');}),/lost response/);
+ const recovered=await reconcileCenterCheckout(pool,lost.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},async()=>({ok:true,json:async()=>({_embedded:{payments:[externalPayment]},_links:{next:null}})}));
+ assert.equal(recovered.reconciled,true);assert.equal(recovered.paymentId,'tr_lost');
+ assert.equal((await reconcileCenterCheckout(pool,lost.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},()=>{throw Error('no re-read')})).reconciled,true);
+
 
 
 

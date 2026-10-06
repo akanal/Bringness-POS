@@ -33,3 +33,40 @@ export async function createCenterMollieCheckout(pool,attemptId,env=process.env,
  return {checkoutUrl};
  },env,fetcher);
 }
+export function matchingCheckoutPayments(payments,attempt){
+ return payments.filter(p=>p.metadata?.bringnessCheckoutId===attempt.id&&p.metadata?.bringnessOrderId===attempt.order_id
+ &&p.profileId===attempt.request_payload.profileId&&eurCents(p.amount)===attempt.total_cents);
+}
+export async function reconcileCenterCheckout(pool,attemptId,env=process.env,fetcher=fetch){
+ const origin=new URL(env.CENTER_PAYMENT_ORIGIN||'http://invalid');if(origin.protocol!=='https:')throw Error('PAYMENT_ORIGIN_MISSING');
+ const attempt=(await pool.query(`SELECT a.*,o.total_cents FROM center_checkout_attempts a JOIN orders o ON o.id=a.order_id WHERE a.id=$1`,[attemptId])).rows[0];
+ if(!attempt?.attempted_at||!attempt.request_payload)throw Error('NO_PAYMENT_ATTEMPT');
+ if(attempt.payment_id)return {reconciled:true,paymentId:attempt.payment_id};
+ return withMerchantToken(pool,attempt.restaurant_id,async(accessToken,envelope)=>{
+ const credential=(await pool.query('SELECT * FROM center_mollie_credentials WHERE restaurant_id=$1 AND token_envelope=$2',[attempt.restaurant_id,envelope])).rows[0];
+ if(!credential?.verified_at||credential.profile_id!==attempt.request_payload.profileId)throw Error('MERCHANT_CONNECTION_CHANGED');
+ let url=new URL('https://api.mollie.com/v2/payments');url.searchParams.set('profileId',credential.profile_id);url.searchParams.set('limit','250');
+ const matches=[];
+ for(let page=0;url&&page<10;page++){
+ if(url.origin!=='https://api.mollie.com'||url.pathname!=='/v2/payments')throw Error('INVALID_PAYMENT_PAGE');
+ const response=await fetcher(url.href,{headers:{authorization:'Bearer '+accessToken},signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('PAYMENT_RECONCILIATION_FAILED');
+ const data=await response.json();if(!Array.isArray(data._embedded?.payments))throw Error('INVALID_PAYMENT_LIST');
+ matches.push(...matchingCheckoutPayments(data._embedded.payments,attempt));
+ url=data._links?.next?.href?new URL(data._links.next.href):null;
+ }
+ if(url)return {reconciled:false,reason:'scan_incomplete',retryCreationAllowed:false};
+ if(matches.length!==1)return {reconciled:false,reason:matches.length?'ambiguous_payment':'payment_not_found',retryCreationAllowed:false};
+ const payment=matches[0];if(!/^tr_[a-zA-Z0-9]+$/.test(payment.id||''))throw Error('INVALID_PAYMENT_ID');
+ let checkoutUrl=payment._links?.checkout?.href;
+ if(checkoutUrl){const target=new URL(checkoutUrl);if(target.protocol!=='https:'||!(target.hostname==='mollie.com'||target.hostname.endsWith('.mollie.com')))throw Error('INVALID_CHECKOUT_URL');}
+ else checkoutUrl=new URL('/center/status.html#token='+attempt.guest_status_token,origin).href;
+ const client=await pool.connect();try{
+ await client.query('BEGIN');const locked=(await client.query('SELECT payment_id FROM center_checkout_attempts WHERE id=$1 FOR UPDATE',[attemptId])).rows[0];
+ if(locked.payment_id){await client.query('COMMIT');return {reconciled:true,paymentId:locked.payment_id};}
+ await client.query(`INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency,guest_status_token)
+ VALUES($1,$2,$3,$4,$5,$6,'EUR',$7)`,[payment.id,attempt.order_id,attempt.center_id,attempt.restaurant_id,credential.organization_id,attempt.total_cents,attempt.guest_status_token]);
+ await client.query('UPDATE center_checkout_attempts SET payment_id=$2,checkout_url=$3 WHERE id=$1',[attemptId,payment.id,checkoutUrl]);
+ await client.query('COMMIT');return {reconciled:true,paymentId:payment.id,checkoutUrl};
+ }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+ },env,fetcher);
+}
