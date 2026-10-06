@@ -202,3 +202,32 @@ test('Center invitation requires login and explicit acceptance and rejects malfo
  assert.equal(accepts,1);assert.equal(await page.locator('#accept').isVisible(),false);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+
+test('a completed saved payment attempt opens guest status after reload',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();let calls=0;const requests=[];
+ const productId='11111111-1111-4111-8111-111111111111',restaurantId='22222222-2222-4222-8222-222222222222';
+ await page.route('https://center.test/**',async route=>{
+ const req=route.request(),url=new URL(req.url());
+ if(url.pathname==='/center/')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/index.html',import.meta.url),'utf8')});
+ if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:'<h1>Bestellstatus</h1>'});
+ let data,status=200;
+ if(url.pathname.endsWith('/restaurants'))data={center:'Center',table:'1',restaurants:[{id:restaurantId,name:'Restaurant'}]};
+ else if(url.pathname.endsWith('/menu'))data={restaurant:{name:'Restaurant'},orderingAvailable:true,products:[{id:productId,name:'Gericht',price_cents:1250}]};
+ else if(url.pathname.endsWith('/order')){
+ calls++;requests.push(req.postDataJSON());
+ if(calls===1){status=503;data={error:'Zahlungsstatus unklar.',cartEditable:false};}
+ else data={statusUrl:'/center/status.html#token='+'a'.repeat(64),alreadyCreated:true};
+ }else throw Error('Unexpected request');
+ return route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/?code='+'a'.repeat(48));
+ await page.locator('#restaurants button').click();await page.getByRole('button',{name:'In den Warenkorb'}).click();
+ await page.locator('#checkout').click();await page.locator('#status').getByText(/Zahlungsstatus unklar/).waitFor();
+ await page.reload();await page.locator('#status').getByText(/Ein Zahlungsversuch ist noch gespeichert/).waitFor();
+ await page.locator('#checkout').click();await page.getByRole('heading',{name:'Bestellstatus'}).waitFor();
+ assert.equal(page.url(),'https://center.test/center/status.html#token='+'a'.repeat(64));
+ assert.equal(calls,2);assert.deepEqual(requests[0],requests[1]);
+ }finally{await browser.close();}
+});
