@@ -1,3 +1,4 @@
+import {applyCenterStock} from './center-stock-bridge.js';
 import {validateCenterPayment} from './center-payment-core.js';
 // Internal entry point. verifyPayment must read the provider API using the bound
 // restaurant merchant credentials. It must not trust callback or guest fields.
@@ -15,6 +16,7 @@ export async function releaseCenterPayment(pool,paymentId,verifyPayment){
  const result=validateCenterPayment({paymentId:binding.payment_id,orderId:binding.order_id,merchantReference:binding.merchant_reference,amountCents:binding.amount_cents,currency:binding.currency},payment);
  const paidAt=typeof payment?.paidAt==='string'?Date.parse(payment.paidAt):NaN;
  if(!result.release||!Number.isFinite(paidAt)||paidAt>Date.now()+60000){await client.query('ROLLBACK');return {released:false,reason:result.release?'invalid_payment_time':result.reason};}
+ await applyCenterStock(client,binding.order_id,binding.restaurant_id,'accept');
  const order=await client.query(`UPDATE orders SET status='kitchen' WHERE id=$1 AND restaurant_id=$2 AND total_cents=$3 AND status='payment_pending' RETURNING id`,[binding.order_id,binding.restaurant_id,binding.amount_cents]);
  if(!order.rows.length){await client.query('ROLLBACK');return {released:false,reason:'order_not_pending'};}
  await client.query("INSERT INTO payments(order_id,method,amount_cents) VALUES($1,'mollie_center',$2)",[binding.order_id,binding.amount_cents]);
@@ -53,6 +55,7 @@ export async function advanceCenterKitchen(pool,restaurantId,orderId,nextStatus)
  ORDER BY cp.paid_at,cp.payment_id LIMIT 1`,[restaurantId])).rows[0];
  if(first?.id!==orderId){await client.query('ROLLBACK');return {ok:false,reason:'earlier_order_waiting'};}
  }else if(order.status!=='preparing'){await client.query('ROLLBACK');return {ok:false,reason:'invalid_transition'};}
+ if(nextStatus==='preparing')await applyCenterStock(client,orderId,restaurantId,'start');
  await client.query('UPDATE orders SET status=$2 WHERE id=$1',[orderId,nextStatus]);
  await client.query(nextStatus==='preparing'?'UPDATE center_order_payments SET preparation_started_at=now() WHERE order_id=$1':'UPDATE center_order_payments SET ready_at=now() WHERE order_id=$1',[orderId]);
  await client.query('COMMIT');return {ok:true,status:nextStatus};

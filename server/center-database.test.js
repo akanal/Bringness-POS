@@ -21,6 +21,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  CREATE TABLE receipts(order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
  CREATE TABLE payments(order_id uuid,method text,amount_cents integer);
  CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
+ CREATE TABLE pos_stock_links(restaurant_id uuid,active boolean);
  CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,name text,price_cents integer,tax_rate numeric,active boolean);
  CREATE TABLE order_items(order_id uuid,product_id uuid,product_name_snapshot text,unit_price_cents integer,tax_rate_snapshot numeric,quantity numeric);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
