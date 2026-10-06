@@ -3,11 +3,16 @@ import {withMerchantToken} from './center-mollie-merchant.js';
 import {eurCents} from './center-mollie-payment.js';
 export async function createCenterMollieCheckout(pool,attemptId,env=process.env,fetcher=fetch){
  const origin=new URL(env.CENTER_PAYMENT_ORIGIN||'http://invalid');if(origin.protocol!=='https:')throw Error('PAYMENT_ORIGIN_MISSING');
- const attempt=(await pool.query(`SELECT a.*,o.total_cents,o.status,cr.merchant_reference,cr.contract_status,cr.payment_status,cr.active
+ const attempt=(await pool.query(`SELECT a.*,o.total_cents,o.status,cp.provider_status,cp.released_at,cr.merchant_reference,cr.contract_status,cr.payment_status,cr.active
  FROM center_checkout_attempts a JOIN orders o ON o.id=a.order_id
  JOIN center_restaurants cr ON cr.restaurant_id=a.restaurant_id AND cr.center_id=a.center_id
+ LEFT JOIN center_order_payments cp ON cp.order_id=a.order_id AND cp.restaurant_id=a.restaurant_id
  WHERE a.id=$1 AND o.restaurant_id=a.restaurant_id`,[attemptId])).rows[0];
  if(!attempt)throw Error('CHECKOUT_NOT_FOUND');
+ if(attempt.released_at||['kitchen','preparing','ready'].includes(attempt.status)||['failed','canceled','expired'].includes(attempt.provider_status)){
+ if(!/^[a-f0-9]{64}$/.test(attempt.guest_status_token||''))throw Error('CHECKOUT_STATUS_UNAVAILABLE');
+ return {statusUrl:'/center/status.html#token='+attempt.guest_status_token,alreadyCreated:true};
+ }
  if(attempt.checkout_url)return {checkoutUrl:attempt.checkout_url,alreadyCreated:true};
  if(attempt.attempted_at)return {pending:true,reconciliationRequired:true};
  if(attempt.status!=='payment_pending'||!attempt.active||attempt.contract_status!=='signed'||attempt.payment_status!=='verified')throw Error('CHECKOUT_NOT_READY');
