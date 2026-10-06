@@ -1,5 +1,6 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "bringness-domain-preflight-20261006"
+  "operation": "deploy",
+  "target": "pos",
+  "revision": "1286c3aebb1b72951f87922c6945f646f20b036e",
+  "requestId": "bringness-domain-live-20261006"
 }
