@@ -259,8 +259,13 @@ test('database migration and delegated setup lifecycle',async()=>{
  await assert.rejects(acceptCenterInvitation(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},invitationToken),/INVITATION_NOT_ALLOWED/);
  const foreignCenters=await call('','GET','foreign-owner');assert.equal(foreignCenters.status,200);
  assert.equal(foreignCenters.data.centers.some(center=>center.id===created.data.center.id),true);
+ assert.equal(foreignCenters.data.centers.find(center=>center.id===created.data.center.id).can_manage,false);
  const foreignRestaurants=await call(c+'/restaurants','GET','foreign-owner');assert.equal(foreignRestaurants.status,200);
  assert.deepEqual(foreignRestaurants.data.restaurants.map(r=>r.id),[otherRestaurant]);
+ assert.equal(foreignRestaurants.data.restaurants[0].can_manage,true);
+ const operatorView=await call(c+'/restaurants','GET','owner');
+ assert.equal(operatorView.data.restaurants.find(r=>r.id===otherRestaurant).can_manage,false);
+ assert.equal(operatorView.data.restaurants.find(r=>r.id===restaurant).can_manage,true);
  assert.equal((await call(c+'/restaurants/'+restaurant+'/onboarding','PUT','foreign-owner',{contractStatus:'signed',merchantReference:'org_try'})).status,404);
  const foreignConnect=await beginRestaurantMollieConnect(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},created.data.center.id,otherRestaurant,env);assert.equal(foreignConnect.status,200);
  await assert.rejects(inviteCenterRestaurant(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},created.data.center.id,restaurant),/INVITATION_NOT_ALLOWED/);
@@ -294,6 +299,8 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await exportCenterTableQr(pool,delegatedUser,secondCenter,setupTable.id,qrEnv,renderQr)).status,404);
  assert.equal((await call(sc+'/setup','PUT','foreign-owner',{action:'complete'})).status,200);
  const exported=await exportCenterTableQr(pool,delegatedUser,secondCenter,setupTable.id,qrEnv,renderQr);
+ assert.equal((await call(sc+'/setup','GET','foreign-owner')).data.setup.can_export_qr,true);
+ assert.equal((await call(c+'/setup','GET','foreign-owner')).data.setup.can_export_qr,false);
  assert.equal(exported.status,200);assert.ok(exported.svg.includes(setupTable.qr_token));
  assert.equal((await exportCenterTableQr(pool,{id:crypto.randomUUID(),company_id:otherCompany},secondCenter,setupTable.id,qrEnv,renderQr)).status,404);
  assert.equal((await call(sc+'/tables','POST','foreign-owner',{name:'After delegated lock'})).status,403);
