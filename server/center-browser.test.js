@@ -288,7 +288,7 @@ test('late '+delayed+' response cannot restore the previous Center view',async()
  if(old&&url.pathname.endsWith('/'+delayed)){mark();await gate;}
  return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
  });
- await page.goto('https://center.test/center/manage.html');await started;
+ await page.goto('https://center.test/center/manage.html',{waitUntil:'commit'});await started;
  await page.locator('#centers').selectOption('new');
  await page.locator('#setupStatus').getByText('Ersteinrichtung abgeschlossen.',{exact:true}).waitFor();
  const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/centers/old/'+delayed);
