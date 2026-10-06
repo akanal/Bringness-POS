@@ -17,6 +17,14 @@ export async function releaseCenterPayment(pool,paymentId,verifyPayment){
  if(!result.release||!Number.isFinite(paidAt)||paidAt>Date.now()+60000){await client.query('ROLLBACK');return {released:false,reason:result.release?'invalid_payment_time':result.reason};}
  const order=await client.query(`UPDATE orders SET status='kitchen' WHERE id=$1 AND restaurant_id=$2 AND total_cents=$3 AND status='payment_pending' RETURNING id`,[binding.order_id,binding.restaurant_id,binding.amount_cents]);
  if(!order.rows.length){await client.query('ROLLBACK');return {released:false,reason:'order_not_pending'};}
+ await client.query("INSERT INTO payments(order_id,method,amount_cents) VALUES($1,'mollie_center',$2)",[binding.order_id,binding.amount_cents]);
+ const receiptNumber='BN-'+new Date().getUTCFullYear()+'-'+String((await client.query("SELECT nextval('receipt_number_seq') n")).rows[0].n).padStart(6,'0');
+ await client.query("INSERT INTO receipts(order_id,receipt_number,fiscal_status) VALUES($1,$2,'pending')",[binding.order_id,receiptNumber]);
+ await client.query(`UPDATE receipts rc SET merchant_snapshot=(SELECT jsonb_build_object(
+ 'businessName',coalesce(nullif(b.company_name,''),co.name),'restaurantName',r.name,
+ 'street',coalesce(b.street,''),'postalCode',coalesce(b.postal_code,''),'city',coalesce(b.city,''),'vatId',coalesce(b.vat_id,''))
+ FROM orders o JOIN restaurants r ON r.id=o.restaurant_id JOIN companies co ON co.id=r.company_id
+ LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE o.id=rc.order_id) WHERE rc.order_id=$1`,[binding.order_id]);
  await client.query('UPDATE center_order_payments SET paid_at=$2,released_at=now() WHERE payment_id=$1',[paymentId,new Date(paidAt).toISOString()]);
  await client.query('COMMIT');return {released:true,orderId:binding.order_id};
  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}

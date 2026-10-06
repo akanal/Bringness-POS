@@ -15,7 +15,11 @@ test('database migration and delegated setup lifecycle',async()=>{
  const db=process.env.CENTER_TEST_DATABASE_URL ? new engine.default.Pool({connectionString:process.env.CENTER_TEST_DATABASE_URL}) : new engine.PGlite();
  if(process.env.CENTER_TEST_DATABASE_URL){db.exec=sql=>db.query(sql);db.close=()=>db.end();}
  try {
- await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
+ await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text DEFAULT 'Company'); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
+ CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);
+ CREATE SEQUENCE receipt_number_seq;
+ CREATE TABLE receipts(order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
+ CREATE TABLE payments(order_id uuid,method text,amount_cents integer);
  CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
  CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,name text,price_cents integer,tax_rate numeric,active boolean);
  CREATE TABLE order_items(order_id uuid,product_id uuid,product_name_snapshot text,unit_price_cents integer,tax_rate_snapshot numeric,quantity numeric);
@@ -26,7 +30,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  const migration=source.match(/await pool.query\(`([\s\S]*?)`\)/)[1];
  await db.exec(migration);await db.exec(migration);
  const company=crypto.randomUUID(),admin=crypto.randomUUID(),owner=crypto.randomUUID(),restaurant=crypto.randomUUID();
- await db.query('INSERT INTO companies VALUES($1)',[company]);
+ await db.query('INSERT INTO companies(id) VALUES($1)',[company]);
  await db.query("INSERT INTO users(id,company_id,role,status) VALUES($1,$3,'owner','active'),($2,$3,'owner','active')",[admin,owner,company]);
  await db.query('INSERT INTO platform_admins VALUES($1,true)',[admin]);
  for(const [id,key] of [[admin,'admin'],[owner,'owner']])await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[id,crypto.createHash('sha256').update(key).digest('hex')]);
@@ -119,6 +123,19 @@ test('database migration and delegated setup lifecycle',async()=>{
  const statusReq=Readable.from([]);Object.assign(statusReq,{url:'/api/v1/guest/center/status?token='+guestToken,method:'GET',headers:{}});
  const statusRes={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};await handler(statusReq,statusRes);
  assert.equal(statusRes.status,200);assert.equal(statusRes.data.order.status,'ready');assert.equal(statusRes.data.order.restaurant_name,'Restaurant');
+ const guestReceipt=(await db.query('SELECT * FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0];
+ assert.match(guestReceipt.receipt_number,/^BN-\d{4}-\d{6}$/);assert.equal(guestReceipt.fiscal_status,'pending');assert.equal(guestReceipt.merchant_snapshot.restaurantName,'Restaurant');
+ assert.equal((await db.query('SELECT count(*)::int n FROM payments WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
+ assert.equal((await db.query('SELECT count(*)::int n FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
+ const failedReceiptOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[failedReceiptOrder,restaurant]);
+ await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('tr_receiptfail',$1,$2,$3,'org_restaurant',1250,'EUR')",[failedReceiptOrder,created.data.center.id,restaurant]);
+ await db.query('ALTER TABLE receipts RENAME TO receipts_unavailable');
+ await assert.rejects(releaseCenterPayment(pool,'tr_receiptfail',async()=>({...verifiedGuestPayment,paymentId:'tr_receiptfail',orderId:failedReceiptOrder,amountCents:1250})));
+ await db.query('ALTER TABLE receipts_unavailable RENAME TO receipts');
+ assert.equal((await db.query('SELECT status FROM orders WHERE id=$1',[failedReceiptOrder])).rows[0].status,'payment_pending');
+ assert.equal((await db.query('SELECT count(*)::int n FROM payments WHERE order_id=$1',[failedReceiptOrder])).rows[0].n,0);
+
+
 
 
 
