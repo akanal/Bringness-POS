@@ -259,5 +259,20 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await call(c+'/restaurants/'+restaurant+'/onboarding','PUT','foreign-owner',{contractStatus:'signed',merchantReference:'org_try'})).status,404);
  const foreignConnect=await beginRestaurantMollieConnect(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},created.data.center.id,otherRestaurant,env);assert.equal(foreignConnect.status,200);
  await assert.rejects(inviteCenterRestaurant(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},created.data.center.id,restaurant),/INVITATION_NOT_ALLOWED/);
+
+ // Expired invitations cannot grant membership or record acceptance.
+ const expired=await inviteCenterRestaurant(pool,{id:owner,company_id:company,role:'owner'},created.data.center.id,otherRestaurant);
+ const expiredToken=new URL(expired.invitationUrl,'https://example.test').hash.slice('#token='.length);
+ const expiredHash=crypto.createHash('sha256').update(expiredToken).digest('hex');
+ await db.query("UPDATE center_restaurant_invitations SET expires_at=now()-interval '1 second' WHERE token_hash=$1",[expiredHash]);
+ await assert.rejects(acceptCenterInvitation(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},expiredToken),/INVITATION_NOT_ALLOWED/);
+ assert.equal((await db.query('SELECT accepted_at FROM center_restaurant_invitations WHERE token_hash=$1',[expiredHash])).rows[0].accepted_at,null);
+ // A conflicting Center membership rolls back both the join and invitation consumption.
+ const secondCenter=(await call('','POST','admin',{name:'Second Center'})).data.center.id;
+ const conflict=await inviteCenterRestaurant(pool,{id:owner,company_id:company,role:'owner'},secondCenter,otherRestaurant);
+ const conflictToken=new URL(conflict.invitationUrl,'https://example.test').hash.slice('#token='.length);
+ await assert.rejects(acceptCenterInvitation(pool,{id:otherOwner,company_id:otherCompany,role:'owner'},conflictToken),error=>error.code==='23505');
+ assert.equal((await db.query('SELECT center_id FROM center_restaurants WHERE restaurant_id=$1',[otherRestaurant])).rows[0].center_id,created.data.center.id);
+ assert.equal((await db.query('SELECT accepted_at FROM center_restaurant_invitations WHERE token_hash=$1',[crypto.createHash('sha256').update(conflictToken).digest('hex')])).rows[0].accepted_at,null);
  }finally{await db.close();}
 });
