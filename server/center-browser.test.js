@@ -7,7 +7,7 @@ test('center management hides table creation until approval and after completion
  try{
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  let approved=false,locked=false,tables=[];
- await page.route('http://center.test/**',async route=>{
+ await page.route('https://center.test/**',async route=>{
  const req=route.request(),url=new URL(req.url());let data;
  if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
  if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
@@ -22,7 +22,7 @@ test('center management hides table creation until approval and after completion
  return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
  });
  await page.addInitScript(()=>localStorage.setItem('bringness-pos-token','test'));
- await page.goto('http://center.test/center/manage.html');
+ await page.goto('https://center.test/center/manage.html');
  await page.locator('#setupStatus').getByText('Ersteinrichtung offen.',{exact:true}).waitFor();
  assert.equal(await page.locator('#newTable').isVisible(),false);
  approved=true;await page.reload();await page.locator('#newTable').waitFor({state:'visible'});
@@ -38,7 +38,7 @@ test('guest cart keeps the same payment attempt after an uncertain response',asy
  try{
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const productId='11111111-1111-4111-8111-111111111111',restaurantId='22222222-2222-4222-8222-222222222222',requests=[];
- await page.route('http://center.test/**',async route=>{
+ await page.route('https://center.test/**',async route=>{
  const req=route.request(),url=new URL(req.url());
  if(url.pathname==='/center/')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/index.html',import.meta.url),'utf8')});
  let data,status=200;
@@ -49,7 +49,7 @@ test('guest cart keeps the same payment attempt after an uncertain response',asy
  }else throw Error('Unexpected request '+url.pathname);
  return route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
  });
- await page.goto('http://center.test/center/?code='+ 'a'.repeat(48));
+ await page.goto('https://center.test/center/?code='+ 'a'.repeat(48));
  await page.locator('#restaurants button').click();
  await page.getByRole('button',{name:'In den Warenkorb'}).click();
  assert.match(await page.locator('#cartTotal').textContent(),/12,50/);
@@ -61,5 +61,31 @@ test('guest cart keeps the same payment attempt after an uncertain response',asy
  await page.locator('#checkout').click();
  await page.waitForFunction(()=>!document.getElementById('checkout').disabled);
  assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
+test('kitchen blocks later starts while allowing parallel preparations to finish',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const orders=[{id:'started',status:'preparing',items:[]},{id:'first',status:'kitchen',items:[]},{id:'later',status:'kitchen',items:[]}];let actions=0;
+ await page.route('https://center.test/**',async route=>{
+ const req=route.request(),url=new URL(req.url());
+ if(url.pathname==='/center/kitchen.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/kitchen.html',import.meta.url),'utf8')});
+ if(url.pathname!=='/api/v1/centers/kitchen')throw Error('Unexpected request');
+ if(req.method()==='PUT'){
+ actions++;const body=req.postDataJSON();assert.equal(body.orderId,'first');assert.equal(body.status,'preparing');
+ return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Lager vorübergehend nicht erreichbar.'})});
+ }
+ return route.fulfill({contentType:'application/json',body:JSON.stringify({orders})});
+ });
+ await page.addInitScript(()=>localStorage.setItem('bringness-pos-token','test'));
+ await page.goto('https://center.test/center/kitchen.html?restaurantId=test');
+ const started=page.locator('article').filter({has:page.getByRole('heading',{name:'1. Bestellung started',exact:true})});
+ const first=page.locator('article').filter({has:page.getByRole('heading',{name:'2. Bestellung first',exact:true})});
+ const later=page.locator('article').filter({has:page.getByRole('heading',{name:'3. Bestellung later',exact:true})});
+ await first.getByRole('button').waitFor();assert.equal(await started.getByRole('button').isEnabled(),true);
+ assert.equal(await first.getByRole('button').isEnabled(),true);assert.equal(await later.getByRole('button').isDisabled(),true);
+ await first.getByRole('button').click();await page.locator('#status').getByText('Lager vorübergehend nicht erreichbar.',{exact:true}).waitFor();
+ assert.equal(actions,1);assert.equal(await later.getByRole('button').isDisabled(),true);assert.equal(await first.getByRole('button').isEnabled(),true);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
