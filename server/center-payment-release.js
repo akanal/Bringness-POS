@@ -33,6 +33,7 @@ export async function releaseCenterPayment(pool,paymentId,verifyPayment){
 }
 export async function centerKitchenQueue(pool,restaurantId){
  return (await pool.query(`SELECT o.id,o.status,cp.paid_at,
+ (SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id) collection_number,
  (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
  FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id
  WHERE cp.restaurant_id=$1 AND cp.released_at IS NOT NULL AND o.status IN ('kitchen','preparing','ready')
