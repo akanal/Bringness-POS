@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bringness POS Admin</title>
+<title>Bringness Admin</title>
 <link rel="stylesheet" href="/styles.css">
 <style>
 :root{--line:#e4e9ee;--muted:#66727d;--green:#0b7a42;--soft:#f6f8fa;--dark:#101820}
@@ -11,12 +11,12 @@ body{background:#f3f6f8}.admin{max-width:1280px;margin:28px auto;padding:20px}.c
 </style>
 </head>
 <body>
-<header><a class="brand home" href="/">Bringness <span>POS Admin</span></a><a href="/pos/">Kasse</a></header>
+<header><a class="brand home" href="/">Bringness <span>Admin</span></a><a href="/pos/">Kasse</a></header>
 <main class="admin">
 <section id="login" class="card"><h1>Admin-Zugang</h1><p>Geschützter Verwaltungszugang für Inhaber und berechtigte Administratoren.</p><input id="email" type="email" autocomplete="username" placeholder="E-Mail"><input id="password" type="password" autocomplete="current-password" placeholder="Passwort" style="margin-top:8px"><button id="go" class="btn" style="margin-top:10px">Anmelden</button><button id="forgotToggle" type="button" style="margin-top:10px;margin-left:8px">Passwort vergessen?</button><p id="msg" role="status"></p><div id="forgotPanel" style="display:none;border-top:1px solid #e4e9ee;margin-top:18px;padding-top:16px"><h2>Admin-Passwort zurücksetzen</h2><p id="forgotInfo" class="muted">Verfügbarkeit wird geprüft…</p><input id="forgotEmail" type="email" autocomplete="email" placeholder="Admin-E-Mail"><button id="forgotSend" type="button" class="btn" style="margin-top:10px" disabled>Reset-Link per E-Mail senden</button><p id="forgotMessage" role="status"></p></div></section>
 <section id="firstLogin" class="card" style="display:none;max-width:540px"><h1>Startpasswort ändern</h1><p>Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="firstLoginForm"><label>Startpasswort <input name="current" type="password" autocomplete="current-password" required></label><label>Neues Passwort <input name="next" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required></label><label>Neues Passwort wiederholen <input name="repeat" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required></label><button class="btn" type="submit">Passwort ändern</button><p id="firstLoginMessage" role="status"></p></form></section>
 <section id="dash" style="display:none">
-<div class="topline"><div><h1>Bringness POS Verwaltung</h1><div class="muted"><span class="status-dot"></span>Admin-Zentrale aktiv</div></div><button id="out">Abmelden</button></div>
+<div class="topline"><div><h1>Bringness Verwaltung</h1><div class="muted"><span class="status-dot"></span>Admin-Zentrale aktiv</div></div><button id="out">Abmelden</button></div>
 <div class="kpis"><div class="kpi"><span>Betriebe</span><strong id="restaurants">0</strong></div><div class="kpi"><span>Verkäufe</span><strong id="orders">0</strong></div><div class="kpi"><span>Mitarbeiter</span><strong id="employees">0</strong></div><div class="kpi"><span>Rechnungen</span><strong id="invoices">0</strong></div></div>
 <div class="tabs"><button class="active" data-tab="overview">Übersicht</button><button data-tab="customers">Kunden & Lizenzen</button><button data-tab="devicesPanel">Geräte</button><button data-tab="billingPanel">Zahlungen</button><button data-tab="systemPanel">System & Protokoll</button><button data-tab="securityPanel">Sicherheit</button></div>
 <section id="overview" class="panel active"><div class="grid"><div class="card"><h3>Online-Abonnement</h3><p>29,99 € + 19 % MwSt. = 35,69 € / Monat</p><button onclick="buy('online_monthly')">Mit Mollie testen</button></div><div class="card"><h3>Download-Lizenz</h3><p>399,00 € + 19 % MwSt. = 474,81 € einmalig</p><button onclick="buy('download_license')">Mit Mollie testen</button></div></div><div id="platformSummary" class="card platform"><h2>Plattformübersicht</h2><div class="kpis"><div class="kpi"><span>Kundenkonten</span><strong id="platformCompanyCount">0</strong></div><div class="kpi"><span>Kunden-Betriebe</span><strong id="platformRestaurantCount">0</strong></div><div class="kpi"><span>Aktive Module</span><strong id="platformFeatureCount">0</strong></div><div class="kpi"><span>Erfasste Zahlungen</span><strong id="platformPaymentCount">0</strong></div></div><div class="card platform" id="platformQuickGuide"><h2>Plattform-Werkzeuge</h2><p class="muted">Kunden, Betriebe, Inhaber und Mitarbeiter über „Kundenansicht“ suchen. Dort beim gewählten Kunden Testphasen und Sonderpreise für neue Monatsabos verwalten.</p><div class="toolbar"><button type="button" id="openCustomerDetail">Kundenansicht & Konditionen öffnen</button><a href="/#tischbestellung">QR & NFC einrichten</a></div></div></div></section>
@@ -58,5 +58,6 @@ $('out').onclick=()=>{localStorage.removeItem('bringness-pos-token');location.re
 </script>
 </body>
 </html>
+
 
 

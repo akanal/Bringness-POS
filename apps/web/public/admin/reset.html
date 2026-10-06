@@ -4,18 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Admin-Passwort zurücksetzen · Bringness POS</title>
+<title>Admin-Passwort zurücksetzen · Bringness</title>
 <link rel="stylesheet" href="/styles.css">
 <style>body{background:#f3f6f8}.reset{max-width:480px;margin:45px auto;padding:20px}.card{background:#fff;border-radius:18px;padding:25px;box-shadow:0 4px 22px rgba(15,25,35,.06)}input{display:block;box-sizing:border-box;width:100%;padding:12px;margin:7px 0 17px;border:1px solid #d6dde3;border-radius:9px}label{display:block}#message{min-height:1.5em}</style>
 </head>
 <body>
-<header><a class="brand home" href="/">Bringness <span>POS Admin</span></a></header>
+<header><a class="brand home" href="/">Bringness <span>Admin</span></a></header>
 <main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p>Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label for="newPassword">Neues Passwort</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><label for="repeatPassword">Passwort wiederholen</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
 <script>
 const returnToPos=new URLSearchParams(location.search).get('returnTo')==='pos';
 const returnToAi=new URLSearchParams(location.search).get('returnTo')==='ai';
 const loginLink=document.querySelector('a[href="/admin/"]');if(returnToAi){loginLink.href='/ai-workspace.html?admin=1';loginLink.textContent='Zur AI-Admin-Anmeldung';}
-if(returnToPos){loginLink.href='/pos/';loginLink.textContent='Zur Kassen-Anmeldung';document.title='Passwort zurücksetzen · Bringness POS';document.querySelector('.brand span').textContent='POS';}
+if(returnToPos){loginLink.href='/pos/';loginLink.textContent='Zur Kassen-Anmeldung';document.title='Passwort zurücksetzen · Bringness';document.querySelector('.brand span').textContent='';}
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
 history.replaceState(null,'',location.pathname+(returnToAi?'?returnTo=ai':returnToPos?'?returnTo=pos':''));
@@ -26,6 +26,7 @@ document.querySelectorAll('input[type="password"]').forEach(input=>{const button
 </script>
 </body>
 </html>
+
 
 
 

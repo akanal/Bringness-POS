@@ -43,11 +43,7 @@
       const img=document.createElement('img');
       img.src=src; img.alt='Bringness'; img.dataset.bringnessLogo='1';
       img.style.cssText='display:block;height:42px;width:auto;max-width:220px;object-fit:contain';
-      const pos=document.createElement('span');
-      pos.textContent='– POS';
-      pos.dataset.bringnessPosLabel='1';
-      pos.style.cssText='font-size:15px;font-weight:800;letter-spacing:.04em;white-space:nowrap;color:currentColor;opacity:.82;margin-left:8px';
-      el.textContent=''; el.appendChild(img); el.appendChild(pos);
+      el.textContent=''; el.appendChild(img);
       if(el.tagName==='A'&&!el.getAttribute('href')) el.setAttribute('href','/');
       el.style.display='inline-flex'; el.style.alignItems='center'; el.style.textDecoration='none'; el.style.gap='0';
     }
