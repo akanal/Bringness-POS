@@ -19,6 +19,10 @@ Food payments go directly to the selected restaurant operator. Each restaurant c
 - Guest status and milestone history. Connection failures retain the last state and retry; hanging requests time out after 15 seconds.
 - Receipt/TSE preparation and guarded automatic signing worker. Ambiguous hardware responses require reconciliation rather than blind signing retries.
 
+## Table QR export
+
+Management includes an authenticated SVG download for each active table, available after delegated setup is locked. The export checks the table and center against the acting company and encodes the existing fixed guest token. Configure a root HTTPS public origin using `CENTER_PUBLIC_ORIGIN`, `PUBLIC_BASE_URL` or `PUBLIC_URL`. Request host headers are not used to choose the QR destination. Endpoint: `GET /api/v1/centers/:centerId/tables/:tableId/qr`.
+
 ## Entry points
 
 - Management: `/center/manage.html`, using existing POS login.
@@ -44,6 +48,6 @@ The workflow also tracks AI inventory, POS stock bridge, TSE and server startup 
 - Implement cross-company restaurant enrollment/invitations.
 - Complete the per-scan ordering lifecycle. A static QR/NFC URL alone cannot prove a physical rescan.
 - Implement supported, consented notifications when the guest page is closed. The current status page requires the page to remain open.
-- Complete shared table QR image export and review the remaining Center requirements.
+- Review the remaining Center requirements.
 
 Do not enable checkout or automatic signing solely because simulated checks pass.
