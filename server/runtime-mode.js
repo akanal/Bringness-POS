@@ -38,3 +38,18 @@ export function configurePosOrigin(env, mode) {
     }
   }
 }
+
+export function redirectLegacyPosDomain(req, res, mode, env = process.env) {
+  if (mode !== "pos" || env.NODE_ENV !== "production") return false;
+  // Keep legacy API callbacks and existing API clients working without requiring redirect support.
+  if (!["GET", "HEAD"].includes(req.method)) return false;
+  const host = String(req.headers.host || "").toLowerCase();
+  if (!/^(?:www\.)?bringness-pos\.de(?::443)?$/.test(host)) return false;
+  const path = String(req.url || "/");
+  if (!path.startsWith("/") || /[\r\n]/.test(path)) return false;
+  const pathname = new URL(path, "https://bringness.de").pathname;
+  if (pathname === "/api" || pathname.startsWith("/api/")) return false;
+  res.writeHead(308, {location: "https://bringness.de" + path, "cache-control": "no-store"});
+  res.end();
+  return true;
+}
