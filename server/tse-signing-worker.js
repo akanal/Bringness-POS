@@ -25,5 +25,17 @@ export async function signPreparedTse(pool,id,adapter){
 }
 export async function processPreparedTse(pool,adapterForRestaurant){
  const rows=(await pool.query("SELECT id,restaurant_id FROM tse_transactions WHERE state='prepared' ORDER BY created_at,id LIMIT 10")).rows;
- for(const row of rows)await signPreparedTse(pool,row.id,await adapterForRestaurant(row.restaurant_id));
+ const outcomes=[];
+ for(const row of rows){
+  try{
+   const adapter=await adapterForRestaurant(row.restaurant_id);
+   outcomes.push({id:row.id,...await signPreparedTse(pool,row.id,adapter)});
+  }catch{
+   // An unavailable restaurant bridge must not block other restaurants.
+   // Leave the durable state untouched: claimed transactions must never be
+   // reset to prepared after an ambiguous hardware or database response.
+   outcomes.push({id:row.id,signed:false,reason:'processing_failed'});
+  }
+ }
+ return outcomes;
 }
