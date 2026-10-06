@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Readable} from 'node:stream';
-import {createCenterHandler} from './center-core.js';
+import {createCenterHandler,centerOrderingAvailable} from './center-core.js';
 const id='11111111-1111-4111-8111-111111111111',code='a'.repeat(48);
 const rows=(...rows)=>({rows,rowCount:rows.length});
 test('restaurant cannot be enrolled into a second center even concurrently',async()=>{
@@ -90,4 +90,12 @@ test('durable checkout token exposes pending status before provider binding exis
 test('unknown status token cannot reveal another checkout',async()=>{
  const r=await request(async()=>rows(),'/api/v1/guest/center/status?token='+'c'.repeat(64));
  assert.equal(r.status,404);
+});
+
+test('menu ordering requires both rollout authorization and provider readiness',()=>{
+ assert.equal(centerOrderingAvailable(true,{}),false);
+ assert.equal(centerOrderingAvailable(false,{CENTER_CHECKOUT_ENABLED:'true'}),false);
+ assert.equal(centerOrderingAvailable(undefined,{CENTER_CHECKOUT_ENABLED:'true'}),false);
+ assert.equal(centerOrderingAvailable('true',{CENTER_CHECKOUT_ENABLED:'true'}),false);
+ assert.equal(centerOrderingAvailable(true,{CENTER_CHECKOUT_ENABLED:'true'}),true);
 });
