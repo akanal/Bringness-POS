@@ -151,10 +151,19 @@ test('database migration and delegated setup lifecycle',async()=>{
  let sendCalls=0;
  assert.equal(await dispatchCenterGuestPush(pool,async()=>{sendCalls++;throw Object.assign(Error('temporary push outage'),{statusCode:503});}),1);
  assert.equal((await db.query('SELECT state FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0].state,'pending');
+
+ // A provider-expired endpoint is removed and a new guest enrollment rearms it.
+ assert.equal(await dispatchCenterGuestPush(pool,async()=>{throw Object.assign(Error('expired push endpoint'),{statusCode:410});}),1);
+ assert.equal((await db.query('SELECT state FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0].state,'failed');
+ assert.equal((await db.query('SELECT count(*)::int n FROM center_guest_push WHERE order_id=$1',[guestResult.orderId])).rows[0].n,0);
+ assert.equal(await saveGuestSubscription(pool,guestToken,pushSubscription,true),true);
+ const rearmed=(await db.query('SELECT state,attempts FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0];
+ assert.equal(rearmed.state,'pending');assert.equal(rearmed.attempts,0);
  let delivered;
  assert.equal(await dispatchCenterGuestPush(pool,async(subscription,payload)=>{sendCalls++;assert.equal(subscription.endpoint,pushSubscription.endpoint);delivered=JSON.parse(payload);}),1);
  assert.equal(sendCalls,2);assert.match(delivered.body,new RegExp(guestReceipt.receipt_number));assert.match(delivered.title,/Restaurant/);
  assert.equal((await db.query('SELECT state FROM center_guest_notifications WHERE order_id=$1',[guestResult.orderId])).rows[0].state,'sent');
+ assert.equal(await saveGuestSubscription(pool,guestToken,pushSubscription,true),true);
  assert.equal(await dispatchCenterGuestPush(pool,async()=>{throw Error('already sent must not repeat');}),0);
  await db.query("UPDATE orders SET created_at=now()-interval '25 hours' WHERE id=$1",[guestResult.orderId]);
  await dispatchCenterGuestPush(pool,async()=>{throw Error('expired order must not send');});
