@@ -32,6 +32,10 @@ Management includes an authenticated SVG download for each active table, availab
 - Public discovery: `GET /api/v1/guest/center/restaurants` and `GET /api/v1/guest/center/menu`.
 - Guest checkout: `POST /api/v1/guest/center/order`; the server rejects checkout unless `CENTER_CHECKOUT_ENABLED=true`. This flag is not rollout authorization and must stay disabled pending production readiness.
 
+## Guest notifications
+
+The status page offers push enrollment only when explicitly enabled and configured. Consent is requested on a button click. An order-specific status token authorizes subscription storage for 24 hours. The ready transition writes an outbox entry in its transaction. A worker claims entries, sends restaurant and receipt-based collection number, removes expired endpoints and bounds retries. Delivery is at least once: a lost acknowledgement can repeat a push, with a stable per-order notification tag. Provider acceptance does not prove device display. Subscriptions expire with status access; no live push delivery has been verified.
+
 ## Verified scope
 
 GitHub Center validation run 37535677295 completed successfully on integration commit c9e684f853bd87a70bce41c995fad51c377da62c. It includes the PostgreSQL database flow and Chromium checks for management approval/locking, preserved checkout attempts after uncertain responses, kitchen ordering after an inventory failure, and guest status recovery after a connection outage.
@@ -47,7 +51,7 @@ The workflow also tracks AI inventory, POS stock bridge, TSE and server startup 
 - Validate the complete deployed flow across browser, POS, AI inventory, payment provider, receipt and TSE, including recovery paths.
 - Implement cross-company restaurant enrollment/invitations.
 - Complete the per-scan ordering lifecycle. A static QR/NFC URL alone cannot prove a physical rescan.
-- Implement supported, consented notifications when the guest page is closed. The current status page requires the page to remain open.
+- Validate guest Web Push delivery on real devices, including supported Safari/iOS setup. Consent enrollment, Center-scoped service worker and durable dispatch are implemented; sender responses and browser capabilities were simulated. Enable only after configuring VAPID keys and explicitly setting `CENTER_PUSH_ENABLED=true`.
 - Review the remaining Center requirements.
 
 Do not enable checkout or automatic signing solely because simulated checks pass.
