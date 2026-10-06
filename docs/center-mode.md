@@ -36,6 +36,10 @@ Management includes an authenticated SVG download for each active table, availab
 - Public discovery: `GET /api/v1/guest/center/restaurants` and `GET /api/v1/guest/center/menu`.
 - Guest checkout: `POST /api/v1/guest/center/order`; the server rejects checkout unless `CENTER_CHECKOUT_ENABLED=true`. This flag is not rollout authorization and must stay disabled pending production readiness.
 
+## Guest menu selection
+
+Menu loads track the latest restaurant selection. Late successes or errors from previous selections are ignored; returning to the restaurant list invalidates pending menu loads. Once checkout is submitted, pending menu responses cannot change the restaurant or locked cart. Restaurants without ordering availability remain readable but their add-to-cart controls are disabled. Browser checks deliberately delay a previous menu until after a newer restaurant's checkout is locked, covering both successful and failed old responses.
+
 ## Checkout reload recovery
 
 Before submitting, the guest page saves the cart and request ID in sessionStorage, keyed to the table token. Reloading the same tab restores the locked cart and retries the existing server-idempotent request. Already released orders and verified failed/canceled/expired payments return a status-page URL instead of reopening the provider checkout. Pending payments continue to reuse their original checkout. No new checkout is sent if storage cannot be written or an existing saved attempt cannot be read. An explicit server response permitting cart editing clears the saved attempt. This recovery is limited to the same browser tab; closing it or clearing browser storage loses this local checkpoint. It does not prove a physical QR rescan or authorize rollout.
