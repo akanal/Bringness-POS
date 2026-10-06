@@ -1,3 +1,4 @@
+import {visibleCenterProducts} from './center-availability.js';
 import crypto from 'node:crypto';
 import {guestCenterCheckout} from './center-guest-checkout.js';
 import {verifyAndReleaseMolliePayment} from './center-mollie-payment.js';
@@ -65,13 +66,13 @@ export function createCenterHandler(pool) {
       if (!restaurant) return send(res, 404, {error: 'Restaurant nicht gefunden'});
       const lang = String(url.searchParams.get('lang') || 'de').toLowerCase().split('-')[0];
       const products = (await pool.query(`SELECT p.id,p.name,coalesce(pt.description,p.description) description,
-        pt.ingredients,p.price_cents,c.name category,
+        pt.ingredients,p.price_cents,c.name category,p.ai_stock_available,av.allergens availability_rule,
         coalesce((SELECT json_agg(json_build_object('code',a.code,'name',a.name_de)) FROM product_allergens pa JOIN allergen_catalog a ON a.code=pa.code WHERE pa.product_id=p.id),'[]'::json) allergens,
         coalesce((SELECT json_agg(json_build_object('code',a.code,'name',a.name_de)) FROM product_additives pa JOIN additive_catalog a ON a.code=pa.code WHERE pa.product_id=p.id),'[]'::json) additives
-        FROM products p LEFT JOIN categories c ON c.id=p.category_id
+        FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN product_translations av ON av.product_id=p.id AND av.language_code='avl'
         LEFT JOIN product_translations pt ON pt.product_id=p.id AND pt.language_code=$2
         WHERE p.restaurant_id=$1 AND p.active=true ORDER BY c.sort_order,p.name,p.id`, [restaurantId, /^[a-z]{2,3}$/.test(lang) ? lang : 'de'])).rows;
-      return send(res, 200, {center: table.center_name, table: table.name, restaurant, products, orderingAvailable: false});
+      return send(res, 200, {center: table.center_name, table: table.name, restaurant, products: visibleCenterProducts(products), orderingAvailable: false});
     }
     if(p==='/api/v1/centers/mollie/callback'){
       if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});

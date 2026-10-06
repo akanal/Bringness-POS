@@ -1,3 +1,4 @@
+import {visibleCenterProducts} from './center-availability.js';
 import crypto from 'node:crypto';
 import {createCenterMollieCheckout,reconcileCenterCheckout} from './center-mollie-checkout.js';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -25,8 +26,8 @@ export async function guestCenterCheckout(pool,b,env=process.env,fetcher=fetch){
  const restaurant=(await client.query(`SELECT r.id FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id
  JOIN center_mollie_credentials mc ON mc.restaurant_id=r.id WHERE cr.center_id=$1 AND r.id=$2 AND cr.active=true
  AND cr.contract_status='signed' AND cr.payment_status='verified' AND mc.verified_at IS NOT NULL`,[table.center_id,b.restaurantId])).rows[0];if(!restaurant)throw Error('MERCHANT_NOT_READY');
- const products=(await client.query('SELECT id,name,price_cents,tax_rate FROM products WHERE restaurant_id=$1 AND active=true AND id=ANY($2::uuid[])',[restaurant.id,canonical.map(i=>i.productId)])).rows;
- const quote=quoteCenterCart(canonical,products);
+ const products=(await client.query(`SELECT p.id,p.name,p.price_cents,p.tax_rate,p.ai_stock_available,av.allergens availability_rule FROM products p LEFT JOIN product_translations av ON av.product_id=p.id AND av.language_code='avl' WHERE p.restaurant_id=$1 AND p.active=true AND p.id=ANY($2::uuid[])`,[restaurant.id,canonical.map(i=>i.productId)])).rows;
+ const quote=quoteCenterCart(canonical,visibleCenterProducts(products));
  const order=(await client.query("INSERT INTO orders(restaurant_id,source,status,total_cents) VALUES($1,'center','payment_pending',$2) RETURNING id",[restaurant.id,quote.totalCents])).rows[0];
  for(const line of quote.lines)await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,line.product.id,line.product.name,line.product.price_cents,line.product.tax_rate,line.quantity]);
  attempt=(await client.query(`INSERT INTO center_checkout_attempts(order_id,center_id,restaurant_id,table_id,request_id,cart_hash) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[order.id,table.center_id,restaurant.id,table.id,b.requestId,cartHash])).rows[0];

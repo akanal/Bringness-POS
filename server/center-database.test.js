@@ -24,7 +24,8 @@ test('database migration and delegated setup lifecycle',async()=>{
  CREATE TABLE payments(order_id uuid,method text,amount_cents integer);
  CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
  CREATE TABLE pos_stock_links(restaurant_id uuid,active boolean);
- CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,name text,price_cents integer,tax_rate numeric,active boolean);
+ CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,name text,price_cents integer,tax_rate numeric,active boolean,ai_stock_available boolean DEFAULT true);
+ CREATE TABLE product_translations(product_id uuid,language_code text,allergens text);
  CREATE TABLE order_items(order_id uuid,product_id uuid,product_name_snapshot text,unit_price_cents integer,tax_rate_snapshot numeric,quantity numeric);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
  CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
@@ -108,7 +109,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal(recovered.reconciled,true);assert.equal(recovered.paymentId,'tr_lost');
  assert.equal((await reconcileCenterCheckout(pool,lost.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},()=>{throw Error('no re-read')})).reconciled,true);
  const table=(await db.query('SELECT qr_token FROM center_tables ORDER BY name LIMIT 1')).rows[0];
- const product=crypto.randomUUID();await db.query("INSERT INTO products VALUES($1,$2,'Gericht',1250,19,true)",[product,restaurant]);
+ const product=crypto.randomUUID();await db.query("INSERT INTO products(id,restaurant_id,name,price_cents,tax_rate,active) VALUES($1,$2,'Gericht',1250,19,true)",[product,restaurant]);
  const guestRequest={code:table.qr_token,restaurantId:restaurant,requestId:crypto.randomUUID(),items:[{productId:product,quantity:2,price_cents:1}]};let guestCreates=0;
  const guestProvider=async(url,options)=>{guestCreates++;const payload=JSON.parse(options.body);assert.equal(payload.amount.value,'25.00');return {ok:true,json:async()=>({id:'tr_guest',profileId:payload.profileId,amount:payload.amount,metadata:payload.metadata,_links:{checkout:{href:'https://www.mollie.com/checkout/guest'}}})};};
  const guestEnv={...env,CENTER_PAYMENT_ORIGIN:'https://example.test',CENTER_CHECKOUT_ENABLED:'true'};
