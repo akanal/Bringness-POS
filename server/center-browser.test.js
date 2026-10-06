@@ -69,7 +69,21 @@ test('guest cart keeps the same payment attempt after an uncertain response',asy
  assert.equal(await page.locator('#back').isDisabled(),true);
  await page.locator('#checkout').click();
  await page.waitForFunction(()=>!document.getElementById('checkout').disabled);
- assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);assert.deepEqual(errors,[]);
+ assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);
+ await page.reload();
+ await page.locator('#status').getByText(/Ein Zahlungsversuch ist noch gespeichert/).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Entfernen',exact:true}).isDisabled(),true);
+ await page.locator('#checkout').click();
+ await page.locator('#status').getByText(/Zahlungsstatus unklar/).waitFor();
+ assert.equal(requests.length,3);assert.deepEqual(requests[0],requests[2]);
+ await page.goto('https://center.test/center/?code='+'b'.repeat(48));
+ assert.equal(await page.locator('#cart').isVisible(),false);
+ await page.locator('#restaurants button').click();
+ await page.getByRole('button',{name:'In den Warenkorb'}).click();
+ await page.evaluate(()=>{Storage.prototype.setItem=function(){throw Error('storage unavailable');};});
+ await page.locator('#checkout').click();
+ await page.locator('#status').getByText(/nicht gesichert werden/).waitFor();
+ assert.equal(requests.length,3);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
 test('kitchen blocks later starts while allowing parallel preparations to finish',async()=>{
