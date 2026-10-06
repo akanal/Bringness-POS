@@ -1,3 +1,4 @@
+import {centerPushConfiguration,dispatchCenterGuestPush} from './center-guest-push.js';
 import pg from 'pg';
 import {createCenterHandler} from './center-core.js';
 const pool = new pg.Pool({connectionString: process.env.DATABASE_URL, ssl: process.env.NODE_ENV === 'production' ? {rejectUnauthorized: false} : false});
@@ -81,8 +82,25 @@ export async function migrateCenter() {
       sent_at timestamptz,
       UNIQUE(order_id,event_type)
     );
+    ALTER TABLE center_guest_notifications ADD COLUMN IF NOT EXISTS claimed_at timestamptz;
+    CREATE TABLE IF NOT EXISTS center_guest_push (
+      order_id uuid PRIMARY KEY REFERENCES orders(id) ON DELETE CASCADE,
+      subscription jsonb NOT NULL,endpoint_hash text NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS preparation_started_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS ready_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS guest_status_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');
   `);
 }
+
+let pushBusy=false;
+export async function centerPushTick(){
+ if(pushBusy||!centerPushConfiguration())return;
+ pushBusy=true;try{
+ const {default:webpush}=await import('web-push');
+ webpush.setVapidDetails(process.env.VAPID_SUBJECT||'mailto:info@bringness.de',process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);
+ await dispatchCenterGuestPush(pool,(subscription,payload)=>webpush.sendNotification(subscription,payload,{TTL:300,timeout:15000}));
+ }finally{pushBusy=false;}
+}
+const pushTimer=setInterval(()=>centerPushTick().catch(()=>console.error('Center guest push worker failed')),10000);pushTimer.unref();
