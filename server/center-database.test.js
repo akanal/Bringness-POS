@@ -24,7 +24,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text DEFAULT 'Company'); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
  CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);
  CREATE SEQUENCE receipt_number_seq;
- CREATE TABLE receipts(order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
+ CREATE TABLE receipts(public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
  CREATE TABLE payments(order_id uuid,method text,amount_cents integer);
  CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
  CREATE TABLE pos_stock_links(restaurant_id uuid,active boolean);
@@ -136,6 +136,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  const statusRes={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};await handler(statusReq,statusRes);
  assert.equal(statusRes.status,200);assert.equal(statusRes.data.order.status,'ready');assert.equal(statusRes.data.order.restaurant_name,'Restaurant');
  const guestReceipt=(await db.query('SELECT * FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0];
+ assert.equal(statusRes.data.order.receipt_url,'/beleg/'+guestReceipt.public_token);
  assert.match(guestReceipt.receipt_number,/^BN-\d{4}-\d{6}$/);assert.equal(guestReceipt.fiscal_status,'pending');assert.equal(guestReceipt.merchant_snapshot.restaurantName,'Restaurant');
  assert.equal((await db.query('SELECT count(*)::int n FROM payments WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
  assert.equal((await db.query('SELECT count(*)::int n FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
@@ -197,7 +198,7 @@ test('database migration and delegated setup lifecycle',async()=>{
   const token=(await db.query('SELECT guest_status_token FROM center_order_payments WHERE order_id=$1',[failedReceiptOrder])).rows[0].guest_status_token;
   const req=Readable.from([]);Object.assign(req,{url:'/api/v1/guest/center/status?token='+token,method:'GET',headers:{}});
   const res={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};
-  await handler(req,res);assert.equal(res.data.order.status,'payment_'+failedStatus);
+  await handler(req,res);assert.equal(res.data.order.status,'payment_'+failedStatus);assert.equal(res.data.order.receipt_url,null);
  }
  assert.equal((await db.query('SELECT status FROM orders WHERE id=$1',[failedReceiptOrder])).rows[0].status,'payment_pending');
  assert.equal((await db.query('SELECT count(*)::int n FROM receipts WHERE order_id=$1',[failedReceiptOrder])).rows[0].n,0);
