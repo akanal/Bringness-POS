@@ -74,6 +74,22 @@ export function createCenterHandler(pool) {
       const center = (await pool.query('INSERT INTO centers(company_id,name) VALUES($1,$2) RETURNING id,name,active', [user.company_id, name])).rows[0];
       return send(res, 201, {center});
     }
+    const onboarding = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/onboarding$/i);
+    if (onboarding) {
+      if (!uuid.test(onboarding[1]) || !uuid.test(onboarding[2])) return send(res, 404, {error: 'Nicht gefunden'});
+      if (req.method !== 'PUT') return send(res, 405, {error: 'Methode nicht erlaubt'});
+      if (!['pending','signed','suspended'].includes(b.contractStatus) || typeof b.merchantReference !== 'string' || b.merchantReference.length > 120) return send(res, 400, {error: 'Vertragsstatus und Händlerreferenz erforderlich'});
+      if ('paymentStatus' in b) return send(res, 400, {error: 'Zahlungsbestätigung kann nur vom Zahlungsanbieter erfolgen'});
+      const reference = b.merchantReference.trim();
+      if (reference && !/^[a-zA-Z0-9_.:-]+$/.test(reference)) return send(res, 400, {error: 'Nur eine Händlerreferenz eingeben, keine Zugangsdaten'});
+      if (/^(test_|live_|sk_|Bearer)/i.test(reference)) return send(res, 400, {error: 'Keine API-Schlüssel oder Zugangsdaten eingeben'});
+      const q = await pool.query(`UPDATE center_restaurants cr SET contract_status=$4,merchant_reference=$5,
+        payment_status=CASE WHEN cr.merchant_reference IS DISTINCT FROM $5 THEN CASE WHEN $5::text IS NULL THEN 'not_connected' ELSE 'pending' END ELSE cr.payment_status END
+        FROM centers c,restaurants r WHERE cr.center_id=c.id AND cr.restaurant_id=r.id
+        AND c.id=$1 AND r.id=$2 AND c.company_id=$3 AND r.company_id=$3
+        RETURNING cr.contract_status,cr.payment_status,cr.merchant_reference`, [onboarding[1],onboarding[2],user.company_id,b.contractStatus,reference||null]);
+      return q.rowCount ? send(res,200,{onboarding:q.rows[0],orderingAvailable:false}) : send(res,404,{error:'Center-Restaurant nicht gefunden'});
+    }
     const match = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/(tables|restaurants)$/i);
     if (!match || !uuid.test(match[1])) return send(res, 404, {error: 'Nicht gefunden'});
     const centerId = match[1];
@@ -86,7 +102,7 @@ export function createCenterHandler(pool) {
       const table = (await pool.query('INSERT INTO center_tables(center_id,name,qr_token) VALUES($1,$2,$3) RETURNING id,name,qr_token,active', [centerId, name, crypto.randomBytes(24).toString('hex')])).rows[0];
       return send(res, 201, {table});
     }
-    if (req.method === 'GET') return send(res, 200, {restaurants: (await pool.query(`SELECT r.id,r.name,cr.active FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=$1 ORDER BY r.name,r.id`, [centerId])).rows});
+    if (req.method === 'GET') return send(res, 200, {restaurants: (await pool.query(`SELECT r.id,r.name,cr.active,cr.contract_status,cr.payment_status,cr.merchant_reference FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=$1 ORDER BY r.name,r.id`, [centerId])).rows});
     if (req.method !== 'PUT') return send(res, 405, {error: 'Methode nicht erlaubt'});
     if (!uuid.test(b.restaurantId || '') || typeof b.active !== 'boolean') return send(res, 400, {error: 'Restaurant und Aktivstatus erforderlich'});
     // Cross-company enrollment requires an invitation/approval flow; never attach someone else's business.

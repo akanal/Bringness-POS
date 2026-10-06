@@ -4,6 +4,15 @@ import {Readable} from 'node:stream';
 import {createCenterHandler} from './center-core.js';
 const id='11111111-1111-4111-8111-111111111111',code='a'.repeat(48);
 const rows=(...rows)=>({rows,rowCount:rows.length});
+test('manual onboarding cannot claim verified payment',async()=>{
+  const r=await request(async()=>rows({role:'owner',company_id:id}),'/api/v1/centers/'+id+'/restaurants/'+id+'/onboarding','PUT',{contractStatus:'signed',merchantReference:'org_example',paymentStatus:'verified'},true);assert.equal(r.status,400);
+});
+test('onboarding update scopes both restaurant and center ownership and invalidates changed merchant reference',async()=>{
+  const r=await request(async(sql,args)=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id});assert.match(sql,/c.company_id=\$3 AND r.company_id=\$3/);assert.match(sql,/IS DISTINCT FROM \$5/);assert.equal(args[4],'org_example');return rows({contract_status:'signed',payment_status:'pending',merchant_reference:'org_example'});},'/api/v1/centers/'+id+'/restaurants/'+id+'/onboarding','PUT',{contractStatus:'signed',merchantReference:'org_example'},true);assert.equal(r.status,200);assert.equal(r.data.orderingAvailable,false);assert.equal(r.data.onboarding.payment_status,'pending');
+});
+test('onboarding rejects API secrets instead of storing them as merchant references',async()=>{
+  const r=await request(async(sql)=>{assert.match(sql,/FROM sessions/);return rows({role:'owner',company_id:id});},'/api/v1/centers/'+id+'/restaurants/'+id+'/onboarding','PUT',{contractStatus:'signed',merchantReference:'live_secret'},true);assert.equal(r.status,400);
+});
 async function request(query,path,method='GET',payload,auth=false){
   const req=Readable.from(payload?[JSON.stringify(payload)]:[]);Object.assign(req,{url:path,method,headers:auth?{authorization:'Bearer test'}:{}});
   const res={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};
