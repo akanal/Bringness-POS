@@ -83,6 +83,13 @@ test('guest cart keeps the same payment attempt after an uncertain response',asy
  await page.evaluate(()=>{Storage.prototype.setItem=function(){throw Error('storage unavailable');};});
  await page.locator('#checkout').click();
  await page.locator('#status').getByText(/nicht gesichert werden/).waitFor();
+ assert.equal(requests.length,3);
+ await page.reload();
+ await page.evaluate(()=>sessionStorage.setItem('bringness-center-pending:'+'b'.repeat(48),'invalid json'));
+ await page.reload();
+ await page.locator('#status').getByText(/nicht geladen werden/).waitFor();
+ assert.equal(await page.locator('#restaurants').isVisible(),false);
+ assert.equal(await page.locator('#checkout').isDisabled(),true);
  assert.equal(requests.length,3);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
