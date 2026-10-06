@@ -172,6 +172,19 @@ test('database migration and delegated setup lifecycle',async()=>{
 
  const failedReceiptOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[failedReceiptOrder,restaurant]);
  await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('tr_receiptfail',$1,$2,$3,'org_restaurant',1250,'EUR')",[failedReceiptOrder,created.data.center.id,restaurant]);
+
+ // Unpaid terminal statuses are persisted only after verified binding checks.
+ assert.equal((await releaseCenterPayment(pool,'tr_receiptfail',async()=>({...verifiedGuestPayment,paymentId:'tr_receiptfail',orderId:failedReceiptOrder,amountCents:1,status:'failed'}))).reason,'amount_mismatch');
+ assert.equal((await db.query('SELECT provider_status FROM center_order_payments WHERE order_id=$1',[failedReceiptOrder])).rows[0].provider_status,null);
+ for(const failedStatus of ['failed','canceled','expired']){
+  assert.equal((await releaseCenterPayment(pool,'tr_receiptfail',async()=>({...verifiedGuestPayment,paymentId:'tr_receiptfail',orderId:failedReceiptOrder,amountCents:1250,status:failedStatus}))).reason,'payment_'+failedStatus);
+  const token=(await db.query('SELECT guest_status_token FROM center_order_payments WHERE order_id=$1',[failedReceiptOrder])).rows[0].guest_status_token;
+  const req=Readable.from([]);Object.assign(req,{url:'/api/v1/guest/center/status?token='+token,method:'GET',headers:{}});
+  const res={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};
+  await handler(req,res);assert.equal(res.data.order.status,'payment_'+failedStatus);
+ }
+ assert.equal((await db.query('SELECT status FROM orders WHERE id=$1',[failedReceiptOrder])).rows[0].status,'payment_pending');
+ assert.equal((await db.query('SELECT count(*)::int n FROM receipts WHERE order_id=$1',[failedReceiptOrder])).rows[0].n,0);
  await db.query('ALTER TABLE receipts RENAME TO receipts_unavailable');
  await assert.rejects(releaseCenterPayment(pool,'tr_receiptfail',async()=>({...verifiedGuestPayment,paymentId:'tr_receiptfail',orderId:failedReceiptOrder,amountCents:1250})));
  await db.query('ALTER TABLE receipts_unavailable RENAME TO receipts');
