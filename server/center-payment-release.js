@@ -1,3 +1,4 @@
+import {enqueueCenterReadyNotification} from './center-notifications.js';
 import {applyCenterStock} from './center-stock-bridge.js';
 import {validateCenterPayment} from './center-payment-core.js';
 // Internal entry point. verifyPayment must read the provider API using the bound
@@ -59,6 +60,7 @@ export async function advanceCenterKitchen(pool,restaurantId,orderId,nextStatus)
  if(nextStatus==='preparing')await applyCenterStock(client,orderId,restaurantId,'start');
  await client.query('UPDATE orders SET status=$2 WHERE id=$1',[orderId,nextStatus]);
  await client.query(nextStatus==='preparing'?'UPDATE center_order_payments SET preparation_started_at=now() WHERE order_id=$1':'UPDATE center_order_payments SET ready_at=now() WHERE order_id=$1',[orderId]);
+ if(nextStatus==='ready')await enqueueCenterReadyNotification(client,orderId);
  await client.query('COMMIT');return {ok:true,status:nextStatus};
  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
