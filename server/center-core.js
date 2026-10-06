@@ -162,7 +162,7 @@ export function createCenterHandler(pool) {
     }
     if (!user.platform_admin && !['owner', 'admin'].includes(user.role)) return send(res, 403, {error: 'Nur Besitzer können Center verwalten'});
     if (p === '/api/v1/centers' && req.method === 'GET') {
-      return send(res, 200, {centers: (await pool.query('SELECT id,name,active FROM centers WHERE company_id=$1 ORDER BY name,id', [user.company_id])).rows});
+      return send(res, 200, {centers: (await pool.query('SELECT c.id,c.name,c.active FROM centers c WHERE c.company_id=$1 OR EXISTS(SELECT 1 FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=c.id AND cr.active=true AND r.company_id=$1) ORDER BY c.name,c.id', [user.company_id])).rows});
     }
     let b = {};
     if (['POST', 'PUT'].includes(req.method)) {
@@ -189,7 +189,7 @@ export function createCenterHandler(pool) {
     if(verify){
       if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
       const owned=(await pool.query(`SELECT r.id FROM restaurants r JOIN center_restaurants cr ON cr.restaurant_id=r.id
-        JOIN centers c ON c.id=cr.center_id WHERE c.id=$1 AND r.id=$2 AND c.company_id=$3 AND r.company_id=$3 AND cr.active=true`,[verify[1],verify[2],user.company_id])).rows[0];
+        JOIN centers c ON c.id=cr.center_id WHERE c.id=$1 AND r.id=$2 AND r.company_id=$3 AND cr.active=true`,[verify[1],verify[2],user.company_id])).rows[0];
       if(!owned)return send(res,404,{error:'Restaurant nicht gefunden'});
       try{return send(res,200,await verifyMerchantProfile(pool,verify[2],b.profileId));}catch{return send(res,502,{error:'Zahlungsprofil konnte nicht bestätigt werden. Verbindung und Mollie-Profil prüfen.'});}
     }
@@ -211,7 +211,7 @@ export function createCenterHandler(pool) {
       const q = await pool.query(`UPDATE center_restaurants cr SET contract_status=$4,merchant_reference=$5,
         payment_status=CASE WHEN cr.merchant_reference IS DISTINCT FROM $5 THEN CASE WHEN $5::text IS NULL THEN 'not_connected' ELSE 'pending' END ELSE cr.payment_status END
         FROM centers c,restaurants r WHERE cr.center_id=c.id AND cr.restaurant_id=r.id
-        AND c.id=$1 AND r.id=$2 AND c.company_id=$3 AND r.company_id=$3
+        AND c.id=$1 AND r.id=$2 AND r.company_id=$3 AND cr.active=true
         RETURNING cr.contract_status,cr.payment_status,cr.merchant_reference`, [onboarding[1],onboarding[2],user.company_id,b.contractStatus,reference||null]);
       return q.rowCount ? send(res,200,{onboarding:q.rows[0],orderingAvailable:false}) : send(res,404,{error:'Center-Restaurant nicht gefunden'});
     }
@@ -220,7 +220,7 @@ export function createCenterHandler(pool) {
       if (req.method === 'GET') {
         const state = (await pool.query(`SELECT setup_completed_at,
           ($3::boolean OR setup_user_id=$4) can_setup FROM centers
-          WHERE id=$1 AND company_id=$2`, [setup[1],user.company_id,!!user.platform_admin,user.id])).rows[0];
+          WHERE id=$1 AND (company_id=$2 OR setup_user_id=$4 OR EXISTS(SELECT 1 FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=centers.id AND cr.active=true AND r.company_id=$2))`, [setup[1],user.company_id,!!user.platform_admin,user.id])).rows[0];
         return state ? send(res,200,{setup:state,canApprove:!!user.platform_admin}) : send(res,404,{error:'Center nicht gefunden'});
       }
       if (req.method !== 'PUT') return send(res,405,{error:'Methode nicht erlaubt'});
@@ -233,13 +233,13 @@ export function createCenterHandler(pool) {
           AND $4::uuid=(SELECT cr.restaurant_id FROM center_restaurants cr WHERE cr.center_id=c.id ORDER BY cr.enrolled_at,cr.restaurant_id LIMIT 1)
           AND EXISTS(SELECT 1 FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id
             JOIN users u ON u.company_id=r.company_id WHERE cr.center_id=c.id AND cr.restaurant_id=$4
-            AND cr.active=true AND u.id=$3 AND u.status='active' AND u.role IN ('owner','admin') AND u.company_id=$2)
+            AND cr.active=true AND u.id=$3 AND u.status='active' AND u.role IN ('owner','admin'))
           RETURNING setup_approved_at`, [setup[1],user.company_id,b.userId,b.restaurantId,user.id]);
         return q.rowCount ? send(res,200,{ok:true}) : send(res,409,{error:'Ersteinrichtung nicht freigebbar: erstes Restaurant und berechtigten Benutzer prüfen'});
       }
       if (b.action === 'complete') {
         const q = await pool.query(`UPDATE centers c SET setup_completed_at=now()
-          WHERE c.id=$1 AND c.company_id=$2 AND c.setup_completed_at IS NULL
+          WHERE c.id=$1 AND (c.company_id=$2 OR c.setup_user_id=$4) AND c.setup_completed_at IS NULL
           AND ($3::boolean OR c.setup_user_id=$4)
           AND EXISTS(SELECT 1 FROM center_tables t WHERE t.center_id=c.id AND t.active=true)
           RETURNING setup_completed_at`, [setup[1],user.company_id,!!user.platform_admin,user.id]);
@@ -258,21 +258,21 @@ export function createCenterHandler(pool) {
     const match = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/(tables|restaurants)$/i);
     if (!match || !uuid.test(match[1])) return send(res, 404, {error: 'Nicht gefunden'});
     const centerId = match[1];
-    const owned = (await pool.query('SELECT id FROM centers WHERE id=$1 AND company_id=$2', [centerId, user.company_id])).rowCount;
+    const owned = (await pool.query('SELECT id FROM centers WHERE id=$1 AND (company_id=$2 OR setup_user_id=$4 OR ($3::boolean AND EXISTS(SELECT 1 FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=centers.id AND cr.active=true AND r.company_id=$2)))', [centerId, user.company_id,req.method==='GET',user.id])).rowCount;
     if (!owned) return send(res, 404, {error: 'Center nicht gefunden'});
     if (match[2] === 'tables') {
       if (req.method === 'GET') return send(res, 200, {tables: (await pool.query('SELECT id,name,qr_token,active FROM center_tables WHERE center_id=$1 ORDER BY name,id', [centerId])).rows});
       if (req.method !== 'POST') return send(res, 405, {error: 'Methode nicht erlaubt'});
       if (!name || name.length > 80) return send(res, 400, {error: 'Tischname erforderlich (maximal 80 Zeichen)'});
       const table = (await pool.query(`WITH allowed AS (
-        SELECT id FROM centers WHERE id=$1 AND company_id=$4
+        SELECT id FROM centers WHERE id=$1 AND (company_id=$4 OR setup_user_id=$6)
         AND ($5::boolean OR (setup_user_id=$6 AND setup_completed_at IS NULL)) FOR UPDATE
       ) INSERT INTO center_tables(center_id,name,qr_token) SELECT id,$2,$3 FROM allowed
       RETURNING id,name,qr_token,active`, [centerId, name, crypto.randomBytes(24).toString('hex'),user.company_id,!!user.platform_admin,user.id])).rows[0];
       if (!table) return send(res,403,{error:'Tischverwaltung gesperrt oder Ersteinrichtung nicht freigegeben'});
       return send(res, 201, {table});
     }
-    if (req.method === 'GET') return send(res, 200, {restaurants: (await pool.query(`SELECT r.id,r.name,cr.active,cr.contract_status,cr.payment_status,cr.merchant_reference FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=$1 ORDER BY r.name,r.id`, [centerId])).rows});
+    if (req.method === 'GET') return send(res, 200, {restaurants: (await pool.query(`SELECT r.id,r.name,cr.active,cr.contract_status,cr.payment_status,cr.merchant_reference FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=$1 AND (r.company_id=$2 OR EXISTS(SELECT 1 FROM centers c WHERE c.id=cr.center_id AND c.company_id=$2)) ORDER BY r.name,r.id`, [centerId,user.company_id])).rows});
     if (req.method !== 'PUT') return send(res, 405, {error: 'Methode nicht erlaubt'});
     if (!uuid.test(b.restaurantId || '') || typeof b.active !== 'boolean') return send(res, 400, {error: 'Restaurant und Aktivstatus erforderlich'});
     // Cross-company enrollment requires an invitation/approval flow; never attach someone else's business.
