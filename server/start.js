@@ -1,7 +1,7 @@
 import {handleLanguageCatalog,ensureLanguageDatabase} from "./language-catalog.js";
 import fs from "node:fs";
 import {handleQrService,migrateQrService} from "./qr-service.js";
-import {runtimeMode, configurePosOrigin, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
+import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
 const appMode = runtimeMode();
 configurePosOrigin(process.env, appMode);
 const aiFeatures = await loadAiFeatures(appMode);
@@ -38,6 +38,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (redirectLegacyPosDomain(req,res,appMode)) return;
       if (await handleLanguageCatalog(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
       if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
