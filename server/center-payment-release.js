@@ -25,6 +25,28 @@ export async function centerKitchenQueue(pool,restaurantId){
  return (await pool.query(`SELECT o.id,o.status,cp.paid_at,
  (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
  FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id
- WHERE cp.restaurant_id=$1 AND cp.released_at IS NOT NULL AND o.status IN ('kitchen','preparing')
+ WHERE cp.restaurant_id=$1 AND cp.released_at IS NOT NULL AND o.status IN ('kitchen','preparing','ready')
  ORDER BY cp.paid_at,cp.payment_id`,[restaurantId])).rows;
+}
+export async function advanceCenterKitchen(pool,restaurantId,orderId,nextStatus){
+ if(!['preparing','ready'].includes(nextStatus))return {ok:false,reason:'invalid_status'};
+ const client=await pool.connect();
+ try{
+ await client.query('BEGIN');
+ await client.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[restaurantId]);
+ const order=(await client.query(`SELECT o.id,o.status FROM orders o JOIN center_order_payments cp ON cp.order_id=o.id
+ WHERE o.id=$1 AND cp.restaurant_id=$2 AND o.restaurant_id=$2 AND cp.released_at IS NOT NULL FOR UPDATE OF o`,[orderId,restaurantId])).rows[0];
+ if(!order){await client.query('ROLLBACK');return {ok:false,reason:'order_not_released'};}
+ if(order.status===nextStatus){await client.query('COMMIT');return {ok:true,alreadyApplied:true};}
+ if(nextStatus==='preparing'){
+ if(order.status!=='kitchen'){await client.query('ROLLBACK');return {ok:false,reason:'invalid_transition'};}
+ const first=(await client.query(`SELECT o.id FROM orders o JOIN center_order_payments cp ON cp.order_id=o.id
+ WHERE cp.restaurant_id=$1 AND cp.released_at IS NOT NULL AND o.status='kitchen'
+ ORDER BY cp.paid_at,cp.payment_id LIMIT 1`,[restaurantId])).rows[0];
+ if(first?.id!==orderId){await client.query('ROLLBACK');return {ok:false,reason:'earlier_order_waiting'};}
+ }else if(order.status!=='preparing'){await client.query('ROLLBACK');return {ok:false,reason:'invalid_transition'};}
+ await client.query('UPDATE orders SET status=$2 WHERE id=$1',[orderId,nextStatus]);
+ await client.query(nextStatus==='preparing'?'UPDATE center_order_payments SET preparation_started_at=now() WHERE order_id=$1':'UPDATE center_order_payments SET ready_at=now() WHERE order_id=$1',[orderId]);
+ await client.query('COMMIT');return {ok:true,status:nextStatus};
+ }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }

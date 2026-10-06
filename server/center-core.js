@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import {centerKitchenQueue} from './center-payment-release.js';
+import {centerKitchenQueue,advanceCenterKitchen} from './center-payment-release.js';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const token = /^[a-f0-9]{48}$/;
@@ -63,13 +63,19 @@ export function createCenterHandler(pool) {
       WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND coalesce(u.must_change_password,false)=false`, [crypto.createHash('sha256').update(raw).digest('hex')])).rows[0];
     if (!user) return send(res, 401, {error: 'Nicht angemeldet'});
     if (p === '/api/v1/centers/kitchen') {
-      if (req.method !== 'GET') return send(res,405,{error:'Methode nicht erlaubt'});
+      if (!['GET','PUT'].includes(req.method)) return send(res,405,{error:'Methode nicht erlaubt'});
       const restaurantId=url.searchParams.get('restaurantId');
       if(!uuid.test(restaurantId || ''))return send(res,400,{error:'Restaurant erforderlich'});
       const allowed=(await pool.query(`SELECT r.id FROM restaurants r WHERE r.id=$1 AND r.company_id=$2
         AND ($3 IN ('owner','admin') OR EXISTS(SELECT 1 FROM employees e WHERE e.restaurant_id=r.id
           AND e.user_id=$4 AND e.active=true AND e.role='kitchen'))`,[restaurantId,user.company_id,user.role,user.id])).rows[0];
       if(!allowed)return send(res,403,{error:'Kein Küchenzugang für diesen Betrieb'});
+      if(req.method==='PUT'){
+        let action;try{action=await body(req);}catch{return send(res,400,{error:'Ungültige Eingabe'});}
+        if(!uuid.test(action.orderId||'') || !['preparing','ready'].includes(action.status))return send(res,400,{error:'Bestellung und Küchenstatus erforderlich'});
+        const result=await advanceCenterKitchen(pool,restaurantId,action.orderId,action.status);
+        return send(res,result.ok?200:409,result.ok?result:{error:result.reason==='earlier_order_waiting'?'Bitte zuerst die frühere Bestellung starten.':'Bestellung kann nicht in diesen Status wechseln.',reason:result.reason});
+      }
       return send(res,200,{orders:await centerKitchenQueue(pool,restaurantId)});
     }
     if (!user.platform_admin && !['owner', 'admin'].includes(user.role)) return send(res, 403, {error: 'Nur Besitzer können Center verwalten'});

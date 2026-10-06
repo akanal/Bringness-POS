@@ -42,7 +42,11 @@ export async function migrateCenter() {
       currency text NOT NULL CHECK(currency='EUR'),
       paid_at timestamptz,
       released_at timestamptz,
+      preparation_started_at timestamptz,
+      ready_at timestamptz,
       FOREIGN KEY(center_id,restaurant_id) REFERENCES center_restaurants(center_id,restaurant_id)
     );
+    ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS preparation_started_at timestamptz;
+    ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS ready_at timestamptz;
   `);
 }

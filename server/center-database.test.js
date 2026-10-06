@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {Readable} from 'node:stream';
-import {releaseCenterPayment,centerKitchenQueue} from './center-payment-release.js';
+import {releaseCenterPayment,centerKitchenQueue,advanceCenterKitchen} from './center-payment-release.js';
 import {createCenterHandler} from './center-core.js';
 const dependency=process.env.CENTER_TEST_PGLITE || '@electric-sql/pglite';
 const engine=await import(process.env.CENTER_TEST_DATABASE_URL ? (process.env.CENTER_TEST_PG || 'pg') : dependency);
@@ -53,6 +53,20 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await releaseCenterPayment(pool,'pay-1',async()=>{throw Error('must not reverify')})).alreadyReleased,true);
  assert.equal((await centerKitchenQueue(pool,restaurant)).length,1);
  assert.equal((await centerKitchenQueue(pool,crypto.randomUUID())).length,0);
+ const later=crypto.randomUUID();
+ await db.query("INSERT INTO orders VALUES($1,$2,1250,'payment_pending')",[later,restaurant]);
+ await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('pay-2',$1,$2,$3,'merchant-1',1250,'EUR')",[later,created.data.center.id,restaurant]);
+ assert.equal((await releaseCenterPayment(pool,'pay-2',async()=>({...payment,paymentId:'pay-2',orderId:later,paidAt:new Date(Date.parse(payment.paidAt)+1000).toISOString()}))).released,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,later,'preparing')).reason,'earlier_order_waiting');
+ assert.equal((await advanceCenterKitchen(pool,restaurant,order,'ready')).ok,false);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,order,'preparing')).ok,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,order,'preparing')).alreadyApplied,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,later,'preparing')).ok,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,later,'ready')).ok,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,order,'ready')).ok,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,order,'ready')).alreadyApplied,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,order,'preparing')).ok,false);
+
 
  }finally{await db.close();}
 });
