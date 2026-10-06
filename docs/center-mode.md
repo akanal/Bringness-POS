@@ -9,7 +9,7 @@ Food payments go directly to the selected restaurant operator. Each restaurant c
 ## Implemented
 
 - Centers, fixed shared table tokens and restaurant membership. QR/NFC use the same guest URL: `/center/index.html?code=TABLE_TOKEN`.
-- Scoped management and one-center-per-restaurant constraint. Enrollment currently supports restaurants belonging to the acting company.
+- Scoped management and one-center-per-restaurant constraint. Restaurants from other companies join through restaurant-bound invitations confirmed by their own owner/admin.
 - Platform-admin approval delegates initial table setup to the first enrolled restaurant. Completion locks delegated table creation. Platform maintenance access remains.
 - Mollie authorization callback, browser-bound one-use state, encrypted credentials, token refresh and merchant/profile readiness checks.
 - Server-priced guest cart, availability checks at menu load and order creation, durable request IDs, reusable checkout and reconciliation of lost payment responses.
@@ -18,6 +18,10 @@ Food payments go directly to the selected restaurant operator. Each restaurant c
 - Kitchen ordering by confirmed payment: only the earliest waiting order starts next; started orders can finish independently. The view refreshes automatically and retains existing orders during outages.
 - Guest status and milestone history. Connection failures retain the last state and retry; hanging requests time out after 15 seconds.
 - Receipt/TSE preparation and guarded automatic signing worker. Ambiguous hardware responses require reconciliation rather than blind signing retries.
+
+## Cross-company invitations
+
+A Center owner/admin creates an invitation in management using the target restaurant ID. The link opens `/center/join.html#token=INVITATION_TOKEN`; share it with the restaurant operator. No message is sent automatically. Invitations expire after seven days, are stored as hashes, and are consumed transactionally on acceptance. The accepting owner/admin must belong to the target restaurant's company. Existing one-center-per-restaurant restrictions remain. Joining does not enable checkout or connect a merchant account: each operator retains control of their own Mollie onboarding. Members see their own restaurants; the Center operator sees its membership list. Delegated table setup remains limited to the approved setup user.
 
 ## Table QR export
 
@@ -38,7 +42,7 @@ The status page offers push enrollment only when explicitly enabled and configur
 
 ## Verified scope
 
-GitHub Center validation run 37535677295 completed successfully on integration commit c9e684f853bd87a70bce41c995fad51c377da62c. It includes the PostgreSQL database flow and Chromium checks for management approval/locking, preserved checkout attempts after uncertain responses, kitchen ordering after an inventory failure, and guest status recovery after a connection outage.
+GitHub Center validation run 37541603209 completed successfully on integration commit 4745a148a5084de98edff14662e976c29f1e6fed. PostgreSQL checks also cover cross-company invitation acceptance, replay rejection, restaurant visibility and merchant-account isolation. It includes the PostgreSQL database flow and Chromium checks for management approval/locking, preserved checkout attempts after uncertain responses, kitchen ordering after an inventory failure, and guest status recovery after a connection outage.
 
 Browser tests intercept API requests. Provider and hardware responses in integration checks are simulated. These results do not demonstrate an actual Mollie payment, physical TSE signing or a complete browser-to-production checkout.
 
@@ -49,7 +53,6 @@ The workflow also tracks AI inventory, POS stock bridge, TSE and server startup 
 - Configure platform Mollie Connect application settings and validate a complete payment against a restaurant-owned account; each restaurant grants access itself during onboarding.
 - Integrate the real Swissbit SDK/bridge, configure each restaurant's TSE and validate signatures using actual hardware.
 - Validate the complete deployed flow across browser, POS, AI inventory, payment provider, receipt and TSE, including recovery paths.
-- Implement cross-company restaurant enrollment/invitations.
 - Complete the per-scan ordering lifecycle. A static QR/NFC URL alone cannot prove a physical rescan.
 - Validate guest Web Push delivery on real devices, including supported Safari/iOS setup. Consent enrollment, Center-scoped service worker and durable dispatch are implemented; sender responses and browser capabilities were simulated. Enable only after configuring VAPID keys and explicitly setting `CENTER_PUSH_ENABLED=true`.
 - Review the remaining Center requirements.
