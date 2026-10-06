@@ -1,3 +1,4 @@
+import {createPublicReceiptHandler} from './public-receipt-core.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -419,5 +420,35 @@ test('guest status rejects an external or malformed digital receipt URL',async()
  receiptUrl='/beleg/invalid';const response=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/status'));await page.locator('#refresh').click();await (await response).finished();
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  assert.equal(await page.locator('#receipt').getAttribute('href'),null);
+ }finally{await browser.close();}
+});
+
+test('digital receipt print action opens the dialog and keeps amounts and fiscal warning in print media',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{window.printCalls=0;window.print=()=>{window.printCalls++;};});
+ const handler=createPublicReceiptHandler({query:async sql=>{
+ if(sql.includes('FROM receipts rc'))return {rows:[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',fiscal_status:'pending',order_id:'order',total_cents:2500,restaurant_name:'Restaurant',company_name:'Company',merchant_snapshot:{businessName:'Betreiber',restaurantName:'Restaurant',street:'Teststraße 1',postalCode:'12345',city:'Berlin'}}]};
+ if(sql.includes('FROM order_items'))return {rows:[{product_name_snapshot:'Gericht',unit_price_cents:1250,tax_rate_snapshot:19,quantity:2}]};
+ if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:2500}]};
+ throw Error('Unexpected query');
+ }});
+ await page.route('https://center.test/**',async route=>{
+ const url=new URL(route.request().url());
+ if(url.pathname==='/receipt-print.js')return route.fulfill({contentType:'text/javascript',body:await readFile(new URL('../apps/web/public/receipt-print.js',import.meta.url),'utf8')});
+ const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(body){this.body=body;}};
+ assert.equal(await handler({url:url.pathname,method:'GET'},res),true);
+ return route.fulfill({status:res.status,headers:res.headers,body:res.body});
+ });
+ await page.goto('https://center.test/beleg/11111111-1111-4111-8111-111111111111');
+ const print=page.getByRole('button',{name:'Beleg drucken / als PDF speichern',exact:true});
+ await print.click();assert.equal(await page.evaluate(()=>window.printCalls),1);
+ await page.emulateMedia({media:'print'});
+ assert.equal(await print.isVisible(),false);assert.equal(await page.locator('.total').isVisible(),true);
+ assert.match(await page.locator('.total').textContent(),/25,00/);
+ assert.equal(await page.locator('.warning').isVisible(),true);
+ const styles=await page.locator('.receipt').evaluate(node=>{const s=getComputedStyle(node);return {shadow:s.boxShadow,padding:s.paddingTop,minHeight:s.minHeight};});
+ assert.deepEqual(styles,{shadow:'none',padding:'0px',minHeight:'0px'});assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
