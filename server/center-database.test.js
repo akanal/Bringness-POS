@@ -1,3 +1,4 @@
+import {recoverGuestPayment} from './center-payment-recovery.js';
 import {saveGuestSubscription,manageGuestSubscription,dispatchCenterGuestPush} from './center-guest-push.js';
 import test from 'node:test';
 import {signPreparedTse} from './tse-signing-worker.js';
@@ -173,6 +174,15 @@ test('database migration and delegated setup lifecycle',async()=>{
  const failedReceiptOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[failedReceiptOrder,restaurant]);
  await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('tr_receiptfail',$1,$2,$3,'org_restaurant',1250,'EUR')",[failedReceiptOrder,created.data.center.id,restaurant]);
 
+
+ const recoveryToken=(await db.query('SELECT guest_status_token FROM center_order_payments WHERE order_id=$1',[failedReceiptOrder])).rows[0].guest_status_token;
+ let recoveryReads=0;
+ const recoveryCheck=async id=>{assert.equal(id,'tr_receiptfail');recoveryReads++;};
+ assert.equal((await recoverGuestPayment(pool,recoveryToken,recoveryCheck,{CENTER_CHECKOUT_ENABLED:'true'})).checked,true);
+ assert.equal((await recoverGuestPayment(pool,recoveryToken,recoveryCheck,{CENTER_CHECKOUT_ENABLED:'true'})).checked,false);
+ assert.equal(recoveryReads,1);
+ await db.query("UPDATE center_order_payments SET guest_checked_at=now()-interval '31 seconds' WHERE order_id=$1",[failedReceiptOrder]);
+ assert.equal((await recoverGuestPayment(pool,recoveryToken,recoveryCheck,{CENTER_CHECKOUT_ENABLED:'true'})).checked,true);assert.equal(recoveryReads,2);
  // Unpaid terminal statuses are persisted only after verified binding checks.
  assert.equal((await releaseCenterPayment(pool,'tr_receiptfail',async()=>({...verifiedGuestPayment,paymentId:'tr_receiptfail',orderId:failedReceiptOrder,amountCents:1,status:'failed'}))).reason,'amount_mismatch');
  assert.equal((await db.query('SELECT provider_status FROM center_order_payments WHERE order_id=$1',[failedReceiptOrder])).rows[0].provider_status,null);
