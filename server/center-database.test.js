@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {guestCenterCheckout} from './center-guest-checkout.js';
 import {createCenterMollieCheckout,reconcileCenterCheckout} from './center-mollie-checkout.js';
 import {withMerchantToken,verifyMerchantProfile} from './center-mollie-merchant.js';
 import {beginRestaurantMollieConnect,completeRestaurantMollieConnect} from './center-mollie-connect.js';
@@ -15,8 +16,9 @@ test('database migration and delegated setup lifecycle',async()=>{
  if(process.env.CENTER_TEST_DATABASE_URL){db.exec=sql=>db.query(sql);db.close=()=>db.end();}
  try {
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
- CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,total_cents integer,status text,created_at timestamptz DEFAULT now());
- CREATE TABLE order_items(order_id uuid,product_name_snapshot text,quantity numeric);
+ CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
+ CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,name text,price_cents integer,tax_rate numeric,active boolean);
+ CREATE TABLE order_items(order_id uuid,product_id uuid,product_name_snapshot text,unit_price_cents integer,tax_rate_snapshot numeric,quantity numeric);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
  CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
  CREATE TABLE platform_admins(user_id uuid,active boolean);`);
@@ -98,6 +100,27 @@ test('database migration and delegated setup lifecycle',async()=>{
  const recovered=await reconcileCenterCheckout(pool,lost.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},async()=>({ok:true,json:async()=>({_embedded:{payments:[externalPayment]},_links:{next:null}})}));
  assert.equal(recovered.reconciled,true);assert.equal(recovered.paymentId,'tr_lost');
  assert.equal((await reconcileCenterCheckout(pool,lost.id,{...env,CENTER_PAYMENT_ORIGIN:'https://example.test'},()=>{throw Error('no re-read')})).reconciled,true);
+ const table=(await db.query('SELECT qr_token FROM center_tables ORDER BY name LIMIT 1')).rows[0];
+ const product=crypto.randomUUID();await db.query("INSERT INTO products VALUES($1,$2,'Gericht',1250,19,true)",[product,restaurant]);
+ const guestRequest={code:table.qr_token,restaurantId:restaurant,requestId:crypto.randomUUID(),items:[{productId:product,quantity:2,price_cents:1}]};let guestCreates=0;
+ const guestProvider=async(url,options)=>{guestCreates++;const payload=JSON.parse(options.body);assert.equal(payload.amount.value,'25.00');return {ok:true,json:async()=>({id:'tr_guest',profileId:payload.profileId,amount:payload.amount,metadata:payload.metadata,_links:{checkout:{href:'https://www.mollie.com/checkout/guest'}}})};};
+ const guestEnv={...env,CENTER_PAYMENT_ORIGIN:'https://example.test',CENTER_CHECKOUT_ENABLED:'true'};
+ const guestResult=await guestCenterCheckout(pool,guestRequest,guestEnv,guestProvider);assert.equal(guestResult.checkoutUrl,'https://www.mollie.com/checkout/guest');
+ assert.equal((await guestCenterCheckout(pool,guestRequest,guestEnv,()=>{throw Error('no duplicate payment')})).orderId,guestResult.orderId);assert.equal(guestCreates,1);
+ await assert.rejects(guestCenterCheckout(pool,{...guestRequest,items:[{productId:product,quantity:3}]},guestEnv,guestProvider),/REQUEST_REUSED_WITH_DIFFERENT_CART/);
+ assert.equal((await db.query('SELECT total_cents,status FROM orders WHERE id=$1',[guestResult.orderId])).rows[0].total_cents,2500);
+ assert.equal((await db.query('SELECT total_cents,status FROM orders WHERE id=$1',[guestResult.orderId])).rows[0].status,'payment_pending');
+ const verifiedGuestPayment={paymentId:'tr_guest',orderId:guestResult.orderId,merchantReference:'org_restaurant',amountCents:2500,currency:'EUR',status:'paid',refundedCents:0,chargedBackCents:0,paidAt:new Date().toISOString()};
+ assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>verifiedGuestPayment)).released,true);
+ assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>{throw Error('no duplicate release')})).alreadyReleased,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'preparing')).ok,true);
+ assert.equal((await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'ready')).ok,true);
+ const guestToken=(await db.query('SELECT guest_status_token FROM center_order_payments WHERE order_id=$1',[guestResult.orderId])).rows[0].guest_status_token;
+ const statusReq=Readable.from([]);Object.assign(statusReq,{url:'/api/v1/guest/center/status?token='+guestToken,method:'GET',headers:{}});
+ const statusRes={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};await handler(statusReq,statusRes);
+ assert.equal(statusRes.status,200);assert.equal(statusRes.data.order.status,'ready');assert.equal(statusRes.data.order.restaurant_name,'Restaurant');
+
+
 
 
 
