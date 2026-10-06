@@ -76,3 +76,18 @@ test('guest status rejects a table token or malformed token without reading orde
 test('guest status query exposes only status and restaurant with expiry',async()=>{
  const r=await request(async(sql,args)=>{assert.match(sql,/guest_status_token=\$1/);assert.match(sql,/24 hours/);assert.doesNotMatch(sql,/guest_email|merchant_reference|total_cents/);assert.equal(args[0],'a'.repeat(64));return rows({status:'ready',restaurant_name:'Restaurant',ready_at:'now'});},'/api/v1/guest/center/status?token='+'a'.repeat(64));assert.equal(r.status,200);assert.equal(r.data.order.status,'ready');
 });
+
+test('durable checkout token exposes pending status before provider binding exists',async()=>{
+ const r=await request(async(sql,args)=>{
+  assert.match(sql,/LEFT JOIN center_checkout_attempts a/);
+  assert.match(sql,/a.restaurant_id=o.restaurant_id/);
+  assert.match(sql,/cp.guest_status_token=\$1 OR a.guest_status_token=\$1/);
+  assert.equal(args[0],'b'.repeat(64));
+  return rows({status:'payment_pending',restaurant_name:'Restaurant',collection_number:null,paid_at:null});
+ },'/api/v1/guest/center/status?token='+'b'.repeat(64));
+ assert.equal(r.status,200);assert.equal(r.data.order.status,'payment_pending');assert.equal(r.data.order.collection_number,null);
+});
+test('unknown status token cannot reveal another checkout',async()=>{
+ const r=await request(async()=>rows(),'/api/v1/guest/center/status?token='+'c'.repeat(64));
+ assert.equal(r.status,404);
+});
