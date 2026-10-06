@@ -8,7 +8,8 @@ test('center management hides table creation until approval and after completion
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  let approved=false,locked=false,tables=[],qrRequests=0;
  await page.route('https://center.test/**',async route=>{
- const req=route.request(),url=new URL(req.url());let data;
+ const req=route.request(),url=new URL(req.url());
+ if(url.pathname==='/api/v1/guest/center/manifest')return route.fulfill({contentType:'application/manifest+json',body:JSON.stringify({name:'Abholung',start_url:'/center/status.html#token='+url.searchParams.get('token'),display:'standalone'})});let data;
  if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
  if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
  else if(url.pathname==='/api/v1/centers')data={centers:[{id:'test-center',name:'Center'}]};
@@ -103,6 +104,7 @@ test('guest status retains milestones through an outage and recovers online',asy
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));let offline=false,ready=false;
  await page.route('https://center.test/**',async route=>{
  const url=new URL(route.request().url());
+ if(url.pathname==='/api/v1/guest/center/manifest')return route.fulfill({contentType:'application/manifest+json',body:JSON.stringify({name:'Abholung',display:'standalone'})});
  if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
  if(url.pathname==='/api/v1/guest/center/notification-config')return route.fulfill({contentType:'application/json',body:JSON.stringify({available:false})});
  if(url.pathname!=='/api/v1/guest/center/status')throw Error('Unexpected request');
@@ -142,6 +144,7 @@ test('guest notification enrollment requires a click and binds the status token'
  });
  await page.goto('https://center.test/center/status.html#token='+'a'.repeat(64));
  await page.locator('#notify').waitFor({state:'visible'});
+ assert.equal(await page.locator('link[rel="manifest"]').getAttribute('href'),'/api/v1/guest/center/manifest?token='+'a'.repeat(64));
  assert.equal(await page.evaluate(()=>window.permissionCalls),0);assert.equal(saved,undefined);
  await page.locator('#notify').click();
  await page.locator('#notifyStatus').getByText('Abholbenachrichtigung für diese Bestellung aktiviert.',{exact:true}).waitFor();
