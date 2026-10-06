@@ -1,3 +1,4 @@
+import {molliePaymentReadUrl} from './center-mollie-mode.js';
 import {withMerchantToken} from './center-mollie-merchant.js';
 import {releaseCenterPayment} from './center-payment-release.js';
 export function eurCents(amount){
@@ -14,12 +15,13 @@ export function normalizeMolliePayment(payment,credential){
 }
 export async function verifyAndReleaseMolliePayment(pool,paymentId,env=process.env,fetcher=fetch){
  if(!/^tr_[a-zA-Z0-9]+$/.test(paymentId||''))return {released:false,reason:'invalid_payment_id'};
- const binding=(await pool.query('SELECT restaurant_id FROM center_order_payments WHERE payment_id=$1',[paymentId])).rows[0];
+ const binding=(await pool.query('SELECT p.restaurant_id,a.request_payload FROM center_order_payments p JOIN center_checkout_attempts a ON a.payment_id=p.payment_id WHERE p.payment_id=$1',[paymentId])).rows[0];
  if(!binding)return {released:false,reason:'unknown_payment'};
  return releaseCenterPayment(pool,paymentId,async()=>withMerchantToken(pool,binding.restaurant_id,async(accessToken,envelope)=>{
  const credential=(await pool.query('SELECT profile_id,organization_id,verified_at FROM center_mollie_credentials WHERE restaurant_id=$1 AND token_envelope=$2',[binding.restaurant_id,envelope])).rows[0];
  if(!credential)throw Error('MERCHANT_CONNECTION_CHANGED');
- const response=await fetcher('https://api.mollie.com/v2/payments/'+paymentId,{headers:{authorization:'Bearer '+accessToken,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+ const mode=binding.request_payload?.testmode===true?'test':'live';
+ const response=await fetcher(molliePaymentReadUrl('/v2/payments/'+paymentId,mode).href,{headers:{authorization:'Bearer '+accessToken,accept:'application/json'},signal:AbortSignal.timeout(15000)});
  if(!response.ok)throw Error('PAYMENT_READ_FAILED');return normalizeMolliePayment(await response.json(),credential);
  },env,fetcher));
 }
