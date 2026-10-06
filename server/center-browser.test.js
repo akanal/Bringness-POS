@@ -12,14 +12,14 @@ test('center management hides table creation until approval and after completion
  if(url.pathname==='/api/v1/guest/center/manifest')return route.fulfill({contentType:'application/manifest+json',body:JSON.stringify({name:'Abholung',start_url:'/center/status.html#token='+url.searchParams.get('token'),display:'standalone'})});let data;
  if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
  if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
- else if(url.pathname==='/api/v1/centers')data={centers:[{id:'test-center',name:'Center'}]};
+ else if(url.pathname==='/api/v1/centers')data={centers:[{id:'test-center',name:'Center',can_manage:true}]};
  else if(url.pathname.endsWith('/qr')){
  assert.equal(req.headers().authorization,'Bearer test');assert.equal(locked,true);qrRequests++;
  return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="white"/></svg>'});
  }else if(url.pathname.endsWith('/restaurants'))data={restaurants:[]};
  else if(url.pathname.endsWith('/setup')){
  if(req.method()==='PUT'){assert.equal(req.postDataJSON().action,'complete');locked=true;data={ok:true};}
- else data={setup:{can_setup:approved,setup_completed_at:locked?'now':null},canApprove:false};
+ else data={setup:{can_setup:approved,can_export_qr:locked,setup_completed_at:locked?'now':null},canApprove:false};
  }else if(url.pathname.endsWith('/tables')){
  if(req.method()==='POST'){assert.equal(approved&&!locked,true);tables.push({id:'22222222-2222-4222-8222-222222222222',name:req.postDataJSON().name,qr_token:'a'.repeat(48)});data={table:tables.at(-1)};}else data={tables};
  }else throw Error('Unexpected request '+url.pathname);
@@ -229,5 +229,41 @@ test('a completed saved payment attempt opens guest status after reload',async()
  await page.locator('#checkout').click();await page.getByRole('heading',{name:'Bestellstatus'}).waitFor();
  assert.equal(page.url(),'https://center.test/center/status.html#token='+'a'.repeat(64));
  assert.equal(calls,2);assert.deepEqual(requests[0],requests[1]);
+ }finally{await browser.close();}
+});
+
+test('management shows merchant controls only for owned restaurants and Center actions only for its operator',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>localStorage.setItem('bringness-pos-token','operator'));
+ await page.route('https://center.test/**',async route=>{
+ const url=new URL(route.request().url());
+ if(url.pathname==='/center/manage.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/manage.html',import.meta.url),'utf8')});
+ let data;
+ const ownedCenter=url.pathname.includes('/owned/');
+ if(url.pathname==='/api/v1/bootstrap')data={restaurants:[]};
+ else if(url.pathname==='/api/v1/centers')data={centers:[{id:'owned',name:'Eigenes Center',can_manage:true},{id:'joined',name:'Beigetretenes Center',can_manage:false}]};
+ else if(url.pathname.endsWith('/restaurants'))data={restaurants:ownedCenter?[
+ {id:'own',name:'Eigenes Restaurant',can_manage:true,contract_status:'signed',payment_status:'verified'},
+ {id:'foreign',name:'Fremdes Restaurant',can_manage:false,contract_status:'signed',payment_status:'verified'}]:
+ [{id:'own',name:'Eigenes Restaurant',can_manage:true,contract_status:'signed',payment_status:'verified'}]};
+ else if(url.pathname.endsWith('/setup'))data={setup:{setup_completed_at:'now',can_setup:false,can_export_qr:ownedCenter},canApprove:false};
+ else if(url.pathname.endsWith('/tables'))data={tables:[{id:'table',name:'Tisch 1',active:true,qr_token:'a'.repeat(48)}]};
+ else throw Error('Unexpected request');
+ return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/manage.html');
+ await page.getByRole('button',{name:'QR-Bild herunterladen',exact:true}).waitFor();
+ assert.equal(await page.locator('#inviteSection').isVisible(),true);assert.equal(await page.locator('#enrollSection').isVisible(),true);
+ const own=page.locator('article').filter({has:page.getByRole('heading',{name:'Eigenes Restaurant',exact:true})});
+ const foreign=page.locator('article').filter({has:page.getByRole('heading',{name:'Fremdes Restaurant',exact:true})});
+ assert.equal(await own.getByRole('button',{name:'Mollie verbinden'}).count(),1);
+ assert.equal(await foreign.locator('form').count(),0);assert.equal(await foreign.locator('button').count(),0);
+ await page.locator('#centers').selectOption('joined');
+ await page.waitForFunction(()=>document.querySelectorAll('#restaurants article').length===1&&document.getElementById('tables').textContent.includes('Tisch 1'));
+ assert.equal(await page.locator('#inviteSection').isVisible(),false);assert.equal(await page.locator('#enrollSection').isVisible(),false);
+ assert.equal(await page.getByRole('button',{name:'QR-Bild herunterladen',exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Mollie verbinden'}).count(),1);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
