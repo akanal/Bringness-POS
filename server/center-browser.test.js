@@ -117,3 +117,35 @@ test('guest status retains milestones through an outage and recovers online',asy
  await page.locator('#status').getByText('Deine Bestellung ist abholbereit.',{exact:true}).waitFor();assert.equal(await page.locator('#history li').count(),3);assert.equal(await page.locator('#collection').textContent(),'Abholnummer: BN-2026-000042');assert.equal(await page.locator('#restaurant').textContent(),'Restaurant');assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+
+test('guest notification enrollment requires a click and binds the status token',async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage();let saved;
+ await page.addInitScript(()=>{
+  window.permissionCalls=0;
+  Object.defineProperty(window,'Notification',{configurable:true,value:{requestPermission:async()=>{window.permissionCalls++;return 'granted';}}});
+  Object.defineProperty(window,'PushManager',{configurable:true,value:function(){}});
+  const subscription={toJSON:()=>({endpoint:'https://fcm.googleapis.com/fcm/send/test',keys:{p256dh:'test',auth:'test'}})};
+  const registration={pushManager:{getSubscription:async()=>null,subscribe:async options=>{if(!options.userVisibleOnly)throw Error('visible push required');return subscription;}}};
+  Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{register:async()=>registration,ready:Promise.resolve(registration)}});
+ });
+ await page.route('https://center.test/**',async route=>{
+  const req=route.request(),url=new URL(req.url());
+  if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
+  let data;
+  if(url.pathname.endsWith('/notification-config'))data={available:true,publicKey:Buffer.alloc(65,1).toString('base64url')};
+  else if(url.pathname.endsWith('/notifications')){saved=req.postDataJSON();data={subscribed:true};}
+  else if(url.pathname.endsWith('/status'))data={order:{restaurant_name:'Restaurant',status:'preparing'}};
+  else throw Error('Unexpected request');
+  return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/status.html#token='+'a'.repeat(64));
+ await page.locator('#notify').waitFor({state:'visible'});
+ assert.equal(await page.evaluate(()=>window.permissionCalls),0);assert.equal(saved,undefined);
+ await page.locator('#notify').click();
+ await page.locator('#notifyStatus').getByText('Abholbenachrichtigung für diese Bestellung aktiviert.',{exact:true}).waitFor();
+ assert.equal(await page.evaluate(()=>window.permissionCalls),1);assert.equal(saved.token,'a'.repeat(64));assert.equal(saved.consent,true);
+ assert.equal(saved.subscription.endpoint,'https://fcm.googleapis.com/fcm/send/test');
+ }finally{await browser.close();}
+});
