@@ -14,7 +14,7 @@ export async function beginRestaurantMollieConnect(pool,user,centerId,restaurant
  const q=await pool.query(`INSERT INTO center_mollie_oauth_states(state_hash,user_id,center_id,restaurant_id,expires_at,browser_hash)
  SELECT $1,$2,c.id,r.id,now()+interval '10 minutes',$6 FROM centers c
  JOIN center_restaurants cr ON cr.center_id=c.id JOIN restaurants r ON r.id=cr.restaurant_id
- WHERE c.id=$3 AND r.id=$4 AND c.company_id=$5 AND r.company_id=$5 AND cr.active=true
+ WHERE c.id=$3 AND r.id=$4 AND c.active=true AND r.company_id=$5 AND cr.active=true
  RETURNING state_hash`,[hash,user.id,centerId,restaurantId,user.company_id,browserHash]);
  if(!q.rows.length)return {status:404,error:'Restaurant nicht gefunden'};
  const url=new URL('https://my.mollie.com/oauth2/authorize');
