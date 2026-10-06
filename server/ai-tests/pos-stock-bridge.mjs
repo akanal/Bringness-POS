@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {applyCenterStock} from '../center-stock-bridge.js';
 import {JSDOM} from 'jsdom';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -60,4 +61,22 @@ const render=await new Function('document','api','orderBoardData','prompt',"cons
 await render('bestellungen',restaurant);await doc.querySelector('[data-stock-status="kitchen"]').onclick();assert.equal(await status(uiOrder),'kitchen');assert(doc.querySelector('[data-stock-status="preparing"]'));assert.equal(Number((await getStock()).reserved_quantity),0.15);checks++;
 await doc.querySelector('[data-stock-status="preparing"]').onclick();assert.equal(await status(uiOrder),'preparing');assert.equal(Number((await getStock()).quantity),1.85);assert(!doc.querySelector('[data-stock-status="preparing"]'));checks++;
 await doc.querySelector('[data-stock-status="cancelled"]').onclick();assert.equal(await status(uiOrder),'cancelled');assert.equal(Number((await getStock()).quantity),1.85);dom.window.close();checks++;
+
+// Center payment-pending orders must reserve/consume through the same AI ledger.
+await ai.query('UPDATE ai_stock SET quantity=3,reserved_quantity=0 WHERE id=$1',[stock]);
+await ai.query('UPDATE ai_recipes SET stock_blocked=false WHERE id=$1',[recipe]);
+const centerOrder=(await pos.query("INSERT INTO orders(restaurant_id,source,status) VALUES($1,'center','payment_pending') RETURNING id",[restaurant])).rows[0].id;
+await pos.query('INSERT INTO order_items VALUES($1,$2,2)',[centerOrder,product]);
+const centerDependencies={stockPool:ai,kitchenAction};
+async function centerAction(action,statusTarget,rollback=false){const c=await pos.connect();try{await c.query('BEGIN');await applyCenterStock(c,centerOrder,restaurant,action,centerDependencies);await c.query('UPDATE orders SET status=$2 WHERE id=$1',[centerOrder,statusTarget]);await c.query(rollback?'ROLLBACK':'COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
+await centerAction('accept','kitchen',true);assert.equal(await status(centerOrder),'payment_pending');assert.equal(Number((await getStock()).reserved_quantity),0.3);checks++;
+await centerAction('accept','kitchen');assert.equal(await status(centerOrder),'kitchen');assert.equal(Number((await getStock()).reserved_quantity),0.3);checks++;
+await centerAction('start','preparing',true);assert.equal(await status(centerOrder),'kitchen');assert.equal(Number((await getStock()).quantity),2.7);assert.equal(Number((await getStock()).reserved_quantity),0);checks++;
+await centerAction('start','preparing');assert.equal(await status(centerOrder),'preparing');assert.equal(Number((await getStock()).quantity),2.7);checks++;
+assert.equal((await pos.query("SELECT count(*)::int n FROM pos_stock_commands WHERE order_id=$1 AND state='applied'",[centerOrder])).rows[0].n,2);checks++;
+
+const stockFailure=(await pos.query("INSERT INTO orders(restaurant_id,source,status) VALUES($1,'center','payment_pending') RETURNING id",[restaurant])).rows[0].id;
+await pos.query('INSERT INTO order_items VALUES($1,$2,99)',[stockFailure,product]);
+const failureClient=await pos.connect();try{await failureClient.query('BEGIN');await assert.rejects(applyCenterStock(failureClient,stockFailure,restaurant,'accept',centerDependencies),/Nicht genügend/);await failureClient.query('ROLLBACK');}finally{failureClient.release();}
+assert.equal(await status(stockFailure),'payment_pending');assert.equal((await pos.query('SELECT count(*)::int n FROM pos_stock_commands WHERE order_id=$1',[stockFailure])).rows[0].n,0);assert.equal(Number((await getStock()).quantity),2.7);checks++;
 console.log(`${checks} POS/AI bridge scenarios passed using separate PostgreSQL engines.`);for(const db of dbs)await db.close();
