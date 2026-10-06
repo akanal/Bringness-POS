@@ -15,6 +15,10 @@ export async function releaseCenterPayment(pool,paymentId,verifyPayment){
  if(!binding.active||binding.payment_status!=='verified'||binding.contract_status!=='signed'||binding.current_merchant!==binding.merchant_reference){await client.query('ROLLBACK');return {released:false,reason:'merchant_not_ready'};}
  const payment=await verifyPayment({paymentId:binding.payment_id,merchantReference:binding.merchant_reference});
  const result=validateCenterPayment({paymentId:binding.payment_id,orderId:binding.order_id,merchantReference:binding.merchant_reference,amountCents:binding.amount_cents,currency:binding.currency},payment);
+ if(result.reason==='payment_not_paid'&&['failed','canceled','expired'].includes(payment?.status)){
+  await client.query('UPDATE center_order_payments SET provider_status=$2 WHERE payment_id=$1',[paymentId,payment.status]);
+  await client.query('COMMIT');return {released:false,reason:'payment_'+payment.status};
+ }
  const paidAt=typeof payment?.paidAt==='string'?Date.parse(payment.paidAt):NaN;
  if(!result.release||!Number.isFinite(paidAt)||paidAt>Date.now()+60000){await client.query('ROLLBACK');return {released:false,reason:result.release?'invalid_payment_time':result.reason};}
  await applyCenterStock(client,binding.order_id,binding.restaurant_id,'accept');
@@ -28,7 +32,7 @@ export async function releaseCenterPayment(pool,paymentId,verifyPayment){
  'street',coalesce(b.street,''),'postalCode',coalesce(b.postal_code,''),'city',coalesce(b.city,''),'vatId',coalesce(b.vat_id,''))
  FROM orders o JOIN restaurants r ON r.id=o.restaurant_id JOIN companies co ON co.id=r.company_id
  LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE o.id=rc.order_id) WHERE rc.order_id=$1`,[binding.order_id]);
- await client.query('UPDATE center_order_payments SET paid_at=$2,released_at=now() WHERE payment_id=$1',[paymentId,new Date(paidAt).toISOString()]);
+ await client.query('UPDATE center_order_payments SET paid_at=$2,released_at=now(),provider_status='paid' WHERE payment_id=$1',[paymentId,new Date(paidAt).toISOString()]);
  await client.query('COMMIT');return {released:true,orderId:binding.order_id};
  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
