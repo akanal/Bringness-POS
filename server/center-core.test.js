@@ -106,3 +106,12 @@ test('home-screen manifest preserves the protected order link and expires with t
  const expired=await request(async()=>rows(),'/api/v1/guest/center/manifest?token='+'a'.repeat(64));assert.equal(expired.status,404);
  const invalid=await request(()=>{throw Error('must not query');},'/api/v1/guest/center/manifest?token=bad');assert.equal(invalid.status,404);
 });
+
+test('guest receipt link is scoped to its status capability and verified release',async()=>{
+ const r=await request(async(sql,args)=>{
+ assert.match(sql,/cp.released_at IS NOT NULL/);assert.match(sql,/rc.order_id=o.id/);assert.match(sql,/rc.public_token/);
+ assert.match(sql,/cp.guest_status_token=\$1 OR a.guest_status_token=\$1/);assert.equal(args[0],'d'.repeat(64));
+ return rows({status:'ready',receipt_url:'/beleg/'+id});
+ },'/api/v1/guest/center/status?token='+'d'.repeat(64));
+ assert.equal(r.status,200);assert.equal(r.data.order.receipt_url,'/beleg/'+id);
+});
