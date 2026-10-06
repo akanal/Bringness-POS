@@ -13,7 +13,7 @@ if(/^[a-f0-9]{64}$/.test(token)){
 const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 document.getElementById('installHint').hidden=!ios||standalone;
-const labels={payment_pending:'Zahlung wird geprüft.',kitchen:'Deine Bestellung wartet auf die Zubereitung.',preparing:'Deine Bestellung wird zubereitet.',ready:'Deine Bestellung ist abholbereit.',cancelled:'Deine Bestellung wurde storniert.'};
+const labels={payment_pending:'Zahlung wird geprüft.',payment_failed:'Die Zahlung ist fehlgeschlagen. Es wurde keine Bestellung an die Küche freigegeben.',payment_canceled:'Die Zahlung wurde abgebrochen. Es wurde keine Bestellung an die Küche freigegeben.',payment_expired:'Der Zahlungsvorgang ist abgelaufen. Es wurde keine Bestellung an die Küche freigegeben.',kitchen:'Deine Bestellung wartet auf die Zubereitung.',preparing:'Deine Bestellung wird zubereitet.',ready:'Deine Bestellung ist abholbereit.',cancelled:'Deine Bestellung wurde storniert.'};
 function renderHistory(order){
  const history=document.getElementById('history');history.replaceChildren();
  for(const [field,label] of [['paid_at','Zahlung bestätigt'],['released_at','An die Küche freigegeben'],['preparation_started_at','Zubereitung gestartet'],['ready_at','Abholbereit']]){
@@ -32,7 +32,7 @@ async function load(){
   state.textContent=labels[data.order.status]||'Status wird geprüft.';
   renderHistory(data.order);
   connection.textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE');
-  finished=['ready','cancelled'].includes(data.order.status);
+  finished=['ready','cancelled','payment_failed','payment_canceled','payment_expired'].includes(data.order.status);
  }catch(e){connection.textContent=finished?e.message:'Verbindung unterbrochen. Der angezeigte Status kann veraltet sein. Wir versuchen es automatisch erneut.';}
  finally{loading=false;if(!finished&&!document.hidden)timer=setTimeout(load,10000);}
 }
