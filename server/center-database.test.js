@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {signPreparedTse} from './tse-signing-worker.js';
 import {ensureTseSchema} from './tse-core.js';
 import {guestCenterCheckout} from './center-guest-checkout.js';
 import {createCenterMollieCheckout,reconcileCenterCheckout} from './center-mollie-checkout.js';
@@ -151,6 +152,19 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await releaseCenterPayment(pool,'tr_fiscal',async()=>({...verifiedGuestPayment,paymentId:'tr_fiscal',orderId:fiscalOrder,amountCents:1250}))).released,true);
  const fiscal=(await db.query('SELECT state,process_data FROM tse_transactions WHERE order_id=$1',[fiscalOrder])).rows[0];assert.equal(fiscal.state,'prepared');assert.equal(fiscal.process_data.totalsMatch,true);assert.equal(fiscal.process_data.payments[0].method,'mollie_center');assert.equal(fiscal.process_data.totalCents,1250);
  assert.equal((await db.query('SELECT fiscal_status FROM receipts WHERE order_id=$1',[fiscalOrder])).rows[0].fiscal_status,'prepared');
+ const txId=(await db.query('SELECT id FROM tse_transactions WHERE order_id=$1',[fiscalOrder])).rows[0].id;
+ assert.equal((await signPreparedTse(pool,txId,{status:async()=>({certified:false})})).reason,'device_not_ready');
+ await db.query("INSERT INTO tse_devices(restaurant_id,serial_number,certified,status) VALUES($1,'SIMULATED-TEST-DEVICE',true,'connected')",[restaurant]);
+ let starts=0,finishes=0;
+ const fakeTse={status:async()=>({certified:true,serialNumber:'SIMULATED-TEST-DEVICE'}),startTransaction:async()=>{starts++;return {transactionNumber:'1',certified:true,serialNumber:'SIMULATED-TEST-DEVICE',startedAt:new Date().toISOString()};},finishTransaction:async()=>{finishes++;return {transactionNumber:'1',certified:true,serialNumber:'SIMULATED-TEST-DEVICE',signature:'SIMULATED-NOT-A-REAL-SIGNATURE',signatureCounter:'1',signatureAlgorithm:'TEST-ONLY',finishedAt:new Date().toISOString()};}};
+ assert.equal((await signPreparedTse(pool,txId,fakeTse)).signed,true);
+ assert.equal((await signPreparedTse(pool,txId,fakeTse)).reason,'already_claimed');assert.equal(starts,1);assert.equal(finishes,1);
+ assert.equal((await db.query('SELECT fiscal_status FROM receipts WHERE order_id=$1',[fiscalOrder])).rows[0].fiscal_status,'signed');
+ const uncertain=(await db.query("INSERT INTO tse_transactions(restaurant_id,client_transaction_id,process_data) VALUES($1,'uncertain-test',$2::jsonb) RETURNING id",[restaurant,JSON.stringify(fiscal.process_data)])).rows[0].id;
+ assert.equal((await signPreparedTse(pool,uncertain,{...fakeTse,startTransaction:async()=>{throw Error('lost hardware reply')}})).reason,'outcome_unconfirmed');
+ assert.equal((await db.query('SELECT state FROM tse_transactions WHERE id=$1',[uncertain])).rows[0].state,'needs_review');
+ assert.equal((await signPreparedTse(pool,uncertain,fakeTse)).reason,'already_claimed');
+
 
 
 
