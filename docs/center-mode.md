@@ -38,7 +38,7 @@ Management includes an authenticated SVG download for each active table, availab
 
 ## Checkout reload recovery
 
-Before submitting, the guest page saves the cart and request ID in sessionStorage, keyed to the table token. Reloading the same tab restores the locked cart and retries the existing server-idempotent request. No new checkout is sent if storage cannot be written or an existing saved attempt cannot be read. An explicit server response permitting cart editing clears the saved attempt. This recovery is limited to the same browser tab; closing it or clearing browser storage loses this local checkpoint. It does not prove a physical QR rescan or authorize rollout.
+Before submitting, the guest page saves the cart and request ID in sessionStorage, keyed to the table token. Reloading the same tab restores the locked cart and retries the existing server-idempotent request. Already released orders and verified failed/canceled/expired payments return a status-page URL instead of reopening the provider checkout. Pending payments continue to reuse their original checkout. No new checkout is sent if storage cannot be written or an existing saved attempt cannot be read. An explicit server response permitting cart editing clears the saved attempt. This recovery is limited to the same browser tab; closing it or clearing browser storage loses this local checkpoint. It does not prove a physical QR rescan or authorize rollout.
 
 ## Guest notifications
 
