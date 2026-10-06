@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createPaymentReceiptHandler} from './payment-receipt-core.js';
+const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',publicToken='33333333-3333-4333-8333-333333333333';
+async function run(fiscalStatus,{authenticated=true,found=true}={}){
+ const documents=[],queries=[];
+ class Pdf {
+ constructor(options){this.options=options;this.texts=[];documents.push(this);}
+ fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(){return this;}
+ text(value){this.texts.push(value);return this;}pipe(){return this;}end(){this.ended=true;return this;}
+ }
+ const pool={query:async(sql,args)=>{
+ queries.push({sql,args});
+ if(sql.includes('FROM sessions'))return {rows:authenticated?[{id:receiptId,company_id:company,role:'owner'}]:[]};
+ if(sql.includes('FROM receipts rc')){
+ assert.match(sql,/rc.id=\$1 AND c.id=\$2/);assert.deepEqual(args,[receiptId,company]);
+ return {rowCount:found?1:0,rows:found?[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,order_id:'order',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
+ }
+ if(sql.includes('FROM order_items'))return {rows:[{product_name_snapshot:'Gericht',unit_price_cents:1190,tax_rate_snapshot:19,quantity:1}]};
+ if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:1190}]};
+ throw Error('Unexpected query');
+ }};
+ const handler=createPaymentReceiptHandler(pool,Pdf,{toBuffer:async(url)=>{assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>'https://pos.example.test/beleg/'+token);
+ const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){this.body=JSON.parse(raw);}};
+ assert.equal(await handler({url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
+ return {res,documents,queries};
+}
+for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
+ test('PDF template respects stored fiscal status: '+fiscalStatus,async()=>{
+ const {res,documents}=await run(fiscalStatus);assert.equal(res.status,200);assert.equal(res.headers['content-type'],'application/pdf');
+ const doc=documents[0],text=doc.texts.join('\n');
+ assert.equal(doc.ended,true);assert.match(text,/Historisches Restaurant/);assert.match(text,/Historischer Betrieb/);
+ assert.match(text,/Gesamt: 11,90 EUR/);assert.match(text,/Steuer: 1,90 EUR/);assert.match(text,/Online-Zahlung/);assert.doesNotMatch(text,/mollie_center/);
+ assert.equal(text.includes('Nicht TSE-signiert'),fiscalStatus!=='signed');assert.doesNotMatch(text,/Eine TSE ist nicht angeschlossen/);
+ });
+}
+test('PDF download requires an active session and company-scoped receipt lookup',async()=>{
+ const unauth=await run('signed',{authenticated:false});assert.equal(unauth.res.status,401);assert.equal(unauth.documents.length,0);assert.equal(unauth.queries.length,1);
+ const missing=await run('signed',{found:false});assert.equal(missing.res.status,404);assert.equal(missing.documents.length,0);assert.equal(missing.queries.length,2);
+});
