@@ -35,8 +35,10 @@ export function createCenterHandler(pool) {
         const statusToken=url.searchParams.get('token')||'';
         if(!/^[a-f0-9]{64}$/.test(statusToken))return send(res,404,{error:'Bestellung nicht gefunden'});
         const order=(await pool.query(`SELECT o.status,r.name restaurant_name,(SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id) collection_number,cp.paid_at,cp.released_at,cp.preparation_started_at,cp.ready_at
-          FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id JOIN restaurants r ON r.id=cp.restaurant_id
-          WHERE cp.guest_status_token=$1 AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
+          FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
+          LEFT JOIN center_order_payments cp ON cp.order_id=o.id AND cp.restaurant_id=o.restaurant_id
+          LEFT JOIN center_checkout_attempts a ON a.order_id=o.id AND a.restaurant_id=o.restaurant_id
+          WHERE (cp.guest_status_token=$1 OR a.guest_status_token=$1) AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
         return order?send(res,200,{order}):send(res,404,{error:'Bestellung nicht gefunden'});
       }
       if (p === '/api/v1/guest/center/order') {
