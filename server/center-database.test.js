@@ -1,3 +1,4 @@
+import {createPublicReceiptHandler} from './public-receipt-core.js';
 import {exportCenterTableQr} from './center-table-qr.js';
 import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
 import {recoverGuestPayment} from './center-payment-recovery.js';
@@ -24,7 +25,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text DEFAULT 'Company'); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
  CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);
  CREATE SEQUENCE receipt_number_seq;
- CREATE TABLE receipts(public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
+ CREATE TABLE receipts(issued_at timestamptz DEFAULT now(),public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
  CREATE TABLE payments(order_id uuid,method text,amount_cents integer);
  CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
  CREATE TABLE pos_stock_links(restaurant_id uuid,active boolean);
@@ -213,6 +214,25 @@ test('database migration and delegated setup lifecycle',async()=>{
  ALTER TABLE order_items ADD COLUMN id uuid DEFAULT gen_random_uuid();
  ALTER TABLE payments ADD COLUMN id uuid DEFAULT gen_random_uuid();
  ALTER TABLE payments ADD COLUMN created_at timestamptz DEFAULT now();`);
+
+ // Render the actual existing digital receipt through its public capability.
+ const publicReceipt=createPublicReceiptHandler(pool);
+ const digital={writeHead(status,headers){this.status=status;this.headers=headers;},end(html){this.html=html;}};
+ await db.query("UPDATE order_items SET product_name_snapshot='<script>bad()</script> Gericht' WHERE order_id=$1",[guestResult.orderId]);
+ assert.equal(await publicReceipt({url:statusRes.data.order.receipt_url,method:'GET'},digital),true);
+ assert.equal(digital.status,200);assert.match(digital.html,new RegExp(guestReceipt.receipt_number));
+ assert.match(digital.html,/25,00/);assert.match(digital.html,/MwSt. 19 %/);assert.match(digital.html,/3,99/);
+ assert.match(digital.html,/Online-Zahlung/);assert.doesNotMatch(digital.html,/mollie_center/);
+ assert.match(digital.html,/&lt;script&gt;bad\(\)&lt;\/script&gt; Gericht/);assert.doesNotMatch(digital.html,/<script>/);
+ assert.match(digital.html,/Nicht TSE-signiert/);assert.equal(digital.headers['referrer-policy'],'no-referrer');
+ assert.equal(digital.headers['cache-control'],'private, no-store');
+ // Later merchant changes cannot rewrite the receipt's historical seller snapshot.
+ await db.query("UPDATE restaurants SET name='Changed after sale' WHERE id=$1",[restaurant]);
+ const historical={...digital};await publicReceipt({url:statusRes.data.order.receipt_url,method:'GET'},historical);
+ assert.match(historical.html,/<h1>Restaurant<\/h1>/);assert.doesNotMatch(historical.html,/Changed after sale/);
+ await db.query("UPDATE restaurants SET name='Restaurant' WHERE id=$1",[restaurant]);
+ const missing={...digital};await publicReceipt({url:'/beleg/'+crypto.randomUUID(),method:'GET'},missing);assert.equal(missing.status,404);
+ assert.equal(await publicReceipt({url:'/beleg/not-a-uuid',method:'GET'},digital),false);
  await ensureTseSchema({query:sql=>db.exec(sql)});
  const tseSource=await readFile(new URL('./tse-integration.js',import.meta.url),'utf8');
  const trigger=tseSource.match(/await pool.query\(`([\s\S]*?)`\)/)[1];await db.exec(trigger);
