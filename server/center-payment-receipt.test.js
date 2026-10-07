@@ -11,7 +11,7 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  }
  const pool={query:async(sql,args)=>{
  queries.push({sql,args});
- if(sql.includes('FROM sessions'))return {rows:authenticated?[{id:receiptId,company_id:company,role:'owner'}]:[]};
+ if(sql.includes('FROM sessions')){assert.match(sql,/coalesce\(u.must_change_password,false\)=false/);return {rows:authenticated?[{id:receiptId,company_id:company,role:'owner'}]:[]};}
  if(sql.includes('FROM receipts rc')){
  assert.match(sql,/rc.id=\$1 AND c.id=\$2/);assert.deepEqual(args,[receiptId,company]);
  return {rowCount:found?1:0,rows:found?[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,order_id:'order',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
@@ -46,3 +46,10 @@ for(const failure of [{qrFails:true},{urlFails:true}]){
  assert.match(result.res.body.error,/PDF/);assert.equal(result.documents.length,0);
  });
 }
+
+test('malformed receipt UUID cannot reach session or receipt queries',async()=>{
+ const handler=createPaymentReceiptHandler({query(){throw Error('must not query');}},class{}, {},()=>{throw Error('must not create link');});
+ const res={writeHead(status){this.status=status;},end(raw){this.body=JSON.parse(raw);}};
+ assert.equal(await handler({url:'/api/v1/receipts/'+'-'.repeat(36)+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
+ assert.equal(res.status,404);
+});
