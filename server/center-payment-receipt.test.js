@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',publicToken='33333333-3333-4333-8333-333333333333';
-async function run(fiscalStatus,{authenticated=true,found=true}={}){
+async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false}={}){
  const documents=[],queries=[];
  class Pdf {
  constructor(options){this.options=options;this.texts=[];documents.push(this);}
@@ -20,7 +20,7 @@ async function run(fiscalStatus,{authenticated=true,found=true}={}){
  if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:1190}]};
  throw Error('Unexpected query');
  }};
- const handler=createPaymentReceiptHandler(pool,Pdf,{toBuffer:async(url)=>{assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>'https://pos.example.test/beleg/'+token);
+ const handler=createPaymentReceiptHandler(pool,Pdf,{toBuffer:async(url)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
  const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){this.body=JSON.parse(raw);}};
  assert.equal(await handler({url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
  return {res,documents,queries};
@@ -38,3 +38,11 @@ test('PDF download requires an active session and company-scoped receipt lookup'
  const unauth=await run('signed',{authenticated:false});assert.equal(unauth.res.status,401);assert.equal(unauth.documents.length,0);assert.equal(unauth.queries.length,1);
  const missing=await run('signed',{found:false});assert.equal(missing.res.status,404);assert.equal(missing.documents.length,0);assert.equal(missing.queries.length,2);
 });
+
+for(const failure of [{qrFails:true},{urlFails:true}]){
+ test('QR preparation failure returns JSON before starting PDF output: '+JSON.stringify(failure),async()=>{
+ const result=await run('pending',failure);
+ assert.equal(result.res.status,503);assert.equal(result.res.headers['content-type'],'application/json');
+ assert.match(result.res.body.error,/PDF/);assert.equal(result.documents.length,0);
+ });
+}
