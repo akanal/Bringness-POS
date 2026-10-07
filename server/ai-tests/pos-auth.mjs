@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {JSDOM} from 'jsdom';
+const root=new URL('../../',import.meta.url),read=p=>fs.readFileSync(new URL(p,root),'utf8');
+const loginSource=read('server/index.js').split('\n').find(x=>x.startsWith('if(p==="/api/v1/auth/login"'));
+const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+const run=new AsyncFunction('p','req','res','body','pool','hash','json','session','loginAttempts','crypto',loginSource);
+const attempts=new Map();let queries=0;
+async function login(password,email='Owner@example.org'){let reply;await run('/api/v1/auth/login',{method:'POST'},{},async()=>({email,password}),{query:async(sql,args)=>{queries++;return {rows:args[1]==='correct'?[{id:'owner',display_name:'Owner'}]:[]}}},v=>v,(_,status,data)=>reply={status,...data},async()=>'session',attempts,crypto);return reply}
+assert.equal((await login('')).status,400);assert.equal(queries,0);
+for(let i=0;i<5;i++)assert.equal((await login('wrong')).status,401);
+let blocked=await login('correct');assert.equal(blocked.status,429);assert(blocked.retryAfter<=30&&blocked.retryAfter>0);assert.equal(queries,5);
+const key=crypto.createHash('sha256').update('owner@example.org').digest('hex');attempts.get(key).blockedUntil=Date.now()-1;
+assert.equal((await login('correct')).status,200);assert(!attempts.has(key));
+for(let i=0;i<5;i++)await login('wrong');attempts.get(key).blockedUntil=Date.now()-1;for(let i=0;i<5;i++)await login('wrong');blocked=await login('correct');assert(blocked.retryAfter<=60&&blocked.retryAfter>30);
+attempts.get(key).until=Date.now()-1;assert.equal((await login('correct')).status,200);
+const w=new JSDOM(read('apps/web/public/pos/index.html'),{url:'https://pos.example.org/pos/',runScripts:'outside-only'}).window;w.console.error=()=>{};
+let release,posts=0;w.fetch=async(url)=>{if(!url.includes('/auth/login'))return {ok:true,status:200,json:async()=>({})};posts++;return new Promise(resolve=>release=()=>resolve({ok:false,status:401,json:async()=>({error:'Anmeldedaten stimmen nicht'})}))};w.eval(read('apps/web/public/pos/app.js'));const d=w.document,form=d.getElementById('authForm');d.getElementById('email').value='owner@example.org';d.getElementById('password').value='wrong';
+form.dispatchEvent(new w.Event('submit',{cancelable:true}));form.dispatchEvent(new w.Event('submit',{cancelable:true}));assert.equal(posts,1);assert(d.getElementById('authSubmit').disabled);d.getElementById('registerTab').click();assert.equal(d.getElementById('nameField').style.display,'none');release();await new Promise(r=>setTimeout(r,0));assert(!d.getElementById('authSubmit').disabled);assert.equal(d.getElementById('authMsg').textContent,'Anmeldedaten stimmen nicht');d.getElementById('registerTab').click();assert(d.getElementById('name').required);assert.equal(d.getElementById('authSubmit').textContent,'Konto erstellen');d.getElementById('loginTab').click();assert(!d.getElementById('name').required);assert(!d.getElementById('password').hasAttribute('pattern'));d.getElementById('togglePassword').click();assert.equal(d.getElementById('password').type,'text');
+w.fetch=async(url)=>{if(url.includes('/auth/login'))return {ok:true,status:200,json:async()=>({token:'valid-session',user:{role:'owner'}})};throw Error('network')};form.dispatchEvent(new w.Event('submit',{cancelable:true}));await new Promise(r=>setTimeout(r,0));assert.equal(w.localStorage.getItem('bringness-pos-token'),'valid-session');assert.match(d.getElementById('authMsg').textContent,/Verbindung/);w.close();console.log('POS authentication passed: validation, normalized login, 30/60 second throttling, expiry/success reset, duplicate submit guard, register/login switching, password visibility and session preservation on network failure.');

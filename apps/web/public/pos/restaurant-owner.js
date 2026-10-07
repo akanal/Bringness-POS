@@ -10,13 +10,6 @@
   function rid(){return document.getElementById("restaurant")?.value||""}
   function body(){return document.getElementById("moduleBody")}
 
-  function addImpressumLink(){
-    const menu=document.getElementById("userMenu");
-    if(menu&&!menu.querySelector('[data-impressum-link]')){
-      const a=document.createElement("a");a.href="/impressum";a.dataset.impressumLink="1";a.textContent="Impressum";menu.appendChild(a);
-    }
-  }
-
   async function receiptQr(id,number){
     const r=await fetch("/api/v1/receipts/"+encodeURIComponent(id)+"/number-qr",{headers:{authorization:"Bearer "+token()}});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw Error(e.error||"QR-Code nicht verfügbar")}
@@ -73,9 +66,9 @@
 
   async function renderShift(){
     const area=body();if(!area)return;const restaurantId=rid();
-    const [waiters,presence,schedules]=await Promise.all([api("/waiters?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/presence?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/schedules?restaurantId="+encodeURIComponent(restaurantId))]);
-    const people=waiters.waiters||[],existing=schedules.schedules||[];
-    area.innerHTML='<div class="modulegrid"><div class="modulecard"><b>Anwesenheit Kellner</b><p class="muted">Login und Logout werden als Anwesenheitszeit protokolliert.</p><div id="presenceList"></div></div><div class="modulecard"><b>Dienstplan</b><p class="muted">Schichten festlegen; Kellner sehen ihre kommenden Dienste beim Login. Wiederholt sich derselbe Wochentag mit derselben Uhrzeit mindestens dreimal, führt Bringness diesen Rhythmus automatisch für vier weitere Wochen fort.</p><form id="scheduleForm" style="display:grid;gap:8px"><select id="scheduleEmployee" required><option value="">Kellner wählen</option>'+people.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+'</option>').join("")+'</select><label>Beginn<input id="scheduleStart" type="datetime-local" required></label><label>Ende<input id="scheduleEnd" type="datetime-local" required></label><input id="scheduleNote" maxlength="300" placeholder="Hinweis, z. B. Terrasse"><button type="submit">Dienst eintragen</button></form></div></div><div class="modulecard" style="margin-top:12px"><b>Kommende Dienste</b><div id="scheduleList"></div></div>';
+    const [waiters,presence,schedules]=await Promise.all([api("/personnel/employees?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/presence?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/schedules?restaurantId="+encodeURIComponent(restaurantId))]);
+    const people=waiters.employees||[],existing=schedules.schedules||[];
+    area.innerHTML='<div class="modulegrid"><div class="modulecard"><b>Service-Anmeldungen</b><p class="muted">Login und Logout dokumentieren den Servicezugang. Arbeitszeiten werden separat in der Zeiterfassung gebucht.</p><div id="presenceList"></div></div><div class="modulecard"><b>Dienstplan</b><p class="muted">Schichten festlegen; Kellner sehen ihre kommenden Dienste beim Login. Wiederholt sich derselbe Wochentag mit derselben Uhrzeit mindestens dreimal, führt Bringness diesen Rhythmus automatisch für vier weitere Wochen fort.</p><form id="scheduleForm" style="display:grid;gap:8px"><select id="scheduleEmployee" required><option value="">Mitarbeiter wählen</option>'+people.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+'</option>').join("")+'</select><label>Beginn<input id="scheduleStart" type="datetime-local" required></label><label>Ende<input id="scheduleEnd" type="datetime-local" required></label><input id="scheduleNote" maxlength="300" placeholder="Hinweis, z. B. Terrasse"><button type="submit">Dienst eintragen</button></form></div></div><div class="modulecard" style="margin-top:12px"><b>Kommende Dienste</b><div id="scheduleList"></div></div>';
     document.getElementById("presenceList").innerHTML=(presence.presence||[]).map(x=>'<p><b>'+esc(x.display_name)+'</b> · '+new Date(x.started_at).toLocaleString("de-DE")+' – '+(x.ended_at?new Date(x.ended_at).toLocaleString("de-DE"):'anwesend')+'</p>').join("")||'<p class="muted">Noch keine Anwesenheitsdaten.</p>';
     document.getElementById("scheduleList").innerHTML=existing.map(x=>'<p><b>'+esc(x.display_name)+'</b> · '+new Date(x.starts_at).toLocaleString("de-DE")+' – '+new Date(x.ends_at).toLocaleString("de-DE")+(x.note?' · '+esc(x.note):'')+(x.recurrence==='auto-weekly'?' · <span class="muted">automatisch fortgeführt</span>':'')+'</p>').join("")||'<p class="muted">Noch keine Dienste geplant.</p>';
     document.getElementById("scheduleForm").onsubmit=async e=>{
@@ -92,10 +85,10 @@
   }
 
   function hook(){
-    addImpressumLink();
+
     const original=window.showModule;
     if(typeof original!=="function"||original.__roWrapped)return setTimeout(hook,250);
-    const wrapped=async function(v){const out=await original(v);try{if(v==="belege")enhanceReceipts();if(v==="varianten")await renderVariants();if(v==="schicht")await renderShift()}catch(e){console.error(e);if(body())body().insertAdjacentHTML("beforeend",'<div class="modulecard">Zusatzfunktion: '+esc(e.message)+'</div>')}return out};
+    const wrapped=async function(v){const out=await original(v);try{if(v==="belege")enhanceReceipts();if(v==="varianten")await renderVariants();if(v==="dienstplan")await renderShift()}catch(e){console.error(e);if(body())body().insertAdjacentHTML("beforeend",'<div class="modulecard">Zusatzfunktion: '+esc(e.message)+'</div>')}return out};
     wrapped.__roWrapped=true;window.showModule=wrapped;
   }
   hook();

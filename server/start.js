@@ -1,3 +1,4 @@
+import {createPersonnel,migratePersonnel} from './personnel.js';
 import {createRemoteSupport,migrateRemoteSupport,cleanupRemoteSupport} from './remote-support-core.js';
 import {handlePlatformAiAssets} from './platform-ai-assets.js';
 import {handleAccountantAccess,migrateAccountantAccess} from './accountant-access.js';
@@ -43,6 +44,7 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
 const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
+const handlePersonnel=createPersonnel(platformGatewayPool);
 
 // Add modular API routes without destabilising the large legacy server file.
 const originalCreateServer = http.createServer.bind(http);
@@ -50,6 +52,7 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
+      if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (await handleLanguageCatalog(req,res)) return;
       if (await handlePlatformAiAssets(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
@@ -112,6 +115,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
+        if (!html.includes('/pos/personnel.js')) html = html.replace("</body>", '<script src="/pos/personnel.js"></script></body>');
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/tisch/index.html")) {
@@ -143,6 +147,7 @@ async function migrateWithRetry(){
   for(let attempt=1;attempt<=12;attempt++){
     try{
       await migrateRestaurantOwnerFeatures();
+      await migratePersonnel(platformGatewayPool);
       await migrateQrService();
       await migratePosStockEvents();
       await migrateCenter();
