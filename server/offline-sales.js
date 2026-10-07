@@ -19,7 +19,7 @@ export async function issueOfflineCatalog(db,user,deviceKey){
 export async function importOfflineSale(db,user,deviceKey,request){
  if(!offlineUuid.test(request?.id||'')||!offlineUuid.test(request?.snapshotId||''))fail('Ungültiger Offline-Verkauf');
  const c=await db.connect();try{await c.query('BEGIN');
- const snapshot=(await c.query(`SELECT s.payload FROM pos_offline_catalogs s JOIN devices d ON d.id=s.device_id WHERE s.id=$1 AND s.company_id=$2 AND d.device_key=$3 AND d.company_id=$2 FOR SHARE OF s,d`,[request.snapshotId,user.company_id,deviceKey])).rows[0]?.payload;
+ const snapshot=(await c.query(`SELECT s.payload FROM pos_offline_catalogs s JOIN devices d ON d.id=s.device_id WHERE s.id=$1 AND s.company_id=$2 AND d.device_key=$3 FOR SHARE OF s,d`,[request.snapshotId,user.company_id,deviceKey])).rows[0]?.payload;
  if(!snapshot)fail('Offline-Katalog nicht zugänglich',403);
  const receipt=quoteOfflineSale(snapshot,request),fingerprint=offlineFingerprint(receipt);
  await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[request.id]);

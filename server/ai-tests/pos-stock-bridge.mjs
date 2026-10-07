@@ -17,6 +17,8 @@ await pos.query('INSERT INTO restaurants VALUES($1,$2)',[restaurant,company]);aw
 await ai.query("INSERT INTO ai_accounts(id,role) VALUES($1,'restaurant')",[account]);await ai.query('INSERT INTO ai_locations VALUES($1,$2)',[location,account]);await ai.query("INSERT INTO ai_stock VALUES($1,$2,$3,'Fleisch',1,0.2)",[stock,account,location]);await ai.query("INSERT INTO ai_recipes(id,account_id,location_id,external_code,name) VALUES($1,$2,$3,$4,'Burger')",[recipe,account,location,product]);await ai.query('INSERT INTO ai_recipe_items VALUES($1,$2,0.15)',[recipe,stock]);await ai.query("INSERT INTO ai_connectors(id,account_id,location_id,kind,active,pos_restaurant_id,pos_user_id,pos_company_id) VALUES($1,$2,$3,'pos',true,$4,$5,$6)",[connector,account,location,restaurant,owner,company]);
 await migratePosStockBridge(pos);await migratePosStockBridge(pos);await migrateStockLifecycle(ai);await ai.query("UPDATE ai_connectors SET consumption_mode='lifecycle'");await configurePosStockLink(pos,link,true);
 let checks=0;
+await assert.rejects(pos.query("INSERT INTO orders(restaurant_id,source,status) VALUES($1,'offline','paid')",[restaurant]),/zuerst anlegen/);checks++;
+
 const getStock=async()=>(await ai.query('SELECT quantity,reserved_quantity FROM ai_stock WHERE id=$1',[stock])).rows[0];const status=async oid=>(await pos.query('SELECT status FROM orders WHERE id=$1',[oid])).rows[0].status;
 const order=async qty=>{const oid=crypto.randomUUID();await pos.query('INSERT INTO orders(id,restaurant_id) VALUES($1,$2)',[oid,restaurant]);await pos.query('INSERT INTO order_items VALUES($1,$2,$3)',[oid,product,qty]);return oid};
 const run=()=>processPosStockCommands(pos,ai,kitchenAction);
