@@ -79,10 +79,11 @@ export function createCenterHandler(pool) {
         const statusToken=url.searchParams.get('token')||'';
         if(!/^[a-f0-9]{64}$/.test(statusToken))return send(res,404,{error:'Bestellung nicht gefunden'});
         await recoverGuestPayment(pool,statusToken,paymentId=>verifyAndReleaseMolliePayment(pool,paymentId));
-        const order=(await pool.query(`SELECT CASE WHEN o.status='payment_pending' AND cp.provider_status IN ('failed','canceled','expired') THEN 'payment_'||cp.provider_status ELSE o.status END status,r.name restaurant_name,(SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id) collection_number,CASE WHEN cp.released_at IS NOT NULL THEN (SELECT '/beleg/'||rc.public_token::text FROM receipts rc WHERE rc.order_id=o.id ORDER BY rc.receipt_number LIMIT 1) END receipt_url,cp.paid_at,cp.released_at,cp.preparation_started_at,cp.ready_at
+        const order=(await pool.query(`SELECT CASE WHEN o.status='payment_pending' AND cp.provider_status IN ('failed','canceled','expired') THEN 'payment_'||cp.provider_status ELSE o.status END status,r.name restaurant_name,(SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id) collection_number,CASE WHEN cp.released_at IS NOT NULL THEN (SELECT '/beleg/'||rc.public_token::text FROM receipts rc WHERE rc.order_id=o.id ORDER BY rc.receipt_number LIMIT 1) END receipt_url,CASE WHEN a.request_id IS NOT NULL AND t.active=true AND c.active=true AND (o.status='ready' OR (cp.released_at IS NULL AND cp.provider_status IN ('failed','canceled','expired'))) THEN '/center/index.html?code='||t.qr_token END next_order_url,a.request_id checkout_request_id,cp.paid_at,cp.released_at,cp.preparation_started_at,cp.ready_at
           FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
           LEFT JOIN center_order_payments cp ON cp.order_id=o.id AND cp.restaurant_id=o.restaurant_id
           LEFT JOIN center_checkout_attempts a ON a.order_id=o.id AND a.restaurant_id=o.restaurant_id
+          LEFT JOIN center_tables t ON t.id=a.table_id LEFT JOIN centers c ON c.id=t.center_id
           WHERE (cp.guest_status_token=$1 OR a.guest_status_token=$1) AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
         return order?send(res,200,{order}):send(res,404,{error:'Bestellung nicht gefunden'});
       }
