@@ -1,6 +1,6 @@
 # Center mode — integration draft
 
-Current integration: PR #61, branch `feat/center-ai-integration`. This is a draft; main and production have not been updated. Online ordering and automatic TSE signing remain disabled.
+PR #61 was merged and deployed to Netcup on 2026-10-07 (UTC), revision `bb1a578c639f5ad470b68376974151d70f932b89`, via [deployment run 37579427426](https://github.com/akanal/Bringness-POS/actions/runs/37579427426). Live POS: https://bringness.de/pos/ ; Center management: https://bringness.de/center/manage.html . Public checks verified healthy application/database, current Center pages, disabled Center checkout (503) and unavailable push enrollment. Real Mollie payment and hardware TSE acceptance remain deferred; automatic signing was not enabled.
 
 ## Payment ownership
 
@@ -68,7 +68,7 @@ The workflow tracks Center, receipt, AI inventory, POS stock bridge, TSE and sta
 
 ## Deferred integration and production acceptance
 
-The implemented Center software is ready for review in PR #61. The branch has not been merged or deployed. Remaining acceptance requires configured external services, devices and a deployed environment:
+The implemented Center software has been merged through PR #61 and deployed. Publication makes the management and guest pages available; it does not complete provider/device acceptance or enable checkout. Remaining acceptance requires configured external services, devices and a deployed environment:
 
 1. Configure Mollie Connect and validate restaurant-owned onboarding, successful payment, canceled/expired payment, lost response recovery and webhook retries. Verify money goes to the selected restaurant.
 2. Integrate/configure the real Swissbit SDK/bridge and each restaurant's TSE. Validate actual signatures and reconcile ambiguous device responses.
