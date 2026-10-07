@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "ccebc3bf818a56e6bf98da53ac28fdcdaa1e8b2c",
-  "requestId": "pos-ai-completion-ai-20261007"
+  "revision": "19483a36eda2afa4216fc67d732fec82985b1428",
+  "requestId": "platform-admin-ai-19483a36"
 }
