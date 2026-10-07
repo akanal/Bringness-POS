@@ -472,7 +472,7 @@ test('next table order respects saved checkout: '+scenario,async()=>{
   return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
  });
  await page.goto('https://center.test/center/status.html#token='+'b'.repeat(64));
- await page.locator('#status').getByText(scenario==='pending'?'Zahlung ausstehend':'Bereit zur Abholung',{exact:false}).waitFor();
+ await page.locator('#status').getByText(scenario==='pending'?'Zahlung wird geprüft.':'Deine Bestellung ist abholbereit.',{exact:false}).waitFor();
  if(scenario==='pending'){assert.equal(await page.locator('#nextOrder').isVisible(),false);return;}
  await page.locator('#nextOrder').click();
  if(scenario==='matching'){
