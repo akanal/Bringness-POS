@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',publicToken='33333333-3333-4333-8333-333333333333';
-async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null}={}){
+async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null}={}){
  const documents=[],queries=[];
  class Pdf extends EventEmitter {
  constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.texts=[];documents.push(this);}
@@ -21,7 +21,7 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:1190}]};
  throw Error('Unexpected query');
  }};
- const handler=createPaymentReceiptHandler(pool,Pdf,{toBuffer:async(url)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
+ const handler=createPaymentReceiptHandler(pool,PdfWriter||Pdf,QrWriter||{toBuffer:async(url)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
  const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){if(Buffer.isBuffer(raw))this.pdf=raw;else this.body=JSON.parse(raw);}};
  assert.equal(await handler({url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
  return {res,documents,queries};
@@ -64,3 +64,11 @@ for(const writerFailure of ['constructor','draw','stream']){
  if(documents.length)assert.equal(documents[0].destroyed,true);
  });
 }
+
+test('real PDFKit and QR encoder produce a complete buffered receipt',{skip:!process.env.CENTER_TEST_PDFKIT||!process.env.CENTER_TEST_QRCODE},async()=>{
+ const [{default:PdfWriter},{default:QrWriter}]=await Promise.all([import(process.env.CENTER_TEST_PDFKIT),import(process.env.CENTER_TEST_QRCODE)]);
+ const {res}=await run('pending',{PdfWriter,QrWriter});
+ assert.equal(res.status,200);assert.equal(res.headers['content-type'],'application/pdf');
+ assert.ok(res.pdf.length>1000);assert.equal(res.pdf.subarray(0,5).toString(),'%PDF-');
+ assert.match(res.pdf.subarray(-100).toString(),/%%EOF/);
+});
