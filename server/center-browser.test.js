@@ -159,6 +159,7 @@ test('guest notification enrollment requires a click and binds the status token'
   const req=route.request(),url=new URL(req.url());
   if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
   let data;
+  if(url.pathname==='/api/v1/guest/center/manifest')return route.fulfill({contentType:'application/manifest+json',body:JSON.stringify({name:'Abholung',start_url:'/center/status.html#token='+url.searchParams.get('token'),display:'standalone'})});
   if(url.pathname.endsWith('/notification-config'))data={available:true,publicKey:Buffer.alloc(65,1).toString('base64url')};
   else if(url.pathname.endsWith('/notifications')){saved=req.postDataJSON();data={subscribed:saved.action!=='disable'};}
   else if(url.pathname.endsWith('/status'))data={order:{restaurant_name:'Restaurant',status:'preparing'}};
