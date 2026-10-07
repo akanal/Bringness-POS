@@ -52,11 +52,11 @@ jobs:
         with:
           node-version: '22'
       - name: Install isolated test dependencies
-        run: npm install --prefix "$RUNNER_TEMP/center-deps" --no-save pg@8.13.1 playwright@1.62.1
+        run: npm install --prefix "$RUNNER_TEMP/center-deps" --no-save pg@8.13.1 playwright@1.62.1 pdfkit@0.17.2 qrcode@1.5.4
       - name: Install Chromium
         run: node "$RUNNER_TEMP/center-deps/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Run authorization checks
-        run: node --test server/center-payment-receipt.test.js server/center-core.test.js server/center-payment-recovery.test.js server/center-notifications.test.js server/center-guest-push.test.js server/center-table-qr.test.js server/center-payment-core.test.js server/center-mollie-connect.test.js server/center-mollie-payment.test.js server/center-mollie-checkout.test.js server/center-mollie-mode.test.js server/center-guest-checkout.test.js server/center-stock-bridge.test.js server/tse-signing-worker.test.js
+        run: CENTER_TEST_PDFKIT="$RUNNER_TEMP/center-deps/node_modules/pdfkit/js/pdfkit.js" CENTER_TEST_QRCODE="$RUNNER_TEMP/center-deps/node_modules/qrcode/lib/index.js" node --test server/center-payment-receipt.test.js server/center-core.test.js server/center-payment-recovery.test.js server/center-notifications.test.js server/center-guest-push.test.js server/center-table-qr.test.js server/center-payment-core.test.js server/center-mollie-connect.test.js server/center-mollie-payment.test.js server/center-mollie-checkout.test.js server/center-mollie-mode.test.js server/center-guest-checkout.test.js server/center-stock-bridge.test.js server/tse-signing-worker.test.js
       - name: Verify migration and lifecycle on PostgreSQL
         env:
           CENTER_TEST_DATABASE_URL: postgres://center_test:center_test@localhost:5432/center_test
