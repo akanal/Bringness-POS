@@ -66,15 +66,20 @@ return async function handlePaymentReceipt(req, res) {
     return true;
   }
   const height = Math.max(560, 390 + items.length * 34 + payments.length * 20);
-  const doc = new PDFDocument({ size: [226.77, height], margin: 18 });
-
-  res.writeHead(200, {
-    "content-type": "application/pdf",
-    "content-disposition": "attachment; filename=Beleg-" + receipt.receipt_number + ".pdf",
-    "cache-control": "private, no-store",
-  });
-  doc.pipe(res);
-
+  let pdf;
+  try {
+    pdf=await new Promise((resolve,reject)=>{
+      const doc=new PDFDocument({size:[226.77,height],margin:18});
+      const chunks=[];let size=0,settled=false;
+      const fail=error=>{if(settled)return;settled=true;reject(error);doc.destroy?.();};
+      doc.on('error',fail);
+      doc.on('data',chunk=>{
+        if(settled)return;
+        try{const bytes=Buffer.from(chunk);size+=bytes.length;if(size>8*1024*1024){fail(Error('PDF_TOO_LARGE'));return;}chunks.push(bytes);}
+        catch(error){fail(error);}
+      });
+      doc.once('end',()=>{if(settled)return;settled=true;resolve(Buffer.concat(chunks));});
+      try{
   doc.fontSize(13).font("Helvetica-Bold").text(receipt.restaurant_name);
   doc.fontSize(9).font("Helvetica").text(receipt.billing_name || receipt.company_name);
   if (receipt.street) doc.text(receipt.street);
@@ -116,7 +121,19 @@ return async function handlePaymentReceipt(req, res) {
   doc.image(qrBuffer, { fit: [78, 78], align: "center" });
   doc.fontSize(7).fillColor("#52677a").text("QR: Digitalen Beleg öffnen", { align: "center" });
   if(receipt.fiscal_status!=="signed")doc.moveDown().fontSize(8).fillColor("#9b2226").text("Nicht TSE-signiert – kein fiskalisierter Kassenbeleg.");
-  doc.end();
+        doc.end();
+      }catch(error){fail(error);}
+    });
+  }catch{
+    send(res,503,{error:"Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen."});
+    return true;
+  }
+  res.writeHead(200,{
+    "content-type":"application/pdf",
+    "content-disposition":"attachment; filename=Beleg-"+receipt.receipt_number+".pdf",
+    "cache-control":"private, no-store"
+  });
+  res.end(pdf);
   return true;
 }
 ;
