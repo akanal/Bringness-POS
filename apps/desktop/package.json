@@ -26,8 +26,10 @@
     ],
     "win": {
       "target": "nsis",
-      "publisherName": "Bringness",
-      "signAndEditExecutable": true
+      "signAndEditExecutable": true,
+      "signtoolOptions": {
+        "publisherName": "Bringness"
+      }
     },
     "nsis": {
       "oneClick": false,

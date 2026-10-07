@@ -56,7 +56,7 @@ final class POSBrowser: NSObject, ObservableObject, WKNavigationDelegate, WKUIDe
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let filename = (suggestedFilename as NSString).lastPathComponent
-            let url = directory.appendingPathComponent(filename.isEmpty ? "Bringness-Beleg.pdf" : filename)
+            let url = directory.appendingPathComponent((filename.isEmpty || filename == "." || filename == "..") ? "Bringness-Beleg.pdf" : filename)
             downloads[ObjectIdentifier(download)] = url
             completionHandler(url)
         } catch { self.error = "Der Beleg konnte nicht gespeichert werden."; completionHandler(nil) }
