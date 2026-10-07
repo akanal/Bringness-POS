@@ -460,6 +460,7 @@ test('next table order respects saved checkout: '+scenario,async()=>{
  try{
  const page=await browser.newPage(),code='a'.repeat(48),id='11111111-1111-4111-8111-111111111111',otherId='22222222-2222-4222-8222-222222222222';
  await page.addInitScript(({code,id,otherId,scenario})=>{
+  if(sessionStorage.getItem('bringness-center-pending:other-table'))return;
   sessionStorage.setItem('bringness-center-pending:'+code,JSON.stringify({requestId:scenario==='conflict'?otherId:id}));
   sessionStorage.setItem('bringness-center-pending:other-table','untouched');
   if(scenario==='storage-failure'){Storage.prototype.removeItem=()=>{throw Error('storage unavailable');};}
