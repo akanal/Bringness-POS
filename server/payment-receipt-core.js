@@ -118,7 +118,10 @@ return async function handlePaymentReceipt(req, res) {
   }
 
   doc.moveDown();
-  doc.image(qrBuffer, { fit: [78, 78], align: "center" });
+  const qrSize = 78;
+  const qrX = (doc.page.width - qrSize) / 2;
+  doc.image(qrBuffer, qrX, doc.y, { width: qrSize, height: qrSize });
+  doc.x = doc.page.margins.left;
   doc.fontSize(7).fillColor("#52677a").text("QR: Digitalen Beleg öffnen", { align: "center" });
   if(receipt.fiscal_status!=="signed")doc.moveDown().fontSize(8).fillColor("#9b2226").text("Nicht TSE-signiert – kein fiskalisierter Kassenbeleg.");
         doc.end();
