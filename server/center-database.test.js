@@ -125,6 +125,9 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await db.query('SELECT total_cents,status FROM orders WHERE id=$1',[guestResult.orderId])).rows[0].total_cents,2500);
  assert.equal((await db.query('SELECT total_cents,status FROM orders WHERE id=$1',[guestResult.orderId])).rows[0].status,'payment_pending');
  const verifiedGuestPayment={paymentId:'tr_guest',orderId:guestResult.orderId,merchantReference:'org_restaurant',amountCents:2500,currency:'EUR',status:'paid',refundedCents:0,chargedBackCents:0,paidAt:new Date().toISOString()};
+ const pendingToken=(await db.query('SELECT guest_status_token FROM center_order_payments WHERE order_id=$1',[guestResult.orderId])).rows[0].guest_status_token;
+ async function readGuestStatus(token){const req=Readable.from([]);Object.assign(req,{url:'/api/v1/guest/center/status?token='+token,method:'GET',headers:{}});const res={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};await handler(req,res);return res.data.order;}
+ assert.equal((await readGuestStatus(pendingToken)).next_order_url,null);
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>verifiedGuestPayment)).released,true);
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>{throw Error('no duplicate release')})).alreadyReleased,true);
  assert.equal((await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'preparing')).ok,true);
@@ -139,6 +142,11 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal(statusRes.status,200);assert.equal(statusRes.data.order.status,'ready');assert.equal(statusRes.data.order.restaurant_name,'Restaurant');
  const guestReceipt=(await db.query('SELECT * FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0];
  assert.equal(statusRes.data.order.receipt_url,'/beleg/'+guestReceipt.public_token);
+ assert.equal(statusRes.data.order.next_order_url,'/center/index.html?code='+table.qr_token);
+ assert.equal(statusRes.data.order.checkout_request_id,guestRequest.requestId);
+ await db.query('UPDATE center_tables SET active=false WHERE qr_token=$1',[table.qr_token]);
+ assert.equal((await readGuestStatus(guestToken)).next_order_url,null);
+ await db.query('UPDATE center_tables SET active=true WHERE qr_token=$1',[table.qr_token]);
  assert.match(guestReceipt.receipt_number,/^BN-\d{4}-\d{6}$/);assert.equal(guestReceipt.fiscal_status,'pending');assert.equal(guestReceipt.merchant_snapshot.restaurantName,'Restaurant');
  assert.equal((await db.query('SELECT count(*)::int n FROM payments WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
  assert.equal((await db.query('SELECT count(*)::int n FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0].n,1);
