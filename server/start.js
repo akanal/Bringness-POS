@@ -1,3 +1,4 @@
+import {createRemoteSupport,migrateRemoteSupport,cleanupRemoteSupport} from './remote-support-core.js';
 import {handlePlatformAiAssets} from './platform-ai-assets.js';
 import {handleAccountantAccess,migrateAccountantAccess} from './accountant-access.js';
 import {handleOfflineSales,migrateOfflineSales} from './offline-sales.js';
@@ -41,6 +42,7 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
 
 const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
+const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 
 // Add modular API routes without destabilising the large legacy server file.
 const originalCreateServer = http.createServer.bind(http);
@@ -66,6 +68,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleAdminAuditExport(req,res)) return;
       if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformAiGateway(req,res)) return;
+      if (await handleRemoteSupport(req,res)) return;
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;
@@ -112,6 +115,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
         if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js"></script></body>');
+        if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js"></script></body>');
         if (!html.includes('/admin/platform-hub.js')) html = html.replace("</body>", '<script src="/admin/platform-hub.js"></script></body>');
         if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js"></script></body>');
       }
@@ -137,6 +141,8 @@ async function migrateWithRetry(){
       await migrateTseIntegration();
       await migrateBillingAccess();
       await migrateDeviceLicense();
+      await migrateRemoteSupport(platformGatewayPool);
+      setInterval(()=>cleanupRemoteSupport(platformGatewayPool).catch(()=>{}),30000).unref();
       await migrateOfflineSales();
       await migrateAccountantAccess();
       await migrateBillingTerms();

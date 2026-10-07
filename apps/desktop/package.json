@@ -1,6 +1,6 @@
 {
   "name": "bringness-pos-desktop",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Bringness POS Windows Desktop Client",
   "main": "main.cjs",
@@ -22,7 +22,11 @@
       "offline-preload.cjs",
       "offline.html",
       "offline-ui.js",
-      "offline-sale-core.mjs"
+      "offline-sale-core.mjs",
+      "remote-support.cjs",
+      "support-preload.cjs",
+      "support-control.html",
+      "support-control.js"
     ],
     "win": {
       "target": "nsis",
