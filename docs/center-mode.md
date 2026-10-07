@@ -1,0 +1,78 @@
+# Center mode — integration draft
+
+Current integration: PR #61, branch `feat/center-ai-integration`. This is a draft; main and production have not been updated. Online ordering and automatic TSE signing remain disabled.
+
+## Payment ownership
+
+Food payments go directly to the selected restaurant operator. Each restaurant connects its own Mollie merchant account during onboarding. Bringness POS license/subscription credentials must never receive restaurant food payments. The server chooses the merchant from the restaurant, not from guest-supplied bank or account data. Other providers can be added through the provider interface when needed; unsupported providers cannot enable online checkout.
+
+## Implemented
+
+- Centers, fixed shared table tokens and restaurant membership. QR/NFC use the same guest URL: `/center/index.html?code=TABLE_TOKEN`.
+- Scoped management and one-center-per-restaurant constraint. Restaurants from other companies join through restaurant-bound invitations confirmed by their own owner/admin.
+- Platform-admin approval delegates initial table setup to the first enrolled restaurant. Completion locks delegated table creation. Platform maintenance access remains.
+- Mollie authorization callback, browser-bound one-use state, encrypted credentials, token refresh and merchant/profile readiness checks.
+- Server-priced guest cart, availability checks at menu load and order creation, durable request IDs, reusable checkout and reconciliation of lost payment responses.
+- Provider verification of merchant, amount, currency and order before one-time receipt booking and kitchen release.
+- Ingredient reservation at release and consumption at preparation start through the AI inventory bridge. Retries do not intentionally duplicate ledger entries; inventory failures prevent status progression.
+- Kitchen ordering by confirmed payment: only the earliest waiting order starts next; started orders can finish independently. The view refreshes automatically and retains existing orders during outages.
+- Guest status and milestone history. Connection failures retain the last state and retry; hanging requests time out after 15 seconds.
+- Receipt/TSE preparation and guarded automatic signing worker. Ambiguous hardware responses require reconciliation rather than blind signing retries.
+
+## Cross-company invitations
+
+A Center owner/admin creates an invitation in management using the target restaurant ID. The link opens `/center/join.html#token=INVITATION_TOKEN`; share it with the restaurant operator. No message is sent automatically. Invitations expire after seven days, are stored as hashes, and are consumed transactionally on acceptance. The accepting owner/admin must belong to the target restaurant's company. Existing one-center-per-restaurant restrictions remain. Joining does not enable checkout or connect a merchant account: each operator retains control of their own Mollie onboarding. Members see their own restaurants; the Center operator sees its membership list. Management capability flags hide invitation/enrollment actions in Centers owned by another company, show other operators' merchant settings as read-only and offer QR downloads only when authorized. Server authorization remains authoritative for every mutation. Each management refresh tracks the selected Center and view version; late restaurant, table or setup responses are discarded after a switch. Merchant and QR actions retain the Center ID of the rendered record. Form submissions also capture their view context: after a Center switch, late successes/errors do not replace current messages, show old invitation links, refresh setup or navigate to a merchant authorization page. Already submitted server actions still complete; their result can be inspected by returning to the original Center. First-Center creation continues to select and load the new Center when the original view is still current. Delegated table setup remains limited to the approved setup user.
+
+## Table QR export
+
+Management includes an authenticated SVG download for each active table, available after delegated setup is locked. The server requires completed setup and authorizes either the Center's company or the specifically approved setup user, including a delegated operator from another company. Other members do not gain QR export rights through membership alone. The export encodes the existing fixed guest token. Configure a root HTTPS public origin using `CENTER_PUBLIC_ORIGIN`, `PUBLIC_BASE_URL` or `PUBLIC_URL`. Request host headers are not used to choose the QR destination. Endpoint: `GET /api/v1/centers/:centerId/tables/:tableId/qr`.
+
+## Entry points
+
+- Management: `/center/manage.html`, using existing POS login.
+- Kitchen: `/center/kitchen.html?restaurantId=RESTAURANT_ID`, with protected restaurant-scoped access.
+- Guest menu: `/center/index.html?code=TABLE_TOKEN`.
+- Guest status: `/center/status.html#token=STATUS_TOKEN`.
+- Public discovery: `GET /api/v1/guest/center/restaurants` and `GET /api/v1/guest/center/menu`.
+- Guest checkout: `POST /api/v1/guest/center/order`; the server rejects checkout unless `CENTER_CHECKOUT_ENABLED=true`. This flag is not rollout authorization and must stay disabled pending production readiness.
+
+## Guest menu selection
+
+Menu loads track the latest restaurant selection. Late successes or errors from previous selections are ignored; returning to the restaurant list invalidates pending menu loads. Once checkout is submitted, pending menu responses cannot change the restaurant or locked cart. Restaurants without ordering availability remain readable but their add-to-cart controls are disabled. Browser checks deliberately delay a previous menu until after a newer restaurant's checkout is locked, covering both successful and failed old responses.
+
+## Checkout reload recovery
+
+Before submitting, the guest page saves the cart and request ID in sessionStorage, keyed to the table token. Reloading the same tab restores the locked cart and retries the existing server-idempotent request. Already released orders and verified failed/canceled/expired payments return a status-page URL instead of reopening the provider checkout. Pending payments continue to reuse their original checkout. No new checkout is sent if storage cannot be written or an existing saved attempt cannot be read. An explicit server response permitting cart editing clears the saved attempt. This recovery is limited to the same browser tab; closing it or clearing browser storage loses this local checkpoint. It does not prove a physical QR rescan or authorize rollout.
+
+## Next order at the same table
+
+After a ready order or a verified failed/canceled/expired unpaid payment, the status page offers “Neue Bestellung am selben Tisch”. The server supplies the destination only while the original table and Center are active. On an explicit click, the page clears only the matching request ID from that table's sessionStorage checkpoint and opens the guest menu. A different saved attempt or inaccessible/corrupt storage blocks the reset; other tables are untouched. Pending and preparing orders do not expose this action. The previous status/receipt remains accessible using its existing token lifecycle. PostgreSQL checks cover the ready destination, request binding, pending guard and inactive tables; browser checks cover matching attempts, conflicting attempts, storage failure and pending status.
+
+A fixed QR/NFC URL identifies the table. It cannot prove a physical rescan or enforce one order per physical scan. The implemented completion action provides the next-order flow without claiming such proof.
+
+## Digital guest receipt
+
+The guest status response includes the existing `/beleg/PUBLIC_RECEIPT_TOKEN` link only after the payment is verified and the order released. Receipt lookup remains bound to the status-authorized order. The status page accepts only the same-origin receipt path with a UUID token and opens it separately with no referrer. Unpaid or failed orders expose no link. The receipt endpoint is the existing POS digital receipt renderer, including merchant snapshot, positions, totals, tax breakdown and fiscal-status warning. Its injectable handler is exercised against PostgreSQL using a released Center receipt: total/VAT values, escaped product text, missing public tokens and stable seller snapshots after later restaurant changes. Center payment methods are displayed as “Online-Zahlung”. A receipt button opens the browser print dialog, which can print or save as PDF depending on the browser. Print media hides controls and decorative layout while retaining totals, tax information and any unsigned-receipt warning; mobile screen rules do not override paper styling. Chromium and WebKit checks use a simulated print-dialog call and actual print-media CSS, not a physical printer. Receipt-handler changes trigger the Center validation workflow. An unsigned receipt continues to say it is not TSE-signed; this feature does not create a hardware signature. Authenticated PDF downloads now use the same stored fiscal-status rule, replacing the unconditional unsigned warning and unsupported claim that no TSE is connected. PDF template checks cover pending/prepared/review/signed states, seller snapshots, tax text, Center payment labels and company-scoped access using a simulated document writer. They do not verify an actual hardware signature or exported PDF layout. Receipt URL/QR preparation now completes before PDF headers and streaming begin; a preparation failure returns a no-store JSON 503 response without creating a PDF writer. The complete PDF is now buffered before response headers are sent, with an 8 MiB output bound. Writer construction, drawing and stream failures return JSON 503 instead of a partial PDF; simulated failures exercise each path. CI also uses real PDFKit and QR encoding to check a complete PDF header/end marker. This binary integrity check does not verify the exported page layout or a physical signature. Authenticated PDF access requires an active user, an unexpired session and no pending mandatory password change. PostgreSQL exercises each rejected account/session state; malformed receipt UUIDs are rejected before database access. Company-scoped receipt lookup remains required. Status access expires after 24 hours, while an already obtained receipt uses the existing POS public-receipt token lifecycle.
+
+## Guest notifications
+
+The status page offers push enrollment only when explicitly enabled and configured. Consent is requested on a button click. An order-specific status token authorizes subscription storage for 24 hours. The ready transition writes an outbox entry in its transaction. A worker claims entries, sends restaurant and receipt-based collection number, removes expired endpoints and bounds retries. Delivery is at least once: a lost acknowledgement can repeat a push, with a stable per-order notification tag. Provider acceptance does not prove device display. Subscriptions expire with status access; no live push delivery has been verified.
+
+## Verified scope
+
+GitHub Center validation [run 37578880860](https://github.com/akanal/Bringness-POS/actions/runs/37578880860) passed on code commit `78cda2781d000f750474eedb765900dba5ec6ccf`. Both Chromium and WebKit jobs completed successfully: each ran 108 authorization/core checks, the PostgreSQL lifecycle suite and 21 browser checks with no failures or skips.
+
+The suite exercises authorization and merchant isolation, checkout recovery, PostgreSQL migrations/payment booking/inventory/kitchen/receipt lifecycle, invitations and setup delegation, real PDFKit/QR output integrity, and guest/management browser behavior in Chromium and WebKit. API responses in browser tests and provider/hardware responses in integration tests are simulated. WebKit coverage checks the Safari engine; it is not a physical iPhone or Safari device test. The PDF binary check does not verify exported page layout or a physical printer.
+
+The workflow tracks Center, receipt, AI inventory, POS stock bridge, TSE and startup dependencies. Checkout, push and automatic TSE signing remain disabled by default.
+
+## Deferred integration and production acceptance
+
+The implemented Center software is ready for review in PR #61. The branch has not been merged or deployed. Remaining acceptance requires configured external services, devices and a deployed environment:
+
+1. Configure Mollie Connect and validate restaurant-owned onboarding, successful payment, canceled/expired payment, lost response recovery and webhook retries. Verify money goes to the selected restaurant.
+2. Integrate/configure the real Swissbit SDK/bridge and each restaurant's TSE. Validate actual signatures and reconcile ambiguous device responses.
+3. Run the deployed flow: approve initial setup, create/lock tables, export/scan QR, choose restaurant, pay, verify exactly one receipt and kitchen release, start preparation/consume reserved stock, finish, open/print the receipt, then start a new order at the same table. Repeat outage/reload and duplicate-callback cases.
+4. If enabling optional guest push, configure VAPID keys and test actual delivery/opt-out on target devices, including installed Safari/iOS use. Provider acceptance alone does not prove device display.
+
+Mollie and TSE acceptance are intentionally deferred to the final integration stage. Enable checkout, push or automatic signing only after their relevant configured integration checks pass; simulated CI success alone is insufficient.

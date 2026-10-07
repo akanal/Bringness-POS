@@ -1,5 +1,7 @@
+import {handlePosStockBridge,migratePosStockEvents} from './pos-stock-bridge.js';
 import {handleLanguageCatalog,ensureLanguageDatabase} from "./language-catalog.js";
 import fs from "node:fs";
+import {handleCenter,migrateCenter} from "./center.js";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
 const appMode = runtimeMode();
@@ -43,6 +45,8 @@ http.createServer = function patchedCreateServer(listener) {
       if (blockAiRequest(req,res,appMode)) return;
       if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
+      if (await handlePosStockBridge(req,res)) return;
+      if (await handleCenter(req,res)) return;
       if (await handleQrService(req,res)) return;
       if (await handleSupport(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
@@ -61,6 +65,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleRestaurantOwnerFeature(req,res)) return;
     } catch (error) {
       console.error("Modular feature error:", error);
+      if (!res.headersSent && error.code==='P0001') {res.writeHead(409,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({error:error.message}))}
       if (!res.headersSent) {
         res.writeHead(500, {"content-type":"application/json","cache-control":"no-store"});
         return res.end(JSON.stringify({error:"Serverfehler"}));
@@ -114,6 +119,8 @@ async function migrateWithRetry(){
     try{
       await migrateRestaurantOwnerFeatures();
       await migrateQrService();
+      await migratePosStockEvents();
+      await migrateCenter();
       await migratePublicReceipts();
       await migrateTseIntegration();
       await migrateBillingAccess();

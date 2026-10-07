@@ -1,0 +1,117 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {Readable} from 'node:stream';
+import {createCenterHandler,centerOrderingAvailable} from './center-core.js';
+const id='11111111-1111-4111-8111-111111111111',code='a'.repeat(48);
+const rows=(...rows)=>({rows,rowCount:rows.length});
+test('restaurant cannot be enrolled into a second center even concurrently',async()=>{
+  const r=await request(async(sql)=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id});if(sql.startsWith('SELECT'))return rows({id});throw Object.assign(Error('unique restaurant membership'),{code:'23505'});},'/api/v1/centers/'+id+'/restaurants','PUT',{restaurantId:id,active:true},true);assert.equal(r.status,409);
+});
+test('manual onboarding cannot claim verified payment',async()=>{
+  const r=await request(async()=>rows({role:'owner',company_id:id}),'/api/v1/centers/'+id+'/restaurants/'+id+'/onboarding','PUT',{contractStatus:'signed',merchantReference:'org_example',paymentStatus:'verified'},true);assert.equal(r.status,400);
+});
+test('onboarding update scopes both restaurant and center ownership and invalidates changed merchant reference',async()=>{
+  const r=await request(async(sql,args)=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id});assert.match(sql,/r.company_id=\$3 AND cr.active=true/);assert.match(sql,/IS DISTINCT FROM \$5/);assert.equal(args[4],'org_example');return rows({contract_status:'signed',payment_status:'pending',merchant_reference:'org_example'});},'/api/v1/centers/'+id+'/restaurants/'+id+'/onboarding','PUT',{contractStatus:'signed',merchantReference:'org_example'},true);assert.equal(r.status,200);assert.equal(r.data.orderingAvailable,false);assert.equal(r.data.onboarding.payment_status,'pending');
+});
+test('onboarding rejects API secrets instead of storing them as merchant references',async()=>{
+  const r=await request(async(sql)=>{assert.match(sql,/FROM sessions/);return rows({role:'owner',company_id:id});},'/api/v1/centers/'+id+'/restaurants/'+id+'/onboarding','PUT',{contractStatus:'signed',merchantReference:'live_secret'},true);assert.equal(r.status,400);
+});
+async function request(query,path,method='GET',payload,auth=false){
+  const req=Readable.from(payload?[JSON.stringify(payload)]:[]);Object.assign(req,{url:path,method,headers:auth?{authorization:'Bearer test'}:{}});
+  const res={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};
+  assert.equal(await createCenterHandler({query})(req,res),true);return res;
+}
+test('unconfigured center orders cannot create or dispatch an unpaid order',async()=>{
+  const r=await request(()=>{throw Error('must not access orders');},'/api/v1/guest/center/order','POST',{items:[{qty:5}]});assert.equal(r.status,503);
+});
+test('guest menu never exposes a restaurant outside this center',async()=>{
+  let n=0;const r=await request(async(sql,args)=>{n++;if(n===1){assert.match(sql,/t.active=true AND c.active=true/);return rows({center_id:id});}assert.match(sql,/cr.center_id=\$1 AND cr.restaurant_id=\$2 AND cr.active=true/);assert.deepEqual(args,[id,id]);return rows();},'/api/v1/guest/center/menu?code='+code+'&restaurantId='+id);assert.equal(r.status,404);assert.equal(n,2);
+});
+test('invalid public code cannot enumerate centers',async()=>{
+  const r=await request(()=>{throw Error('query not allowed');},'/api/v1/guest/center/restaurants?code=invalid');assert.equal(r.status,404);
+});
+test('unauthenticated center management is denied',async()=>{
+  const r=await request(()=>{throw Error('query not allowed');},'/api/v1/centers');assert.equal(r.status,401);
+});
+test('waiters cannot create centers',async()=>{
+  const r=await request(async()=>rows({role:'waiter'}),'/api/v1/centers','POST',{name:'Center'},true);assert.equal(r.status,403);
+});
+test('owner cannot add another company restaurant',async()=>{
+  const r=await request(async(sql,args)=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id});if(sql.includes('FROM centers'))return rows({id});if(sql.includes('FROM restaurants')){assert.match(sql,/company_id=\$2/);assert.equal(args[1],id);return rows();}throw Error('must not enroll');},'/api/v1/centers/'+id+'/restaurants','PUT',{restaurantId:id,active:true},true);assert.equal(r.status,403);
+});
+test('guests see only active center memberships and no internal table tokens',async()=>{
+  const r=await request(async(sql)=>{if(sql.includes('FROM center_tables'))return rows({center_id:id,center_name:'Center',name:'1'});assert.match(sql,/cr.active=true/);assert.doesNotMatch(sql,/qr_token/);return rows({id,name:'Restaurant'});},'/api/v1/guest/center/restaurants?code='+code);assert.equal(r.status,200);assert.equal(r.data.orderingAvailable,false);assert.equal(r.data.restaurants[0].name,'Restaurant');
+});
+
+test('restaurant owner cannot create fixed center tables without delegated approval',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:false});if(sql.startsWith('SELECT'))return rows({id});assert.match(sql,/setup_completed_at IS NULL/);return rows();},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,403);
+});
+test('superadmin can create a fixed table within the scoped center',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:true});if(sql.includes('FROM centers'))return rows({id});assert.match(sql,/INSERT INTO center_tables/);return rows({id,name:'Tisch 1'});},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,201);
+});
+test('superadmin table creation still checks center ownership',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({role:'owner',company_id:id,platform_admin:true});if(sql.includes('FROM centers'))return rows();assert.match(sql,/setup_completed_at IS NULL/);return rows();},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,404);
+});
+
+test('only superadmin can delegate setup',async()=>{
+ const r=await request(async()=>rows({id,role:'owner',company_id:id}),'/api/v1/centers/'+id+'/setup','PUT',{action:'approve',userId:id,restaurantId:id},true);assert.equal(r.status,403);
+});
+test('delegation checks first restaurant, active ownership and permanent lock',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({id,role:'owner',company_id:id,platform_admin:true});assert.match(sql,/ORDER BY cr.enrolled_at,cr.restaurant_id LIMIT 1/);assert.match(sql,/setup_completed_at IS NULL/);assert.match(sql,/setup_approved_at IS NULL/);assert.match(sql,/JOIN users u ON u.company_id=r.company_id/);return rows({setup_approved_at:'now'});},'/api/v1/centers/'+id+'/setup','PUT',{action:'approve',userId:id,restaurantId:id},true);assert.equal(r.status,200);
+});
+test('setup completion requires delegated identity and at least one active table',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({id,role:'owner',company_id:id});assert.match(sql,/c.setup_user_id=\$4/);assert.match(sql,/t.active=true/);assert.match(sql,/setup_completed_at IS NULL/);return rows();},'/api/v1/centers/'+id+'/setup','PUT',{action:'complete'},true);assert.equal(r.status,409);
+});
+test('delegated table creation locks center row and checks completion atomically',async()=>{
+ const r=await request(async(sql,args)=>{if(sql.includes('FROM sessions'))return rows({id,role:'owner',company_id:id});if(sql.startsWith('SELECT'))return rows({id});assert.match(sql,/FOR UPDATE/);assert.match(sql,/setup_user_id=\$6 AND setup_completed_at IS NULL/);assert.equal(args[5],id);return rows({id,name:'Tisch 1'});},'/api/v1/centers/'+id+'/tables','POST',{name:'Tisch 1'},true);assert.equal(r.status,201);
+});
+
+test('kitchen endpoint denies an unassigned restaurant before reading its queue',async()=>{
+ const r=await request(async sql=>{if(sql.includes('FROM sessions'))return rows({id,company_id:id,role:'kitchen'});assert.match(sql,/e.user_id=\$4/);assert.match(sql,/r.company_id=\$2/);return rows();},'/api/v1/centers/kitchen?restaurantId='+id,'GET',undefined,true);assert.equal(r.status,403);
+});
+
+test('guest status rejects a table token or malformed token without reading orders',async()=>{
+ const r=await request(()=>{throw Error('no database read allowed')},'/api/v1/guest/center/status?token='+code);assert.equal(r.status,404);
+});
+test('guest status query exposes only status and restaurant with expiry',async()=>{
+ const r=await request(async(sql,args)=>{assert.match(sql,/guest_status_token=\$1/);assert.match(sql,/24 hours/);assert.doesNotMatch(sql,/guest_email|merchant_reference|total_cents/);assert.equal(args[0],'a'.repeat(64));return rows({status:'ready',restaurant_name:'Restaurant',ready_at:'now'});},'/api/v1/guest/center/status?token='+'a'.repeat(64));assert.equal(r.status,200);assert.equal(r.data.order.status,'ready');
+});
+
+test('durable checkout token exposes pending status before provider binding exists',async()=>{
+ const r=await request(async(sql,args)=>{
+  assert.match(sql,/LEFT JOIN center_checkout_attempts a/);
+  assert.match(sql,/a.restaurant_id=o.restaurant_id/);
+  assert.match(sql,/cp.guest_status_token=\$1 OR a.guest_status_token=\$1/);
+  assert.equal(args[0],'b'.repeat(64));
+  return rows({status:'payment_pending',restaurant_name:'Restaurant',collection_number:null,paid_at:null});
+ },'/api/v1/guest/center/status?token='+'b'.repeat(64));
+ assert.equal(r.status,200);assert.equal(r.data.order.status,'payment_pending');assert.equal(r.data.order.collection_number,null);
+});
+test('unknown status token cannot reveal another checkout',async()=>{
+ const r=await request(async()=>rows(),'/api/v1/guest/center/status?token='+'c'.repeat(64));
+ assert.equal(r.status,404);
+});
+
+test('menu ordering requires both rollout authorization and provider readiness',()=>{
+ assert.equal(centerOrderingAvailable(true,{}),false);
+ assert.equal(centerOrderingAvailable(false,{CENTER_CHECKOUT_ENABLED:'true'}),false);
+ assert.equal(centerOrderingAvailable(undefined,{CENTER_CHECKOUT_ENABLED:'true'}),false);
+ assert.equal(centerOrderingAvailable('true',{CENTER_CHECKOUT_ENABLED:'true'}),false);
+ assert.equal(centerOrderingAvailable(true,{CENTER_CHECKOUT_ENABLED:'true'}),true);
+});
+
+test('home-screen manifest preserves the protected order link and expires with the order',async()=>{
+ const r=await request(async(sql,args)=>{assert.match(sql,/24 hours/);assert.equal(args[0],'a'.repeat(64));return rows({id});},'/api/v1/guest/center/manifest?token='+'a'.repeat(64));
+ assert.equal(r.status,200);assert.equal(r.data.display,'standalone');assert.equal(r.data.start_url,'/center/status.html#token='+'a'.repeat(64));assert.equal(r.data.scope,'/center/');
+ const expired=await request(async()=>rows(),'/api/v1/guest/center/manifest?token='+'a'.repeat(64));assert.equal(expired.status,404);
+ const invalid=await request(()=>{throw Error('must not query');},'/api/v1/guest/center/manifest?token=bad');assert.equal(invalid.status,404);
+});
+
+test('guest receipt link is scoped to its status capability and verified release',async()=>{
+ const r=await request(async(sql,args)=>{
+ assert.match(sql,/cp.released_at IS NOT NULL/);assert.match(sql,/rc.order_id=o.id/);assert.match(sql,/rc.public_token/);
+ assert.match(sql,/cp.guest_status_token=\$1 OR a.guest_status_token=\$1/);assert.equal(args[0],'d'.repeat(64));
+ return rows({status:'ready',receipt_url:'/beleg/'+id});
+ },'/api/v1/guest/center/status?token='+'d'.repeat(64));
+ assert.equal(r.status,200);assert.equal(r.data.order.receipt_url,'/beleg/'+id);
+});

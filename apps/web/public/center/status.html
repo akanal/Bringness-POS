@@ -1,0 +1,105 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#d35c13"><meta name="apple-mobile-web-app-capable" content="yes"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><p><a id="receipt" hidden target="_blank" rel="noopener noreferrer">Digitalen Beleg öffnen</a></p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="notify" hidden>Bei Abholbereitschaft benachrichtigen</button><button id="notifyOff" hidden>Abholbenachrichtigung abschalten</button><p id="installHint" hidden>Für Abholbenachrichtigungen auf iPhone oder iPad: Diese Seite über „Teilen“ → „Zum Home-Bildschirm“ hinzufügen und dort öffnen.</p><p id="notifyStatus" role="status"></p><button id="nextOrder" hidden>Neue Bestellung am selben Tisch</button><p id="nextOrderStatus" role="status"></p><button id="refresh">Aktualisieren</button><p>Ohne aktivierte Abholbenachrichtigung bitte diese Seite geöffnet lassen. Die Zustellung hängt von Gerät und Benachrichtigungseinstellungen ab.</p></main><script type="module">
+async function request(url,options={}){
+ const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
+ try{const response=await fetch(url,{...options,signal:controller.signal});const data=await response.json();return {ok:response.ok,status:response.status,json:async()=>data};}
+ finally{clearTimeout(timeout);}
+}
+
+const token=new URLSearchParams(location.hash.slice(1)).get('token')||'';const state=document.getElementById('status');const connection=document.getElementById('connection');let timer,loading=false,finished=false,nextOrder=null;
+if(/^[a-f0-9]{64}$/.test(token)){
+ const manifest=document.createElement('link');manifest.rel='manifest';
+ manifest.href='/api/v1/guest/center/manifest?token='+encodeURIComponent(token);document.head.append(manifest);
+}
+const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+document.getElementById('installHint').hidden=!ios||standalone;
+const labels={payment_pending:'Zahlung wird geprüft.',payment_failed:'Die Zahlung ist fehlgeschlagen. Es wurde keine Bestellung an die Küche freigegeben.',payment_canceled:'Die Zahlung wurde abgebrochen. Es wurde keine Bestellung an die Küche freigegeben.',payment_expired:'Der Zahlungsvorgang ist abgelaufen. Es wurde keine Bestellung an die Küche freigegeben.',kitchen:'Deine Bestellung wartet auf die Zubereitung.',preparing:'Deine Bestellung wird zubereitet.',ready:'Deine Bestellung ist abholbereit.',cancelled:'Deine Bestellung wurde storniert.'};
+function renderHistory(order){
+ const history=document.getElementById('history');history.replaceChildren();
+ for(const [field,label] of [['paid_at','Zahlung bestätigt'],['released_at','An die Küche freigegeben'],['preparation_started_at','Zubereitung gestartet'],['ready_at','Abholbereit']]){
+  if(!order[field])continue;const date=new Date(order[field]);if(!Number.isFinite(date.getTime()))continue;
+  const row=document.createElement('li');row.textContent=label+' · '+date.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});history.append(row);
+ }
+}
+async function load(){
+ if(loading)return;clearTimeout(timer);loading=true;
+ try{
+  const r=await request('/api/v1/guest/center/status?token='+encodeURIComponent(token),{cache:'no-store',referrerPolicy:'no-referrer'});
+  const data=await r.json();
+  if(!r.ok){if(r.status===404||r.status===410)finished=true;throw Error(data.error||'Status nicht verfügbar');}
+  document.getElementById('restaurant').textContent=data.order.restaurant_name;
+  const collection=document.getElementById('collection');collection.hidden=!data.order.collection_number;collection.textContent=data.order.collection_number?'Abholnummer: '+data.order.collection_number:'';
+  state.textContent=labels[data.order.status]||'Status wird geprüft.';
+  const receipt=document.getElementById('receipt');
+  const receiptUrl=typeof data.order.receipt_url==='string'&&/^\/beleg\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.order.receipt_url)?data.order.receipt_url:null;
+  receipt.hidden=!receiptUrl;if(receiptUrl)receipt.setAttribute('href',receiptUrl);else receipt.removeAttribute('href');
+  const nextButton=document.getElementById('nextOrder');
+  const url=data.order.next_order_url,id=data.order.checkout_request_id;
+  nextOrder=['ready','payment_failed','payment_canceled','payment_expired'].includes(data.order.status)&&typeof url==='string'&&/^\/center\/index.html\?code=[a-f0-9]{48}$/.test(url)&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id||'')?{url,id}:null;
+  nextButton.hidden=!nextOrder;
+  renderHistory(data.order);
+  connection.textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE');
+  finished=['ready','cancelled','payment_failed','payment_canceled','payment_expired'].includes(data.order.status);
+ }catch(e){connection.textContent=finished?e.message:'Verbindung unterbrochen. Der angezeigte Status kann veraltet sein. Wir versuchen es automatisch erneut.';}
+ finally{loading=false;if(!finished&&!document.hidden)timer=setTimeout(load,10000);}
+}
+document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(!document.hidden&&!finished)load();});
+window.addEventListener('online',()=>{if(!finished&&!document.hidden)load();});
+
+const notifyOff=document.getElementById('notifyOff'),notify=document.getElementById('notify'),notifyStatus=document.getElementById('notifyStatus');
+let pushConfig,pushRegistration;
+async function preparePush(){
+ if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){
+  notifyStatus.textContent='Benachrichtigungen werden auf diesem Gerät nicht unterstützt. Bitte die Statusseite geöffnet lassen.';return;
+ }
+ try{
+  const response=await request('/api/v1/guest/center/notification-config',{cache:'no-store'});
+  const config=await response.json();if(!response.ok||!config.available)return;
+  pushConfig=config;pushRegistration=await navigator.serviceWorker.register('/center/sw.js',{scope:'/center/'});
+  notify.hidden=false;
+  const existing=await pushRegistration.pushManager.getSubscription();
+  if(existing){const data=await notificationAction('status',existing);notify.hidden=data.subscribed===true;notifyOff.hidden=!data.subscribed;}
+ }catch{notifyStatus.textContent='Benachrichtigungen momentan nicht verfügbar. Die Statusanzeige bleibt nutzbar.';}
+}
+notify.onclick=async()=>{
+ notify.disabled=true;
+ try{
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted'){notifyStatus.textContent='Keine Benachrichtigungen freigegeben. Bitte die Statusseite geöffnet lassen.';return;}
+  await navigator.serviceWorker.ready;
+  const encoded=pushConfig.publicKey.replace(/-/g,'+').replace(/_/g,'/');
+  const key=Uint8Array.from(atob(encoded+'='.repeat((4-encoded.length%4)%4)),c=>c.charCodeAt(0));
+  const subscription=await pushRegistration.pushManager.getSubscription()||await pushRegistration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+  const response=await request('/api/v1/guest/center/notifications',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,subscription:subscription.toJSON(),consent:true})});
+  const data=await response.json();if(!response.ok)throw Error(data.error||'Anmeldung fehlgeschlagen.');
+  notifyStatus.textContent='Abholbenachrichtigung für diese Bestellung aktiviert.';notify.hidden=true;notifyOff.hidden=false;
+ }catch(e){notifyStatus.textContent=e.message||'Benachrichtigung konnte nicht aktiviert werden.';}
+ finally{notify.disabled=false;}
+};
+async function notificationAction(action,subscription){
+ const response=await request('/api/v1/guest/center/notifications',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,subscription:subscription.toJSON(),action})});
+ const data=await response.json();if(!response.ok)throw Error(data.error||'Anfrage fehlgeschlagen.');return data;
+}
+notifyOff.onclick=async()=>{
+ notifyOff.disabled=true;
+ try{
+  const subscription=await pushRegistration.pushManager.getSubscription();
+  if(!subscription)throw Error('Gerätezugang nicht mehr verfügbar.');
+  await notificationAction('disable',subscription);
+  notifyOff.hidden=true;notify.hidden=false;notifyStatus.textContent='Abholbenachrichtigung für diese Bestellung abgeschaltet.';
+ }catch(e){notifyStatus.textContent=e.message;}finally{notifyOff.disabled=false;}
+};
+document.getElementById('nextOrder').onclick=()=>{
+ if(!nextOrder)return;
+ const message=document.getElementById('nextOrderStatus');
+ try{
+ const code=new URL(nextOrder.url,location.origin).searchParams.get('code'),key='bringness-center-pending:'+code;
+ const saved=JSON.parse(sessionStorage.getItem(key)||'null');
+ if(saved&&saved.requestId!==nextOrder.id){message.textContent='Für diesen Tisch ist bereits ein anderer Zahlungsversuch gespeichert. Bitte zuerst diesen Vorgang abschließen.';return;}
+ if(saved)sessionStorage.removeItem(key);
+ location.assign(nextOrder.url);
+ }catch{message.textContent='Der gespeicherte Vorgang kann nicht freigegeben werden. Bitte den ursprünglichen Browser-Tab verwenden.';}
+};
+preparePush();
+document.getElementById('refresh').onclick=load;await load();
+</script></body></html>

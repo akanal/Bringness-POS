@@ -1,0 +1,69 @@
+name: Center validation
+on:
+  pull_request:
+    paths:
+      - 'server/center*'
+      - 'server/public-receipt*.js'
+      - 'server/payment-receipt*.js'
+      - 'server/ai-*'
+      - 'server/pos-stock-*'
+      - 'server/tse-*'
+      - 'server/restaurant-owner-features.js'
+      - 'server/start.js'
+      - 'server/index.js'
+      - 'apps/web/public/center/**'
+      - 'apps/web/public/receipt-print.js'
+      - '.github/workflows/center-validation.yml'
+  push:
+    branches: ['feat/center-mode-foundation']
+    paths:
+      - 'server/center*'
+      - 'server/public-receipt*.js'
+      - 'server/payment-receipt*.js'
+      - 'server/ai-*'
+      - 'server/pos-stock-*'
+      - 'server/tse-*'
+      - 'server/restaurant-owner-features.js'
+      - 'server/start.js'
+      - 'server/index.js'
+      - 'apps/web/public/center/**'
+      - 'apps/web/public/receipt-print.js'
+      - '.github/workflows/center-validation.yml'
+permissions:
+  contents: read
+jobs:
+  center-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: center_test
+          POSTGRES_PASSWORD: center_test
+          POSTGRES_DB: center_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U center_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated test dependencies
+        run: npm install --prefix "$RUNNER_TEMP/center-deps" --no-save pg@8.13.1 playwright@1.62.1 pdfkit@0.17.2 qrcode@1.5.4
+      - name: Install browser engine
+        run: node "$RUNNER_TEMP/center-deps/node_modules/playwright/cli.js" install --with-deps ${{ matrix.browser }}
+      - name: Run authorization checks
+        run: CENTER_TEST_PDFKIT="$RUNNER_TEMP/center-deps/node_modules/pdfkit/js/pdfkit.js" CENTER_TEST_QRCODE="$RUNNER_TEMP/center-deps/node_modules/qrcode/lib/index.js" node --test server/center-payment-receipt.test.js server/center-core.test.js server/center-payment-recovery.test.js server/center-notifications.test.js server/center-guest-push.test.js server/center-table-qr.test.js server/center-payment-core.test.js server/center-mollie-connect.test.js server/center-mollie-payment.test.js server/center-mollie-checkout.test.js server/center-mollie-mode.test.js server/center-guest-checkout.test.js server/center-stock-bridge.test.js server/tse-signing-worker.test.js
+      - name: Verify migration and lifecycle on PostgreSQL
+        env:
+          CENTER_TEST_DATABASE_URL: postgres://center_test:center_test@localhost:5432/center_test
+        run: CENTER_TEST_PG="$RUNNER_TEMP/center-deps/node_modules/pg/lib/index.js" node --test server/center-database.test.js
+      - name: Verify Center management, checkout, kitchen and guest status
+        run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node --test server/center-browser.test.js
