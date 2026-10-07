@@ -1,3 +1,4 @@
+import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 import {createPublicReceiptHandler} from './public-receipt-core.js';
 import {exportCenterTableQr} from './center-table-qr.js';
 import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
@@ -325,5 +326,23 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal(exported.status,200);assert.ok(exported.svg.includes(setupTable.qr_token));
  assert.equal((await exportCenterTableQr(pool,{id:crypto.randomUUID(),company_id:otherCompany},secondCenter,setupTable.id,qrEnv,renderQr)).status,404);
  assert.equal((await call(sc+'/tables','POST','foreign-owner',{name:'After delegated lock'})).status,403);
+
+ // Protected PDF reads follow the same active-session/password-reset policy.
+ const protectedPdf=createPaymentReceiptHandler(pool,class{constructor(){throw Error('no receipt should render');}}, {},()=>{throw Error('no link should render');});
+ async function pdfAccess(){
+ const res={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};
+ await protectedPdf({url:'/api/v1/receipts/'+crypto.randomUUID()+'/pdf',method:'GET',headers:{authorization:'Bearer owner'}},res);
+ return res.status;
+ }
+ await db.query('UPDATE users SET must_change_password=true WHERE id=$1',[owner]);
+ assert.equal(await pdfAccess(),401);
+ await db.query('UPDATE users SET must_change_password=false WHERE id=$1',[owner]);
+ assert.equal(await pdfAccess(),404);
+ await db.query("UPDATE users SET status='paused' WHERE id=$1",[owner]);
+ assert.equal(await pdfAccess(),401);
+ await db.query("UPDATE users SET status='active' WHERE id=$1",[owner]);
+ await db.query("UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1",[owner]);
+ assert.equal(await pdfAccess(),401);
+ await db.query("UPDATE sessions SET expires_at=now()+interval '1 hour' WHERE user_id=$1",[owner]);
  }finally{await db.close();}
 });
