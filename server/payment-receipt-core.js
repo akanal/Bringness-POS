@@ -10,7 +10,7 @@ async function currentUser(req) {
   if (!token) return null;
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const q = await pool.query(
-    "SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",
+    "SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND coalesce(u.must_change_password,false)=false",
     [tokenHash]
   );
   return q.rows[0] || null;
@@ -23,6 +23,7 @@ return async function handlePaymentReceipt(req, res) {
   const match = pathname.match(/^\/api\/v1\/receipts\/([0-9a-f-]{36})\/pdf$/);
   if (!match || req.method !== "GET") return false;
 
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(match[1])){send(res,404,{error:'Beleg nicht gefunden'});return true;}
   const user = await currentUser(req);
   if (!user) {
     send(res, 401, { error: "Nicht angemeldet" });
