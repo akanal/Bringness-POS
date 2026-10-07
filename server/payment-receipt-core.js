@@ -56,6 +56,14 @@ return async function handlePaymentReceipt(req, res) {
   ]);
   const items = itemsResult.rows;
   const payments = paymentsResult.rows;
+  let qrBuffer;
+  try {
+    const qrPayload=receiptUrl(req,receipt.public_token);
+    qrBuffer=await QRCode.toBuffer(qrPayload,{width:120,margin:1});
+  } catch {
+    send(res,503,{error:"Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen."});
+    return true;
+  }
   const height = Math.max(560, 390 + items.length * 34 + payments.length * 20);
   const doc = new PDFDocument({ size: [226.77, height], margin: 18 });
 
@@ -103,8 +111,6 @@ return async function handlePaymentReceipt(req, res) {
     doc.text("Steuer: " + euro(group.tax) + " · Brutto: " + euro(group.gross));
   }
 
-  const qrPayload = receiptUrl(req, receipt.public_token);
-  const qrBuffer = await QRCode.toBuffer(qrPayload, { width: 120, margin: 1 });
   doc.moveDown();
   doc.image(qrBuffer, { fit: [78, 78], align: "center" });
   doc.fontSize(7).fillColor("#52677a").text("QR: Digitalen Beleg öffnen", { align: "center" });
