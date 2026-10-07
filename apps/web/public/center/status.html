@@ -1,11 +1,11 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#d35c13"><meta name="apple-mobile-web-app-capable" content="yes"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><p><a id="receipt" hidden target="_blank" rel="noopener noreferrer">Digitalen Beleg öffnen</a></p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="notify" hidden>Bei Abholbereitschaft benachrichtigen</button><button id="notifyOff" hidden>Abholbenachrichtigung abschalten</button><p id="installHint" hidden>Für Abholbenachrichtigungen auf iPhone oder iPad: Diese Seite über „Teilen“ → „Zum Home-Bildschirm“ hinzufügen und dort öffnen.</p><p id="notifyStatus" role="status"></p><button id="refresh">Aktualisieren</button><p>Ohne aktivierte Abholbenachrichtigung bitte diese Seite geöffnet lassen. Die Zustellung hängt von Gerät und Benachrichtigungseinstellungen ab.</p></main><script type="module">
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="theme-color" content="#d35c13"><meta name="apple-mobile-web-app-capable" content="yes"><title>Bestellstatus</title><style>body{font:22px system-ui;background:#f7f4f0;color:#222}main{max-width:650px;margin:auto;padding:28px}#status{background:white;padding:24px;border-radius:16px}button{font:inherit;padding:14px}</style></head><body><main><h1>Deine Bestellung</h1><h2 id="restaurant"></h2><p id="collection" hidden></p><p id="status" role="status">Status wird geladen …</p><p><a id="receipt" hidden target="_blank" rel="noopener noreferrer">Digitalen Beleg öffnen</a></p><section aria-label="Bestellverlauf"><h2>Bestellverlauf</h2><ol id="history"></ol></section><p id="connection" role="status"></p><button id="notify" hidden>Bei Abholbereitschaft benachrichtigen</button><button id="notifyOff" hidden>Abholbenachrichtigung abschalten</button><p id="installHint" hidden>Für Abholbenachrichtigungen auf iPhone oder iPad: Diese Seite über „Teilen“ → „Zum Home-Bildschirm“ hinzufügen und dort öffnen.</p><p id="notifyStatus" role="status"></p><button id="nextOrder" hidden>Neue Bestellung am selben Tisch</button><p id="nextOrderStatus" role="status"></p><button id="refresh">Aktualisieren</button><p>Ohne aktivierte Abholbenachrichtigung bitte diese Seite geöffnet lassen. Die Zustellung hängt von Gerät und Benachrichtigungseinstellungen ab.</p></main><script type="module">
 async function request(url,options={}){
  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
  try{const response=await fetch(url,{...options,signal:controller.signal});const data=await response.json();return {ok:response.ok,status:response.status,json:async()=>data};}
  finally{clearTimeout(timeout);}
 }
 
-const token=new URLSearchParams(location.hash.slice(1)).get('token')||'';const state=document.getElementById('status');const connection=document.getElementById('connection');let timer,loading=false,finished=false;
+const token=new URLSearchParams(location.hash.slice(1)).get('token')||'';const state=document.getElementById('status');const connection=document.getElementById('connection');let timer,loading=false,finished=false,nextOrder=null;
 if(/^[a-f0-9]{64}$/.test(token)){
  const manifest=document.createElement('link');manifest.rel='manifest';
  manifest.href='/api/v1/guest/center/manifest?token='+encodeURIComponent(token);document.head.append(manifest);
@@ -33,6 +33,10 @@ async function load(){
   const receipt=document.getElementById('receipt');
   const receiptUrl=typeof data.order.receipt_url==='string'&&/^\/beleg\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.order.receipt_url)?data.order.receipt_url:null;
   receipt.hidden=!receiptUrl;if(receiptUrl)receipt.setAttribute('href',receiptUrl);else receipt.removeAttribute('href');
+  const nextButton=document.getElementById('nextOrder');
+  const url=data.order.next_order_url,id=data.order.checkout_request_id;
+  nextOrder=['ready','payment_failed','payment_canceled','payment_expired'].includes(data.order.status)&&typeof url==='string'&&/^\/center\/index.html\?code=[a-f0-9]{48}$/.test(url)&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id||'')?{url,id}:null;
+  nextButton.hidden=!nextOrder;
   renderHistory(data.order);
   connection.textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE');
   finished=['ready','cancelled','payment_failed','payment_canceled','payment_expired'].includes(data.order.status);
@@ -84,6 +88,17 @@ notifyOff.onclick=async()=>{
   await notificationAction('disable',subscription);
   notifyOff.hidden=true;notify.hidden=false;notifyStatus.textContent='Abholbenachrichtigung für diese Bestellung abgeschaltet.';
  }catch(e){notifyStatus.textContent=e.message;}finally{notifyOff.disabled=false;}
+};
+document.getElementById('nextOrder').onclick=()=>{
+ if(!nextOrder)return;
+ const message=document.getElementById('nextOrderStatus');
+ try{
+ const code=new URL(nextOrder.url,location.origin).searchParams.get('code'),key='bringness-center-pending:'+code;
+ const saved=JSON.parse(sessionStorage.getItem(key)||'null');
+ if(saved&&saved.requestId!==nextOrder.id){message.textContent='Für diesen Tisch ist bereits ein anderer Zahlungsversuch gespeichert. Bitte zuerst diesen Vorgang abschließen.';return;}
+ if(saved)sessionStorage.removeItem(key);
+ location.assign(nextOrder.url);
+ }catch{message.textContent='Der gespeicherte Vorgang kann nicht freigegeben werden. Bitte den ursprünglichen Browser-Tab verwenden.';}
 };
 preparePush();
 document.getElementById('refresh').onclick=load;await load();
