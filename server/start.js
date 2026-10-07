@@ -53,6 +53,14 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleLanguageCatalog(req,res)) return;
       if (await handlePlatformAiAssets(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
+      if (appMode==='pos' && ['GET','HEAD'].includes(req.method)) {
+        const seoPath = new URL(req.url,'http://local').pathname;
+        if (seoPath==='/robots.txt' || seoPath==='/sitemap.xml') {
+          const contents=fs.readFileSync(new URL('../apps/web/public'+seoPath,import.meta.url));
+          res.writeHead(200,{'content-type':seoPath.endsWith('.xml')?'application/xml; charset=utf-8':'text/plain; charset=utf-8','cache-control':'public, max-age=300','x-content-type-options':'nosniff'});
+          return res.end(req.method==='HEAD'?undefined:contents);
+        }
+      }
       if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
       if (await handlePosStockBridge(req,res)) return;
@@ -96,6 +104,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
   if (normalized.includes("/apps/web/public/") && normalized.endsWith(".html")) {
     try {
       let html = fs.readFileSync(filePath, "utf8");
+      if (/\/(admin|pos|service|tisch)\/index\.html$/.test(normalized) || normalized.endsWith('/accountant.html')) html=html.replace('</head>','<meta name="robots" content="noindex, nofollow"></head>');
       if (!normalized.includes('/ai') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
