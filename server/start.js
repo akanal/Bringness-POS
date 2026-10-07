@@ -1,3 +1,4 @@
+import {createDisplays,migrateDisplays} from './displays.js';
 import {createPersonnel,migratePersonnel} from './personnel.js';
 import {createRemoteSupport,migrateRemoteSupport,cleanupRemoteSupport} from './remote-support-core.js';
 import {handlePlatformAiAssets} from './platform-ai-assets.js';
@@ -45,6 +46,7 @@ const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
+const handleDisplays=createDisplays(platformGatewayPool);
 
 // Add modular API routes without destabilising the large legacy server file.
 const originalCreateServer = http.createServer.bind(http);
@@ -53,6 +55,7 @@ http.createServer = function patchedCreateServer(listener) {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
+      if (appMode!=='ai' && await handleDisplays(req,res)) return;
       if (await handleLanguageCatalog(req,res)) return;
       if (await handlePlatformAiAssets(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
@@ -148,6 +151,7 @@ async function migrateWithRetry(){
     try{
       await migrateRestaurantOwnerFeatures();
       await migratePersonnel(platformGatewayPool);
+      await migrateDisplays(platformGatewayPool);
       await migrateQrService();
       await migratePosStockEvents();
       await migrateCenter();
@@ -224,5 +228,6 @@ async function applyAvailabilityRules() {
 }
 setTimeout(applyAvailabilityRules, 3000);
 setInterval(applyAvailabilityRules, 60000).unref();
+
 
 
