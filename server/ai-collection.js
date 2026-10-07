@@ -14,17 +14,17 @@ INSERT INTO ai_settings(key,value) VALUES('collection','{"enabled":false,"requir
 CREATE TABLE IF NOT EXISTS ai_collection_mandates(supplier_id uuid PRIMARY KEY REFERENCES ai_accounts(id),consented_at timestamptz,consent_version int,customer_id text,mandate_id text,verified_at timestamptz,revoked_at timestamptz);
 CREATE TABLE IF NOT EXISTS ai_collection_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),supplier_id uuid NOT NULL REFERENCES ai_accounts(id),month text NOT NULL,net_cents bigint NOT NULL,order_ids jsonb NOT NULL,state text NOT NULL DEFAULT 'draft',reason text NOT NULL DEFAULT '',invoice_reference text NOT NULL DEFAULT '',gross_cents bigint,due_at timestamptz,notified_at timestamptz,payment_id text UNIQUE,customer_id text,mandate_id text,attempted_at timestamptz,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(supplier_id,month));
 `);await migrateAiInvoices()}
-export async function collectionSettings(){return (await aiPool().query("SELECT value FROM ai_settings WHERE key='collection'")).rows[0].value}
+export async function collectionSettings(db=aiPool()){return (await db.query("SELECT value FROM ai_settings WHERE key='collection'")).rows[0].value}
 function issuerReady(i){return Boolean(i&&['name','address','postalCode','city','taxId','creditorId'].every(k=>typeof i[k]==='string'&&i[k].trim())&&i.confirmed===true)}
 async function api(path,body){if(!key())fail('Separater AI-Mollie-Zugang fehlt',503);const r=await fetch('https://api.mollie.com/v2'+path,{method:body?'POST':'GET',headers:{authorization:'Bearer '+key(),'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});if(!r.ok)fail('Mollie-Anfrage fehlgeschlagen. Anbieterzugang und Freischaltung prüfen.',503);return r.json()}
-export async function verifiedMandate(supplierId){
- const m=(await aiPool().query('SELECT m.*,a.email,a.status FROM ai_collection_mandates m JOIN ai_accounts a ON a.id=m.supplier_id WHERE supplier_id=$1',[supplierId])).rows[0];
+export async function verifiedMandate(supplierId,db=aiPool()){
+ const m=(await db.query('SELECT m.*,a.email,a.status FROM ai_collection_mandates m JOIN ai_accounts a ON a.id=m.supplier_id WHERE supplier_id=$1',[supplierId])).rows[0];
  if(!m?.consented_at||m.revoked_at||!m.customer_id||!m.mandate_id||m.status!=='active')fail('Gültiges Lieferantenmandat erforderlich',409);
  const [c,mandate]=await Promise.all([api('/customers/'+m.customer_id),api('/customers/'+m.customer_id+'/mandates/'+m.mandate_id)]);
  if(String(c.email||'').toLowerCase()!==m.email.toLowerCase()||mandate.id!==m.mandate_id||mandate.status!=='valid'||mandate.method!=='directdebit')fail('Mollie bestätigt kein passendes gültiges SEPA-Mandat',409);
- await aiPool().query('UPDATE ai_collection_mandates SET verified_at=now() WHERE supplier_id=$1',[supplierId]);return m;
+ await db.query('UPDATE ai_collection_mandates SET verified_at=now() WHERE supplier_id=$1',[supplierId]);return m;
 }
-export async function supplierMayTrade(supplierId){const cfg=await collectionSettings();if(!cfg.requireMandate)return true;try{await verifiedMandate(supplierId);return true}catch{return false}}
+export async function supplierMayTrade(supplierId,db=aiPool()){const cfg=await collectionSettings(db);if(!cfg.requireMandate)return true;try{await verifiedMandate(supplierId,db);return true}catch{return false}}
 export async function prepareCollectionJobs(){
  // Calendar month is fixed in Europe/Berlin; only completed received periods are proposed.
  await aiPool().query(`INSERT INTO ai_collection_jobs(supplier_id,month,net_cents,order_ids) SELECT o.supplier_id,to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM'),sum(o.commission_cents),jsonb_agg(o.id ORDER BY o.id) FROM ai_orders o LEFT JOIN ai_commission_payments p ON p.order_id=o.id WHERE o.status='received' AND o.commission_cents>0 AND p.order_id IS NULL AND to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM')<$1 GROUP BY o.supplier_id,to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM') ON CONFLICT(supplier_id,month) WHERE kind='commission' DO UPDATE SET net_cents=excluded.net_cents,order_ids=excluded.order_ids,updated_at=now() WHERE ai_collection_jobs.state='draft'`,[currentMonth()]);

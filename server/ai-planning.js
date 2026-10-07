@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS ai_purchase_delegates(account_id uuid NOT NULL REFERE
 CREATE TABLE IF NOT EXISTS ai_purchase_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),location_id uuid NOT NULL REFERENCES ai_locations(id),submitted_by uuid NOT NULL REFERENCES ai_accounts(id),request_key uuid NOT NULL,delivery_date date NOT NULL,note text NOT NULL DEFAULT '',lines jsonb NOT NULL,status text NOT NULL DEFAULT 'submitted' CHECK(status IN ('submitted','approved','rejected')),decision_note text NOT NULL DEFAULT '',decided_by uuid REFERENCES ai_accounts(id),decided_at timestamptz,created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(submitted_by,request_key));
 `)}
 async function ownLocation(user,locationId){id(locationId);const l=(await aiPool().query('SELECT * FROM ai_locations WHERE id=$1 AND account_id=$2',[locationId,user.id])).rows[0];if(!l)fail('Standort nicht gefunden',404);return l}
-export async function planningContext(accountId,locationId,{withWeather=true}={}){
- const pool=aiPool(),s=(await pool.query('SELECT * FROM ai_plan_settings WHERE location_id=$1',[locationId])).rows[0]||{};
+export async function planningContext(accountId,locationId,{withWeather=true,db=aiPool()}={}){
+ const pool=db,s=(await pool.query('SELECT * FROM ai_plan_settings WHERE location_id=$1',[locationId])).rows[0]||{};
  const settings={latitude:s.latitude??null,longitude:s.longitude??null,radiusKm:s.radius_km||10,weatherStation:s.weather_station||'',hours:s.hours||null,closedDates:s.closed_dates||[],demandRules:demandRules(s.demand_rules||{})};
  const schedule=(await pool.query("SELECT to_char(effective_from,'YYYY-MM-DD') effective_from,hours FROM ai_plan_schedule_history WHERE location_id=$1 ORDER BY effective_from DESC",[locationId])).rows;
  const today=berlinClock().date;

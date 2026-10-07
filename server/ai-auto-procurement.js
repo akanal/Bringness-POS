@@ -27,6 +27,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
   const preview=await cart(db,user,{lines,deliveryDate},{checkout:false});if(!preview.canOrder)fail(preview.warnings.join(' · '),409);
   const result=await cart(db,user,{lines,deliveryDate,quote:preview.quote,requestKey:run.id,confirmed:true},{
    authorize:async(c,quote)=>{
+    if(berlinClock().date!==today)fail('Kalendertag inzwischen gewechselt. Lauf erneut starten.',409);
     const current=(await c.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1 FOR UPDATE',[user.id])).rows[0];
     if(!current?.policy.enabled||current.version!==policyRow.version)fail('Freigabe inzwischen geändert',409);
     if(quote.groups.some(g=>!policy.supplierIds.includes(g.supplierId)||JSON.stringify([g.deliveryArea,g.terms,g.minimumCents])!==JSON.stringify(policy.supplierTerms?.[g.supplierId])))fail('Lieferant nicht freigegeben',409);

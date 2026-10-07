@@ -33,7 +33,6 @@ export async function importOfflineSale(db,user,deviceKey,request){
  for(const i of receipt.items)await c.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,i.productId,i.name,i.unitPriceCents,i.taxRate,i.quantity]);
  await c.query("INSERT INTO payments(order_id,method,amount_cents,created_at) VALUES($1,'cash',$2,$3)",[order.id,receipt.totalCents,receipt.createdAt]);
  await c.query("INSERT INTO receipts(order_id,receipt_number,issued_at,merchant_snapshot) VALUES($1,$2,$3,$4)",[order.id,receipt.receiptNumber,receipt.createdAt,JSON.stringify(receipt.merchant)]);
- const stock=(await c.query('SELECT 1 FROM pos_stock_links WHERE restaurant_id=$1 AND active',[receipt.restaurantId])).rowCount;
  await c.query('INSERT INTO pos_offline_sales(id,catalog_id,order_id,fingerprint,stock_state) VALUES($1,$2,$3,$4,$5)',[request.id,request.snapshotId,order.id,fingerprint,'pending']);
  await c.query("INSERT INTO audit_log(company_id,restaurant_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,$3,'offline_sale_imported','order',$4,$5)",[user.company_id,receipt.restaurantId,user.id,order.id,JSON.stringify({offlineId:request.id,snapshotId:request.snapshotId,totalCents:receipt.totalCents})]);
  await c.query('COMMIT');return {id:order.id,receiptNumber:receipt.receiptNumber,stockState:'pending'};
