@@ -1,0 +1,24 @@
+name: Build iOS POS client
+on:
+  pull_request:
+    paths: ['apps/ios/**', '.github/workflows/ios-client.yml']
+  push:
+    branches: [main]
+    paths: ['apps/ios/**', '.github/workflows/ios-client.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: swift apps/ios/generate-app-icon.swift apps/ios/BringnessPOS/Assets.xcassets/AppIcon.appiconset
+      - run: xcodegen generate --spec apps/ios/project.yml
+      - run: xcodebuild -project apps/ios/BringnessPOS.xcodeproj -scheme BringnessPOS -sdk iphonesimulator -configuration Debug -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bringness-POS-iOS-Simulator
+          path: build/ios/Build/Products/Debug-iphonesimulator/BringnessPOS.app

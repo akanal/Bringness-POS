@@ -11,7 +11,7 @@ CREATE INDEX IF NOT EXISTS pos_stock_queue ON pos_stock_commands(created_at,id) 
 CREATE OR REPLACE FUNCTION pos_stock_order_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF EXISTS(SELECT 1 FROM pos_stock_links WHERE restaurant_id=NEW.restaurant_id AND active) THEN
-  IF TG_OP='INSERT' AND NEW.status<>'open' AND NOT (NEW.source='center' AND NEW.status='payment_pending') THEN RAISE EXCEPTION 'Lagerablauf: Bestellung zuerst anlegen, annehmen und Zubereitung starten'; END IF;
+  IF TG_OP='INSERT' AND NEW.status<>'open' AND NOT (NEW.source='offline' AND NEW.status='paid' AND current_setting('bringness.offline_import',true)='true') AND NOT (NEW.source='center' AND NEW.status='payment_pending') THEN RAISE EXCEPTION 'Lagerablauf: Bestellung zuerst anlegen, annehmen und Zubereitung starten'; END IF;
   IF TG_OP='UPDATE' THEN
    IF EXISTS(SELECT 1 FROM pos_stock_commands WHERE order_id=OLD.id AND state='pending') THEN RAISE EXCEPTION 'Lagerbuchung wird noch geprüft'; END IF;
    IF NEW.status<>OLD.status AND (NEW.status IN ('kitchen','preparing') OR NEW.status='cancelled' AND OLD.status<>'open') AND NOT EXISTS(SELECT 1 FROM pos_stock_commands WHERE order_id=OLD.id AND target_status=NEW.status AND state='applied') THEN RAISE EXCEPTION 'Status nur über den bestätigten Lagerablauf ändern'; END IF;

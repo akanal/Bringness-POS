@@ -1,3 +1,7 @@
 # iOS / iPadOS
 
-Apple-Client für iPad/iPhone. Gemeinsamer POS-Core; App-Signierung und Veröffentlichung erfolgen über Apple Developer/TestFlight.
+SwiftUI/WKWebView-Client für iPhone/iPad ab iOS 16. Die Kasse öffnet `https://bringness.de/pos/` mit dauerhafter WebKit-Anmeldung, nativen Dialogen, Download-Teilen und Verbindungshinweisen.
+
+Auf macOS: `brew install xcodegen`, dann `swift apps/ios/generate-app-icon.swift apps/ios/BringnessPOS/Assets.xcassets/AppIcon.appiconset`, `xcodegen generate --spec apps/ios/project.yml` und `apps/ios/BringnessPOS.xcodeproj` in Xcode öffnen. Für ein Gerät das eigene Apple-Entwicklerteam wählen, Bundle-ID registrieren und eine Signierung einrichten. Der CI-Simulator-Build ist nicht auf einem echten iPhone installierbar.
+
+Vor TestFlight/App Store fehlen noch Apple Developer/App Store Connect, ein signiertes Gerätearchiv sowie Store-Angaben. Die iOS-App verwendet die Online-Kasse; die lokale Offline-Barverkaufskasse ist derzeit Bestandteil des Windows-Clients. Details: `docs/pos-ai-completion.md`.

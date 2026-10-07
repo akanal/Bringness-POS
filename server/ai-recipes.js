@@ -1,3 +1,4 @@
+import {processOfflineStock} from './offline-stock.js';
 import {configurePosStockLink,processPosStockCommands,syncPosStockAvailability} from './pos-stock-bridge-core.js';
 import {kitchenAction,recipeAvailability} from './ai-stock-lifecycle.js';
 import {blockUnavailableRecipes} from './ai-stock-lifecycle.js';
@@ -101,5 +102,6 @@ export async function syncPosSales(){if(running)return;running=true;try{
 
 let kitchenSyncRunning=false;
 export async function syncPosKitchen(){if(kitchenSyncRunning)return;kitchenSyncRunning=true;try{await processPosStockCommands(platformPool,aiPool(),kitchenAction);
+ await processOfflineStock(platformPool,aiPool(),kitchenAction,ingestSale);
  await syncPosStockAvailability(platformPool,aiPool(),recipeAvailability);
 }catch(e){console.error('AI kitchen sync failed:',e.code||e.name)}finally{kitchenSyncRunning=false}}
