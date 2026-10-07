@@ -686,7 +686,7 @@ console.log('Embedded PostgreSQL integration passed: migrations, tenant isolatio
 // Exercise the real POS mode switch and password-change markup without initializing the register.
 const posDom=new JSDOM(fs.readFileSync(root+'/apps/web/public/pos/index.html','utf8'),{runScripts:'outside-only'}),pw=posDom.window,pd=pw.document;
 const posScript=fs.readFileSync(root+'/apps/web/public/pos/app.js','utf8');
-pw.eval('var $=id=>document.getElementById(id);var mode="login";'+posScript.split('\n').find(line=>line.startsWith('function authMode(')));
+pw.eval('var $=id=>document.getElementById(id);var mode="login";var authBusy=false;'+posScript.split('\n').find(line=>line.startsWith('function authMode(')));
 pw.authMode('register');
 for(const value of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x']){pd.getElementById('password').value=value;assert(!pd.getElementById('password').checkValidity())}
 pd.getElementById('password').value='Ab1!xy';assert(pd.getElementById('password').checkValidity());assert(!pd.getElementById('passwordRules').hidden);
