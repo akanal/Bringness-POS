@@ -20,6 +20,8 @@ jobs:
       - run: npm run prepare:offline
       - name: Verify offline cash UI and native IPC isolation
         run: npx electron offline-smoke.cjs
+      - name: Verify native remote support consent, capture, input and stop
+        run: npx electron support-smoke.cjs
       - run: npm run build
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
