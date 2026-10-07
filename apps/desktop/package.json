@@ -1,26 +1,35 @@
 {
   "name": "bringness-pos-desktop",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Bringness POS Windows Desktop Client",
   "main": "main.cjs",
   "scripts": {
-    "build": "electron-builder --win nsis"
+    "build": "npm run prepare:offline && electron-builder --win nsis",
+    "prepare:offline": "node prepare-offline.cjs"
   },
   "devDependencies": {
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron": "44.6.0",
+    "electron-builder": "26.15.3"
   },
   "build": {
     "appId": "de.bringness.pos",
     "productName": "Bringness POS",
     "files": [
-      "main.cjs"
+      "main.cjs",
+      "offline-ledger.mjs",
+      "offline-runtime.cjs",
+      "offline-preload.cjs",
+      "offline.html",
+      "offline-ui.js",
+      "offline-sale-core.mjs"
     ],
     "win": {
       "target": "nsis",
-      "publisherName": "Bringness",
-      "signAndEditExecutable": true
+      "signAndEditExecutable": true,
+      "signtoolOptions": {
+        "publisherName": "Bringness"
+      }
     },
     "nsis": {
       "oneClick": false,
@@ -31,5 +40,8 @@
       "shortcutName": "Bringness POS"
     },
     "artifactName": "Bringness-POS-Setup-${version}.${ext}"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8"
   }
 }

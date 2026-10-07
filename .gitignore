@@ -7,3 +7,7 @@ build/
 coverage/
 .DS_Store
 *.log
+
+apps/desktop/offline-sale-core.mjs
+apps/ios/*.xcodeproj/
+apps/ios/BringnessPOS/Assets.xcassets/AppIcon.appiconset/AppIcon.png

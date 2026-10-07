@@ -1,6 +1,8 @@
 name: Build Windows Desktop
 on:
   workflow_dispatch:
+  pull_request:
+    paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
   push:
     branches: [main]
     paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
@@ -14,12 +16,32 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: 20}
-      - run: npm install
+      - run: npm ci
+      - run: npm run prepare:offline
+      - name: Verify offline cash UI and native IPC isolation
+        run: npx electron offline-smoke.cjs
       - run: npm run build
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      - name: Verify installer signature
+        id: signature
+        shell: pwsh
+        env:
+          CERT_CONFIGURED: ${{ secrets.WINDOWS_CSC_LINK != '' }}
+        run: |
+          $files = Get-ChildItem dist/*.exe
+          if (-not $files) { throw "No installer was built" }
+          $valid = $true
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if ($signature.Status -ne "Valid") { $valid = $false }
+          }
+          if ($env:CERT_CONFIGURED -eq "true" -and -not $valid) { throw "Configured signing did not produce a valid installer signature" }
+          "signed=$($valid.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if (-not $valid) { "Unsigned test build only; public installer was not replaced." >> $env:GITHUB_STEP_SUMMARY }
       - name: Publish latest installer asset
+        if: github.event_name != 'pull_request' && steps.signature.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-latest
@@ -29,5 +51,5 @@ jobs:
           files: apps/desktop/dist/*.exe
       - uses: actions/upload-artifact@v4
         with:
-          name: Bringness-POS-Windows
+          name: Bringness-POS-Windows-signed-${{ steps.signature.outputs.signed }}
           path: apps/desktop/dist/*.exe

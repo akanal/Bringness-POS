@@ -1,0 +1,23 @@
+name: POS and AI completion validation
+on:
+  pull_request:
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+  push:
+    branches: [main]
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
+      - run: node --test server/ai-demand-core.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+      - run: node server/ai-tests/offline-accountant.mjs
+      - run: node server/ai-tests/pos-stock-bridge.mjs
+      - run: node server/ai-tests/integration.mjs

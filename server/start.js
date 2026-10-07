@@ -1,3 +1,5 @@
+import {handleAccountantAccess,migrateAccountantAccess} from './accountant-access.js';
+import {handleOfflineSales,migrateOfflineSales} from './offline-sales.js';
 import {handlePosStockBridge,migratePosStockEvents} from './pos-stock-bridge.js';
 import {handleLanguageCatalog,ensureLanguageDatabase} from "./language-catalog.js";
 import fs from "node:fs";
@@ -50,6 +52,8 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleQrService(req,res)) return;
       if (await handleSupport(req,res)) return;
       if (await handleDeviceLicense(req,res)) return;
+      if (await handleOfflineSales(req,res)) return;
+      if (await handleAccountantAccess(req,res)) return;
       if (await handleAdminPasswordReset(req,res)) return;
       if (await handleAdminTeam(req,res)) return;
       if (await handleStaffInvitations(req,res)) return;
@@ -125,6 +129,8 @@ async function migrateWithRetry(){
       await migrateTseIntegration();
       await migrateBillingAccess();
       await migrateDeviceLicense();
+      await migrateOfflineSales();
+      await migrateAccountantAccess();
       await migrateBillingTerms();
       await migrateStaffInvitations();
       await migrateSupport();

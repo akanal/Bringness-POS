@@ -68,8 +68,10 @@ jobs:
           node --test server/runtime-mode.test.js server/qr-service.test.js ops/select-operation.test.js
           python3 ops/netcup-command.test.py
           node server/ai-policy.test.js
-          node --test server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+          node --test server/ai-demand-core.test.js server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
           npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+          node server/ai-tests/offline-accountant.mjs
           node server/ai-tests/stock-lifecycle.mjs
           node server/ai-tests/pos-stock-bridge.mjs
           node server/ai-tests/language-integration.mjs
