@@ -2,7 +2,8 @@ import {createPublicReceiptHandler} from './public-receipt-core.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const {chromium}=await import(process.env.CENTER_TEST_PLAYWRIGHT || 'playwright');
+const playwright=await import(process.env.CENTER_TEST_PLAYWRIGHT || 'playwright');
+const chromium=playwright[process.env.CENTER_TEST_BROWSER || 'chromium'];
 test('center management hides table creation until approval and after completion',async()=>{
  const browser=await chromium.launch({headless:true});
  try{
@@ -452,3 +453,37 @@ test('digital receipt print action opens the dialog and keeps amounts and fiscal
  assert.deepEqual(styles,{shadow:'none',padding:'0px',minHeight:'0px'});assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+
+for(const scenario of ['matching','conflict','storage-failure','pending']){
+test('next table order respects saved checkout: '+scenario,async()=>{
+ const browser=await chromium.launch({headless:true});
+ try{
+ const page=await browser.newPage(),code='a'.repeat(48),id='11111111-1111-4111-8111-111111111111',otherId='22222222-2222-4222-8222-222222222222';
+ await page.addInitScript(({code,id,otherId,scenario})=>{
+  sessionStorage.setItem('bringness-center-pending:'+code,JSON.stringify({requestId:scenario==='conflict'?otherId:id}));
+  sessionStorage.setItem('bringness-center-pending:other-table','untouched');
+  if(scenario==='storage-failure'){Storage.prototype.removeItem=()=>{throw Error('storage unavailable');};}
+ },{code,id,otherId,scenario});
+ await page.route('https://center.test/**',async route=>{
+  const url=new URL(route.request().url());let data={};
+  if(url.pathname==='/center/status.html')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/center/status.html',import.meta.url),'utf8')});
+  if(url.pathname==='/center/index.html')return route.fulfill({contentType:'text/html',body:'<h1>Neue Bestellung</h1>'});
+  if(url.pathname.endsWith('/status'))data={order:{status:scenario==='pending'?'payment_pending':'ready',restaurant_name:'Restaurant',checkout_request_id:id,next_order_url:'/center/index.html?code='+code}};
+  return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+ });
+ await page.goto('https://center.test/center/status.html#token='+'b'.repeat(64));
+ await page.locator('#status').getByText(scenario==='pending'?'Zahlung ausstehend':'Bereit zur Abholung',{exact:false}).waitFor();
+ if(scenario==='pending'){assert.equal(await page.locator('#nextOrder').isVisible(),false);return;}
+ await page.locator('#nextOrder').click();
+ if(scenario==='matching'){
+  await page.waitForURL('https://center.test/center/index.html?code='+code);
+  assert.equal(await page.evaluate(code=>sessionStorage.getItem('bringness-center-pending:'+code),code),null);
+ }else{
+  await page.locator('#nextOrderStatus').getByText(scenario==='conflict'?'Für diesen Tisch ist bereits ein anderer Zahlungsversuch gespeichert. Bitte zuerst diesen Vorgang abschließen.':'Der gespeicherte Vorgang kann nicht freigegeben werden. Bitte den ursprünglichen Browser-Tab verwenden.',{exact:true}).waitFor();
+  assert.match(page.url(),/status.html/);
+  assert.ok(await page.evaluate(code=>sessionStorage.getItem('bringness-center-pending:'+code),code));
+ }
+ assert.equal(await page.evaluate(()=>sessionStorage.getItem('bringness-center-pending:other-table')),'untouched');
+ }finally{await browser.close();}
+});
+}
