@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {personnelReport,monthWindow} from './personnel-report.js';
 const digest=s=>crypto.createHash('sha256').update(s).digest('hex');
 const legacyHash=s=>crypto.scryptSync(s,process.env.PASSWORD_PEPPER||'bringness-pos',64).toString('hex');
 export const pinHash=pin=>{const salt=crypto.randomBytes(16).toString('hex');return salt+':'+crypto.scryptSync(pin,salt,64).toString('hex')};
@@ -9,11 +10,13 @@ async function body(req){let text='';for await(const chunk of req){text+=chunk;i
 const fail=(text,status=400)=>{throw Object.assign(Error(text),{status})};
 export function nextClockState(state,action){const next={off:{start:'working'},working:{pause:'paused',end:'off'},paused:{resume:'working',end:'off'}}[state]?.[action];if(!next)fail('Diese Buchung passt nicht zum aktuellen Status.',409);return next}
 export async function migratePersonnel(pool){await pool.query(`
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS duty_state text NOT NULL DEFAULT 'off' CHECK(duty_state IN ('off','working','paused'));
 CREATE TABLE IF NOT EXISTS personnel_admin_pins(user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,pin_hash text NOT NULL);
 CREATE TABLE IF NOT EXISTS personnel_unlocks(token_hash text PRIMARY KEY,session_hash text NOT NULL REFERENCES sessions(token_hash) ON DELETE CASCADE,user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at timestamptz NOT NULL);
 CREATE TABLE IF NOT EXISTS personnel_attempts(key text PRIMARY KEY,count int NOT NULL,until_at timestamptz NOT NULL);
 CREATE TABLE IF NOT EXISTS personnel_time_entries(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),employee_id uuid NOT NULL REFERENCES employees(id),restaurant_id uuid NOT NULL REFERENCES restaurants(id),action text NOT NULL CHECK(action IN ('start','pause','resume','end')),recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),effective_at timestamptz NOT NULL DEFAULT clock_timestamp(),request_id uuid NOT NULL UNIQUE,corrected_by uuid REFERENCES users(id),correction_reason text);
 CREATE INDEX IF NOT EXISTS personnel_time_employee_idx ON personnel_time_entries(employee_id,recorded_at,id);
+UPDATE employees e SET duty_state=coalesce((SELECT CASE action WHEN 'start' THEN 'working' WHEN 'resume' THEN 'working' WHEN 'pause' THEN 'paused' ELSE 'off' END FROM personnel_time_entries WHERE employee_id=e.id ORDER BY recorded_at DESC,id DESC LIMIT 1),'off');
 `)}
 export function createPersonnel(pool){
  async function actor(req){const raw=String(req.headers.authorization||'').replace(/^Bearer /,'');if(!raw)return null;return (await pool.query("SELECT u.id,u.company_id,u.role,u.password_hash,s.token_hash session_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[digest(raw)])).rows[0]||null}
@@ -34,19 +37,29 @@ export function createPersonnel(pool){
   else{const stored=(await pool.query('SELECT pin_hash FROM personnel_admin_pins WHERE user_id=$1',[u.id])).rows[0];if(!pinMatches(String(b.pin||''),stored?.pin_hash))fail('PIN stimmt nicht',403)}
   await pool.query('DELETE FROM personnel_attempts WHERE key=$1',[key]);const raw=crypto.randomBytes(32).toString('hex');await pool.query("INSERT INTO personnel_unlocks VALUES($1,$2,$3,now()+interval '3 minutes')",[digest(raw),u.session_hash,u.id]);return send(res,200,{unlockToken:raw})
  }
- if(route==='/people'&&req.method==='GET'){await allowedRestaurant(b.restaurantId,u);return send(res,200,{people:(await pool.query('SELECT id,display_name FROM employees WHERE restaurant_id=$1 AND active=true ORDER BY display_name',[b.restaurantId])).rows})}
+ if(route==='/people'&&req.method==='GET'){if(u.role==='waiter')fail('Nur eigene Mitarbeiterdaten sind freigegeben',403);await allowedRestaurant(b.restaurantId,u);return send(res,200,{people:(await pool.query('SELECT id,display_name FROM employees WHERE restaurant_id=$1 AND active=true ORDER BY display_name',[b.restaurantId])).rows})}
  if(route==='/clock'&&req.method==='POST'){
   await allowedRestaurant(b.restaurantId,u);if(!uuid(b.employeeId))fail('Mitarbeiter wählen');const key='employee:'+b.employeeId;await attempt(key);
-  const c=await pool.connect();try{await c.query('BEGIN');const e=(await c.query('SELECT id,pin_hash FROM employees WHERE id=$1 AND restaurant_id=$2 AND active=true FOR UPDATE',[b.employeeId,b.restaurantId])).rows[0];if(!e||!pinMatches(String(b.pin||''),e.pin_hash))fail('PIN oder Mitarbeiter stimmt nicht',403);await pool.query('DELETE FROM personnel_attempts WHERE key=$1',[key]);
+  const c=await pool.connect();try{await c.query('BEGIN');const e=(await c.query('SELECT id,pin_hash,user_id FROM employees WHERE id=$1 AND restaurant_id=$2 AND active=true FOR UPDATE',[b.employeeId,b.restaurantId])).rows[0];if(u.role==='waiter'&&e?.user_id!==u.id)fail('Nur die eigene Dienstzeit darf gebucht werden',403);if(!e||!pinMatches(String(b.pin||''),e.pin_hash))fail('PIN oder Mitarbeiter stimmt nicht',403);await pool.query('DELETE FROM personnel_attempts WHERE key=$1',[key]);
    const latest=(await c.query('SELECT action,effective_at FROM personnel_time_entries WHERE employee_id=$1 ORDER BY recorded_at DESC,id DESC LIMIT 1',[e.id])).rows[0];let state=latest?({start:'working',resume:'working',pause:'paused',end:'off'}[latest.action]):'off';
-   if(b.action){if(!uuid(b.requestId))fail('Buchungskennung erforderlich');const prior=(await c.query('SELECT employee_id,action FROM personnel_time_entries WHERE request_id=$1',[b.requestId])).rows[0];if(prior){if(prior.employee_id!==e.id||prior.action!==b.action)fail('Buchungskennung bereits verwendet',409)}else{state=nextClockState(state,b.action);const entry=(await c.query('INSERT INTO personnel_time_entries(employee_id,restaurant_id,action,request_id) VALUES($1,$2,$3,$4) RETURNING id',[e.id,b.restaurantId,b.action,b.requestId])).rows[0];await audit(c,u,'personnel.clock',entry.id,{employeeId:e.id,action:b.action})}}
-   await c.query('COMMIT');return send(res,200,{state,confirmed:!!b.action})
+   if(b.action){if(b.action==='toggle'){const priorToggle=uuid(b.requestId)?(await c.query('SELECT employee_id,action FROM personnel_time_entries WHERE request_id=$1',[b.requestId])).rows[0]:null;if(priorToggle&&priorToggle.employee_id!==e.id)fail('Buchungskennung bereits verwendet',409);b.action=priorToggle?.action||(state==='off'?'start':'end')}if(!uuid(b.requestId))fail('Buchungskennung erforderlich');const prior=(await c.query('SELECT employee_id,action FROM personnel_time_entries WHERE request_id=$1',[b.requestId])).rows[0];if(prior){if(prior.employee_id!==e.id||prior.action!==b.action)fail('Buchungskennung bereits verwendet',409)}else{state=nextClockState(state,b.action);const entry=(await c.query('INSERT INTO personnel_time_entries(employee_id,restaurant_id,action,request_id) VALUES($1,$2,$3,$4) RETURNING id',[e.id,b.restaurantId,b.action,b.requestId])).rows[0];await audit(c,u,'personnel.clock',entry.id,{employeeId:e.id,action:b.action})}}
+   await c.query('UPDATE employees SET duty_state=$1 WHERE id=$2',[state,e.id]);const openTables=state==='off'?(await c.query("SELECT t.id,t.name FROM dining_tables t WHERE t.waiter_employee_id=$1 AND EXISTS(SELECT 1 FROM orders o WHERE o.table_id=t.id AND o.status NOT IN ('paid','cancelled'))",[e.id])).rows:[];await c.query('COMMIT');return send(res,200,{state,confirmed:!!b.action,openTables})
   }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ if((route==='/report'||route==='/my-report')&&req.method==='GET'){
+  const own=route==='/my-report';if(own&&u.role!=='waiter')fail('Kein Mitarbeiterzugang',403);if(!own&&!await unlock(req,u))fail('Verwaltungs-PIN erforderlich',403);
+  let restaurantId=b.restaurantId,employeeId=b.employeeId||null;
+  if(own){const me=(await pool.query('SELECT id,restaurant_id FROM employees WHERE user_id=$1 AND active=true',[u.id])).rows[0];if(!me)fail('Mitarbeiter nicht gefunden',404);restaurantId=me.restaurant_id;employeeId=me.id;}
+  await allowedRestaurant(restaurantId,u);if(employeeId&&!uuid(employeeId))fail('Ungültiger Mitarbeiter');
+  const month=b.month||new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit'}).format(new Date()),window=monthWindow(month);
+  const people=(await pool.query('SELECT id,display_name FROM employees WHERE restaurant_id=$1 AND ($2::uuid IS NULL OR id=$2) ORDER BY display_name',[restaurantId,employeeId])).rows;
+  const entries=(await pool.query('SELECT id,employee_id,action,recorded_at,effective_at,correction_reason FROM personnel_time_entries WHERE restaurant_id=$1 AND ($2::uuid IS NULL OR employee_id=$2) AND effective_at<$3 ORDER BY recorded_at,id',[restaurantId,employeeId,new Date(window.to).toISOString()])).rows;
+  return send(res,200,personnelReport(entries,people,month));
  }
  if(!await unlock(req,u))fail('Verwaltungs-PIN erforderlich',403);
  if(route==='/touch'&&req.method==='POST')return send(res,200,{ok:true});
  await allowedRestaurant(b.restaurantId,u);
- if(route==='/employees'&&req.method==='GET')return send(res,200,{employees:(await pool.query('SELECT id,display_name,role,active,(pin_hash IS NOT NULL) pin_configured FROM employees WHERE restaurant_id=$1 ORDER BY display_name',[b.restaurantId])).rows});
+ if(route==='/employees'&&req.method==='GET')return send(res,200,{employees:(await pool.query('SELECT id,display_name,role,active,duty_state,(pin_hash IS NOT NULL) pin_configured FROM employees WHERE restaurant_id=$1 ORDER BY display_name',[b.restaurantId])).rows});
  if(route==='/employees'&&req.method==='POST'){const name=String(b.name||'').trim(),role=String(b.role||'cashier');if(name.length<2||name.length>100||!['cashier','kitchen','manager','waiter'].includes(role)||!/^\d{6,8}$/.test(String(b.pin||'')))fail('Name, Rolle und persönliche PIN mit 6 bis 8 Ziffern erforderlich');const e=(await pool.query('INSERT INTO employees(restaurant_id,display_name,role,pin_hash) VALUES($1,$2,$3,$4) RETURNING id',[b.restaurantId,name,role,pinHash(String(b.pin))])).rows[0];await audit(pool,u,'personnel.employee.created',e.id,{name,role});return send(res,201,{id:e.id})}
  if(route==='/pin'&&req.method==='POST'){if(!uuid(b.employeeId)||!/^\d{6,8}$/.test(String(b.pin||'')))fail('PIN mit 6 bis 8 Ziffern erforderlich');const q=await pool.query('UPDATE employees SET pin_hash=$1 WHERE id=$2 AND restaurant_id=$3 RETURNING id',[pinHash(String(b.pin)),b.employeeId,b.restaurantId]);if(!q.rowCount)fail('Mitarbeiter nicht gefunden',404);await audit(pool,u,'personnel.employee.pin',b.employeeId,{});return send(res,200,{ok:true})}
  if(route==='/schedules'&&req.method==='GET')return send(res,200,{schedules:(await pool.query('SELECT employee_id,starts_at,ends_at FROM waiter_schedules WHERE restaurant_id=$1 AND ends_at>now()-interval \'90 days\' AND ends_at<=now()',[b.restaurantId])).rows});
@@ -56,3 +69,4 @@ export function createPersonnel(pool){
  }catch(e){if(e.status)return send(res,e.status,{error:e.message});throw e}
  }
 }
+

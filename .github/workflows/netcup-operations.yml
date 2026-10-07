@@ -71,7 +71,9 @@ jobs:
           node --test server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
           npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
+          node --test server/personnel-report.test.js
           node server/ai-tests/personnel.mjs
+          node server/ai-tests/personnel-service.mjs
           node server/ai-tests/pos-auth.mjs
           node server/ai-tests/remote-support.mjs
           node server/ai-tests/offline-accountant.mjs
@@ -106,6 +108,7 @@ jobs:
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
             root@152.53.196.43 "$command"
+
 
 
 
