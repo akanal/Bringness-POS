@@ -1,3 +1,4 @@
+import {adminAccountDetail,adminDisableProcurement} from './ai-admin-account.js';
 import {migrateAutoProcurement,automaticProcurementRoutes,automaticProcurementTick} from './ai-auto-procurement.js';
 import {cartTransaction} from './ai-cart.js';
 import {migrateStockLifecycle,kitchenRoutes,kitchenAction,recipeAvailability,blockUnavailableRecipes} from './ai-stock-lifecycle.js';
@@ -131,6 +132,8 @@ export async function handleAiPlatform(req,res){
    if(p==='/api/ai/admin/subscriptions'&&req.method==='GET')return send(res,200,{...await subscriptionRoutes(p,req.method,{},admin,true),setup:await tariffSetupStatus()});
    if(p==='/api/ai/admin/tariffs'&&req.method==='GET')return send(res,200,{...await readAiTariffs(),setup:await tariffSetupStatus()});
    if(p==='/api/ai/admin/tariffs'&&req.method==='POST')return send(res,200,await updateAiTariff(await body(req),admin));
+   if(p==='/api/ai/admin/account-detail'&&req.method==='GET')return send(res,200,await adminAccountDetail(pool,url.searchParams.get('id')));
+   if(p==='/api/ai/admin/disable-procurement'&&req.method==='POST')return send(res,200,await adminDisableProcurement(pool,admin,(await body(req)).id));
    if(p==='/api/ai/admin/overview'&&req.method==='GET')return send(res,200,await adminOverview(pool));
    if(p==='/api/ai/admin/audit'&&req.method==='GET')return send(res,200,await adminAudit(pool,platformPool,url));
    if(p==='/api/ai/admin/monitor')return send(res,200,await inventoryRoutes(p,req.method,{},admin,url,true));

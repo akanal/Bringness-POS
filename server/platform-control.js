@@ -26,7 +26,7 @@ async function platformUser(req){
     SELECT u.id FROM sessions s
     JOIN users u ON u.id=s.user_id
     JOIN platform_admins pa ON pa.user_id=u.id AND pa.active=true
-    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'
+    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)
   `,[hash]);
   return result.rows[0]||null;
 }
@@ -37,6 +37,14 @@ export async function handlePlatformControl(req,res){
   const actor=await platformUser(req);
   if(!actor){send(res,403,{error:"Nur Bringness-Plattformadministratoren"});return true}
   const p=url.pathname;
+  if(p==="/api/v1/platform/control/offline"&&req.method==="GET"){
+    const counts=(await pool.query("SELECT stock_state,count(*)::int count FROM pos_offline_sales GROUP BY stock_state")).rows;
+    const sales=(await pool.query(`SELECT s.id,s.stock_state,s.stock_error,s.created_at,o.created_at sold_at,o.total_cents,r.name restaurant_name,c.name company_name,d.name device_name
+      FROM pos_offline_sales s JOIN orders o ON o.id=s.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id
+      JOIN pos_offline_catalogs catalog ON catalog.id=s.catalog_id JOIN devices d ON d.id=catalog.device_id
+      WHERE s.stock_state IN ('pending','conflict') ORDER BY s.created_at DESC LIMIT 100`)).rows;
+    send(res,200,{counts,sales,limited:sales.length===100});return true;
+  }
   if(p==="/api/v1/platform/control/registers"&&req.method==="GET"){
     const q=await pool.query(`
       SELECT r.id,r.company_id,r.name,r.mode,c.name company_name,

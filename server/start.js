@@ -1,3 +1,4 @@
+import {handlePlatformAiAssets} from './platform-ai-assets.js';
 import {handleAccountantAccess,migrateAccountantAccess} from './accountant-access.js';
 import {handleOfflineSales,migrateOfflineSales} from './offline-sales.js';
 import {handlePosStockBridge,migratePosStockEvents} from './pos-stock-bridge.js';
@@ -20,6 +21,7 @@ import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
 import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
 import { handleBillingStatus } from "./billing-status.js";
 import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
+import {createPlatformAiGateway} from "./platform-ai-gateway.js";
 import { handlePlatformControl } from "./platform-control.js";
 import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
 import { handleSupport, migrateSupport } from "./support-center.js";
@@ -37,6 +39,9 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
   return originalPoolQuery.call(this, text, ...args);
 };
 
+const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
+const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
+
 // Add modular API routes without destabilising the large legacy server file.
 const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
@@ -44,6 +49,7 @@ http.createServer = function patchedCreateServer(listener) {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
       if (await handleLanguageCatalog(req,res)) return;
+      if (await handlePlatformAiAssets(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
       if (aiFeatures && await aiFeatures.handleAiPlatform(req,res)) return;
       if (await requireAdminPasswordChange(req,res)) return;
@@ -59,6 +65,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleStaffInvitations(req,res)) return;
       if (await handleAdminAuditExport(req,res)) return;
       if (await handleBillingTerms(req,res)) return;
+      if (await handlePlatformAiGateway(req,res)) return;
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;
@@ -105,6 +112,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
         if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js"></script></body>');
+        if (!html.includes('/admin/platform-hub.js')) html = html.replace("</body>", '<script src="/admin/platform-hub.js"></script></body>');
         if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js"></script></body>');
       }
       return Readable.from([Buffer.from(html, "utf8")]);

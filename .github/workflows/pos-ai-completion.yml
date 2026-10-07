@@ -17,7 +17,7 @@ jobs:
         with: {node-version: 24}
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm ci --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
-      - run: node --test server/ai-demand-core.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+      - run: node --test server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
       - run: node server/ai-tests/offline-accountant.mjs
       - run: node server/ai-tests/pos-stock-bridge.mjs
       - run: node server/ai-tests/integration.mjs

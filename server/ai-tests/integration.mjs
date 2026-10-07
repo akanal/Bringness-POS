@@ -882,4 +882,19 @@ await query("UPDATE ai_orders SET unavailable=true WHERE id=$1",[waitIds[0]]);as
 await query("UPDATE ai_orders SET updated_at=now() WHERE id=$1",[waitIds[1]]);assert(!(await call('monitor',null,flowBuyerToken)).findings.some(f=>f.kind==='confirmation_pending'));
 await query("UPDATE ai_orders SET updated_at=now()-interval '25 hours',status='cancelled' WHERE id=$1",[waitIds[1]]);assert(!(await call('monitor',null,flowBuyerToken)).findings.some(f=>f.kind==='confirmation_pending'));
 console.log('Pending confirmation monitor passed: 24-hour threshold, one finding per supplier group, private restaurant access, admin overview, stable acknowledgement, browser action, fresh/revised orders, unavailable/cancelled exclusion and automatic resolution.');
+// Platform-wide account inspection keeps tenant tokens out and revokes automatic ordering transactionally.
+assert.equal((await call('admin/account-detail?id='+autoAccount,null,autoToken)).status,403);
+assert.equal((await call('admin/account-detail?id=bad',null,'admin-token')).status,400);
+const inspected=await call('admin/account-detail?id='+autoAccount,null,'admin-token');assert.equal(inspected.status,200);assert.equal(inspected.account.id,autoAccount);assert(inspected.locations.length);assert(inspected.stock.length);assert(!JSON.stringify(inspected).includes('token_hash'));assert(!JSON.stringify(inspected).includes('password_hash'));
+await query("UPDATE ai_auto_procurement SET policy=jsonb_set(policy,'{enabled}','true') WHERE account_id=$1",[autoAccount]);
+assert.equal((await call('admin/disable-procurement',{id:autoAccount},autoToken)).status,403);
+assert.equal((await call('admin/disable-procurement',{id:autoAccount},'admin-token')).changed,true);
+assert.equal((await call('admin/disable-procurement',{id:autoAccount},'admin-token')).changed,false);
+assert.equal((await call('automatic-procurement/run',{},autoToken)).state,'disabled');
+assert.equal((await query("SELECT count(*)::int n FROM ai_audit WHERE target_id=$1 AND action='platform_procurement_disabled'",[autoAccount])).rows[0].n,1);
+const managedWindow=new JSDOM(markup,{url:'https://example.org/admin/ai-workspace.html?admin=1',runScripts:'outside-only'}).window;
+managedWindow.localStorage.setItem('bringness-pos-token','admin-token');managedWindow.fetch=async(url,opts={})=>{const mapped=String(url).replace('/api/v1/platform/ai','/api/ai/admin');return w.fetch(mapped.endsWith('/api/ai/admin/')?mapped.slice(0,-1):mapped,opts)};managedWindow.eval(script);
+await until(()=>managedWindow.document.querySelector('[data-view="account-inspection"]'));managedWindow.document.querySelector('[data-view="account-inspection"]').click();await until(()=>managedWindow.document.getElementById('inspectAccount'));
+const inspectSelect=managedWindow.document.getElementById('inspectAccount');inspectSelect.value=autoAccount;inspectSelect.dispatchEvent(new managedWindow.Event('change'));await until(()=>managedWindow.document.getElementById('inspectDetail').textContent.includes('Beschaffungsläufe'));assert.match(managedWindow.document.getElementById('inspectDetail').textContent,/ausgeschaltet/);managedWindow.close();
+console.log('Platform AI inspection, tenant denial, idempotent audited procurement disablement and shared POS-session UI passed.');
 await db.close();
