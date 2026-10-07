@@ -1,10 +1,6 @@
+# Zurückgestellt: nur bei ausdrücklicher Nachfrage manuell starten.
 name: Build iOS POS client
 on:
-  pull_request:
-    paths: ['apps/ios/**', '.github/workflows/ios-client.yml']
-  push:
-    branches: [main]
-    paths: ['apps/ios/**', '.github/workflows/ios-client.yml']
   workflow_dispatch:
 permissions:
   contents: read

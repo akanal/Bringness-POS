@@ -10,7 +10,7 @@
 8. Kundenportal und Lizenzierung
 9. Admin
 10. Windows Packaging
-11. iPad/iPhone
+11. iPhone/iPad über die Online-Kasse; native iOS-App bei Nachfrage, derzeit zurückgestellt
 12. Bon/Hardware
 13. TSE/Fiskal mit realem Provider
 14. Payment mit realem Provider

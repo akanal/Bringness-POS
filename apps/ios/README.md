@@ -1,4 +1,6 @@
-# iOS / iPadOS
+# iOS / iPadOS – zurückgestellt
+
+Produktentscheidung vom 07.10.2026: Keine iOS-App zum Download anbieten oder veröffentlichen. iPhone und iPad verwenden die Online-Kasse im Browser. Die vorbereitete App bleibt für spätere Nachfrage erhalten; automatische iOS-Builds sind abgeschaltet.
 
 SwiftUI/WKWebView-Client für iPhone/iPad ab iOS 16. Die Kasse öffnet `https://bringness.de/pos/` mit dauerhafter WebKit-Anmeldung, nativen Dialogen, Download-Teilen und Verbindungshinweisen.
 
