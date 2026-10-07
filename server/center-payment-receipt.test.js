@@ -1,13 +1,14 @@
+import {EventEmitter} from 'node:events';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',publicToken='33333333-3333-4333-8333-333333333333';
-async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false}={}){
+async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null}={}){
  const documents=[],queries=[];
- class Pdf {
- constructor(options){this.options=options;this.texts=[];documents.push(this);}
+ class Pdf extends EventEmitter {
+ constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.texts=[];documents.push(this);}
  fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(){return this;}
- text(value){this.texts.push(value);return this;}pipe(){return this;}end(){this.ended=true;return this;}
+ text(value){if(writerFailure==='draw')throw Error('render failed');this.texts.push(value);return this;}destroy(){this.destroyed=true;return this;}end(){this.ended=true;if(writerFailure==='stream')this.emit('error',Error('stream failed'));else this.emit('data',Buffer.from('%PDF-simulated'));this.emit('end');return this;}
  }
  const pool={query:async(sql,args)=>{
  queries.push({sql,args});
@@ -21,13 +22,14 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  throw Error('Unexpected query');
  }};
  const handler=createPaymentReceiptHandler(pool,Pdf,{toBuffer:async(url)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
- const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){this.body=JSON.parse(raw);}};
+ const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){if(Buffer.isBuffer(raw))this.pdf=raw;else this.body=JSON.parse(raw);}};
  assert.equal(await handler({url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
  return {res,documents,queries};
 }
 for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  test('PDF template respects stored fiscal status: '+fiscalStatus,async()=>{
  const {res,documents}=await run(fiscalStatus);assert.equal(res.status,200);assert.equal(res.headers['content-type'],'application/pdf');
+ assert.equal(res.pdf.toString(),'%PDF-simulated');
  const doc=documents[0],text=doc.texts.join('\n');
  assert.equal(doc.ended,true);assert.match(text,/Historisches Restaurant/);assert.match(text,/Historischer Betrieb/);
  assert.match(text,/Gesamt: 11,90 EUR/);assert.match(text,/Steuer: 1,90 EUR/);assert.match(text,/Online-Zahlung/);assert.doesNotMatch(text,/mollie_center/);
@@ -53,3 +55,12 @@ test('malformed receipt UUID cannot reach session or receipt queries',async()=>{
  assert.equal(await handler({url:'/api/v1/receipts/'+'-'.repeat(36)+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
  assert.equal(res.status,404);
 });
+
+for(const writerFailure of ['constructor','draw','stream']){
+ test('PDF writer failure returns JSON without a partial download: '+writerFailure,async()=>{
+ const {res,documents}=await run('pending',{writerFailure});
+ assert.equal(res.status,503);assert.equal(res.headers['content-type'],'application/json');
+ assert.equal(res.pdf,undefined);assert.match(res.body.error,/PDF/);
+ if(documents.length)assert.equal(documents[0].destroyed,true);
+ });
+}
