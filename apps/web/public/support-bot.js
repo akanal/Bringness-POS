@@ -14,7 +14,7 @@
     "role": "owner",
     "title": "Kellner einladen",
     "terms": "kellner mitarbeiter einladen email aktivierung erstcode service",
-    "answer": "Wähle zuerst deinen Betrieb. Öffne die Einstellungen und dort „Kellner & Mitarbeiterzugänge“. Trage Name und E-Mail ein. Der Kellner erhält einen Bestätigungslink und einen sechsstelligen Erstcode. Falls die E-Mail nicht ankommt, prüfe auch den Spamordner.",
+    "answer": "Wähle zuerst deinen Betrieb. Öffne Einstellungen → Personalmanagement → Servicezugänge. Trage Name und E-Mail ein. Der Kellner erhält einen Bestätigungslink und einen sechsstelligen Erstcode. Falls die E-Mail nicht ankommt, prüfe auch den Spamordner.",
     "view": "einstellungen",
     "id": "topic-2"
   },
@@ -99,16 +99,49 @@
   const normalize=s=>String(s).toLocaleLowerCase('de-DE').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
   const button=document.createElement('button');button.id='bringness-help-button';button.type='button';button.textContent='? Hilfe';button.setAttribute('aria-label','Bringness Hilfe öffnen');button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls','bringness-help-panel');
   const panel=document.createElement('section');panel.id='bringness-help-panel';panel.className='bringness-help';panel.hidden=true;panel.setAttribute('aria-label','Bringness Support-Assistent');
-  panel.innerHTML='<header><strong>Bringness Hilfe</strong><button type="button" aria-label="Hilfe schließen">×</button></header><div class="help-log" role="log" aria-live="polite"></div><div class="help-topics" aria-label="Häufige Fragen"></div><form><input type="search" maxlength="2000" aria-label="Frage eingeben" placeholder="Deine Frage …" required><button type="submit">Fragen</button></form><footer>Antworten aus der Bringness-Schnellhilfe · <button type="button" id="supportHistory">Verlauf</button> <button type="button" id="supportNew">Neue Anfrage</button> <button type="button" id="supportEscalate">An Support weitergeben</button><p id="supportNotice">Angemeldete Supportgespräche werden für die Bearbeitung und Problemanalyse gespeichert. Bitte keine Passwörter eingeben.</p></footer>';
+  panel.innerHTML='<header><strong>Bringness Hilfe</strong><button type="button" aria-label="Hilfe schließen">×</button></header><section class="help-context" aria-label="Hilfe zur aktuellen Seite" style="padding:14px;border-bottom:1px solid #ddd" hidden></section><div class="help-log" role="log" aria-live="polite"></div><div class="help-topics" aria-label="Häufige Fragen"></div><form><input type="search" maxlength="2000" aria-label="Frage eingeben" placeholder="Deine Frage …" required><button type="submit">Fragen</button></form><footer>Antworten aus der Bringness-Schnellhilfe · <button type="button" id="supportHistory">Verlauf</button> <button type="button" id="supportNew">Neue Anfrage</button> <button type="button" id="supportEscalate">An Support weitergeben</button><p id="supportNotice">Angemeldete Supportgespräche werden für die Bearbeitung und Problemanalyse gespeichert. Bitte keine Passwörter eingeben.</p></footer>';
   document.body.append(button,panel);
   const log=panel.querySelector('.help-log'),input=panel.querySelector('input'),chips=panel.querySelector('.help-topics');
+  const pageHelp={
+    kasse:['Kasse','Wähle Artikel für den Warenkorb und schließe den Verkauf über die Zahlung ab. Unter Mehr → Personal – Stempeluhr können Mitarbeiter ihren Dienst mit ihrer persönlichen PIN beginnen oder beenden.'],
+    einstellungen:['Einstellungen','Personalmanagement, Bildschirmverwaltung und die Center-Verbindung findest du hier. Die Verwaltungs-PIN schützt Änderungen. Bei der ersten Einrichtung bestätigst du dein vorhandenes Kassenkennwort und legst eine eigene PIN mit 6–8 Ziffern fest. Eine vergessene PIN setzt du mit dem Kontokennwort neu.'],
+    personalmanagement:['Personalmanagement','Hier verwaltest du Mitarbeiter, Rechte, Dienstplan und Arbeitszeiten. Die Verwaltungs-PIN schützt diesen Bereich. Zum Ein- und Ausstempeln nutzt jeder Mitarbeiter seine persönliche PIN unter Mehr → Personal – Stempeluhr.'],
+    mitarbeiter:['Mitarbeiter & Rechte','Lege Mitarbeiter mit der passenden Rolle und einer persönlichen Stempel-PIN an. Diese PIN dient der Zeiterfassung. Den Zugang zum Service auf dem Handy richtest du separat unter Servicezugänge ein.'],
+    personalservice:['Servicezugänge','Lege Name und E-Mail des Mitarbeiters fest. Die Einladung ermöglicht einen eigenen Servicezugang. Weise danach die passenden Bereiche oder Tische zu.'],
+    dienstplan:['Dienstplan','Plane die Dienste deiner Mitarbeiter. Die tatsächlich gestempelten Zeiten findest du getrennt unter Zeiterfassung und Stundenübersicht.'],
+    zeiterfassung:['Zeiterfassung','Hier siehst du Dienstbeginn, Pausen und Dienstende. Fehlerhafte Buchungen kannst du mit einer Begründung nachvollziehbar korrigieren.'],
+    stunden:['Stundenübersicht','Wähle Monat und Mitarbeiter, um Dienstzeiten, Pausen und Gesamtstunden auszuwerten. Die Übersicht lässt sich drucken und über den Druckdialog als PDF speichern.'],
+    displays:['Bildschirmverwaltung','Wähle Quer- oder Hochformat. Füge Speisekarte, Bilder oder Videos zur Wiedergabeliste hinzu und prüfe die Vorschauen. Nach dem Speichern öffnest du den Verbindungslink im Browser des Bildschirms oder Zuspielers. Preise kommen aus deinen Artikeln.'],
+    stempeluhr:['Personal – Stempeluhr','Wähle deinen Namen und bestätige mit deiner persönlichen PIN den Dienstbeginn oder das Dienstende. Pausen buchst du mit Pause beginnen / beenden. Nach Dienstende kommen keine neuen Tischaufträge. Offene Tische musst du übergeben.'],
+    verwaltungspin:['Verwaltungs-PIN','Das Kontokennwort ist dein normales Kassen-Anmeldekennwort. Bei Neue PIN legst du selbst 6–8 Ziffern fest. Diese PIN schützt Einstellungen und Personalmanagement und ist von der persönlichen Stempel-PIN getrennt.'],
+    tische:['Tische','Wähle einen Tisch, um seine Bestellung und den offenen Betrag zu sehen. Die Tischverwaltung bietet Übersicht, Liste und Raumplanung. QR-Codes verbinden Gäste mit dem richtigen Tisch.'],
+    bestellungen:['Bestellungen','Hier siehst du eingehende Bestellungen und ihren Status. Prüfe Tisch und Inhalt, bevor du die Bestellung weiterbearbeitest.'],
+    kueche:['Küche','Die Küchenansicht zeigt offene Bestellungen für die Zubereitung. Bearbeite den Status passend zum tatsächlichen Ablauf.'],
+    belege:['Belege','Hier findest du abgeschlossene Belege. Öffne den gewünschten Beleg zum Drucken oder zum Abruf des digitalen Belegs per QR.'],
+    artikel:['Artikel','Pflege Kategorien, Speisen, Preise und Bilder. Zeitlich begrenzte Verfügbarkeit legst du bei den Artikeln fest.'],
+    varianten:['Varianten','Varianten ergänzen Artikel um Auswahlmöglichkeiten. Prüfe die zugehörigen Preise und die Zuordnung zum Artikel.'],
+    schicht:['Kassenschicht','Kassenschichten betreffen den Kassenbetrieb und die Abrechnung. Die Arbeitszeit deiner Mitarbeiter verwaltest du getrennt im Personalmanagement.'],
+    tse:['TSE','Hier findest du den Status und die Funktionen der technischen Sicherheitseinrichtung. Eine erreichbare Kasse allein bestätigt noch keine abgeschlossene TSE-Einrichtung.'],
+    lizenz:['Lizenz & Abo','Hier siehst du Tarife, Modulfreigaben und den Zahlungsstatus deines Betriebs.'],
+    login:['Kassenanmeldung','Melde dich mit deiner E-Mail und deinem Kontokennwort an. Bei einem vergessenen Kennwort nutze Passwort vergessen. Die Verwaltungs-PIN wird erst innerhalb der Kasse eingerichtet.']
+  };
+  function updatePageHelp(){
+    const box=panel.querySelector('.help-context');if(isService||!location.pathname.startsWith('/pos')){box.hidden=true;return}
+    let view=document.body.dataset.posView||'kasse';
+    const dialog=document.querySelector('.personnel-dialog');
+    if(dialog){const name=dialog.getAttribute('aria-label')||'';if(name==='Stempeluhr')view='stempeluhr';else if(name.includes('Verwaltungs-PIN'))view='verwaltungspin'}
+    if(!document.querySelector('#workspace.show'))view='login';
+    const help=pageHelp[view]||[document.querySelector('#moduleView h2')?.textContent||'Aktuelle Seite','Hier bearbeitest du die Funktionen der geöffneten Seite. Stelle unten eine konkrete Frage, wenn du weitere Unterstützung benötigst.'];
+    box.replaceChildren();const title=document.createElement('strong'),description=document.createElement('p');title.textContent=help[0];description.textContent=help[1];box.append(title,description);box.hidden=false;
+  }
+  document.addEventListener('bringness:pos-view',()=>{if(!panel.hidden)updatePageHelp()});
   function message(value,who='bot',topic){const item=document.createElement('div');item.className='help-message '+who;item.textContent=value;if(topic){const action=topic.view&&!isService?document.querySelector('[data-view="'+topic.view+'"], [data-user-view="'+topic.view+'"]'):null;const link=document.createElement(action?'button':'a');link.textContent=action?'Bereich öffnen →':topic.href?'Servicebereich öffnen →':'';if(action){link.type='button';link.style.cssText='display:block;margin-top:9px;border:0;background:transparent;color:#075a81;font:700 14px system-ui;cursor:pointer;padding:0';link.onclick=()=>{action.click();close()}}else if(topic.href){link.href=topic.href;link.style.display='block';link.style.marginTop='9px'}if(link.textContent)item.append(link)}log.append(item);log.scrollTop=log.scrollHeight}
   function close(){panel.hidden=true;button.setAttribute('aria-expanded','false');button.focus()}
   let conversationId=null,lastToken=null,busy=false;
   const authToken=()=>localStorage.getItem(isService?'bringness-waiter-token':'bringness-pos-token');
   async function request(path,body){const r=await fetch('/api/v1'+path,{method:body?'POST':'GET',headers:{'content-type':'application/json',authorization:'Bearer '+(authToken()||'')},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.error||'Support konnte nicht geladen werden.');return j}
   function identity(){const current=authToken();if(current!==lastToken){lastToken=current;conversationId=null;log.replaceChildren()}return current}
-  button.onclick=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){identity();if(!log.childElementCount)message('Hallo! Ich bin der automatische Bringness-Supportassistent. Häufige Fragen beantworte ich sofort. Spezielle Fragen übernimmt unser Supportteam.');input.focus()}};
+  button.onclick=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){identity();updatePageHelp();if(!log.childElementCount)message('Hallo! Ich bin der automatische Bringness-Supportassistent. Häufige Fragen beantworte ich sofort. Spezielle Fragen übernimmt unser Supportteam.');input.focus()}};
   panel.querySelector('header button').onclick=close;
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden)close()});
   async function ask(question){if(busy)return;identity();busy=true;panel.querySelector('form button').disabled=true;message(question,'user');try{if(authToken()){const j=await request('/support/message',{question,conversationId});conversationId=j.conversationId;message('Automatische Antwort: '+j.answer,'bot',j.topic)}else{const topic=visible.find(t=>t.title===question);message(topic?topic.answer:'Bitte melde dich an, damit wir diese Frage speichern und an das Supportteam weitergeben können.','bot',topic)}}catch(error){message(error.message)}finally{busy=false;panel.querySelector('form button').disabled=false}}
@@ -120,3 +153,4 @@
   panel.querySelector('#supportNew').onclick=()=>{if(busy)return;identity();conversationId=null;log.replaceChildren();message('Wobei können wir helfen? Häufige Fragen beantwortet der automatische Assistent.');input.focus()};
   if(new URLSearchParams(location.search).get('support')==='open')button.click();
 })();
+
