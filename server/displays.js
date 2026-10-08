@@ -25,6 +25,13 @@ export function createDisplays(pool){
  return send(res,200,{name:d.name,restaurantName:d.restaurant_name,orientation:d.orientation,fit:d.fit,playlist:d.playlist,products,updatedAt:d.updated_at});
  }
  const rid=url.searchParams.get('restaurantId');const u=platform?await systemActor(pool,req,res,rid):await owner(req,res);if(!u)return true;if(!uuid(rid)||!(await pool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[rid,u.company_id])).rowCount)return send(res,404,{error:'Betrieb nicht gefunden'});
+ if(platform&&p==='/api/v1/displays/catalog'&&req.method==='GET'){
+ const [restaurants,categories,products]=await Promise.all([
+ pool.query('SELECT id,name FROM restaurants WHERE id=$1',[rid]),
+ pool.query('SELECT id,name,restaurant_id AS "restaurantId" FROM categories WHERE restaurant_id=$1 ORDER BY sort_order,name',[rid]),
+ pool.query('SELECT id,name,restaurant_id AS "restaurantId",category_id AS "categoryId",price_cents::numeric/100 AS price FROM products WHERE restaurant_id=$1 AND active=true AND ai_stock_available=true ORDER BY name',[rid])]);
+ return send(res,200,{restaurants:restaurants.rows,categories:categories.rows,products:products.rows});
+ }
  if(p==='/api/v1/displays'&&req.method==='GET')return send(res,200,{displays:(await pool.query('SELECT id,name,orientation,fit,playlist,token FROM pos_displays WHERE restaurant_id=$1 ORDER BY name',[rid])).rows});
  if(p==='/api/v1/displays/media'&&req.method==='POST'){
  const mime=String(req.headers['content-type']||'').split(';')[0];if(!['image/png','image/jpeg','image/webp','video/mp4','video/webm'].includes(mime))return send(res,400,{error:'Bitte PNG, JPEG, WebP, MP4 oder WebM hochladen'});
