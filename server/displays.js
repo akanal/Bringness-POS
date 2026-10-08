@@ -1,3 +1,4 @@
+import {systemActor} from './system-access.js';
 import crypto from 'node:crypto';
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 const uuid=s=>/^[0-9a-f-]{36}$/i.test(String(s));
@@ -14,7 +15,7 @@ export function createDisplays(pool){
  if(!u){send(res,401,{error:'Nicht angemeldet'});return null}if(!['owner','admin'].includes(u.role)){send(res,403,{error:'Keine Verwaltungsberechtigung'});return null}
  const unlock=String(req.headers['x-personnel-unlock']||'');if(!unlock||!(await pool.query("UPDATE personnel_unlocks SET expires_at=now()+interval '3 minutes' WHERE token_hash=$1 AND session_hash=$2 AND user_id=$3 AND expires_at>now() RETURNING token_hash",[hash(unlock),u.token_hash,u.id])).rowCount){send(res,403,{error:'Verwaltungs-PIN erforderlich'});return null}return u}
  async function body(req,max){const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>max)throw Object.assign(Error('Datei oder Anfrage zu groß'),{status:413});chunks.push(c)}return Buffer.concat(chunks)}
- return async(req,res)=>{const url=new URL(req.url,'http://local'),p=url.pathname;if(!p.startsWith('/api/v1/displays')&&!p.startsWith('/api/v1/display-player/'))return false;
+ return async(req,res)=>{const url=new URL(req.url,'http://local'),platform=url.pathname.startsWith('/api/v1/platform/displays'),p=platform?url.pathname.replace('/api/v1/platform/displays','/api/v1/displays'):url.pathname;if(!p.startsWith('/api/v1/displays')&&!p.startsWith('/api/v1/display-player/'))return false;
  try{
  const player=p.match(/^\/api\/v1\/display-player\/([a-f0-9]{48})(?:\/media\/([a-f0-9-]{36}))?$/);
  if(player&&req.method==='GET'){
@@ -23,7 +24,7 @@ export function createDisplays(pool){
  const products=(await pool.query('SELECT p.id,p.name,p.price_cents,p.category_id,c.name category FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.restaurant_id=$1 AND p.active=true AND p.ai_stock_available=true ORDER BY c.sort_order,c.name,p.name LIMIT 250',[d.restaurant_id])).rows;
  return send(res,200,{name:d.name,restaurantName:d.restaurant_name,orientation:d.orientation,fit:d.fit,playlist:d.playlist,products,updatedAt:d.updated_at});
  }
- const u=await owner(req,res);if(!u)return true;const rid=url.searchParams.get('restaurantId');if(!uuid(rid)||!(await pool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[rid,u.company_id])).rowCount)return send(res,404,{error:'Betrieb nicht gefunden'});
+ const rid=url.searchParams.get('restaurantId');const u=platform?await systemActor(pool,req,res,rid):await owner(req,res);if(!u)return true;if(!uuid(rid)||!(await pool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[rid,u.company_id])).rowCount)return send(res,404,{error:'Betrieb nicht gefunden'});
  if(p==='/api/v1/displays'&&req.method==='GET')return send(res,200,{displays:(await pool.query('SELECT id,name,orientation,fit,playlist,token FROM pos_displays WHERE restaurant_id=$1 ORDER BY name',[rid])).rows});
  if(p==='/api/v1/displays/media'&&req.method==='POST'){
  const mime=String(req.headers['content-type']||'').split(';')[0];if(!['image/png','image/jpeg','image/webp','video/mp4','video/webm'].includes(mime))return send(res,400,{error:'Bitte PNG, JPEG, WebP, MP4 oder WebM hochladen'});

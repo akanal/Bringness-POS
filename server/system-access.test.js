@@ -1,0 +1,17 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {Readable} from 'node:stream';
+import {systemActor,createSystemDirectory} from './system-access.js';
+import {createDisplays} from './displays.js';
+import {createPersonnel} from './personnel.js';
+const rid='11111111-1111-4111-8111-111111111111',uid='22222222-2222-4222-8222-222222222222',company='33333333-3333-4333-8333-333333333333';
+function response(){return {writeHead(status){assert.equal(this.status,undefined,'response sent only once');this.status=status},end(body){this.body=JSON.parse(body)}}}
+function request(url,token='admin',body,method='GET'){const req=Readable.from(body?[JSON.stringify(body)]:[]);return Object.assign(req,{url,method,headers:token?{authorization:'Bearer '+token}:{}})}
+function pool(admin=true){return {query:async(sql,args)=>{if(sql.includes('JOIN platform_admins')){assert.match(sql,/pa.active=true/);assert.match(sql,/s.expires_at>now\(\)/);assert.match(sql,/must_change_password/);return {rows:admin?[{id:uid,session_hash:'hash'}]:[],rowCount:admin?1:0}}if(sql==='SELECT id,company_id FROM restaurants WHERE id=$1'){assert.equal(args[0],rid);return {rows:[{id:rid,company_id:company}],rowCount:1}}if(sql.includes('FROM restaurants WHERE id=$1 AND company_id=$2')){assert.deepEqual(args,[rid,company]);return {rows:[{id:rid}],rowCount:1}}if(sql.includes('FROM pos_displays'))return {rows:[],rowCount:0};if(sql.includes('FROM employees'))return {rows:[{id:uid,display_name:'Ada'}],rowCount:1};throw Error('Unexpected query: '+sql)}}}
+test('platform authorization rejects tenant or expired/revoked sessions before selecting a venue',async()=>{const res=response();assert.equal(await systemActor(pool(false),request('/'),res,rid),null);assert.equal(res.status,403)});
+test('platform actor is scoped to selected restaurant company without changing stored account',async()=>{const res=response(),actor=await systemActor(pool(),request('/'),res,rid);assert.equal(actor.company_id,company);assert.equal(actor.id,uid);assert.equal(actor.systemAdmin,true)});
+test('malformed venue is rejected after platform authentication',async()=>{const res=response();await systemActor(pool(),request('/'),res,'bad');assert.equal(res.status,400)});
+test('unauthenticated platform screens and personnel send one response',async()=>{for(const [factory,path] of [[createDisplays,'displays'],[createPersonnel,'personnel/employees']]){const res=response();assert.equal(await factory(pool())(request('/api/v1/platform/'+path+'?restaurantId='+rid,''),res),true);assert.equal(res.status,401)}});
+test('superadmin can inspect another company screens and employees through separate namespace',async()=>{for(const [factory,path,key] of [[createDisplays,'displays','displays'],[createPersonnel,'personnel/employees','employees']]){const res=response();await factory(pool())(request('/api/v1/platform/'+path+'?restaurantId='+rid),res);assert.equal(res.status,200);assert.ok(Array.isArray(res.body[key]))}});
+test('platform cannot stamp a shift on behalf of an employee',async()=>{const res=response();await createPersonnel(pool())(request('/api/v1/platform/personnel/clock','admin',{restaurantId:rid},'POST'),res);assert.equal(res.status,404)});
+test('system directory checks platform access even for unsupported methods',async()=>{const res=response();await createSystemDirectory(pool(false))(request('/api/v1/platform/systems'),res);assert.equal(res.status,403)});

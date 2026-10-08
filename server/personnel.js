@@ -1,3 +1,4 @@
+import {systemActor} from './system-access.js';
 import crypto from 'node:crypto';
 import {personnelReport,monthWindow} from './personnel-report.js';
 const digest=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -20,15 +21,15 @@ UPDATE employees e SET duty_state=coalesce((SELECT CASE action WHEN 'start' THEN
 `)}
 export function createPersonnel(pool){
  async function actor(req){const raw=String(req.headers.authorization||'').replace(/^Bearer /,'');if(!raw)return null;return (await pool.query("SELECT u.id,u.company_id,u.role,u.password_hash,s.token_hash session_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[digest(raw)])).rows[0]||null}
- async function unlock(req,u){if(!['owner','admin'].includes(u.role))return false;const raw=String(req.headers['x-personnel-unlock']||'');if(!raw)return false;return !!(await pool.query("UPDATE personnel_unlocks SET expires_at=now()+interval '3 minutes' WHERE token_hash=$1 AND session_hash=$2 AND user_id=$3 AND expires_at>now() RETURNING token_hash",[digest(raw),u.session_hash,u.id])).rowCount}
+ async function unlock(req,u){if(u.systemAdmin===true)return true;if(!['owner','admin'].includes(u.role))return false;const raw=String(req.headers['x-personnel-unlock']||'');if(!raw)return false;return !!(await pool.query("UPDATE personnel_unlocks SET expires_at=now()+interval '3 minutes' WHERE token_hash=$1 AND session_hash=$2 AND user_id=$3 AND expires_at>now() RETURNING token_hash",[digest(raw),u.session_hash,u.id])).rowCount}
  async function audit(c,u,type,id,payload){await c.query('INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,$3,$4,$5,$6)',[u.company_id,u.id,type,'personnel',id,JSON.stringify(payload)])}
  async function attempt(key){const q=await pool.query("INSERT INTO personnel_attempts VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN personnel_attempts.until_at<now() THEN 1 ELSE personnel_attempts.count+1 END,until_at=CASE WHEN personnel_attempts.until_at<now() THEN now()+interval '15 minutes' ELSE personnel_attempts.until_at END RETURNING count",[key]);if(q.rows[0].count>5)fail('Zu viele PIN-Versuche. Bitte in 15 Minuten erneut versuchen.',429)}
  async function allowedRestaurant(rid,u,c=pool){if(!uuid(rid)||!(await c.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[rid,u.company_id])).rowCount)fail('Betrieb nicht gefunden',404)}
  const sensitive=(p,m)=>p.startsWith('/api/v1/owner/')||p.startsWith('/api/v1/waiters')||p==='/api/v1/employees'||/^\/api\/v1\/restaurants\/[^/]+\/(branding|mode|qr-service)$/.test(p)||p==='/api/v1/billing/profile'&&m!=='GET';
- return async function handle(req,res){const url=new URL(req.url,'http://local'),p=url.pathname,base='/api/v1/personnel',own=p.startsWith(base+'/');if(!own&&!sensitive(p,req.method))return false;
- try{const u=await actor(req);if(!u)return send(res,401,{error:'Nicht angemeldet'});
+ return async function handle(req,res){const url=new URL(req.url,'http://local'),platform=url.pathname.startsWith('/api/v1/platform/personnel/'),p=platform?url.pathname.replace('/api/v1/platform/personnel','/api/v1/personnel'):url.pathname,base='/api/v1/personnel',own=p.startsWith(base+'/');if(!own&&!sensitive(p,req.method))return false;
+ try{let platformBody;if(platform){if(!['/employees','/pin','/entries','/correct','/report','/schedules'].includes(p.slice(base.length)))return send(res,404,{error:'Personal-Funktion nicht freigegeben'});platformBody=req.method==='GET'?Object.fromEntries(url.searchParams):await body(req)}const u=platform?await systemActor(pool,req,res,platformBody.restaurantId??null):await actor(req);if(!u)return platform?true:send(res,401,{error:'Nicht angemeldet'});
  if(!own){if(!await unlock(req,u))return send(res,403,{error:'Verwaltungs-PIN erforderlich',code:'PERSONNEL_LOCKED'});return false}
- const route=p.slice(base.length),b=req.method==='GET'?Object.fromEntries(url.searchParams):await body(req);
+ const route=p.slice(base.length),b=platformBody||(req.method==='GET'?Object.fromEntries(url.searchParams):await body(req));
  if(route==='/access'&&req.method==='GET'){const configured=!!(await pool.query('SELECT user_id FROM personnel_admin_pins WHERE user_id=$1',[u.id])).rowCount;return send(res,200,{configured,canManage:['owner','admin'].includes(u.role)})}
  if(route==='/lock'&&req.method==='POST'){await pool.query('DELETE FROM personnel_unlocks WHERE session_hash=$1',[u.session_hash]);return send(res,200,{ok:true})}
  if((route==='/setup'||route==='/unlock')&&req.method==='POST'){

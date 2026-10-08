@@ -59,6 +59,22 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await call(c+'/setup','PUT','admin',{action:'approve',userId:owner,restaurantId:restaurant})).status,409);
  assert.equal((await call(c+'/tables','POST','admin',{name:'Admin maintenance'})).status,201);
  assert.equal((await call(c+'/tables','GET','owner')).data.tables.length,2);
+ // Platform administration must work across companies; ordinary owners stay isolated.
+ const foreignCompany=crypto.randomUUID(),foreignOwner=crypto.randomUUID();
+ await db.query('INSERT INTO companies(id) VALUES($1)',[foreignCompany]);
+ await db.query("INSERT INTO users(id,company_id,role,status) VALUES($1,$2,'owner','active')",[foreignOwner,foreignCompany]);
+ await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[foreignOwner,crypto.createHash('sha256').update('foreign').digest('hex')]);
+ const foreignCenter=await call('','POST','foreign',{name:'Foreign Center'}),foreignPath='/'+foreignCenter.data.center.id;
+ assert.equal((await call('','GET','admin')).data.centers.some(x=>x.id===foreignCenter.data.center.id),true);
+ assert.equal((await call('','GET','owner')).data.centers.some(x=>x.id===foreignCenter.data.center.id),false);
+ assert.equal((await call(foreignPath+'/setup','GET','admin')).data.canApprove,true);
+ assert.equal((await call(foreignPath+'/tables','POST','admin',{name:'Central administration'})).status,201);
+ assert.equal((await call(foreignPath+'/tables','GET','admin')).data.tables.length,1);
+ assert.equal((await call(foreignPath+'/tables','GET','owner')).status,404);
+ assert.equal((await call(foreignPath+'/restaurants','GET','admin')).status,200);
+ await db.query('DELETE FROM center_tables WHERE center_id=$1',[foreignCenter.data.center.id]);
+ await db.query('DELETE FROM centers WHERE id=$1',[foreignCenter.data.center.id]);
+
  await db.query("UPDATE center_restaurants SET merchant_reference='merchant-1',payment_status='verified',contract_status='signed'");
  const order=crypto.randomUUID();
  await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[order,restaurant]);

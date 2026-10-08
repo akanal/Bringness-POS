@@ -1,3 +1,4 @@
+import {createSystemDirectory} from './system-access.js';
 import {createDisplays,migrateDisplays} from './displays.js';
 import {createPersonnel,migratePersonnel} from './personnel.js';
 import {createRemoteSupport,migrateRemoteSupport,cleanupRemoteSupport} from './remote-support-core.js';
@@ -47,6 +48,7 @@ const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
+const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
 
 // Add modular API routes without destabilising the large legacy server file.
 const originalCreateServer = http.createServer.bind(http);
@@ -54,6 +56,7 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
+      if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
       if (await handleLanguageCatalog(req,res)) return;
