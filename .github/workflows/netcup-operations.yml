@@ -68,10 +68,10 @@ jobs:
           node --test server/runtime-mode.test.js server/qr-service.test.js ops/select-operation.test.js
           python3 ops/netcup-command.test.py
           node server/ai-policy.test.js
-          node --test server/billing-policy.test.js server/billing-status.test.js server/billing-quote.test.js server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+          node --test server/billing-policy.test.js server/billing-quote.test.js server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
           npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
-          node --test server/personnel-report.test.js server/system-access.test.js server/displays.test.js server/center-core.test.js
+          node --test server/billing-status.test.js server/personnel-report.test.js server/system-access.test.js server/displays.test.js server/center-core.test.js
           node server/ai-tests/personnel.mjs
           node server/ai-tests/personnel-service.mjs
           node server/ai-tests/pos-auth.mjs
