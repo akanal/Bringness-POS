@@ -18,6 +18,7 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm ci --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
       - run: node --test server/billing-policy.test.js server/billing-status.test.js server/billing-quote.test.js server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+      - run: node server/ai-tests/displays.mjs
       - run: node server/ai-tests/billing-eligibility.mjs
       - run: node server/ai-tests/remote-support.mjs
       - run: node server/ai-tests/offline-accountant.mjs

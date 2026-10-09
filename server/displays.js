@@ -33,6 +33,7 @@ export function createDisplays(pool){
  return send(res,200,{restaurants:restaurants.rows,categories:categories.rows,products:products.rows});
  }
  if(p==='/api/v1/displays'&&req.method==='GET')return send(res,200,{displays:(await pool.query('SELECT id,name,orientation,fit,playlist,token FROM pos_displays WHERE restaurant_id=$1 ORDER BY name',[rid])).rows});
+ if(p==='/api/v1/displays/media'&&req.method==='GET')return send(res,200,{media:(await pool.query('SELECT id,mime,created_at FROM pos_display_media WHERE restaurant_id=$1 ORDER BY created_at DESC,id LIMIT 500',[rid])).rows.map(m=>({...m,type:m.mime.startsWith('video/')?'video':'image'}))});
  if(p==='/api/v1/displays/media'&&req.method==='POST'){
  const mime=String(req.headers['content-type']||'').split(';')[0];if(!['image/png','image/jpeg','image/webp','video/mp4','video/webm'].includes(mime))return send(res,400,{error:'Bitte PNG, JPEG, WebP, MP4 oder WebM hochladen'});
  const content=await body(req,25*1024*1024);if(!content.length)return send(res,400,{error:'Datei ist leer'});
