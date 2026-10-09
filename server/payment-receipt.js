@@ -18,5 +18,5 @@ export async function renderMailReceipt(receiptId){
  if(!q.rows[0])throw Error('RECEIPT_NOT_FOUND');
  const origin=new URL(process.env.PUBLIC_BASE_URL||'https://bringness.de');if(origin.protocol!=='https:')throw Error('PUBLIC_ORIGIN_INVALID');
  const pdf=await renderPaymentReceipt(pool,PDFDocument,QRCode,(_req,token)=>origin.origin+'/beleg/'+token,{headers:{host:origin.host}},q.rows[0]);
- return {pdf,filename:'Beleg-'+q.rows[0].receipt_number+'.pdf'};
+ return {pdf,restaurantName:q.rows[0].restaurant_name,filename:'Beleg-'+q.rows[0].receipt_number+'.pdf'};
 }
