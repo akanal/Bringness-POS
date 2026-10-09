@@ -15,7 +15,7 @@ on:
       - 'apps/web/public/receipt-print.js'
       - '.github/workflows/center-validation.yml'
   push:
-    branches: ['feat/center-mode-foundation']
+    branches: ['main', 'feat/center-mode-foundation']
     paths:
       - 'server/center*'
       - 'server/public-receipt*.js'
