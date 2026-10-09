@@ -33,7 +33,23 @@ export function createDisplays(pool){
  return send(res,200,{restaurants:restaurants.rows,categories:categories.rows,products:products.rows});
  }
  if(p==='/api/v1/displays'&&req.method==='GET')return send(res,200,{displays:(await pool.query('SELECT id,name,orientation,fit,playlist,token FROM pos_displays WHERE restaurant_id=$1 ORDER BY name',[rid])).rows});
- if(p==='/api/v1/displays/media'&&req.method==='GET')return send(res,200,{media:(await pool.query('SELECT id,mime,created_at FROM pos_display_media WHERE restaurant_id=$1 ORDER BY created_at DESC,id LIMIT 500',[rid])).rows.map(m=>({...m,type:m.mime.startsWith('video/')?'video':'image'}))});
+ if(p==='/api/v1/displays/media'&&req.method==='GET'){
+ const [media,displays]=await Promise.all([pool.query('SELECT id,mime,created_at FROM pos_display_media WHERE restaurant_id=$1 ORDER BY created_at DESC,id LIMIT 500',[rid]),pool.query('SELECT id,name,playlist FROM pos_displays WHERE restaurant_id=$1',[rid])]);
+ return send(res,200,{media:media.rows.map(m=>({...m,type:m.mime.startsWith('video/')?'video':'image',usedBy:displays.rows.filter(d=>d.playlist.some(x=>x.mediaId===m.id)).map(d=>({id:d.id,name:d.name}))}))});
+ }
+ const mediaId=p.match(/^\/api\/v1\/displays\/media\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i)?.[1]?.toLowerCase();
+ if(mediaId&&req.method==='DELETE'){
+ const c=await pool.connect();try{
+ await c.query('BEGIN');await c.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[rid]);
+ const media=await c.query('SELECT id FROM pos_display_media WHERE id=$1 AND restaurant_id=$2 FOR UPDATE',[mediaId,rid]);
+ if(!media.rowCount){await c.query('ROLLBACK');return send(res,404,{error:'Medium nicht gefunden'})}
+ const affected=(await c.query('SELECT id,name,playlist FROM pos_displays WHERE restaurant_id=$1 FOR UPDATE',[rid])).rows.filter(d=>d.playlist.some(x=>x.mediaId===mediaId));
+ for(const d of affected)await c.query('UPDATE pos_displays SET playlist=$2::jsonb,updated_at=now() WHERE id=$1',[d.id,JSON.stringify(d.playlist.filter(x=>x.mediaId!==mediaId))]);
+ await c.query('DELETE FROM pos_display_media WHERE id=$1 AND restaurant_id=$2',[mediaId,rid]);await c.query('COMMIT');
+ return send(res,200,{ok:true,affectedScreens:affected.map(d=>({id:d.id,name:d.name})),message:'Datei vom Server gelöscht. Bildschirme ohne zugewiesenen Inhalt zeigen automatisch die Speisekarte.'});
+ }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+
  if(p==='/api/v1/displays/media'&&req.method==='POST'){
  const mime=String(req.headers['content-type']||'').split(';')[0];if(!['image/png','image/jpeg','image/webp','video/mp4','video/webm'].includes(mime))return send(res,400,{error:'Bitte PNG, JPEG, WebP, MP4 oder WebM hochladen'});
  const content=await body(req,25*1024*1024);if(!content.length)return send(res,400,{error:'Datei ist leer'});
@@ -42,8 +58,8 @@ export function createDisplays(pool){
  }
  const id=p.match(/^\/api\/v1\/displays\/([a-f0-9-]{36})$/i)?.[1];
  if((p==='/api/v1/displays'&&req.method==='POST')||(id&&req.method==='PUT')){
- let b;try{b=JSON.parse((await body(req,20000)).toString())}catch(e){if(e.status)throw e;return send(res,400,{error:'Ungültige Anfrage'})}const d=validateDisplay(b);const categoryIds=[...new Set(d.playlist.flatMap(x=>x.categoryIds||[]))];if(categoryIds.length){const categories=(await pool.query('SELECT id FROM categories WHERE restaurant_id=$1 AND id=ANY($2::uuid[])',[rid,categoryIds])).rows;if(categoryIds.some(id=>!categories.some(c=>c.id===id)))return send(res,400,{error:'Kategorie gehört nicht zum Betrieb oder wurde entfernt'})}const ids=d.playlist.filter(x=>x.mediaId).map(x=>x.mediaId);if(ids.length){const media=(await pool.query('SELECT id,mime FROM pos_display_media WHERE restaurant_id=$1 AND id=ANY($2::uuid[])',[rid,ids])).rows;if(d.playlist.some(x=>x.mediaId&&!media.some(m=>m.id===x.mediaId&&m.mime.startsWith(x.type==='video'?'video/':'image/'))))return send(res,400,{error:'Medium gehört nicht zum Betrieb oder Format stimmt nicht'})}
- const q=id?await pool.query('UPDATE pos_displays SET name=$1,orientation=$2,fit=$3,playlist=$4,updated_at=now() WHERE id=$5 AND restaurant_id=$6 RETURNING id,token',[d.name,d.orientation,d.fit,JSON.stringify(d.playlist),id,rid]):await pool.query('INSERT INTO pos_displays(restaurant_id,name,orientation,fit,playlist,token) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,token',[rid,d.name,d.orientation,d.fit,JSON.stringify(d.playlist),crypto.randomBytes(24).toString('hex')]);if(!q.rowCount)return send(res,404,{error:'Bildschirm nicht gefunden'});return send(res,id?200:201,q.rows[0]);
+ let b;try{b=JSON.parse((await body(req,20000)).toString())}catch(e){if(e.status)throw e;return send(res,400,{error:'Ungültige Anfrage'})}const d=validateDisplay(b);const c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[rid]);const reject=async(status,data)=>{await c.query('ROLLBACK');return send(res,status,data)};const categoryIds=[...new Set(d.playlist.flatMap(x=>x.categoryIds||[]))];if(categoryIds.length){const categories=(await c.query('SELECT id FROM categories WHERE restaurant_id=$1 AND id=ANY($2::uuid[])',[rid,categoryIds])).rows;if(categoryIds.some(id=>!categories.some(c=>c.id===id)))return await reject(400,{error:'Kategorie gehört nicht zum Betrieb oder wurde entfernt'})}const ids=d.playlist.filter(x=>x.mediaId).map(x=>x.mediaId);if(ids.length){const media=(await c.query('SELECT id,mime FROM pos_display_media WHERE restaurant_id=$1 AND id=ANY($2::uuid[])',[rid,ids])).rows;if(d.playlist.some(x=>x.mediaId&&!media.some(m=>m.id===x.mediaId&&m.mime.startsWith(x.type==='video'?'video/':'image/'))))return await reject(400,{error:'Medium gehört nicht zum Betrieb oder Format stimmt nicht'})}
+ const q=id?await c.query('UPDATE pos_displays SET name=$1,orientation=$2,fit=$3,playlist=$4,updated_at=now() WHERE id=$5 AND restaurant_id=$6 RETURNING id,token',[d.name,d.orientation,d.fit,JSON.stringify(d.playlist),id,rid]):await c.query('INSERT INTO pos_displays(restaurant_id,name,orientation,fit,playlist,token) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,token',[rid,d.name,d.orientation,d.fit,JSON.stringify(d.playlist),crypto.randomBytes(24).toString('hex')]);if(!q.rowCount)return await reject(404,{error:'Bildschirm nicht gefunden'});await c.query('COMMIT');return send(res,id?200:201,q.rows[0]);}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
  }
  if(id&&req.method==='DELETE'){const q=await pool.query('DELETE FROM pos_displays WHERE id=$1 AND restaurant_id=$2 RETURNING id',[id,rid]);return send(res,q.rowCount?200:404,q.rowCount?{ok:true}:{error:'Bildschirm nicht gefunden'})}
  return send(res,404,{error:'Bildschirmfunktion nicht gefunden'});

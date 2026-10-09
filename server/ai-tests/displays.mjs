@@ -26,4 +26,25 @@ const saved=(await call(base+q)).result.displays.find(d=>d.id===first.id);assert
 w=await browser();assert.equal(w.document.querySelector('#displaySelect').value,first.id);assert.equal(w.document.querySelector('#displayLink a').hash,'#'+first.token);assert.equal(w.document.querySelector('#displayMedia').options.length,3);assert.equal(w.document.querySelectorAll('[data-replace]').length,1);w.close();
 assert.equal((await call('/api/v1/display-player/'+first.token+'/media/'+original.id,{publicCall:true})).status,404);
 assert.equal((await call('/api/v1/display-player/'+second.token+'/media/'+original.id,{publicCall:true})).status,200);
-await db.close();console.log('Display persistence passed: database media survives restart, independent stable screen URLs, saved-media library, automatic upload assignment, replacement without changing links, browser reopen and isolation between screens.');
+// Removing from one screen preserves server media and triggers the live-menu fallback.
+w=await browser();await w.document.querySelector('[data-remove]').onclick();assert.equal((await call(base+q)).result.displays.find(d=>d.id===first.id).playlist.length,0);assert.equal((await call(base+'/media'+q)).result.media.length,2);
+w.document.querySelector('#displayMedia').value=saved.playlist[0].mediaId;await w.document.querySelector('#displayReuse').onclick();w.close();
+// Permanent deletion removes all same-venue assignments atomically, retaining stable URLs.
+const third=(await call(base+q,{method:'POST',body:{...payload,name:'C Schaufenster'}})).result;
+let usages=(await call(base+'/media'+q)).result.media.find(m=>m.id===original.id).usedBy;assert.equal(usages.length,2);
+assert.equal((await call(base+'/media/'+original.id+'?restaurantId='+id(),{method:'DELETE'})).status,404);
+const normalHandler=handler;handler=createDisplays({...pool,connect:async()=>({query:async(sql,args)=>{if(sql.startsWith('DELETE FROM pos_display_media'))throw Error('Simulated storage delete failure');return query(sql,args)},release(){}})});
+await assert.rejects(call(base+'/media/'+original.id+q,{method:'DELETE'}),/Simulated storage/);handler=normalHandler;
+assert.equal((await call(base+q)).result.displays.find(d=>d.id===second.id).playlist[0].mediaId,original.id);
+w=await browser();w.confirm=message=>{assert.match(message,/B Eingang/);assert.match(message,/C Schaufenster/);return true};w.document.querySelector('#displayMedia').value=original.id;await w.document.querySelector('#displayMediaDelete').onclick();assert.match(w.document.querySelector('#displayStatus').textContent,/vom Server gelöscht/);w.close();
+for(const screen of [second,third]){const found=(await call(base+q)).result.displays.find(d=>d.id===screen.id);assert.equal(found.token,screen.token);assert.deepEqual(found.playlist,[]);assert.deepEqual((await call('/api/v1/display-player/'+screen.token,{publicCall:true})).result.playlist,[])}
+assert.equal((await call('/api/v1/display-player/'+second.token+'/media/'+original.id,{publicCall:true})).status,404);
+assert.equal((await call(base+'/media'+q)).result.media.length,1);
+assert.equal((await call(base+'/'+second.id+q,{method:'PUT',body:payload})).status,400);
+assert.equal((await call(base+'/media/'+original.id+q,{method:'DELETE'})).status,404);
+// Last media removed: the actual player displays the menu rather than a blank screen.
+await call(base+'/media/'+saved.playlist[0].mediaId+q,{method:'DELETE'});
+const fallback=(await call('/api/v1/display-player/'+first.token,{publicCall:true})).result;assert.deepEqual(fallback.playlist,[]);
+const player=new JSDOM('<div id="screen"></div><div id="connection"></div><button id="fullscreen"></button>',{url:'https://bringness.de/display/index.html#'+first.token,runScripts:'outside-only'}).window;
+player.fetch=async()=>({ok:true,json:async()=>({...fallback,products:[{name:'Kaffee',price_cents:250}]})});player.setTimeout=()=>0;player.setInterval=()=>0;player.eval(fs.readFileSync(new URL('../../apps/web/public/display/player.js',import.meta.url),'utf8'));await new Promise(resolve=>setTimeout(resolve,0));assert.match(player.document.querySelector('#screen').textContent,/Kaffee/);player.close();
+await db.close();console.log('Display persistence passed: database media survives restart, independent stable screen URLs, saved-media library, automatic upload assignment, replacement without changing links, browser reopen, screen-only removal, permanent deletion across screens, rollback, stale-save rejection and live menu fallback.');
