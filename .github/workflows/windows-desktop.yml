@@ -17,6 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: 20}
       - run: npm ci
+      - run: node --test offline-sync.test.mjs
       - run: npm run prepare:offline
       - name: Verify offline cash UI and native IPC isolation
         run: npx electron offline-smoke.cjs

@@ -19,6 +19,7 @@
       "main.cjs",
       "offline-ledger.mjs",
       "offline-runtime.cjs",
+      "offline-sync.mjs",
       "offline-preload.cjs",
       "offline.html",
       "offline-ui.js",
