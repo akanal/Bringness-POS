@@ -119,8 +119,12 @@ return async function handlePaymentReceipt(req, res) {
 
   doc.moveDown();
   const qrSize = 78;
+  // Reserve the entire QR/footer block; PDFKit images with explicit coordinates do not advance y.
+  if (doc.y + qrSize + 58 > doc.page.height - doc.page.margins.bottom) doc.addPage();
   const qrX = (doc.page.width - qrSize) / 2;
-  doc.image(qrBuffer, qrX, doc.y, { width: qrSize, height: qrSize });
+  const qrY = doc.y;
+  doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+  doc.y = qrY + qrSize + 8;
   doc.x = doc.page.margins.left;
   doc.fontSize(7).fillColor("#52677a").text("QR: Digitalen Beleg öffnen", { align: "center" });
   if(receipt.fiscal_status!=="signed")doc.moveDown().fontSize(8).fillColor("#9b2226").text("Nicht TSE-signiert – kein fiskalisierter Kassenbeleg.");

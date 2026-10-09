@@ -6,9 +6,9 @@ const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-42
 async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null}={}){
  const documents=[],queries=[];
  class Pdf extends EventEmitter {
- constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:226.77,margins:{left:options.margin}};this.y=100;this.texts=[];this.images=[];documents.push(this);}
+ constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:226.77,margins:{left:options.margin}};this.y=100;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
  fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(buffer,x,y,options){this.images.push({x,y,...options});return this;}
- text(value){if(writerFailure==='draw')throw Error('render failed');this.texts.push(value);return this;}destroy(){this.destroyed=true;return this;}end(){this.ended=true;if(writerFailure==='stream')this.emit('error',Error('stream failed'));else this.emit('data',Buffer.from('%PDF-simulated'));this.emit('end');return this;}
+ text(value){if(writerFailure==='draw')throw Error('render failed');this.texts.push(value);this.textPositions.push({value,y:this.y});return this;}destroy(){this.destroyed=true;return this;}end(){this.ended=true;if(writerFailure==='stream')this.emit('error',Error('stream failed'));else this.emit('data',Buffer.from('%PDF-simulated'));this.emit('end');return this;}
  }
  const pool={query:async(sql,args)=>{
  queries.push({sql,args});
@@ -33,6 +33,8 @@ for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  const doc=documents[0],text=doc.texts.join('\n');
  assert.equal(doc.ended,true);assert.match(text,/Historisches Restaurant/);assert.match(text,/Historischer Betrieb/);
  assert.equal(doc.images.length,1);assert.equal(doc.images[0].x,(doc.page.width-doc.images[0].width)/2);assert.equal(doc.x,doc.page.margins.left);
+ const label=doc.textPositions.find(t=>t.value==="QR: Digitalen Beleg öffnen");assert.ok(label.y>=doc.images[0].y+doc.images[0].height+8);
+ const footer=doc.textPositions.find(t=>t.value.includes("Nicht TSE-signiert"));if(footer)assert.ok(footer.y>=label.y);
  assert.match(text,/Gesamt: 11,90 EUR/);assert.match(text,/Steuer: 1,90 EUR/);assert.match(text,/Online-Zahlung/);assert.doesNotMatch(text,/mollie_center/);
  assert.equal(text.includes('Nicht TSE-signiert'),fiscalStatus!=='signed');assert.doesNotMatch(text,/Eine TSE ist nicht angeschlossen/);
  });
