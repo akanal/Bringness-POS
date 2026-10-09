@@ -17,7 +17,6 @@
       status.textContent='Kartenzahlung abgebrochen. Es wurde kein Verkauf gespeichert.';
       return;
     }
-    const emailInput=document.getElementById('receiptEmail');if(emailInput?.value&&!emailInput.checkValidity()){emailInput.reportValidity();return;}
     button.disabled=true;
     status.textContent='Zahlung wird gespeichert…';
     try{
@@ -25,14 +24,12 @@
         restaurantId:document.getElementById('restaurant').value,
         items:cart.map(item=>({productId:item.id,qty:item.qty})),
         payments:[{method,amountCents:total}],
-        receiptEmail:document.getElementById('receiptEmail')?.value.trim()||'',
         externalCardConfirmed:method==='card'
       })});
-      if(document.getElementById('receiptEmail'))document.getElementById('receiptEmail').value='';
       cart=[];
       renderCart();
       if(window.bnResetTender)window.bnResetTender();
-      status.textContent='Verkauf gespeichert: '+result.receiptNumber+'.'+(method==='cash'?' Rückgeld: '+euro(given-total)+'.':' Zahlungsart Karte vermerkt. Terminalzahlung separat prüfen.')+' Beleg unter „Belege“.'+(result.emailStatus==='queued'?' Beleg-E-Mail wird automatisch versendet.':'');
+      status.textContent='Verkauf gespeichert: '+result.receiptNumber+'.'+(method==='cash'?' Rückgeld: '+euro(given-total)+'.':' Zahlungsart Karte vermerkt. Terminalzahlung separat prüfen.')+' Beleg unter „Belege“.';
     }catch(error){
       status.textContent='Zahlung nicht gespeichert: '+error.message;
     }finally{button.disabled=false}
@@ -45,7 +42,6 @@
     method.hidden=false;
     const basket=button.closest('.basket');
     if(basket)basket.hidden=false;
-    if(!document.getElementById('receiptEmail')){const label=document.createElement('label');label.textContent='Beleg per E-Mail (optional)';const input=document.createElement('input');input.id='receiptEmail';input.type='email';input.maxLength=254;input.placeholder='kunde@beispiel.de';input.autocomplete='off';label.appendChild(input);button.before(label);}
     button.onclick=completeSale;
   }
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',bind):bind();

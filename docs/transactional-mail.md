@@ -1,6 +1,6 @@
 # Automatische Beleg- und Mitarbeiter-E-Mails
 
-Die Online-Kasse nimmt eine optionale Beleg-E-Mail entgegen. Zahlung, Beleg und Versandauftrag werden gemeinsam bestätigt oder zurückgerollt. Beim Bezahlen bestehender QR-/Tischbestellungen erkennt der Worker die bereits gespeicherte Gast-E-Mail erst nach vollständiger Zahlung. Offene oder stornierte Bestellungen erzeugen keinen Versand.
+Die E-Mail-Adresse wird bei der QR-Bestellung vom Gast angegeben. Die Kassenoberfläche fragt keine E-Mail ab. Die Checkout-API unterstützt weiterhin einen optionalen Belegempfänger; Zahlung, Beleg und Versandauftrag werden dort gemeinsam bestätigt oder zurückgerollt. Beim Bezahlen bestehender QR-/Tischbestellungen erkennt der Worker die bereits gespeicherte Gast-E-Mail erst nach vollständiger Zahlung. Offene oder stornierte Bestellungen erzeugen keinen Versand.
 
 Mitarbeiter können bei der Anlage eine E-Mail erhalten. Sie bekommen ihre persönliche Stempel-PIN, Rolle, POS-Adresse und Anleitung für Dienstbeginn/Pause/Dienstende. Die PIN erweitert keine Berechtigungen und ist kein eigenständiger POS-Kontologin. Servicekonten haben weiterhin eine separate Einladung mit 48 Stunden Aktivierung, Erstcode und verpflichtendem Codewechsel.
 
