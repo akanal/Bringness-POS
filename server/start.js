@@ -1,3 +1,5 @@
+import {migrateTransactionalMail,createMailWorker,createMailStatus} from './transactional-mail.js';
+import {renderMailReceipt} from './payment-receipt.js';
 import {createSystemDirectory} from './system-access.js';
 import {createDisplays,migrateDisplays} from './displays.js';
 import {createPersonnel,migratePersonnel} from './personnel.js';
@@ -48,6 +50,7 @@ const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
+const handleMailStatus=createMailStatus(platformGatewayPool);
 const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
 
 // Add modular API routes without destabilising the large legacy server file.
@@ -59,6 +62,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
+      if (appMode!=='ai' && await handleMailStatus(req,res)) return;
       if (await handleLanguageCatalog(req,res)) return;
       if (await handlePlatformAiAssets(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
@@ -167,7 +171,9 @@ async function migrateWithRetry(){
       await migrateOfflineSales();
       await migrateAccountantAccess();
       await migrateBillingTerms();
+      await migrateTransactionalMail(platformGatewayPool);
       await migrateStaffInvitations();
+      if(appMode!=='ai'){const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt});setInterval(()=>deliver().catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
       if (aiFeatures) await aiFeatures.migrateAiPlatform();
       const pricingPool = new pg.Pool({

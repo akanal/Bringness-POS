@@ -1,3 +1,4 @@
+import {enqueueMail} from './transactional-mail.js';
 import crypto from 'node:crypto';
 import pg from 'pg';
 
@@ -38,11 +39,9 @@ export async function handleStaffInvitations(req,res){
     const user=(await c.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role,must_change_password) VALUES($1,$2,$3,$4,'pending','waiter',true) RETURNING id",[actor.company_id,email,pass(pin),name])).rows[0];
     const employee=(await c.query("INSERT INTO employees(restaurant_id,display_name,role,active,user_id) VALUES($1,$2,'waiter',true,$3) RETURNING id,display_name,active",[restaurantId,name,user.id])).rows[0];
     await c.query("INSERT INTO staff_invitations(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '48 hours')",[sha(token),user.id]);
-    const {default:nodemailer}=await import('nodemailer');
-    const transport=nodemailer.createTransport({host:process.env.SMTP_HOST,port,secure:port===465,requireTLS:port!==465,auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASSWORD},tls:{rejectUnauthorized:true}});
-    await transport.sendMail({from:process.env.SMTP_FROM,to:email,subject:'Bringness – Kellnerzugang bestätigen',text:`Hallo ${name},\n\n${r.rows[0].name} hat dich zum Bringness-Service eingeladen. Bestätige deine E-Mail innerhalb von 48 Stunden:\n${origin}/service/#activate=${token}\n\nDein sechsstelliger Erstcode: ${pin}\nNach der Bestätigung melde dich mit dieser E-Mail und dem Erstcode an. Danach legst du einen eigenen sechsstelligen Code fest.\n\nFalls du keine Einladung erwartet hast, ignoriere diese E-Mail.`});
+    await enqueueMail(c,'staff:'+user.id,email,{expiresAt:new Date(Date.now()+48*3600000).toISOString(),subject:'Bringness – Kellnerzugang bestätigen',text:`Hallo ${name},\n\n${r.rows[0].name} hat dich zum Bringness-Service eingeladen. Bestätige deine E-Mail innerhalb von 48 Stunden:\n${origin}/service/#activate=${token}\n\nDein sechsstelliger Erstcode: ${pin}\nNach der Bestätigung melde dich mit dieser E-Mail und dem Erstcode an. Danach legst du einen eigenen sechsstelligen Code fest.\n\nFalls du keine Einladung erwartet hast, ignoriere diese E-Mail.`});
     await c.query('COMMIT');
-    return reply(res,201,{waiter:{...employee,email,status:'pending'},message:'Einladung und Erstcode wurden per E-Mail versendet. Der Zugang wird nach Bestätigung freigeschaltet.'});
+    return reply(res,201,{waiter:{...employee,email,status:'pending'},message:'Einladung und Erstcode sind für den E-Mail-Versand gespeichert. Der Zugang wird nach Bestätigung freigeschaltet.'});
   }catch(error){await c.query('ROLLBACK');if(error.code==='23505')return reply(res,409,{error:'E-Mail ist bereits vergeben'});console.error('Staff invitation failed:',error.message);return reply(res,503,{error:'Einladung konnte nicht versendet werden. Konto wurde nicht angelegt.'})}finally{c.release()}
 }
 

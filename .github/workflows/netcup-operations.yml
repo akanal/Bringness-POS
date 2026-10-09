@@ -72,6 +72,7 @@ jobs:
           npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
           node --test server/billing-status.test.js server/personnel-report.test.js server/system-access.test.js server/displays.test.js server/center-core.test.js
+          node server/ai-tests/transactional-mail.mjs
           node server/ai-tests/personnel.mjs
           node server/ai-tests/personnel-service.mjs
           node server/ai-tests/pos-auth.mjs

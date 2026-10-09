@@ -41,6 +41,22 @@ return async function handlePaymentReceipt(req, res) {
   }
 
   const receipt = q.rows[0];
+  let pdf;
+  try{pdf=await renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,req,q.rows[0]);}
+  catch{send(res,503,{error:'Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen.'});return true;}
+  res.writeHead(200,{
+    "content-type":"application/pdf",
+    "content-disposition":"attachment; filename=Beleg-"+receipt.receipt_number+".pdf",
+    "cache-control":"private, no-store"
+  });
+  res.end(pdf);
+  return true;
+}
+;
+}
+
+export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,req,receipt){
+ const euro=cents=>(Number(cents||0)/100).toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2})+" EUR";
   if (receipt.merchant_snapshot) {
     const snapshot = receipt.merchant_snapshot;
     receipt.restaurant_name = snapshot.restaurantName;
@@ -62,8 +78,7 @@ return async function handlePaymentReceipt(req, res) {
     const qrPayload=receiptUrl(req,receipt.public_token);
     qrBuffer=await QRCode.toBuffer(qrPayload,{width:120,margin:1});
   } catch {
-    send(res,503,{error:"Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen."});
-    return true;
+    throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
   const height = Math.max(560, 390 + items.length * 34 + payments.length * 20);
   let pdf;
@@ -132,16 +147,7 @@ return async function handlePaymentReceipt(req, res) {
       }catch(error){fail(error);}
     });
   }catch{
-    send(res,503,{error:"Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen."});
-    return true;
+    throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
-  res.writeHead(200,{
-    "content-type":"application/pdf",
-    "content-disposition":"attachment; filename=Beleg-"+receipt.receipt_number+".pdf",
-    "cache-control":"private, no-store"
-  });
-  res.end(pdf);
-  return true;
-}
-;
+  return pdf;
 }

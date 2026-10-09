@@ -1,3 +1,4 @@
+import {cleanMailAddress,enqueuePaidReceipt} from './transactional-mail.js';
 import crypto from "node:crypto";
 import pg from "pg";
 
@@ -7,6 +8,7 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
+export function createPaymentCheckout(pool){
 function send(res, status, payload) {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
   res.end(JSON.stringify(payload));
@@ -35,7 +37,7 @@ async function currentUser(req) {
   return q.rows[0] || null;
 }
 
-export async function handlePaymentCheckout(req, res) {
+return async function handlePaymentCheckout(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
   if (pathname !== "/api/v1/orders/checkout" || req.method !== "POST") return false;
 
@@ -56,6 +58,7 @@ export async function handlePaymentCheckout(req, res) {
     return true;
   }
 
+  let receiptEmail='';try{if(body.receiptEmail)receiptEmail=cleanMailAddress(body.receiptEmail);}catch{send(res,400,{error:'Gültige Beleg-E-Mail erforderlich'});return true;}
   const items = Array.isArray(body.items) ? body.items : [];
   const payments = Array.isArray(body.payments) ? body.payments : [];
   const restaurantId = String(body.restaurantId || "");
@@ -148,6 +151,7 @@ export async function handlePaymentCheckout(req, res) {
       "UPDATE receipts rc SET merchant_snapshot=(SELECT jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),co.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) FROM orders ord JOIN restaurants r ON r.id=ord.restaurant_id JOIN companies co ON co.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE ord.id=rc.order_id) WHERE rc.order_id=$1",
       [order.id]
     );
+    await enqueuePaidReceipt(client,order.id,receiptEmail);
     await client.query("COMMIT");
 
     send(res, 201, {
@@ -157,6 +161,7 @@ export async function handlePaymentCheckout(req, res) {
       status: "paid",
       createdAt: order.created_at,
       receiptNumber,
+      emailStatus:receiptEmail?'queued':null,
       payments: payments.map(p => ({ method: p.method, amountCents: Number(p.amountCents) }))
     });
     return true;
@@ -167,3 +172,6 @@ export async function handlePaymentCheckout(req, res) {
     client.release();
   }
 }
+
+}
+export const handlePaymentCheckout=createPaymentCheckout(pool);

@@ -179,7 +179,7 @@ export async function handleRestaurantOwnerFeature(req,res){
         const payload=JSON.stringify({title:"Neue Bestellung · "+t.table_name,body:"Eine neue QR-Bestellung ist eingegangen.",url:"/service/"});
         Promise.allSettled(pushes.map(async row=>{try{await webpush.sendNotification(row.subscription,payload,{TTL:300})}catch(e){if(e.statusCode===404||e.statusCode===410)await pool.query("DELETE FROM waiter_push_subscriptions WHERE endpoint=$1",[row.endpoint])}}));
       }
-      json(res,201,{orderId:o.id,totalCents:total,emailReceiptRequested:!!email,emailDeliveryConfigured:false});
+      json(res,201,{orderId:o.id,totalCents:total,emailReceiptRequested:!!email,emailDeliveryConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM)});
       return true;
     }catch(error){await c.query("ROLLBACK");if(error.code==="22P02")return json(res,400,{error:"Ungültiger Artikel oder Beilage"});throw error}finally{c.release()}
   }
