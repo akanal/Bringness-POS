@@ -75,6 +75,7 @@ jobs:
           node server/ai-tests/personnel.mjs
           node server/ai-tests/personnel-service.mjs
           node server/ai-tests/pos-auth.mjs
+          node server/ai-tests/billing-eligibility.mjs
           node server/ai-tests/remote-support.mjs
           node server/ai-tests/offline-accountant.mjs
           node server/ai-tests/stock-lifecycle.mjs

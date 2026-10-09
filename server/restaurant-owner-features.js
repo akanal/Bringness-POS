@@ -139,7 +139,7 @@ export async function handleRestaurantOwnerFeature(req,res){
         FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.qr_token=$1 FOR UPDATE OF t,r`,[code]);
       if(!tq.rowCount){await c.query("ROLLBACK");return json(res,404,{error:"QR-Code ungültig"})}
       const t=tq.rows[0];
-      const licensed=await c.query("SELECT 1 FROM company_features WHERE company_id=$1 AND feature_code='table_qr' AND status='active' AND ((ends_at IS NULL OR ends_at>now()) OR (grace_until IS NOT NULL AND grace_until>now()))",[t.company_id]);
+      const licensed=await c.query("SELECT 1 FROM company_features WHERE company_id=$1 AND feature_code='table_qr' AND status='active' AND ((ends_at IS NULL OR ends_at>now()) OR (grace_until IS NOT NULL AND grace_until>now())) AND EXISTS(SELECT 1 FROM company_features parent WHERE parent.company_id=$1 AND parent.feature_code='restaurant' AND parent.status='active' AND ((parent.ends_at IS NULL OR parent.ends_at>now()) OR (parent.grace_until IS NOT NULL AND parent.grace_until>now())))",[t.company_id]);
       if(!licensed.rowCount){await c.query("ROLLBACK");return json(res,402,{error:"Tisch-QR ist nicht aktiviert"})}
       const existing=await c.query("SELECT id,total_cents FROM orders WHERE table_id=$1 AND guest_request_id=$2",[t.id,requestId]);
       if(existing.rowCount){await c.query("COMMIT");return json(res,200,{orderId:existing.rows[0].id,totalCents:existing.rows[0].total_cents,alreadyReceived:true})}
