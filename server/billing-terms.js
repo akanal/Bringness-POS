@@ -70,6 +70,8 @@ export async function handleBillingTerms(req,res){
       await client.query("BEGIN");
       const company=await client.query("SELECT id FROM companies WHERE id=$1 FOR UPDATE",[companyId]);
       if(!company.rowCount){await client.query("ROLLBACK");send(res,404,{error:"Kunde nicht gefunden"});return true}
+      const download=await client.query("SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='download_license' AND ce.status='active'",[companyId]);
+      if(download.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Die Download-Lizenz enthält nur die normale Kasse; Restaurant- und Tisch-QR-Testphasen sind ausgeschlossen."});return true}
       const prior=await client.query("SELECT 1 FROM company_trials WHERE company_id=$1 AND plan_code=$2",[companyId,planCode]);
       if(prior.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Für diesen Tarif gab es bereits eine Testphase"});return true}
       const paid=await client.query(`SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id
@@ -77,8 +79,8 @@ export async function handleBillingTerms(req,res){
       if(paid.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Ein bezahltes Abo ist bereits aktiv"});return true}
       const existing=await client.query("SELECT 1 FROM company_features WHERE company_id=$1 AND feature_code=$2 AND status='active' AND (ends_at IS NULL OR ends_at>now())",[companyId,codes[planCode]]);
       if(existing.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Das Modul ist bereits aktiv"});return true}
-      if(planCode!=="pos_base_monthly"){
-        const required=planCode==="restaurant_monthly"?"pos_base":"restaurant";
+      if(planCode==="table_qr_monthly"){
+        const required="restaurant";
         const parent=await client.query("SELECT 1 FROM company_features WHERE company_id=$1 AND feature_code=$2 AND status='active' AND (ends_at IS NULL OR ends_at>now())",[companyId,required]);
         if(!parent.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Zuerst das erforderliche Basis-Modul aktivieren"});return true}
       }

@@ -1,6 +1,6 @@
-const {ipcMain,dialog,nativeImage}=require('electron');const path=require('node:path');
+const {ipcMain,dialog,nativeImage,Menu}=require('electron');const path=require('node:path');
 function installRemoteSupport({app,BrowserWindow,onlineWindow,deviceKey,licenseBlocked=()=>false}){
- let current=null,indicator=null,busy=false,sequence=0,frameSize=null,stopped=new Set();
+ let grant=null,canGrant=false,current=null,indicator=null,busy=false,sequence=0,frameSize=null,stopped=new Set();
  const origin='https://bringness.de';
  async function request(pathname,body){
   const win=onlineWindow();if(!win||win.isDestroyed()||new URL(win.webContents.getURL()).origin!==origin)throw Error('Kasse nicht online');
@@ -9,12 +9,24 @@ function installRemoteSupport({app,BrowserWindow,onlineWindow,deviceKey,licenseB
  }
  function closeLocal(){current=null;frameSize=null;sequence=0;if(indicator&&!indicator.isDestroyed()){const old=indicator;indicator=null;old.destroy()}}
  async function stop(){const id=current?.id;closeLocal();if(id){stopped.add(id);try{await request('device/sessions/'+id+'/stop',{})}catch{}}}
- ipcMain.on('bringness-support-stop',event=>{if(indicator&&event.sender===indicator.webContents)stop()});
+ async function revoke(){try{await request('device/grant',{enabled:false,controlAllowed:false});grant=null;await stop()}catch(e){await dialog.showMessageBox(onlineWindow(),{type:'error',message:'Freigabe konnte nicht widerrufen werden.',detail:e.message})}}
+ async function configure(){
+  if(!canGrant){await dialog.showMessageBox(onlineWindow(),{type:'info',message:'Bitte als Inhaber oder Administrator anmelden, um die Fernfreigabe zu ändern.'});return}
+  const choice=await dialog.showMessageBox(onlineWindow(),{type:'question',buttons:['Abbrechen','Freigabe widerrufen','Dauerhaft nur Bildschirm','Dauerhaft Bildschirm und Bedienung'],defaultId:0,cancelId:0,title:'Fernfreigabe für diese Kasse',message:'Fernhilfe dauerhaft für dieses Kassengerät freigeben?',detail:'Die Freigabe bleibt nach Neustarts und bei Mitarbeiteranmeldung bestehen. Bringness kann Sitzungen für das Kassenfenster starten. Jede Sitzung wird sichtbar angezeigt und kann beendet werden. Hier können Sie die Freigabe jederzeit widerrufen.'});
+  if(choice.response===0)return;
+  if(choice.response===1){await revoke();return}
+  try{grant=(await request('device/grant',{enabled:true,controlAllowed:choice.response===3})).grant;await stop()}catch(e){await dialog.showMessageBox(onlineWindow(),{type:'error',message:e.message})}
+ }
+ const existingMenu=Menu.getApplicationMenu();const items=existingMenu?existingMenu.items.map(item=>item):[];
+ Menu.setApplicationMenu(Menu.buildFromTemplate([...items.filter(item=>item.label!=='Fernhilfe'),{label:'Fernhilfe',submenu:[{label:'Dauerhafte Freigabe verwalten',click:configure},{label:'Aktuelle Sitzung beenden',click:stop}]}]));
+ onlineWindow()?.setMenuBarVisibility(true);
+ ipcMain.on('bringness-support-revoke',event=>{if(indicator&&event.sender===indicator.webContents)revoke()});
+ ipcMain.on('bringness-support-stop' ,event=>{if(indicator&&event.sender===indicator.webContents)stop()});
  function showIndicator(controlAllowed){
-  indicator=new BrowserWindow({width:440,height:170,resizable:false,minimizable:false,maximizable:false,alwaysOnTop:true,autoHideMenuBar:true,title:'Bringness Fernhilfe aktiv',webPreferences:{preload:path.join(__dirname,'support-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  indicator=new BrowserWindow({width:540,height:230,resizable:false,minimizable:false,maximizable:false,alwaysOnTop:true,autoHideMenuBar:true,title:'Bringness Fernhilfe aktiv',webPreferences:{preload:path.join(__dirname,'support-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   indicator.webContents.setWindowOpenHandler(()=>({action:'deny'}));indicator.webContents.on('will-navigate',event=>event.preventDefault());
   indicator.on('closed',()=>{indicator=null;if(current)stop()});
-  indicator.loadFile(path.join(__dirname,'support-control.html'),{query:{mode:controlAllowed?'control':'view'}});
+  indicator.loadFile(path.join(__dirname,'support-control.html'),{query:{mode:controlAllowed?'control':'view',persistent:grant?.enabled?'1':'0',canGrant:canGrant?'1':'0'}});
  }
  async function execute(command){
   const win=onlineWindow(),input=command.input;
@@ -38,17 +50,19 @@ function installRemoteSupport({app,BrowserWindow,onlineWindow,deviceKey,licenseB
   if(busy)return;busy=true;
   try{
    const result=await request('device/poll',{diagnostics:{appVersion:app.getVersion(),platform:process.platform,supportProtocol:1,online:true,licenseBlocked:licenseBlocked()}});
+   grant=result.grant||null;canGrant=result.canGrant===true;
    const session=result.session;
    if(licenseBlocked()){if(current)await stop();return}
    if(!session||stopped.has(session.id)){if(current)closeLocal();return}
    if(session.state==='requested'){
     if(current)return;
-    const choice=await dialog.showMessageBox(onlineWindow(),{type:'question',buttons:['Ablehnen','Nur Bildschirm zeigen','Bildschirm und Bedienung erlauben'],defaultId:0,cancelId:0,title:'Bringness Fernhilfe',message:'Bringness möchte diese Kasse prüfen.',detail:'Nur das Bringness-Kassenfenster wird übertragen. Die Sitzung läuft höchstens 15 Minuten. Bei erlaubter Bedienung kann Bringness Klicks und Tastatureingaben in der Kasse ausführen. Über „Fernhilfe beenden“ können Sie jederzeit stoppen.'});
-    await request('device/sessions/'+session.id+'/accept',{allowed:choice.response!==0,controlAllowed:choice.response===2});
+    if(!canGrant&&!grant?.enabled)return;
+    const choice=grant?.enabled?{response:grant.controlAllowed?2:1}:await dialog.showMessageBox(onlineWindow(),{type:'question',buttons:['Ablehnen','Nur Bildschirm zeigen','Bildschirm und Bedienung erlauben'],defaultId:0,cancelId:0,title:'Bringness Fernhilfe',message:'Bringness möchte diese Kasse prüfen.',detail:'Nur das Bringness-Kassenfenster wird übertragen. Die Sitzung läuft höchstens 15 Minuten. Bei erlaubter Bedienung kann Bringness Klicks und Tastatureingaben in der Kasse ausführen. Über „Fernhilfe beenden“ können Sie jederzeit stoppen.'});
+    await request('device/sessions/'+session.id+'/accept',{allowed:choice.response!==0,controlAllowed:choice.response===2,persistent:grant?.enabled===true});
     if(choice.response===0){stopped.add(session.id);return}
     current={...session,control_allowed:choice.response===2};showIndicator(choice.response===2);return;
    }
-   if(!current||current.id!==session.id){return} // Never resume an old consent after a process restart.
+   if(!current||current.id!==session.id){if(!grant?.enabled||!session.persistent_consent)return;current=session;showIndicator(session.control_allowed)}
    current=session;
    if(Date.now()>=Date.parse(session.expires_at)){await stop();return}
    for(const command of result.commands||[]){
@@ -65,6 +79,6 @@ function installRemoteSupport({app,BrowserWindow,onlineWindow,deviceKey,licenseB
   }catch{if(current)await stop()}finally{busy=false}
  }
  const timer=setInterval(tick,2000);timer.unref?.();app.on('before-quit',()=>{clearInterval(timer);stop()});
- return {stop,tick};
+ return {stop,tick,revoke,configure};
 }
 module.exports={installRemoteSupport};

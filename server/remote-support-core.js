@@ -28,18 +28,34 @@ export function createRemoteSupport(pool){
    if(!user)return send(401,{error:'Bitte anmelden.'});
    const adminPath=!p.startsWith('/api/v1/remote-support/device/');
    if(adminPath&&!user.platform_admin)return send(403,{error:'Nur Plattformadministratoren.'});
-   if(!adminPath&&!['owner','admin'].includes(user.role))return send(403,{error:'Fernhilfe nur mit Inhaber- oder Adminanmeldung.'});
+
    let b={};if(req.method==='POST'){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>250000)return send(413,{error:'Anfrage zu groß.'})}try{b=JSON.parse(raw||'{}')}catch{return send(400,{error:'Ungültige Anfrage.'})}}
    await cleanupRemoteSupport(pool);
-   if(p==='/api/v1/remote-support/devices'&&req.method==='GET')return send(200,{devices:(await pool.query(`SELECT d.id,d.name,d.app_version,d.status,d.last_seen_at,d.support_diagnostics,c.name company_name,rs.id session_id,rs.state session_state,rs.expires_at FROM devices d JOIN companies c ON c.id=d.company_id LEFT JOIN remote_support_sessions rs ON rs.device_id=d.id AND rs.state IN ('requested','active') WHERE d.platform IN ('windows','win32') ORDER BY d.last_seen_at DESC NULLS LAST LIMIT 500`)).rows,limit:500});
+   if(p==='/api/v1/remote-support/devices'&&req.method==='GET')return send(200,{devices:(await pool.query(`SELECT d.id,d.name,d.app_version,d.status,d.last_seen_at,d.support_diagnostics,d.support_grant,c.name company_name,rs.id session_id,rs.state session_state,rs.expires_at FROM devices d JOIN companies c ON c.id=d.company_id LEFT JOIN remote_support_sessions rs ON rs.device_id=d.id AND rs.state IN ('requested','active') WHERE d.platform IN ('windows','win32') ORDER BY d.last_seen_at DESC NULLS LAST LIMIT 500`)).rows,limit:500});
    let device;
-   if(!adminPath){if(!/^[a-f0-9]{64}$/.test(b.deviceKey||''))return send(400,{error:'Ungültiges Gerät.'});device=(await pool.query("SELECT id,company_id,status FROM devices WHERE device_key=$1 AND company_id=$2 AND status='active'",[b.deviceKey,user.company_id])).rows[0];if(!device)return send(403,{error:'Gerät nicht freigegeben.'})}
+   if(!adminPath){if(!/^[a-f0-9]{64}$/.test(b.deviceKey||''))return send(400,{error:'Ungültiges Gerät.'});device=(await pool.query("SELECT id,company_id,status,support_grant FROM devices WHERE device_key=$1 AND company_id=$2 AND status='active'",[b.deviceKey,user.company_id])).rows[0];if(!device)return send(403,{error:'Gerät nicht freigegeben.'})}
+   const owner=['owner','admin'].includes(user.role);
+   if(!adminPath&&!owner&&!device.support_grant?.enabled)return send(403,{error:'Fernhilfe benötigt eine Freigabe des Inhabers für dieses Gerät.'});
+   if(p==='/api/v1/remote-support/device/grant'&&req.method==='POST'){
+    if(!owner)return send(403,{error:'Nur Inhaber und Administratoren dürfen die dauerhafte Freigabe ändern.'});
+    if(typeof b.enabled!=='boolean'||typeof b.controlAllowed!=='boolean')return send(400,{error:'Ungültige Freigabe.'});
+    const c=await pool.connect();try{
+     await c.query('BEGIN');await c.query('SELECT id FROM devices WHERE id=$1 FOR UPDATE',[device.id]);
+     const grant={enabled:b.enabled,controlAllowed:b.enabled&&b.controlAllowed,grantedBy:user.id,updatedAt:new Date().toISOString()};
+     await c.query('UPDATE devices SET support_grant=$2::jsonb WHERE id=$1',[device.id,JSON.stringify(grant)]);
+     // A change in consent ends current sessions and removes their screen data.
+     await c.query("UPDATE remote_support_sessions SET state='ended',ended_at=now(),frame=NULL WHERE device_id=$1 AND state IN ('requested','active')",[device.id]);
+     await c.query("UPDATE remote_support_inputs SET state='cancelled',input=input-'text' WHERE session_id IN (SELECT id FROM remote_support_sessions WHERE device_id=$1) AND state IN ('queued','delivered')",[device.id]);
+     await c.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,'remote_support.grant','device',$3,$4::jsonb)",[device.company_id,user.id,device.id,JSON.stringify(grant)]);
+     await c.query('COMMIT');return send(200,{grant});
+    }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+   }
    if(p==='/api/v1/remote-support/device/poll'&&req.method==='POST'){
     const diagnostics=safeDiagnostics(b.diagnostics);if(b.diagnostics)await pool.query('UPDATE devices SET support_diagnostics=$2::jsonb,last_seen_at=now() WHERE id=$1',[device.id,JSON.stringify(diagnostics)]);
-    const session=(await pool.query("SELECT id,state,expires_at,control_allowed FROM remote_support_sessions WHERE device_id=$1 AND state IN ('requested','active') ORDER BY created_at DESC LIMIT 1",[device.id])).rows[0];
-    if(!session)return send(200,{session:null,commands:[]});
+    const session=(await pool.query("SELECT id,state,expires_at,control_allowed,persistent_consent FROM remote_support_sessions WHERE device_id=$1 AND state IN ('requested','active') ORDER BY created_at DESC LIMIT 1",[device.id])).rows[0];
+    if(!session)return send(200,{session:null,commands:[],grant:device.support_grant,canGrant:owner});
     const commands=session.state==='active'?(await pool.query(`UPDATE remote_support_inputs SET state='delivered',delivered_at=now() WHERE id IN (SELECT id FROM remote_support_inputs WHERE session_id=$1 AND state='queued' AND created_at>now()-interval '15 seconds' ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING id,input,created_at`,[session.id])).rows:[];
-    await pool.query("UPDATE remote_support_inputs SET state='expired',input=input-'text' WHERE session_id=$1 AND state='queued' AND created_at<=now()-interval '15 seconds'",[session.id]);return send(200,{session,commands});
+    await pool.query("UPDATE remote_support_inputs SET state='expired',input=input-'text' WHERE session_id=$1 AND state='queued' AND created_at<=now()-interval '15 seconds'",[session.id]);return send(200,{session,commands,grant:device.support_grant,canGrant:owner});
    }
    if(p==='/api/v1/remote-support/start'&&req.method==='POST'){
     if(!supportUuid.test(b.deviceId||''))return send(400,{error:'Ungültiges Gerät.'});
@@ -54,6 +70,7 @@ export function createRemoteSupport(pool){
    if(!match||!supportUuid.test(match[1]))return send(404,{error:'Fernhilfefunktion nicht gefunden.'});
    const c=await pool.connect();try{
     await c.query('BEGIN');
+    if(!adminPath){device=(await c.query('SELECT id,company_id,status,support_grant FROM devices WHERE id=$1 FOR UPDATE',[device.id])).rows[0];if(device.status!=='active'||!owner&&!device.support_grant?.enabled){await c.query('ROLLBACK');return send(403,{error:'Gerätefreigabe wurde widerrufen.'})}}
     const s=(await c.query('SELECT * FROM remote_support_sessions WHERE id=$1 FOR UPDATE',[match[1]])).rows[0];
     if(!s||(!adminPath&&s.device_id!==device.id)){await c.query('ROLLBACK');return send(404,{error:'Sitzung nicht gefunden.'})}
     const action=match[2]||'';
@@ -63,10 +80,16 @@ export function createRemoteSupport(pool){
      await c.query("UPDATE remote_support_sessions SET state='ended',ended_at=coalesce(ended_at,now()),frame=NULL WHERE id=$1",[s.id]);await c.query("UPDATE remote_support_inputs SET state='cancelled',input=input-'text' WHERE session_id=$1 AND state='queued'",[s.id]);
     }else if(action==='accept'&&!adminPath){
      if(s.state!=='requested'||s.expires_at<=new Date()||typeof b.allowed!=='boolean'||typeof b.controlAllowed!=='boolean'){await c.query('ROLLBACK');return send(409,{error:'Anfrage abgelaufen oder bereits entschieden.'})}
+     const fresh=(await c.query('SELECT support_grant FROM devices WHERE id=$1 FOR UPDATE',[device.id])).rows[0]?.support_grant;
+     if(!owner&&(b.persistent!==true||!fresh?.enabled||b.controlAllowed&&!fresh.controlAllowed)){await c.query('ROLLBACK');return send(403,{error:'Keine passende dauerhafte Freigabe.'})}
+     if(b.persistent===true&&!fresh?.enabled){await c.query('ROLLBACK');return send(403,{error:'Dauerhafte Freigabe wurde widerrufen.'})}
+     const persistent=b.persistent===true&&fresh?.enabled;
+     if(persistent&&b.controlAllowed&&!fresh.controlAllowed){await c.query('ROLLBACK');return send(403,{error:'Die dauerhafte Freigabe erlaubt nur Bildschirmansicht.'})}
+     await c.query('UPDATE remote_support_sessions SET persistent_consent=$2 WHERE id=$1',[s.id,Boolean(persistent)]);
      await c.query("UPDATE remote_support_sessions SET state=$2,control_allowed=$3,accepted_by=$4,accepted_session_hash=$5,expires_at=now()+interval '15 minutes',ended_at=CASE WHEN $2='declined' THEN now() ELSE NULL END WHERE id=$1",[s.id,b.allowed?'active':'declined',b.allowed&&b.controlAllowed,user.id,sha(token)]);
     }else{
      if(s.state!=='active'||s.expires_at<=new Date()){await c.query('ROLLBACK');return send(409,{error:'Sitzung nicht aktiv.'})}
-     if(!adminPath&&(s.accepted_by!==user.id||s.accepted_session_hash!==sha(token))){await c.query('ROLLBACK');return send(403,{error:'Sitzung gehört zu einer anderen Anmeldung.'})}
+     if(!adminPath&&!(s.persistent_consent&&device.support_grant?.enabled)&&(s.accepted_by!==user.id||s.accepted_session_hash!==sha(token))){await c.query('ROLLBACK');return send(403,{error:'Sitzung gehört zu einer anderen Anmeldung.'})}
      if(action==='frame'&&!adminPath){
       if(typeof b.frame!=='string'||b.frame.length>220000||!/^\/9j\/[A-Za-z0-9+/=]+$/.test(b.frame)||!Number.isInteger(b.width)||!Number.isInteger(b.height)||b.width<1||b.width>1920||b.height<1||b.height>1080){await c.query('ROLLBACK');return send(400,{error:'Ungültiges Bildschirmbild.'})}
       const bytes=Buffer.from(b.frame,'base64');if(bytes[0]!==255||bytes[1]!==216||bytes.at(-2)!==255||bytes.at(-1)!==217){await c.query('ROLLBACK');return send(400,{error:'Ungültiges JPEG.'})}
@@ -89,15 +112,32 @@ export function createRemoteSupport(pool){
 }
 export async function migrateRemoteSupport(pool){await pool.query(`
  ALTER TABLE devices ADD COLUMN IF NOT EXISTS support_diagnostics jsonb;
+ ALTER TABLE devices ADD COLUMN IF NOT EXISTS support_grant jsonb;
  CREATE TABLE IF NOT EXISTS remote_support_sessions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),device_id uuid NOT NULL REFERENCES devices(id),company_id uuid NOT NULL REFERENCES companies(id),created_by uuid NOT NULL REFERENCES users(id),created_session_hash text NOT NULL,accepted_by uuid REFERENCES users(id),accepted_session_hash text,state text NOT NULL DEFAULT 'requested' CHECK(state IN ('requested','active','declined','ended')),control_allowed boolean NOT NULL DEFAULT false,expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),ended_at timestamptz,frame text,frame_sequence int NOT NULL DEFAULT 0,frame_at timestamptz,frame_width int,frame_height int);
+ ALTER TABLE remote_support_sessions ADD COLUMN IF NOT EXISTS persistent_consent boolean NOT NULL DEFAULT false;
  CREATE UNIQUE INDEX IF NOT EXISTS remote_support_one_active_device ON remote_support_sessions(device_id) WHERE state IN ('requested','active');
  CREATE TABLE IF NOT EXISTS remote_support_inputs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),session_id uuid NOT NULL REFERENCES remote_support_sessions(id),created_by uuid NOT NULL REFERENCES users(id),input jsonb NOT NULL,state text NOT NULL DEFAULT 'queued',error text,created_at timestamptz NOT NULL DEFAULT now(),delivered_at timestamptz,acknowledged_at timestamptz);
  CREATE INDEX IF NOT EXISTS remote_support_inputs_queue ON remote_support_inputs(session_id,state,created_at);
  `)}
 
 export async function cleanupRemoteSupport(pool){
- await pool.query(`UPDATE remote_support_sessions rs SET state='ended',ended_at=now(),frame=NULL WHERE state IN ('requested','active') AND (
- expires_at<=now() OR NOT EXISTS(SELECT 1 FROM devices current_device WHERE current_device.id=rs.device_id AND current_device.company_id=rs.company_id AND current_device.status='active') OR NOT EXISTS(SELECT 1 FROM sessions creator_session JOIN users creator ON creator.id=creator_session.user_id JOIN platform_admins permission ON permission.user_id=creator.id AND permission.active WHERE creator_session.token_hash=rs.created_session_hash AND creator_session.expires_at>now() AND creator.status='active' AND NOT coalesce(creator.must_change_password,false))
- OR (rs.state='active' AND NOT EXISTS(SELECT 1 FROM sessions auth JOIN users accepted ON accepted.id=auth.user_id WHERE auth.token_hash=rs.accepted_session_hash AND auth.expires_at>now() AND accepted.status='active' AND accepted.role IN ('owner','admin') AND accepted.company_id=rs.company_id AND NOT coalesce(accepted.must_change_password,false))))`);
+ await pool.query(`UPDATE devices d SET support_grant=jsonb_set(d.support_grant,'{enabled}','false'::jsonb) WHERE d.support_grant->>'enabled'='true' AND NOT EXISTS(SELECT 1 FROM users grantor WHERE grantor.id=(d.support_grant->>'grantedBy')::uuid AND grantor.company_id=d.company_id AND grantor.status='active' AND grantor.role IN ('owner','admin'));`);
+ await pool.query(`UPDATE remote_support_sessions rs SET state='ended',ended_at=now(),frame=NULL
+ WHERE state IN ('requested','active') AND (
+   expires_at<=now()
+   OR NOT EXISTS(SELECT 1 FROM devices d WHERE d.id=rs.device_id AND d.company_id=rs.company_id AND d.status='active')
+   OR NOT EXISTS(SELECT 1 FROM sessions auth JOIN users creator ON creator.id=auth.user_id
+     JOIN platform_admins pa ON pa.user_id=creator.id AND pa.active
+     WHERE auth.token_hash=rs.created_session_hash AND auth.expires_at>now() AND creator.status='active' AND NOT coalesce(creator.must_change_password,false))
+   OR (rs.state='active' AND NOT (
+     (rs.persistent_consent AND EXISTS(SELECT 1 FROM devices d JOIN users grantor ON grantor.id=(d.support_grant->>'grantedBy')::uuid
+       WHERE d.id=rs.device_id AND d.support_grant->>'enabled'='true'
+       AND (NOT rs.control_allowed OR d.support_grant->>'controlAllowed'='true')
+       AND grantor.company_id=rs.company_id AND grantor.status='active' AND grantor.role IN ('owner','admin')))
+     OR (NOT rs.persistent_consent AND EXISTS(SELECT 1 FROM sessions auth JOIN users accepted ON accepted.id=auth.user_id
+       WHERE auth.token_hash=rs.accepted_session_hash AND auth.expires_at>now() AND accepted.status='active'
+       AND accepted.role IN ('owner','admin') AND accepted.company_id=rs.company_id AND NOT coalesce(accepted.must_change_password,false)))
+   ))
+ )`);
  await pool.query(`UPDATE remote_support_inputs i SET state=CASE WHEN i.state='delivered' THEN 'uncertain' ELSE 'expired' END,input=i.input-'text' WHERE i.state IN ('queued','delivered') AND (i.created_at<=now()-interval '15 seconds' OR NOT EXISTS(SELECT 1 FROM remote_support_sessions s WHERE s.id=i.session_id AND s.state='active'))`);
 }

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import {billingPolicy} from "./billing-policy.js";
 import pg from "pg";
 
 const pool=new pg.Pool({
@@ -51,29 +52,22 @@ export async function handleBillingStatus(req,res){
     return (!end||end>now)||Boolean(grace&&grace>now);
   };
 
-  const state={
-    pos_base:activeFeature("pos_base"),
-    restaurant:activeFeature("restaurant"),
-    table_qr:activeFeature("table_qr"),
-  };
-
-  const dependencyState={
-    pos_base_monthly:{eligible:!state.pos_base,requires:[]},
-    restaurant_monthly:{eligible:state.pos_base&&!state.restaurant,requires:["pos_base_monthly"]},
-    table_qr_monthly:{eligible:state.pos_base&&state.restaurant&&!state.table_qr,requires:["pos_base_monthly","restaurant_monthly"]},
-    download_license:{eligible:true,requires:[]},
-  };
+  const download=entitlements.rows.some(row=>row.code==='download_license'&&row.status==='active');
+  const baseEntitlement=entitlements.rows.some(row=>row.code==='pos_base_monthly'&&row.status==='active'&&(!row.current_period_end||new Date(row.current_period_end)>new Date()));
+  const policy=billingPolicy({base:baseEntitlement||(featureMap.get('pos_base')?.payment_status==='trial'&&activeFeature('pos_base')),restaurant:activeFeature('restaurant'),tableQr:activeFeature('table_qr'),download});
+  const state={...policy.features,pos_base:policy.features.pos_base||activeFeature("pos_base")},dependencyState=policy.plans;
 
   const latestEntitlement=new Map();
   for(const row of entitlements.rows){if(!latestEntitlement.has(row.code))latestEntitlement.set(row.code,row)}
 
   send(res,200,{
     features:state,
+    downloadOnly:download&&!state.restaurant,
     featureRows:features.rows,
     plans:plans.rows.map(plan=>{
       const ent=latestEntitlement.get(plan.code)||null;
       const dependency=dependencyState[plan.code]||{eligible:true,requires:[]};
-      const active=plan.code==="pos_base_monthly"?state.pos_base:plan.code==="restaurant_monthly"?state.restaurant:plan.code==="table_qr_monthly"?state.table_qr:Boolean(ent&&ent.status==="active");
+      const active=dependency.active;
       return {
         code:plan.code,
         name:plan.name,
@@ -85,6 +79,7 @@ export async function handleBillingStatus(req,res){
         active,
         eligible:active?false:dependency.eligible,
         requires:dependency.requires,
+        included:Boolean(dependency.included),
         entitlement:ent?{status:ent.status,currentPeriodEnd:ent.current_period_end,purchasedAt:ent.purchased_at}:null
       };
     })

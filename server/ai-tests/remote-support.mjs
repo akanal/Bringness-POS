@@ -21,6 +21,32 @@ await query("UPDATE remote_support_sessions SET expires_at=now()-interval '1 sec
 session=await call('start',{deviceId:device});await native('sessions/'+session.id+'/accept',{allowed:true,controlAllowed:true});await native('sessions/'+session.id+'/frame',{frame:'/9j/2Q==',width:100,height:100});await query('DELETE FROM sessions WHERE user_id=$1',[owner]);assert.equal((await call('sessions/'+session.id)).session.state,'ended');assert.equal((await call('sessions/'+session.id)).session.frame,null);
 await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[hash('owner'),owner]);session=await call('start',{deviceId:device});await native('sessions/'+session.id+'/accept',{allowed:true,controlAllowed:true});await query('UPDATE platform_admins SET active=false WHERE user_id=$1',[admin]);assert.equal((await native('poll')).session,null);await query('UPDATE platform_admins SET active=true WHERE user_id=$1',[admin]);
 assert.throws(()=>supportInput({type:'text',text:'a\npassword',frameSequence:1}));assert.equal(safeDiagnostics({pendingOfflineSales:-1}).pendingOfflineSales,null);
+// Persistent consent is per device, granted by owner, survives login changes and is revocable.
+const grantBody={deviceKey,enabled:true,controlAllowed:true};
+assert.equal((await call('device/grant',grantBody,'waiter')).status,403);
+assert.equal((await native('grant',{enabled:true,controlAllowed:true})).status,200);
+assert.equal((await call('device/poll',{deviceKey},'waiter')).grant.enabled,true);
+session=await call('start',{deviceId:device});
+assert.equal((await call('device/sessions/'+session.id+'/accept',{deviceKey,allowed:true,controlAllowed:true,persistent:true},'waiter')).status,200);
+await query('DELETE FROM sessions WHERE user_id=$1',[owner]);
+assert.equal((await call('device/sessions/'+session.id+'/frame',{deviceKey,frame:'/9j/2Q==',width:100,height:100},'waiter')).status,200);
+// New owner session can resume the same device session without a new consent dialog.
+await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[hash('owner-restarted'),owner]);
+assert.equal((await call('device/sessions/'+session.id+'/frame',{deviceKey,frame:'/9j/2Q==',width:100,height:100},'owner-restarted')).status,200);
+assert.equal((await call('device/grant',{deviceKey,enabled:false,controlAllowed:false},'waiter')).status,403);
+assert.equal((await call('device/grant',{deviceKey,enabled:false,controlAllowed:false},'owner-restarted')).status,200);
+assert.equal((await call('sessions/'+session.id)).session.state,'ended');
+assert.equal((await call('sessions/'+session.id)).session.frame,null);
+assert.equal((await call('device/sessions/'+session.id+'/frame',{deviceKey,frame:'/9j/2Q==',width:100,height:100},'waiter')).status,403);
+// View-only persistent grant can never be escalated by the waiter.
+await call('device/grant',{deviceKey,enabled:true,controlAllowed:false},'owner-restarted');
+session=await call('start',{deviceId:device});
+assert.equal((await call('device/sessions/'+session.id+'/accept',{deviceKey,allowed:true,controlAllowed:true,persistent:true},'waiter')).status,403);
+assert.equal((await call('device/sessions/'+session.id+'/accept',{deviceKey,allowed:true,controlAllowed:false,persistent:true},'waiter')).status,200);
+await query("UPDATE users SET status='inactive' WHERE id=$1",[owner]);
+assert.equal((await call('device/poll',{deviceKey},'waiter')).status,403);
+assert.equal((await call('sessions/'+session.id)).session.state,'ended');
+await query("UPDATE users SET status='active' WHERE id=$1",[owner]);
 // Browser permission rendering and same-origin admin calls.
 const dom=new JSDOM('<div id="dash"><div class="tabs"></div></div>',{url:'https://pos.example/admin/',runScripts:'outside-only'}),w=dom.window;w.AbortSignal=AbortSignal;w.localStorage.setItem('bringness-pos-token','platform');w.fetch=async(url,opts={})=>{const result=await call(String(url).replace('/api/v1/remote-support/',''),opts.body?JSON.parse(opts.body):null,'platform');return {ok:result.status<400,status:result.status,json:async()=>result}};w.eval(fs.readFileSync(new URL('../../apps/web/public/admin/remote-support.js',import.meta.url),'utf8'));const wait=async f=>{for(let i=0;i<100;i++){if(f())return;await new Promise(r=>setTimeout(r,10))}throw Error('Admin UI timeout')};await wait(()=>w.document.querySelector('[data-tab="remoteHelp"]'));w.document.querySelector('[data-tab="remoteHelp"]').click();await wait(()=>w.document.querySelector('[data-start-device]'));assert(w.document.getElementById('remoteDevices').textContent.includes('Client unterstützt Fernhilfe'));w.close();
-await db.close();console.log('Remote support passed: platform rights, tenant/device isolation, explicit view/control consent, frame validation, at-most-once dispatch, redacted input, stop, expiry, logout/revocation, audit and admin DOM.');
+await db.close();console.log('Remote support passed: platform rights, tenant/device isolation, explicit view/control consent, frame validation, at-most-once dispatch, redacted input, stop, expiry, logout/revocation, persistent device consent across owner logout and login changes, waiter restrictions, view-only grant, audit and admin DOM.');
