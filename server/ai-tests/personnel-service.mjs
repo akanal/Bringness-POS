@@ -51,8 +51,8 @@ w.document.getElementById('notificationsBtn').click();await waitFor(()=>w.docume
 await db.query("UPDATE orders SET status='open',created_at=now() WHERE id=$1",[qrOrder]);await w.checkAlerts();assert(w.document.getElementById('message').textContent.includes('Neue QR-Bestellung'));assert(signals>1);
 // Category switches preserve quantities across groups, including uncategorized products.
 assert.equal(w.document.getElementById('serviceMore').open,false);
-w.eval(`data.products=[{id:'a',name:'Waffel',price_cents:500,category_id:'sweet',category:'Süß',image_url:'/waffel.jpg'},{id:'b',name:'Kaffee',price_cents:300,category_id:'drinks',category:'Getränke'},{id:'c',name:'Extra',price_cents:100}];cart={};renderProducts()`);
-assert.equal(w.document.querySelectorAll('[data-category]').length,3);assert(w.document.querySelector('.product-photo img'));
+w.fetch=async()=>({ok:true,json:async()=>({...off,products:[{id:'a',name:'Waffel',price_cents:500,category_id:'sweet',category:'Süß',image_url:'/waffel.jpg'},{id:'b',name:'Kaffee',price_cents:300,category_id:'drinks',category:'Getränke'},{id:'c',name:'Extra',price_cents:100}]})});await w.load();w.renderProducts();
+assert.equal(w.document.querySelectorAll('[data-category]').length,3);w.document.querySelector('[data-category="sweet"]').click();assert(w.document.querySelector('.product-photo img'));
 w.document.querySelector('[data-step="1"]').click();assert(w.document.getElementById('total').textContent.includes('5,00'));
 w.document.querySelector('[data-category="drinks"]').click();assert.equal(w.document.querySelector('[data-product]').dataset.product,'b');w.document.querySelector('[data-step="1"]').click();assert(w.document.getElementById('total').textContent.includes('8,00'));
 w.document.querySelector('[data-category="sweet"]').click();assert.equal(w.document.querySelector('[data-product]').value,'1');
