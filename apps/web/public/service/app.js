@@ -6,13 +6,7 @@ function ringOrder(start){try{audioCtx ||= new (window.AudioContext||window.webk
 function alertSound(){
  if(alertPlaying)return;alertPlaying=true;
  ringOrder(audioCtx?.currentTime||0);
- const finish=()=>{ringOrder(audioCtx?.currentTime||0);setTimeout(()=>{alertPlaying=false},1800)};
- setTimeout(()=>{
-  if(!('speechSynthesis' in window)||!('SpeechSynthesisUtterance' in window)){finish();return}
-  try{const speech=new SpeechSynthesisUtterance('Bestellung ist da');speech.lang='de-DE';speech.rate=.95;speech.volume=1;
-   let done=false;const end=()=>{if(done)return;done=true;finish()};speech.onend=end;speech.onerror=end;window.speechSynthesis.speak(speech);setTimeout(end,2600);
-  }catch(e){finish()}
- },1800);
+ setTimeout(()=>{ringOrder(audioCtx?.currentTime||0);setTimeout(()=>{alertPlaying=false},1800)},1800);
  try{if(navigator.vibrate)navigator.vibrate([400,150,400,150,400,1800,400,150,400])}catch(e){}
 }
 
