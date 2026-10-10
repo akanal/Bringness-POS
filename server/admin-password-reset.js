@@ -34,10 +34,10 @@ function mailConfigured(){
 async function sendResetMail(email,token,returnTo){
   const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness.de')).replace(/\/$/,"");
   if(new URL(origin).protocol!=="https:")throw Error("Öffentliche Adresse muss HTTPS verwenden");
-  const link=origin+"/admin/reset.html"+(returnTo==='ai'?"?returnTo=ai":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
+  const link=origin+"/admin/reset.html"+(returnTo==='ai'?"?returnTo=ai":returnTo==='service'?"?returnTo=service":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   await sendSmtpMail({
-    from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
+    from:process.env.SMTP_FROM,to:email,subject:returnTo==='service'?"Bringness – Zugangscode zurücksetzen":returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
     html:`<h1>Passwort zurücksetzen</h1><p><a href="${escape(link)}" style="display:inline-block;background:#183d35;color:#fff;padding:16px 24px;border-radius:24px;text-decoration:none">Neues Passwort festlegen</a></p><p>Der Button ist 30 Minuten gültig. Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p>`,
     text:"Öffne diesen Link, um dein Passwort innerhalb von 30 Minuten neu zu setzen:\n\n"+link+"\n\nWenn du den Reset nicht angefordert hast, ignoriere diese Nachricht."
   });
@@ -81,15 +81,24 @@ export async function handleAdminPasswordReset(req,res){
   if(path==="/api/v1/admin/password/availability"&&req.method==="GET"){
     const state=await adminMailStatus();send(res,200,{emailAvailable:state.available,status:state.status});return true;
   }
-  const posRecovery=path==="/api/v1/auth/forgot-password"||path==="/api/v1/auth/reset-password";
-  const eligibleRoles=posRecovery?"u.role<>'waiter'":"u.role IN ('owner','admin')";
+  const posRecovery=["/api/v1/auth/forgot-password","/api/v1/auth/reset-password","/api/v1/auth/reset-password/details"].includes(path);
+  const eligibleRoles=posRecovery?"true":"u.role IN ('owner','admin')";
+  if(path==="/api/v1/auth/reset-password/details"&&req.method==="POST"){
+    let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
+    const token=String(input.token||"");
+    if(!tokenPattern.test(token)){send(res,400,{error:"Reset-Link ist ungültig oder abgelaufen"});return true}
+    const result=await pool.query("SELECT u.role FROM password_reset_tokens pr JOIN users u ON u.id=pr.user_id WHERE pr.token_hash=$1 AND pr.used_at IS NULL AND pr.expires_at>now() AND u.status='active'",[hash(token)]);
+    if(!result.rows.length){send(res,400,{error:"Reset-Link ist ungültig oder abgelaufen"});return true}
+    const pin=result.rows[0].role==='waiter';
+    send(res,200,{credentialType:pin?'pin':'password',loginPath:pin?'/service/':'/pos/'});return true;
+  }
   if((path==="/api/v1/admin/password/forgot"||path==="/api/v1/auth/forgot-password")&&req.method==="POST"){
     await ensureRecoverySchema();
     if(!mailConfigured()){send(res,503,{error:"E-Mail-Versand ist noch nicht eingerichtet. Bitte SMTP im Bringness-Server konfigurieren."});return true}
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const email=String(input.email||"").trim().toLowerCase();
     if(email.length>254||!emailPattern.test(email)){send(res,400,{error:"Gültige E-Mail-Adresse erforderlich"});return true}
-    const result=await pool.query(`SELECT u.id,u.email FROM users u WHERE lower(btrim(u.email))=$1 AND ${eligibleRoles} AND u.status='active'`,[email]);
+    const result=await pool.query(`SELECT u.id,u.email,u.role FROM users u WHERE lower(btrim(u.email))=$1 AND ${eligibleRoles} AND u.status='active'`,[email]);
     const user=result.rows.length===1?result.rows[0]:null;
     const generic={message:posRecovery?"Wenn ein aktives Konto mit dieser E-Mail existiert, erhältst du einen Link zum Zurücksetzen. Bitte prüfe auch den Spamordner.":"Wenn ein aktives Admin-Konto mit dieser E-Mail existiert, erhält es einen Reset-Link."};
     if(!user){send(res,200,generic);return true}
@@ -97,7 +106,7 @@ export async function handleAdminPasswordReset(req,res){
     if(recent.rowCount){send(res,200,generic);return true}
     const token=crypto.randomBytes(32).toString("hex"),tokenHash=hash(token);
     await pool.query("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '30 minutes')",[tokenHash,user.id]);
-    try{await sendResetMail(user.email,token,posRecovery?'pos-login':input.returnTo==='ai'?'ai':'pos');await pool.query('UPDATE password_reset_tokens SET delivered_at=now() WHERE token_hash=$1',[tokenHash])}
+    try{await sendResetMail(user.email,token,posRecovery?(user.role==='waiter'?'service':'pos-login'):input.returnTo==='ai'?'ai':'pos');await pool.query('UPDATE password_reset_tokens SET delivered_at=now() WHERE token_hash=$1',[tokenHash])}
     catch(error){
       await pool.query("DELETE FROM password_reset_tokens WHERE token_hash=$1",[tokenHash]);
       console.error("Admin password reset mail delivery failed:",error.code||error.name);
@@ -108,20 +117,24 @@ export async function handleAdminPasswordReset(req,res){
   if((path==="/api/v1/admin/password/reset"||path==="/api/v1/auth/reset-password")&&req.method==="POST"){
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const token=String(input.token||""),password=String(input.password||"");
-    if(!tokenPattern.test(token)||!validPassword(password)){
-      send(res,400,{error:"Ungültiger Link oder Passwort. "+passwordMessage});return true;
+    if(!tokenPattern.test(token)||!password.length||password.length>128){
+      send(res,400,{error:"Ungültiger Link oder neue Eingabe."});return true;
     }
     const client=await pool.connect();
     try{
       await client.query("BEGIN");
       const row=(await client.query(`
-        SELECT pr.token_hash,pr.user_id,u.company_id,u.email
+        SELECT pr.token_hash,pr.user_id,u.company_id,u.email,u.role
         FROM password_reset_tokens pr JOIN users u ON u.id=pr.user_id
         WHERE pr.token_hash=$1 AND pr.used_at IS NULL AND pr.expires_at>now()
           AND ${eligibleRoles} AND u.status='active'
         FOR UPDATE OF pr, u
       `,[hash(token)])).rows[0];
       if(!row){await client.query("ROLLBACK");send(res,400,{error:"Reset-Link ist ungültig oder abgelaufen"});return true}
+      const pin=posRecovery&&row.role==='waiter';
+      if(pin?!/^\d{6}$/.test(password):!validPassword(password)){
+        await client.query("ROLLBACK");send(res,400,{error:pin?"Der neue Zugangscode muss genau 6 Ziffern enthalten.":passwordMessage});return true;
+      }
       await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1",[row.user_id,passwordHash(password)]);
       await client.query("UPDATE password_reset_tokens SET used_at=now() WHERE token_hash=$1",[row.token_hash]);
       await client.query("DELETE FROM password_reset_tokens WHERE user_id=$1 AND token_hash<>$2",[row.user_id,row.token_hash]);
@@ -129,7 +142,7 @@ export async function handleAdminPasswordReset(req,res){
       await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id) VALUES($1,$2,'admin.password.reset','user',$3)",[row.company_id,row.user_id,row.user_id]);
       await client.query("COMMIT");
       clearLoginAttempts(row.email);
-      send(res,200,{message:"Passwort geändert. Alle bisherigen Sitzungen wurden abgemeldet."});return true;
+      send(res,200,{message:(pin?"Zugangscode":"Passwort")+" geändert. Alle bisherigen Sitzungen wurden abgemeldet."});return true;
     }catch(error){await client.query("ROLLBACK");throw error}finally{client.release()}
   }
   return false;
@@ -139,6 +152,8 @@ export async function requireAdminPasswordChange(req,res){
   const path=new URL(req.url,"http://localhost").pathname;
   if(!path.startsWith("/api/v1/")||[
     "/api/v1/auth/login","/api/v1/auth/logout","/api/v1/profile/password",
+    "/api/v1/auth/forgot-password","/api/v1/auth/reset-password","/api/v1/auth/reset-password/details",
+    "/api/v1/admin/password/forgot","/api/v1/admin/password/reset","/api/v1/admin/password/availability",
     "/api/v1/admin/password/change","/api/v1/admin/password/first-login"
   ].includes(path))return false;
   const bearer=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
