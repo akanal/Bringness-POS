@@ -6,7 +6,7 @@ const source=readFileSync(new URL('../apps/web/public/pos/personnel.js',import.m
 function client(responses,granted=true){
  const calls=[];let prompts=0;
  const window={fetch:async(input,init)=>{calls.push({input,init});return responses.shift()}};
- const context={window,URL,Headers,Request,location:{href:'https://pos.example/pos/',origin:'https://pos.example'},document:{createElement:()=>({}),head:{appendChild(){}},getElementById:()=>({}),addEventListener(){},querySelectorAll:()=>[]},localStorage:{getItem:()=> 'session'},setInterval(){}};
+ const context={navigator:{userAgent:"Desktop"},window,URL,Headers,Request,location:{href:'https://pos.example/pos/',origin:'https://pos.example'},document:{createElement:()=>({}),head:{appendChild(){}},getElementById:()=>({}),addEventListener(){},querySelectorAll:()=>[]},localStorage:{getItem:()=> 'session'},setInterval(){}};
  vm.runInNewContext(source,context);
  window.ensurePersonnelAccess=async()=>{prompts++;return granted};
  return {window,calls,prompts:()=>prompts};
