@@ -13,3 +13,15 @@ $("dutyForm").oninput=()=>{if(!dutyBusy)dutyRequestId=crypto.randomUUID()};
 $("dutyForm").onsubmit=async event=>{event.preventDefault();if(dutyBusy||!data)return;dutyBusy=true;const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;try{const result=await api('/personnel/clock',{method:'POST',body:JSON.stringify({...Object.fromEntries(new FormData(form)),restaurantId:data.employee.restaurant_id,employeeId:data.employee.id,requestId:dutyRequestId})});form.reset();dutyRequestId=crypto.randomUUID();alertSince=new Date().toISOString();await load();$("message").textContent=result.state==='off'?'Dienst beendet. Zeiterfassung gestoppt; keine neuen Tischaufträge.':'Dienstbuchung gespeichert.';if(result.openTables?.length)$("message").textContent+=' Offene Tische übergeben: '+result.openTables.map(t=>t.name).join(', ');if($("myTimes").open)await loadMyReport();}catch(e){$("message").textContent=e.message;}finally{dutyBusy=false;button.disabled=false}};
 async function loadMyReport(){await window.renderPersonnelReport($("myReport"),{own:true,name:data?.employee.restaurant_name||'Mein Betrieb',request:filters=>api('/personnel/my-report?'+new URLSearchParams(filters))})}
 $("myTimes").addEventListener('toggle',()=>{if($("myTimes").open)loadMyReport().catch(e=>{$("myReport").textContent=e.message})});
+
+// Recovery does not submit or require the current credential.
+let recoveryBusy=false;
+$("forgotPassword").onclick=async()=>{
+  if(recoveryBusy)return;
+  const email=$("email").value.trim();
+  if(!email||!$("email").checkValidity()){$("loginMsg").textContent="Bitte zuerst eine gültige E-Mail-Adresse eingeben.";return}
+  recoveryBusy=true;$("forgotPassword").disabled=true;$("loginMsg").textContent="Reset-Link wird angefordert …";
+  try{const result=await api("/auth/forgot-password",{method:"POST",body:JSON.stringify({email})});$("loginMsg").textContent=result.message}
+  catch(error){$("loginMsg").textContent=error.message}
+  finally{recoveryBusy=false;$("forgotPassword").disabled=false}
+};
