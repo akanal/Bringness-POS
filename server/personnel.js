@@ -10,6 +10,7 @@ const uuid=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
 async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>20000)throw Object.assign(Error('Anfrage zu groß'),{status:413})}try{return JSON.parse(text||'{}')}catch{throw Object.assign(Error('Ungültige Anfrage'),{status:400})}}
 const fail=(text,status=400)=>{throw Object.assign(Error(text),{status})};
+export function isPhoneClockRequest(req){const ua=String(req.headers['user-agent']||'');return /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|Android.*Mobile/i.test(ua)||(req.headers['sec-ch-ua-mobile']==='?1'&&!/iPad|Tablet|Android/i.test(ua));}
 export function nextClockState(state,action){const next={off:{start:'working'},working:{pause:'paused',end:'off'},paused:{resume:'working',end:'off'}}[state]?.[action];if(!next)fail('Diese Buchung passt nicht zum aktuellen Status.',409);return next}
 export async function migratePersonnel(pool){await pool.query(`
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS duty_state text NOT NULL DEFAULT 'off' CHECK(duty_state IN ('off','working','paused'));
@@ -41,6 +42,7 @@ export function createPersonnel(pool){
  }
  if(route==='/people'&&req.method==='GET'){if(u.role==='waiter')fail('Nur eigene Mitarbeiterdaten sind freigegeben',403);await allowedRestaurant(b.restaurantId,u);return send(res,200,{people:(await pool.query('SELECT id,display_name FROM employees WHERE restaurant_id=$1 AND active=true ORDER BY display_name',[b.restaurantId])).rows})}
  if(route==='/clock'&&req.method==='POST'){
+  if(u.role==='waiter'||isPhoneClockRequest(req))return send(res,403,{error:'Stempeln ist nur am Kassengerät im Betrieb möglich. Bitte dort Dienstbeginn, Pausen und Dienstende buchen.',code:'CLOCK_AT_POS_ONLY'});
   await allowedRestaurant(b.restaurantId,u);if(!uuid(b.employeeId))fail('Mitarbeiter wählen');const key='employee:'+b.employeeId;await attempt(key);
   const c=await pool.connect();try{await c.query('BEGIN');const e=(await c.query('SELECT id,pin_hash,user_id FROM employees WHERE id=$1 AND restaurant_id=$2 AND active=true FOR UPDATE',[b.employeeId,b.restaurantId])).rows[0];if(u.role==='waiter'&&e?.user_id!==u.id)fail('Nur die eigene Dienstzeit darf gebucht werden',403);if(!e||!pinMatches(String(b.pin||''),e.pin_hash))fail('PIN oder Mitarbeiter stimmt nicht',403);await pool.query('DELETE FROM personnel_attempts WHERE key=$1',[key]);
    const latest=(await c.query('SELECT action,effective_at FROM personnel_time_entries WHERE employee_id=$1 ORDER BY recorded_at DESC,id DESC LIMIT 1',[e.id])).rows[0];let state=latest?({start:'working',resume:'working',pause:'paused',end:'off'}[latest.action]):'off';
