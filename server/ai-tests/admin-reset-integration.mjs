@@ -68,10 +68,13 @@ for(const pin of [false,true]){
   const browser=new JSDOM(fs.readFileSync(root+'/apps/web/public/admin/reset.html','utf8'),{url:'https://pos.example.org/admin/reset.html?returnTo=pos#token='+'a'.repeat(64),runScripts:'outside-only'}).window;
   let resetPost;browser.localStorage.setItem('bringness-waiter-token','old');
   browser.fetch=async(url,options)=>{if(url.endsWith('/details'))return {ok:true,json:async()=>({credentialType:pin?'pin':'password',loginPath:pin?'/service/':'/pos/'})};resetPost={url,body:JSON.parse(options.body)};return {ok:true,json:async()=>({message:'Zugang geändert.'})}};
+  // Match the production logo helper, which replaces the brand span before reset initialization.
+  browser.document.querySelector('.brand').innerHTML='<img alt="Bringness">';
   browser.eval(browser.document.querySelector('script').textContent);await new Promise(resolve=>setTimeout(resolve,0));
   assert.equal(browser.document.querySelector('a[href="'+(pin?'/service/':'/pos/')+'"]').textContent,pin?'Zur Service-Anmeldung':'Zur Kassen-Anmeldung');assert.equal(browser.location.hash,'');
   const value=pin?'047293':'Ab1!xy';browser.document.getElementById('newPassword').value=value;browser.document.getElementById('repeatPassword').value=value;
   assert(browser.document.getElementById('resetForm').checkValidity());
+  for(const id of ['newPassword','repeatPassword']){const field=browser.document.getElementById(id),eye=browser.document.querySelector('[data-password-eye="'+id+'"]');assert(eye);eye.click();assert.equal(field.type,'text');assert.equal(field.value,value);assert.equal(eye.getAttribute('aria-pressed'),'true');eye.click();assert.equal(field.type,'password');assert.equal(field.value,value);}
   if(pin){assert.equal(browser.document.getElementById('newPassword').inputMode,'numeric');assert.equal(browser.document.getElementById('newPassword').maxLength,6);}
   browser.document.getElementById('resetForm').dispatchEvent(new browser.Event('submit',{bubbles:true,cancelable:true}));await new Promise(resolve=>setTimeout(resolve,0));
   assert.equal(resetPost.url,'/api/v1/auth/reset-password');assert.equal(resetPost.body.password,value);assert.equal(browser.localStorage.getItem('bringness-waiter-token'),null);browser.close();
