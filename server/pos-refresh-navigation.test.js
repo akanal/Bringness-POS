@@ -7,7 +7,7 @@ function fixture(search){
  const elements=new Map(),views=[],renders=[];
  const $=id=>{if(!elements.has(id))elements.set(id,{style:{},classList:{add(){},remove(){}},value:'',textContent:''});return elements.get(id)};
  let failures=0;
- const context=vm.createContext({token:'test',data:{},URLSearchParams,location:{search},document:{body:{classList:{remove(){},add(){}}}},$,console,localStorage:{removeItem(){}},render:id=>renders.push(id),showModule:view=>views.push(view),api:async path=>{if(path==='/bootstrap'){if(failures-->0)throw Object.assign(Error('Unavailable'),{status:503});return {user:{name:'Test'},restaurants:[]}}return {}}});
+ const context=vm.createContext({token:'test',data:{},URLSearchParams,location:{search},document:{body:{dataset:{},classList:{remove(){},add(){}}}},$,console,localStorage:{removeItem(){}},render:id=>renders.push(id),showModule:view=>views.push(view),api:async path=>{if(path==='/bootstrap'){if(failures-->0)throw Object.assign(Error('Unavailable'),{status:503});return {user:{name:'Test'},restaurants:[]}}return {}}});
  vm.runInContext(source.split('\n').filter(l=>l.startsWith('let initialViewApplied=')||l.startsWith('async function load(')).join('\n'),context);
  return {context,views,renders,failNext(){failures=1}};
 }
