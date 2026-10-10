@@ -140,7 +140,7 @@ test("base guest page locks without enhancement scripts and stays locked on relo
     const requests=[],listeners={},events=[],replaced=[],code="a".repeat(48);
     const elements=new Map();
     for(const id of ["language","heading","restaurant","guestBrandName","guestLogo","status","menu","basket","total","send"]){
-      elements.set(id,{textContent:"",innerHTML:"",hidden:false,disabled:false,options:[{value:"de"}],parentElement:{hidden:false},querySelectorAll:()=>[],removeAttribute(){}});
+      elements.set(id,{textContent:"",innerHTML:"",hidden:false,disabled:false,options:[{value:"de"}],parentElement:{hidden:false},querySelectorAll:()=>[],addEventListener(){},removeAttribute(){}});
     }
     const context={
       URL,URLSearchParams,Map,CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail}},
