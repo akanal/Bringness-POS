@@ -11,3 +11,10 @@ function fixture(){
 test('render keeps the selected product category when all categories are rebuilt',()=>{const f=fixture();f.context.render();assert.equal(f.$('productCategory').value,'pizza');assert.match(f.$('productCategory').innerHTML,/Drinks/);assert.match(f.$('productCategory').innerHTML,/Pizza/);assert.doesNotMatch(f.$('productCategory').innerHTML,/Other/);f.context.render();assert.equal(f.$('productCategory').value,'pizza')});
 test('category filter shows assigned products only',()=>{const f=fixture();f.context.cat='pizza';f.context.render();assert.match(f.$('products').innerHTML,/Pizza/);assert.doesNotMatch(f.$('products').innerHTML,/Cola/)});
 test('switching restaurant drops a stale category filter',()=>{const f=fixture();f.context.cat='pizza';f.context.render('r2');assert.equal(f.context.cat,'all');assert.equal(f.$('productCategory').value,'other')});
+
+test('choosing a pool category targets the product form and preserves restaurant isolation',()=>{
+ const source=readFileSync(new URL('../apps/web/public/pos/app.js',import.meta.url),'utf8');let focused=0,scrolled=0;
+ const nodes={restaurant:{value:'r1'},productCategory:{value:'old'},productForm:{scrollIntoView(){scrolled++}},productName:{focus(){focused++}}};
+ const context=vm.createContext({$:id=>nodes[id],data:{categories:[{id:'new',restaurantId:'r1'},{id:'foreign',restaurantId:'r2'}]}});
+ vm.runInContext(source.slice(source.indexOf('function selectProductCategory(')),context);context.selectProductCategory('new');assert.equal(nodes.productCategory.value,'new');assert.equal(focused,1);assert.equal(scrolled,1);context.selectProductCategory('foreign');assert.equal(nodes.productCategory.value,'new');assert.equal(focused,1);
+});
