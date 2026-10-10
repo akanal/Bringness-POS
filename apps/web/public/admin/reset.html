@@ -6,11 +6,11 @@
 <meta name="referrer" content="no-referrer">
 <title>Admin-Passwort zurücksetzen · Bringness</title>
 <link rel="stylesheet" href="/styles.css">
-<style>body{background:#f3f6f8}.reset{max-width:480px;margin:45px auto;padding:20px}.card{background:#fff;border-radius:18px;padding:25px;box-shadow:0 4px 22px rgba(15,25,35,.06)}input{display:block;box-sizing:border-box;width:100%;padding:12px;margin:7px 0 17px;border:1px solid #d6dde3;border-radius:9px}label{display:block}#message{min-height:1.5em}</style>
+<style>body{background:#f3f6f8}.reset{max-width:480px;margin:45px auto;padding:20px}.card{background:#fff;border-radius:18px;padding:25px;box-shadow:0 4px 22px rgba(15,25,35,.06)}input{display:block;box-sizing:border-box;width:100%;padding:12px;margin:7px 0 17px;border:1px solid #d6dde3;border-radius:9px}label{display:block}.password-field{display:flex;gap:8px;margin:7px 0 17px}.password-field input{flex:1;min-width:0;margin:0}.password-eye{flex:none;width:48px;min-height:48px;margin:0;padding:8px;background:#fff;color:#102235;border:1px solid #d6dde3;font-size:23px;touch-action:manipulation}.password-eye:focus-visible{outline:3px solid #ff7628;outline-offset:2px}#message{min-height:1.5em}</style>
 </head>
 <body>
 <header><a class="brand home" href="/">Bringness <span>Admin</span></a></header>
-<main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p id="passwordHelp">Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label id="newPasswordLabel" for="newPassword">Neues Passwort</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><label id="repeatPasswordLabel" for="repeatPassword">Passwort wiederholen</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
+<main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p id="passwordHelp">Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label id="newPasswordLabel" for="newPassword">Neues Passwort</label><div class="password-field"><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button class="password-eye" type="button" data-password-eye="newPassword" aria-label="Passwort anzeigen" aria-controls="newPassword" aria-pressed="false">👁️</button></div><label id="repeatPasswordLabel" for="repeatPassword">Passwort wiederholen</label><div class="password-field"><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button class="password-eye" type="button" data-password-eye="repeatPassword" aria-label="Passwort anzeigen" aria-controls="repeatPassword" aria-pressed="false">👁️</button></div><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
 <script>
 const returnTo=new URLSearchParams(location.search).get('returnTo');
 const returnToPos=returnTo==='pos',returnToService=returnTo==='service',returnToAi=returnTo==='ai';
@@ -18,7 +18,7 @@ const accountRecovery=returnToPos||returnToService;
 const loginLink=document.querySelector('a[href="/admin/"]');
 function setLoginPath(path){loginLink.href=path;loginLink.textContent=path==='/service/'?'Zur Service-Anmeldung':'Zur Kassen-Anmeldung';}
 if(returnToAi){loginLink.href='/ai-workspace.html?admin=1';loginLink.textContent='Zur AI-Admin-Anmeldung';}
-if(accountRecovery){setLoginPath(returnToService?'/service/':'/pos/');document.title='Zugang zurücksetzen · Bringness';document.querySelector('.brand span').textContent='';}
+if(accountRecovery){setLoginPath(returnToService?'/service/':'/pos/');document.title='Zugang zurücksetzen · Bringness';const brandLabel=document.querySelector('.brand span');if(brandLabel)brandLabel.textContent='';}
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
 history.replaceState(null,'',location.pathname+(['ai','pos','service'].includes(returnTo)?'?returnTo='+returnTo:''));
@@ -58,7 +58,14 @@ form.addEventListener('submit',async event=>{
   finally{sending=false}
 });
 prepareReset();
-document.querySelectorAll('input[type="password"]').forEach(input=>{const button=document.createElement('button');button.type='button';button.textContent='◉';button.setAttribute('aria-label','Passwort anzeigen');button.setAttribute('aria-pressed','false');button.onclick=()=>{const visible=input.type==='password';input.type=visible?'text':'password';button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Passwort verbergen':'Passwort anzeigen')};input.insertAdjacentElement('afterend',button)});
+document.querySelectorAll('[data-password-eye]').forEach(button=>{
+  const input=document.getElementById(button.dataset.passwordEye);
+  button.addEventListener('click',()=>{
+    const visible=input.type==='password';input.type=visible?'text':'password';
+    button.setAttribute('aria-pressed',String(visible));
+    button.setAttribute('aria-label',visible?'Eingabe verbergen':'Eingabe anzeigen');
+  });
+});
 </script>
 </body>
 </html>
