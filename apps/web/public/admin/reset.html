@@ -10,18 +10,54 @@
 </head>
 <body>
 <header><a class="brand home" href="/">Bringness <span>Admin</span></a></header>
-<main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p>Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label for="newPassword">Neues Passwort</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><label for="repeatPassword">Passwort wiederholen</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
+<main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p id="passwordHelp">Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label id="newPasswordLabel" for="newPassword">Neues Passwort</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><label id="repeatPasswordLabel" for="repeatPassword">Passwort wiederholen</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
 <script>
-const returnToPos=new URLSearchParams(location.search).get('returnTo')==='pos';
-const returnToAi=new URLSearchParams(location.search).get('returnTo')==='ai';
-const loginLink=document.querySelector('a[href="/admin/"]');if(returnToAi){loginLink.href='/ai-workspace.html?admin=1';loginLink.textContent='Zur AI-Admin-Anmeldung';}
-if(returnToPos){loginLink.href='/pos/';loginLink.textContent='Zur Kassen-Anmeldung';document.title='Passwort zurücksetzen · Bringness';document.querySelector('.brand span').textContent='';}
+const returnTo=new URLSearchParams(location.search).get('returnTo');
+const returnToPos=returnTo==='pos',returnToService=returnTo==='service',returnToAi=returnTo==='ai';
+const accountRecovery=returnToPos||returnToService;
+const loginLink=document.querySelector('a[href="/admin/"]');
+function setLoginPath(path){loginLink.href=path;loginLink.textContent=path==='/service/'?'Zur Service-Anmeldung':'Zur Kassen-Anmeldung';}
+if(returnToAi){loginLink.href='/ai-workspace.html?admin=1';loginLink.textContent='Zur AI-Admin-Anmeldung';}
+if(accountRecovery){setLoginPath(returnToService?'/service/':'/pos/');document.title='Zugang zurücksetzen · Bringness';document.querySelector('.brand span').textContent='';}
 const params=new URLSearchParams(location.hash.slice(1));
 const token=params.get('token')||'';
-history.replaceState(null,'',location.pathname+(returnToAi?'?returnTo=ai':returnToPos?'?returnTo=pos':''));
-const message=document.getElementById('message'),form=document.getElementById('resetForm');
-if(!/^[a-f0-9]{64}$/.test(token)){form.hidden=true;message.textContent='Reset-Link ist ungültig. Bitte fordere einen neuen Link an.'}
-form.addEventListener('submit',async event=>{event.preventDefault();const password=document.getElementById('newPassword').value;if(password!==document.getElementById('repeatPassword').value){message.textContent='Die Passwörter stimmen nicht überein.';return}const button=document.getElementById('submit');button.disabled=true;message.textContent='';try{const response=await fetch(returnToPos?'/api/v1/auth/reset-password':'/api/v1/admin/password/reset',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,password})});const result=await response.json();if(!response.ok)throw Error(result.error||'Zurücksetzen fehlgeschlagen');form.hidden=true;message.textContent=result.message+' Bitte melde dich erneut an.';localStorage.removeItem('bringness-pos-token');sessionStorage.removeItem('bringness-ai-admin-session')}catch(error){message.textContent=error.message;button.disabled=false}});
+history.replaceState(null,'',location.pathname+(['ai','pos','service'].includes(returnTo)?'?returnTo='+returnTo:''));
+const message=document.getElementById('message'),form=document.getElementById('resetForm'),submit=document.getElementById('submit');
+let ready=!accountRecovery,sending=false;
+function showPinFields(){
+  document.querySelector('h1').textContent='Zugangscode zurücksetzen';
+  document.getElementById('passwordHelp').textContent='Lege einen neuen persönlichen Zugangscode mit genau 6 Ziffern fest.';
+  document.getElementById('newPasswordLabel').textContent='Neuer Zugangscode (6 Ziffern)';
+  document.getElementById('repeatPasswordLabel').textContent='Zugangscode wiederholen';
+  submit.textContent='Zugangscode ändern';
+  for(const id of ['newPassword','repeatPassword']){const field=document.getElementById(id);field.pattern='[0-9]{6}';field.minLength=6;field.maxLength=6;field.inputMode='numeric';field.title='Genau 6 Ziffern';}
+}
+async function prepareReset(){
+  if(!/^[a-f0-9]{64}$/.test(token)){ready=false;form.hidden=true;message.textContent='Reset-Link ist ungültig. Bitte fordere einen neuen Link an.';return}
+  if(!accountRecovery)return;
+  submit.disabled=true;message.textContent='Reset-Link wird geprüft …';
+  try{
+    const response=await fetch('/api/v1/auth/reset-password/details',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token})});
+    const result=await response.json();if(!response.ok)throw Error(result.error||'Reset-Link konnte nicht geprüft werden.');
+    if(result.credentialType==='pin')showPinFields();
+    setLoginPath(result.loginPath==='/service/'?'/service/':'/pos/');ready=true;submit.disabled=false;message.textContent='';
+  }catch(error){form.hidden=true;message.textContent=error.message;}
+}
+form.addEventListener('submit',async event=>{
+  event.preventDefault();if(!ready||sending)return;
+  const password=document.getElementById('newPassword').value;
+  if(!form.checkValidity()){form.reportValidity();return}
+  if(password!==document.getElementById('repeatPassword').value){message.textContent='Die Eingaben stimmen nicht überein.';return}
+  sending=true;submit.disabled=true;message.textContent='Wird gespeichert …';
+  try{
+    const response=await fetch(accountRecovery?'/api/v1/auth/reset-password':'/api/v1/admin/password/reset',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,password})});
+    const result=await response.json();if(!response.ok)throw Error(result.error||'Zurücksetzen fehlgeschlagen');
+    form.hidden=true;message.textContent=result.message+' Bitte melde dich erneut an.';
+    localStorage.removeItem('bringness-pos-token');localStorage.removeItem('bringness-waiter-token');sessionStorage.removeItem('bringness-ai-admin-session');
+  }catch(error){message.textContent=error.message;submit.disabled=false}
+  finally{sending=false}
+});
+prepareReset();
 document.querySelectorAll('input[type="password"]').forEach(input=>{const button=document.createElement('button');button.type='button';button.textContent='◉';button.setAttribute('aria-label','Passwort anzeigen');button.setAttribute('aria-pressed','false');button.onclick=()=>{const visible=input.type==='password';input.type=visible?'text':'password';button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Passwort verbergen':'Passwort anzeigen')};input.insertAdjacentElement('afterend',button)});
 </script>
 </body>
