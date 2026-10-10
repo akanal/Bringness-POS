@@ -8,6 +8,7 @@ await db.exec("CREATE TABLE employees(id uuid PRIMARY KEY,user_id uuid,restauran
 await db.query("INSERT INTO employees VALUES($1,$2,$3,true,'waiter','off')",[employee,user,restaurant]);await db.query("INSERT INTO restaurants VALUES($1,$2,'Restaurant','restaurant')",[restaurant,company]);await db.query("INSERT INTO dining_tables VALUES($1,$2,$3,'Tisch 1','Saal','open',1)",[table,restaurant,employee]);await db.query("INSERT INTO orders VALUES(gen_random_uuid(),$1,'qr','open',now(),2500)",[table]);await db.query("INSERT INTO waiter_push_subscriptions VALUES($1,'https://push.example','{}')",[user]);
 await db.exec("ALTER TABLE orders ALTER COLUMN id SET DEFAULT gen_random_uuid();ALTER TABLE orders ADD COLUMN restaurant_id uuid;ALTER TABLE orders ADD COLUMN closed_at timestamptz;ALTER TABLE products ADD COLUMN tax_rate numeric DEFAULT 19;CREATE TABLE order_items(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),order_id uuid,product_id uuid,product_name_snapshot text,unit_price_cents int,tax_rate_snapshot numeric,quantity int,guest_note text,correction_note text,corrected_at timestamptz,corrected_by uuid);");
 await db.query('UPDATE orders SET restaurant_id=$1',[restaurant]);
+await db.exec("CREATE TABLE categories(id uuid,name text,sort_order int);ALTER TABLE products ADD COLUMN category_id uuid;ALTER TABLE products ADD COLUMN description text;ALTER TABLE products ADD COLUMN image_url text;");
 const product='00000000-0000-4000-8000-000000000006';await db.query("INSERT INTO products(id,restaurant_id,name,price_cents,active,ai_stock_available) VALUES($1,$2,'Waffel',1250,true,true)",[product,restaurant]);const qrOrder=(await db.query('SELECT id FROM orders')).rows[0].id;const qrItem=(await db.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,quantity) VALUES($1,$2,'Waffel',1250,2) RETURNING id",[qrOrder,product])).rows[0].id;
 const pool={query:async(sql,args)=>{const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}}};
 pool.connect=async()=>({query:pool.query,release(){}});
@@ -48,5 +49,13 @@ const input=w.document.querySelector('[data-product]');input.value='1';input.dis
 let signals=0;w.AudioContext=class{currentTime=0;destination={};resume(){return Promise.resolve()}createOscillator(){return {frequency:{},connect(){},start(){signals++},stop(){}}}createGain(){return {gain:{exponentialRampToValueAtTime(){}},connect(){}}}};
 w.document.getElementById('notificationsBtn').click();await waitFor(()=>w.document.getElementById('message').textContent.includes('Bestellsignal aktiv'));assert(signals>0);
 await db.query("UPDATE orders SET status='open',created_at=now() WHERE id=$1",[qrOrder]);await w.checkAlerts();assert(w.document.getElementById('message').textContent.includes('Neue QR-Bestellung'));assert(signals>1);
+// Category switches preserve quantities across groups, including uncategorized products.
+assert.equal(w.document.getElementById('serviceMore').open,false);
+w.eval(`data.products=[{id:'a',name:'Waffel',price_cents:500,category_id:'sweet',category:'Süß',image_url:'/waffel.jpg'},{id:'b',name:'Kaffee',price_cents:300,category_id:'drinks',category:'Getränke'},{id:'c',name:'Extra',price_cents:100}];cart={};renderProducts()`);
+assert.equal(w.document.querySelectorAll('[data-category]').length,3);assert(w.document.querySelector('.product-photo img'));
+w.document.querySelector('[data-step="1"]').click();assert(w.document.getElementById('total').textContent.includes('5,00'));
+w.document.querySelector('[data-category="drinks"]').click();assert.equal(w.document.querySelector('[data-product]').dataset.product,'b');w.document.querySelector('[data-step="1"]').click();assert(w.document.getElementById('total').textContent.includes('8,00'));
+w.document.querySelector('[data-category="sweet"]').click();assert.equal(w.document.querySelector('[data-product]').value,'1');
+w.document.querySelector('[data-category="uncategorized"]').click();assert.equal(w.document.querySelector('[data-product]').dataset.product,'c');
 w.close();await db.close();
 console.log('Service duty passed: actual SQL allows assigned-table service independently of duty state, retains open orders, removes phone stamping and preserves private monthly report.');
