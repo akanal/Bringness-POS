@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Mitarbeiterzugang einrichten · Bringness</title>
+<link rel="stylesheet" href="/styles.css">
+<style>body{background:#f3f6f8}.reset{max-width:480px;margin:45px auto;padding:20px}.reset h1{font-size:32px;line-height:1.15;letter-spacing:-.02em;overflow-wrap:anywhere}.card{background:#fff;border-radius:18px;padding:25px;box-shadow:0 4px 22px rgba(15,25,35,.06)}input{display:block;box-sizing:border-box;width:100%;padding:12px;margin:7px 0 17px;border:1px solid #d6dde3;border-radius:9px}label{display:block}.password-field{display:flex;gap:8px;margin:7px 0 17px}.password-field input{flex:1;min-width:0;margin:0}.password-eye{flex:none;width:48px;min-height:48px;margin:0;padding:8px;background:#fff;color:#102235;border:1px solid #d6dde3;font-size:23px;touch-action:manipulation}.password-eye:focus-visible{outline:3px solid #ff7628;outline-offset:2px}#message{min-height:1.5em}</style>
+</head>
+<body>
+<header><a class="brand home" href="/">Bringness <span>POS</span></a></header>
+<main class="reset"><section class="card"><h1>Mitarbeiterzugang einrichten</h1><p id="passwordHelp">Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label id="newPasswordLabel" for="newPassword">Neues Passwort</label><div class="password-field"><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button class="password-eye" type="button" data-password-eye="newPassword" aria-label="Passwort anzeigen" aria-controls="newPassword" aria-pressed="false">👁️</button></div><label id="repeatPasswordLabel" for="repeatPassword">Passwort wiederholen</label><div class="password-field"><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button class="password-eye" type="button" data-password-eye="repeatPassword" aria-label="Passwort anzeigen" aria-controls="repeatPassword" aria-pressed="false">👁️</button></div><label id="stampLabel">Persönliche Stempel-PIN (6–8 Ziffern)<div class="password-field"><input id="stampPin" type="password" inputmode="numeric" pattern="[0-9]{6,8}" minlength="6" maxlength="8" autocomplete="new-password" required><button class="password-eye" type="button" data-password-eye="stampPin" aria-label="PIN anzeigen" aria-controls="stampPin" aria-pressed="false">👁️</button></div></label><button id="submit" class="btn" type="submit">Zugang einrichten</button></form><p id="message" role="status"></p><a href="/admin/">Zur Admin-Anmeldung</a></section></main>
+<script>
+const returnTo='pos';
+const returnToPos=returnTo==='pos',returnToService=returnTo==='service',returnToAi=returnTo==='ai';
+const accountRecovery=returnToPos||returnToService;
+const loginLink=document.querySelector('a[href="/admin/"]');
+function setLoginPath(path){loginLink.href=path;loginLink.textContent=path==='/service/'?'Zur Service-Anmeldung':'Zur Kassen-Anmeldung';}
+if(returnToAi){loginLink.href='/ai-workspace.html?admin=1';loginLink.textContent='Zur AI-Admin-Anmeldung';}
+if(accountRecovery){setLoginPath(returnToService?'/service/':'/pos/');document.title='Mitarbeiterzugang · Bringness';const brandLabel=document.querySelector('.brand span');if(brandLabel)brandLabel.textContent='';}
+const params=new URLSearchParams(location.hash.slice(1));
+const token=params.get('token')||'';
+history.replaceState(null,'',location.pathname+(['ai','pos','service'].includes(returnTo)?'?returnTo='+returnTo:''));
+const message=document.getElementById('message'),form=document.getElementById('resetForm'),submit=document.getElementById('submit');
+let ready=!accountRecovery,sending=false;
+function showPinFields(){
+  document.querySelector('h1').textContent='Zugangscode einrichten';
+  document.getElementById('passwordHelp').textContent='Lege einen neuen persönlichen Zugangscode mit genau 6 Ziffern fest.';
+  document.getElementById('newPasswordLabel').textContent='Neuer Zugangscode (6 Ziffern)';
+  document.getElementById('repeatPasswordLabel').textContent='Zugangscode wiederholen';
+  document.getElementById('stampLabel').hidden=true;document.getElementById('stampPin').required=false;
+  submit.textContent='Zugang einrichten';
+  for(const id of ['newPassword','repeatPassword']){const field=document.getElementById(id);field.pattern='[0-9]{6}';field.minLength=6;field.maxLength=6;field.inputMode='numeric';field.title='Genau 6 Ziffern';}
+}
+async function prepareReset(){
+  if(!/^[a-f0-9]{64}$/.test(token)){ready=false;form.hidden=true;message.textContent='Aktivierungslink ist ungültig. Bitte fordere einen neuen Link an.';return}
+  if(!accountRecovery)return;
+  submit.disabled=true;message.textContent='Aktivierungslink wird geprüft …';
+  try{
+    const response=await fetch('/api/v1/staff/activate/details',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token})});
+    const result=await response.json();if(!response.ok)throw Error(result.error||'Aktivierungslink konnte nicht geprüft werden.');
+    if(result.credentialType==='pin')showPinFields();
+    setLoginPath(result.loginPath==='/service/'?'/service/':'/pos/');ready=true;submit.disabled=false;message.textContent='';
+  }catch(error){form.hidden=true;message.textContent=error.message;}
+}
+form.addEventListener('submit',async event=>{
+  event.preventDefault();if(!ready||sending)return;
+  const password=document.getElementById('newPassword').value;
+  if(!form.checkValidity()){form.reportValidity();return}
+  if(password!==document.getElementById('repeatPassword').value){message.textContent='Die Eingaben stimmen nicht überein.';return}
+  sending=true;submit.disabled=true;message.textContent='Wird gespeichert …';
+  try{
+    const response=await fetch('/api/v1/staff/activate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,password,stampPin:document.getElementById("stampPin").value})});
+    const result=await response.json();if(!response.ok)throw Error(result.error||'Einrichtung fehlgeschlagen');
+    form.hidden=true;message.textContent=result.message+' Bitte melde dich erneut an.';
+    localStorage.removeItem('bringness-pos-token');localStorage.removeItem('bringness-waiter-token');sessionStorage.removeItem('bringness-ai-admin-session');
+  }catch(error){message.textContent=error.message;submit.disabled=false}
+  finally{sending=false}
+});
+prepareReset();
+document.querySelectorAll('[data-password-eye]').forEach(button=>{
+  const input=document.getElementById(button.dataset.passwordEye);
+  button.addEventListener('click',()=>{
+    const visible=input.type==='password';input.type=visible?'text':'password';
+    button.setAttribute('aria-pressed',String(visible));
+    button.setAttribute('aria-label',visible?'Eingabe verbergen':'Eingabe anzeigen');
+  });
+});
+</script>
+</body>
+</html>
