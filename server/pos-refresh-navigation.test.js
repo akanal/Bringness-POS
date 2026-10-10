@@ -17,3 +17,8 @@ for(const search of ['?payment=return','?view=lizenz','?view=einstellungen'])tes
 });
 test('a failed bootstrap does not consume the initial navigation',async()=>{const f=fixture('?payment=return');f.failNext();await f.context.load();assert.deepEqual(f.views,[]);await f.context.load();assert.deepEqual(f.views,['lizenz'])});
 test('ordinary refreshes do not open billing',async()=>{const f=fixture('');await f.context.load();await f.context.load('test-restaurant');assert.deepEqual(f.views,[])});
+test('successful owner login opens the cash register after loading data',async()=>{
+ const nodes=new Map(),views=[],$=id=>{if(!nodes.has(id))nodes.set(id,{value:'test',textContent:''});return nodes.get(id)};
+ const context=vm.createContext({$,authBusy:false,mode:'login',token:null,console,localStorage:{setItem(){}},location:{replace(){}},setAuthBusy(){},api:async()=>({token:'test',user:{role:'owner'}}),load:async()=>views.push('load'),showModule:async v=>views.push(v)});
+ vm.runInContext(source.split('\n').find(l=>l.startsWith('$("authForm").onsubmit=')),context);await $('authForm').onsubmit({preventDefault(){}});assert.deepEqual(views,['load','kasse']);
+});
