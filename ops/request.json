@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "c8750c093dadf4b23611977db9292c8c0c64943e",
-  "requestId": "fix-pos-symbol-glyphs-20261011"
+  "revision": "43f672690c695519f043b4220d22702d084426a7",
+  "requestId": "restore-normal-pos-symbols-20261011"
 }
