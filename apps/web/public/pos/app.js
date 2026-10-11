@@ -41,7 +41,7 @@ personalmanagement:["Personalmanagement","Mitarbeiter, Rechte, Dienstplan und Ar
 dienstplan:["Dienstplan","Geplante Arbeitsschichten",""],
 zeiterfassung:["Zeiterfassung","Arbeitsbeginn, Pausen und Arbeitsende",""],
 stunden:["Stundenübersicht","Erfasste Arbeitszeiten und geplante Dienste",""],
-mitarbeiter:["Mitarbeiter","Mitarbeiter & Rechte","Mitarbeiteranlage ist vorhanden; PIN-Anmeldung, Rollen und Schichtzuordnung werden hier zusammengeführt."],
+mitarbeiter:["Mitarbeiterverwaltung","Mitarbeiter einladen und vorhandene Zugänge anzeigen","Mitarbeiter werden per E-Mail eingeladen und legen Namen sowie Zugangscode selbst fest."],
 belege:["Belege","Belege, Rechnungen & Exporte","Belegarchiv, Druck, QR-Beleg und steuerliche Exporte werden hier zentral verfügbar."],
 schicht:["Schicht","Schicht & Kassenbuch","Kassenöffnung, Anfangsbestand, Einlage/Entnahme und Tagesabschluss."],
 tse:["TSE","Lokale SD-TSE & Fiskalstatus","Für Online- und Windows-Kasse ist eine lokale SD-/microSD-TSE vorgesehen. Eine echte Signierung wird erst nach Anschluss und Prüfung angezeigt."],
