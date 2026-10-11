@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "850a960338f4fa201afc0e0978e4be0c176e0259",
-  "requestId": "pos-cache-bust-20261011"
+  "revision": "a526dbb1c4a5216bb6f94f6780ab38b661aef529",
+  "requestId": "decouple-display-pos-20261011"
 }
