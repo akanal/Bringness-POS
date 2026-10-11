@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "65db13081db7014f4bcde747f3d7a86c1eea17d6",
-  "requestId": "remove-pos-random-overlay-20261011"
+  "revision": "850a960338f4fa201afc0e0978e4be0c176e0259",
+  "requestId": "pos-cache-bust-20261011"
 }
