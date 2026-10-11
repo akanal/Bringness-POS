@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "a766f7d758d6285ed0ef218da5d7ee8400ed1239",
-  "requestId": "restore-pos-waiter-ui-20261011"
+  "revision": "c8750c093dadf4b23611977db9292c8c0c64943e",
+  "requestId": "fix-pos-symbol-glyphs-20261011"
 }
