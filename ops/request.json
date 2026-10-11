@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "2b49abc474a9f6a71ff09af3b282114a142c1ce0",
-  "requestId": "restore-saturday-evening-20261011"
+  "revision": "a766f7d758d6285ed0ef218da5d7ee8400ed1239",
+  "requestId": "restore-pos-waiter-ui-20261011"
 }
