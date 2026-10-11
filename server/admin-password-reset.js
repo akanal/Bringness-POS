@@ -34,7 +34,7 @@ function mailConfigured(){
 async function sendResetMail(email,token,returnTo){
   const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness.de')).replace(/\/$/,"");
   if(new URL(origin).protocol!=="https:")throw Error("Öffentliche Adresse muss HTTPS verwenden");
-  const link=origin+(returnTo==='waiter'?'/service/reset.html':'/admin/reset.html')+(returnTo==='ai'?"?returnTo=ai":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
+  const link=origin+(returnTo==='waiter'?'/service/?reset=1':'/admin/reset.html')+(returnTo==='ai'?"?returnTo=ai":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   await sendSmtpMail({
     from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
