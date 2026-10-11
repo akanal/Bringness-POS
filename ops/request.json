@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "43f672690c695519f043b4220d22702d084426a7",
-  "requestId": "restore-normal-pos-symbols-20261011"
+  "revision": "65db13081db7014f4bcde747f3d7a86c1eea17d6",
+  "requestId": "remove-pos-random-overlay-20261011"
 }
