@@ -24,3 +24,10 @@ Browser sessions may expire. Preserve the existing server automation and connect
 ## Working agreements
 
 Continue authorized development autonomously and preserve established behavior and product decisions. Ask only for real missing access, required external approval, or an unresolved material decision. For the current display defect, remove only the unwanted six-character blocks; preserve POS/waiter logic, orders, data, and workflows. Verify the actual source before treating normal menu icons as the cause.
+
+## Owner decisions confirmed 2026-10-11
+
+- Ask the owner before changing visible design, colors, layout or interaction. Technical repairs may continue autonomously when the agreed design is preserved. The email-only invitation form and staff deletion action are explicitly authorized.
+- Keep screen/background display content separate from product data. Product images render only as images in their intended field; image payloads must never be rendered as text. Verify image rendering before releases that affect it.
+- Owners invite waiters with email alone; waiters provide their own names and personal access codes. Owners control restaurant permissions.
+- Owners may revoke staff access or erase personal profiles with a deletion confirmation. Invalidate sessions and invitation/reset links; preserve orders, payments, receipts and required employment records using anonymized references where appropriate.
