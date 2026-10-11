@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
-  "target": "ai",
-  "revision": "19483a36eda2afa4216fc67d732fec82985b1428",
-  "requestId": "platform-admin-ai-19483a36"
+  "target": "pos",
+  "revision": "2b49abc474a9f6a71ff09af3b282114a142c1ce0",
+  "requestId": "restore-saturday-evening-20261011"
 }
