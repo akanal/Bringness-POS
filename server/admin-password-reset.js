@@ -34,7 +34,7 @@ function mailConfigured(){
 async function sendResetMail(email,token,returnTo){
   const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness.de')).replace(/\/$/,"");
   if(new URL(origin).protocol!=="https:")throw Error("Öffentliche Adresse muss HTTPS verwenden");
-  const link=origin+"/admin/reset.html"+(returnTo==='ai'?"?returnTo=ai":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
+  const link=origin+(returnTo==='waiter'?'/service/?reset=1':'/admin/reset.html')+(returnTo==='ai'?"?returnTo=ai":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   await sendSmtpMail({
     from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
@@ -81,9 +81,10 @@ export async function handleAdminPasswordReset(req,res){
   if(path==="/api/v1/admin/password/availability"&&req.method==="GET"){
     const state=await adminMailStatus();send(res,200,{emailAvailable:state.available,status:state.status});return true;
   }
+  const waiterRecovery=path==="/api/v1/waiter/password/forgot"||path==="/api/v1/waiter/password/reset";
   const posRecovery=path==="/api/v1/auth/forgot-password"||path==="/api/v1/auth/reset-password";
-  const eligibleRoles=posRecovery?"u.role<>'waiter'":"u.role IN ('owner','admin')";
-  if((path==="/api/v1/admin/password/forgot"||path==="/api/v1/auth/forgot-password")&&req.method==="POST"){
+  const eligibleRoles=waiterRecovery?"u.role='waiter'":posRecovery?"u.role<>'waiter'":"u.role IN ('owner','admin')";
+  if((path==="/api/v1/admin/password/forgot"||path==="/api/v1/auth/forgot-password"||path==="/api/v1/waiter/password/forgot")&&req.method==="POST"){
     await ensureRecoverySchema();
     if(!mailConfigured()){send(res,503,{error:"E-Mail-Versand ist noch nicht eingerichtet. Bitte SMTP im Bringness-Server konfigurieren."});return true}
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
@@ -97,7 +98,7 @@ export async function handleAdminPasswordReset(req,res){
     if(recent.rowCount){send(res,200,generic);return true}
     const token=crypto.randomBytes(32).toString("hex"),tokenHash=hash(token);
     await pool.query("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '30 minutes')",[tokenHash,user.id]);
-    try{await sendResetMail(user.email,token,posRecovery?'pos-login':input.returnTo==='ai'?'ai':'pos');await pool.query('UPDATE password_reset_tokens SET delivered_at=now() WHERE token_hash=$1',[tokenHash])}
+    try{await sendResetMail(user.email,token,waiterRecovery?'waiter':posRecovery?'pos-login':input.returnTo==='ai'?'ai':'pos');await pool.query('UPDATE password_reset_tokens SET delivered_at=now() WHERE token_hash=$1',[tokenHash])}
     catch(error){
       await pool.query("DELETE FROM password_reset_tokens WHERE token_hash=$1",[tokenHash]);
       console.error("Admin password reset mail delivery failed:",error.code||error.name);
@@ -105,11 +106,11 @@ export async function handleAdminPasswordReset(req,res){
     }
     send(res,200,generic);return true;
   }
-  if((path==="/api/v1/admin/password/reset"||path==="/api/v1/auth/reset-password")&&req.method==="POST"){
+  if((path==="/api/v1/admin/password/reset"||path==="/api/v1/auth/reset-password"||path==="/api/v1/waiter/password/reset")&&req.method==="POST"){
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const token=String(input.token||""),password=String(input.password||"");
-    if(!tokenPattern.test(token)||!validPassword(password)){
-      send(res,400,{error:"Ungültiger Link oder Passwort. "+passwordMessage});return true;
+    if(!tokenPattern.test(token)||(waiterRecovery?!/^[0-9]{6}$/.test(password):!validPassword(password))){
+      send(res,400,{error:"Ungültiger Link oder Passwort. "+(waiterRecovery?"Bitte einen sechsstelligen Zahlencode wählen.":passwordMessage)});return true;
     }
     const client=await pool.connect();
     try{
