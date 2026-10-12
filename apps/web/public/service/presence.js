@@ -9,7 +9,7 @@
     try{
       const j=await api("/waiter/schedule"),card=document.createElement("section");card.id="waiterScheduleCard";card.className="card";
       card.innerHTML='<h3>Mein Dienstplan</h3><div>'+((j.schedules||[]).map(x=>'<p><b>'+new Date(x.starts_at).toLocaleString("de-DE")+'</b> – '+new Date(x.ends_at).toLocaleString("de-DE")+'<br><span class="muted">'+esc(x.restaurant_name)+(x.note?' · '+esc(x.note):'')+'</span></p>').join("")||'<p class="muted">Aktuell sind keine kommenden Dienste eingetragen.</p>')+'</div>';
-      document.getElementById("serviceMore")?.appendChild(card);
+      document.getElementById("mySchedule")?.appendChild(card);
     }catch(e){}
   }
   async function start(){
