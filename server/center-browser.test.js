@@ -73,7 +73,7 @@ test('guest cart keeps the same payment attempt after an uncertain response',asy
  await page.waitForFunction(()=>!document.getElementById('checkout').disabled);
  assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);
  await page.reload();
- await page.locator('#status').getByText(/Ein Zahlungsversuch ist noch gespeichert/).waitFor();
+ await page.locator('#status').getByText(/Ein Bestellvorgang ist noch gespeichert/).waitFor();
  assert.equal(await page.getByRole('button',{name:'Entfernen',exact:true}).isDisabled(),true);
  await page.locator('#checkout').click();
  await page.locator('#status').getByText(/Zahlungsstatus unklar/).waitFor();
@@ -228,7 +228,7 @@ test('a completed saved payment attempt opens guest status after reload',async()
  await page.goto('https://center.test/center/?code='+'a'.repeat(48));
  await page.locator('#restaurants button').click();await page.getByRole('button',{name:'In den Warenkorb'}).click();
  await page.locator('#checkout').click();await page.locator('#status').getByText(/Zahlungsstatus unklar/).waitFor();
- await page.reload();await page.locator('#status').getByText(/Ein Zahlungsversuch ist noch gespeichert/).waitFor();
+ await page.reload();await page.locator('#status').getByText(/Ein Bestellvorgang ist noch gespeichert/).waitFor();
  await page.locator('#checkout').click();await page.getByRole('heading',{name:'Bestellstatus'}).waitFor();
  assert.equal(page.url(),'https://center.test/center/status.html#token='+'a'.repeat(64));
  assert.equal(calls,2);assert.deepEqual(requests[0],requests[1]);
@@ -261,13 +261,13 @@ test('management shows merchant controls only for owned restaurants and Center a
  assert.equal(await page.locator('#inviteSection').isVisible(),true);assert.equal(await page.locator('#enrollSection').isVisible(),true);
  const own=page.locator('article').filter({has:page.getByRole('heading',{name:'Eigenes Restaurant',exact:true})});
  const foreign=page.locator('article').filter({has:page.getByRole('heading',{name:'Fremdes Restaurant',exact:true})});
- assert.equal(await own.getByRole('button',{name:'Mollie verbinden'}).count(),1);
+ assert.equal(await own.getByRole('button',{name:'Mollie verbinden',includeHidden:true}).count(),1);
  assert.equal(await foreign.locator('form').count(),0);assert.equal(await foreign.locator('button').count(),0);
  await page.locator('#centers').selectOption('joined');
  await page.waitForFunction(()=>document.querySelectorAll('#restaurants article').length===1&&document.getElementById('tables').textContent.includes('Tisch 1'));
  assert.equal(await page.locator('#inviteSection').isVisible(),false);assert.equal(await page.locator('#enrollSection').isVisible(),false);
  assert.equal(await page.getByRole('button',{name:'QR-Bild herunterladen',exact:true}).count(),0);
- assert.equal(await page.getByRole('button',{name:'Mollie verbinden'}).count(),1);assert.deepEqual(errors,[]);
+ assert.equal(await page.getByRole('button',{name:'Mollie verbinden',includeHidden:true}).count(),1);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
 
