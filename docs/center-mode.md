@@ -76,3 +76,13 @@ The implemented Center software has been merged through PR #61 and deployed. Pub
 4. If enabling optional guest push, configure VAPID keys and test actual delivery/opt-out on target devices, including installed Safari/iOS use. Provider acceptance alone does not prove device display.
 
 Mollie and TSE acceptance are intentionally deferred to the final integration stage. Enable checkout, push or automatic signing only after their relevant configured integration checks pass; simulated CI success alone is insufficient.
+
+
+### Restaurant payment choice and permanent screens (2026-10-12)
+Owners choose `onsite`, `online`, or `choice` on the restaurant card. Existing memberships retain `online` until changed. Online/choice settings require verified merchant credentials; actual online ordering still requires the existing `CENTER_CHECKOUT_ENABLED=true` rollout. No provider, secret or rollout setting is invented or activated by this change. `CENTER_ONSITE_ENABLED=false` can disable onsite ordering. Active membership and a signed Center contract remain required.
+
+Onsite ordering creates an unpaid Center order and a durable kitchen/pickup binding (`payment_method=onsite`, internal `onsite_<order UUID>` binding ID). This is not a provider payment: `paid_at` stays null and no `payments` or `receipts` row is created. Status reports payment confirmation only from actual `payments` for the same order. Existing POS cash/card screens are unchanged; automatic settlement/linkage from another POS or a separately created sale is not assumed. Idempotency binds table, restaurant, request ID, cart and payment method.
+
+A new upload/library assignment replaces the display playlist with a permanent image/video. `seconds=0` is valid only for exactly one image/video; menus remain timed. Adding a menu explicitly restores timed rotation. Price-only refreshes do not repaint a permanent image/video. Media and stable screen links are persisted on the server.
+
+Verification: `node server/ai-tests/center-onsite.mjs`, `node server/ai-tests/displays.mjs`, Center unit/database/browser suites. These checks cover the message/notification flow; external provider credentials, real payment processing, physical displays, background mobile push and onsite POS settlement still need live end-to-end verification.

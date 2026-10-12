@@ -330,7 +330,7 @@ test('late '+action+' result cannot affect another Center selection',async()=>{
  await page.goto('https://center.test/center/manage.html');
  await page.locator('#setupStatus').getByText('Ersteinrichtung abgeschlossen.',{exact:true}).waitFor();
  if(action==='invitation'){await page.locator('#invite input').fill('11111111-1111-4111-8111-111111111111');await page.locator('#invite button').click();}
- else await page.getByRole('button',{name:'Mollie verbinden'}).click();
+ else {await page.getByText('Zahlungsanbindung und weitere Einstellungen',{exact:true}).click();await page.getByRole('button',{name:'Mollie verbinden'}).click();}
  await started;await page.locator('#centers').selectOption('new');
  await page.waitForFunction(()=>document.getElementById('setupStatus').textContent==='Ersteinrichtung abgeschlossen.'&&document.getElementById('inviteSection').hidden);
  const response=page.waitForResponse(r=>r.request().method()==='POST');release();await (await response).finished();

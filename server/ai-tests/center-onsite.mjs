@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import {Readable} from 'node:stream';
+import {PGlite} from '@electric-sql/pglite';
+import {JSDOM} from 'jsdom';
+import {guestCenterCheckout} from '../center-guest-checkout.js';
+import {createCenterHandler} from '../center-core.js';
+import {centerKitchenQueue,advanceCenterKitchen} from '../center-payment-release.js';
+const db=new PGlite();await db.waitReady;
+const schema=fs.readFileSync(new URL('../center-database.test.js',import.meta.url),'utf8').match(/await db.exec\(`([\s\S]*?)`\)/)[1];await db.exec(schema);
+const migration=fs.readFileSync(new URL('../center.js',import.meta.url),'utf8').match(/await pool.query\(`([\s\S]*?)`\)/)[1];await db.exec(migration);
+const id=()=>crypto.randomUUID(),company=id(),owner=id(),restaurant=id(),center=id(),table=id(),product=id(),code='a'.repeat(48);
+const query=async(sql,args)=>{const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}};
+const pool={query,connect:async()=>({query,release(){}})};
+await query('INSERT INTO companies(id) VALUES($1)',[company]);await query("INSERT INTO users(id,company_id,role,status) VALUES($1,$2,'owner','active')",[owner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[owner,crypto.createHash('sha256').update('owner').digest('hex')]);
+await query("INSERT INTO restaurants VALUES($1,$2,'Restaurant')",[restaurant,company]);await query("INSERT INTO centers(id,company_id,name) VALUES($1,$2,'Center')",[center,company]);
+await query("INSERT INTO center_restaurants(center_id,restaurant_id,contract_status,payment_mode) VALUES($1,$2,'signed','onsite')",[center,restaurant]);
+await query("INSERT INTO center_tables(id,center_id,name,qr_token) VALUES($1,$2,'1',$3)",[table,center,code]);await query("INSERT INTO products(id,restaurant_id,name,price_cents,tax_rate,active) VALUES($1,$2,'Gericht',1250,19,true)",[product,restaurant]);
+const payload={code,restaurantId:restaurant,requestId:id(),paymentMethod:'onsite',items:[{productId:product,quantity:2}]};
+const noProvider=()=>{throw Error('Must never call a payment provider for onsite orders')};
+const first=await guestCenterCheckout(pool,payload,{},noProvider);assert.match(first.statusUrl,/^\/center\/status.html#token=[a-f0-9]{64}$/);
+await db.exec(migration);const retry=await guestCenterCheckout(pool,payload,{},noProvider);assert.deepEqual(retry,first);
+assert.equal((await query('SELECT * FROM orders')).rows.length,1);assert.equal((await query('SELECT * FROM payments')).rows.length,0);assert.equal((await query('SELECT * FROM receipts')).rows.length,0);
+assert.equal((await query('SELECT * FROM center_order_payments')).rows[0].paid_at,null);
+await assert.rejects(guestCenterCheckout(pool,{...payload,items:[{productId:product,quantity:1}]},{},noProvider),/REQUEST_REUSED/);
+await assert.rejects(guestCenterCheckout(pool,{...payload,paymentMethod:'online'},{CENTER_CHECKOUT_ENABLED:'true'},noProvider),/REQUEST_REUSED/);
+await assert.rejects(guestCenterCheckout(pool,{...payload,requestId:id(),restaurantId:id()},{},noProvider),/MERCHANT_NOT_READY/);
+assert.equal((await centerKitchenQueue(pool,restaurant)).length,1);assert.equal((await centerKitchenQueue(pool,id())).length,0);
+assert.equal((await advanceCenterKitchen(pool,id(),first.orderId,'preparing')).ok,false);
+assert.equal((await advanceCenterKitchen(pool,restaurant,first.orderId,'preparing')).ok,true);assert.equal((await advanceCenterKitchen(pool,restaurant,first.orderId,'ready')).ok,true);
+assert.equal((await query('SELECT * FROM center_guest_notifications')).rows.length,1);
+async function call(path,{method='GET',body,auth=false}={}){const req=Readable.from(body?[JSON.stringify(body)]:[]);Object.assign(req,{url:path,method,headers:auth?{authorization:'Bearer owner'}:{}});const res={writeHead(status){this.status=status},end(raw){this.data=JSON.parse(raw)}};await createCenterHandler(pool)(req,res);return res}
+const statusToken=first.statusUrl.split('token=')[1];let state=await call('/api/v1/guest/center/status?token='+statusToken);assert.equal(state.data.order.status,'ready');assert.equal(state.data.order.payment_confirmed,false);assert.equal(state.data.order.receipt_url,null);assert.match(state.data.order.collection_number,/^C-/);
+// An actual existing-order payment is the only source of confirmation; no guest flag can mark it paid.
+await query("INSERT INTO payments VALUES($1,'cash',2500)",[first.orderId]);state=await call('/api/v1/guest/center/status?token='+statusToken);assert.equal(state.data.order.payment_confirmed,true);
+const settings='/api/v1/centers/'+center+'/restaurants/'+restaurant+'/payment-settings';assert.equal((await call(settings,{method:'PUT',body:{paymentMode:'choice'},auth:true})).status,409);assert.equal((await call(settings,{method:'PUT',body:{paymentMode:'onsite'},auth:true})).status,200);
+assert.equal((await call(settings,{method:'PUT',body:{paymentMode:'onsite'}})).status,401);
+// A single permanent image has no rotation timer and does not repaint on unrelated price changes.
+const playerSource=fs.readFileSync(new URL('../../apps/web/public/display/player.js',import.meta.url),'utf8');
+const w=new JSDOM('<div id="screen"></div><div id="connection"></div><button id="fullscreen"></button>',{url:'https://bringness.de/display/index.html#'+'b'.repeat(48),runScripts:'outside-only'}).window;
+let rotations=0;w.setTimeout=()=>{rotations++;return 1};w.clearTimeout=()=>{};w.setInterval=fn=>{w.refresh=fn;return 1};let model={orientation:'landscape',fit:'contain',playlist:[{type:'image',mediaId:id(),seconds:0}],products:[{name:'Kaffee',price_cents:100}]};w.fetch=async()=>({ok:true,json:async()=>model});w.eval(playerSource);await new Promise(r=>setTimeout(r,0));const image=w.document.querySelector('#screen img');assert(image);assert.equal(rotations,0);model={...model,products:[{name:'Kaffee',price_cents:200}]};await w.refresh();assert.equal(w.document.querySelector('#screen img'),image);assert.equal(rotations,0);
+w.fetch=async()=>{throw Error('offline')};await w.refresh();assert.equal(w.document.querySelector('#screen img'),image);assert.equal(rotations,0);w.close();await db.close();
+console.log('Center onsite and permanent display passed: restart persistence, duplicate prevention, payment-method binding, tenant isolation, no provider/payment/receipt on order, kitchen progression, ready notification, actual-payment confirmation, gated online settings, no permanent-image timer or refresh flicker, offline retention.');

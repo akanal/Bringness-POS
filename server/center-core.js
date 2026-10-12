@@ -26,6 +26,9 @@ async function body(req) {
   }
   return raw ? JSON.parse(raw) : {};
 }
+export function centerPaymentOptions(restaurant,env=process.env){
+ const mode=restaurant.payment_mode||'online';return {paymentMode:mode,onsiteAvailable:['onsite','choice'].includes(mode)&&restaurant.contract_status==='signed'&&env.CENTER_ONSITE_ENABLED!=='false',onlineAvailable:['online','choice'].includes(mode)&&centerOrderingAvailable(restaurant.provider_ready,env)};
+}
 export function centerOrderingAvailable(providerReady,env=process.env){
  return env.CENTER_CHECKOUT_ENABLED==='true'&&providerReady===true;
 }
@@ -79,7 +82,7 @@ export function createCenterHandler(pool) {
         const statusToken=url.searchParams.get('token')||'';
         if(!/^[a-f0-9]{64}$/.test(statusToken))return send(res,404,{error:'Bestellung nicht gefunden'});
         await recoverGuestPayment(pool,statusToken,paymentId=>verifyAndReleaseMolliePayment(pool,paymentId));
-        const order=(await pool.query(`SELECT CASE WHEN o.status='payment_pending' AND cp.provider_status IN ('failed','canceled','expired') THEN 'payment_'||cp.provider_status ELSE o.status END status,r.name restaurant_name,(SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id) collection_number,CASE WHEN cp.released_at IS NOT NULL THEN (SELECT '/beleg/'||rc.public_token::text FROM receipts rc WHERE rc.order_id=o.id ORDER BY rc.receipt_number LIMIT 1) END receipt_url,CASE WHEN a.request_id IS NOT NULL AND t.active=true AND c.active=true AND (o.status='ready' OR (cp.released_at IS NULL AND cp.provider_status IN ('failed','canceled','expired'))) THEN '/center/index.html?code='||t.qr_token END next_order_url,a.request_id checkout_request_id,cp.paid_at,cp.released_at,cp.preparation_started_at,cp.ready_at
+        const order=(await pool.query(`SELECT CASE WHEN o.status='payment_pending' AND cp.provider_status IN ('failed','canceled','expired') THEN 'payment_'||cp.provider_status ELSE o.status END status,r.name restaurant_name,coalesce((SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id),'C-'||upper(left(replace(o.id::text,'-',''),8))) collection_number,CASE WHEN cp.released_at IS NOT NULL THEN (SELECT '/beleg/'||rc.public_token::text FROM receipts rc WHERE rc.order_id=o.id ORDER BY rc.receipt_number LIMIT 1) END receipt_url,CASE WHEN a.request_id IS NOT NULL AND t.active=true AND c.active=true AND (o.status='ready' OR (cp.released_at IS NULL AND cp.provider_status IN ('failed','canceled','expired'))) THEN '/center/index.html?code='||t.qr_token END next_order_url,a.request_id checkout_request_id,cp.paid_at,cp.payment_method,CASE WHEN cp.payment_method='onsite' THEN EXISTS(SELECT 1 FROM payments pay WHERE pay.order_id=o.id GROUP BY pay.order_id HAVING sum(pay.amount_cents)>=o.total_cents) ELSE cp.paid_at IS NOT NULL END payment_confirmed,cp.released_at,cp.preparation_started_at,cp.ready_at
           FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
           LEFT JOIN center_order_payments cp ON cp.order_id=o.id AND cp.restaurant_id=o.restaurant_id
           LEFT JOIN center_checkout_attempts a ON a.order_id=o.id AND a.restaurant_id=o.restaurant_id
@@ -89,8 +92,8 @@ export function createCenterHandler(pool) {
       }
       if (p === '/api/v1/guest/center/order') {
         if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
-        if(process.env.CENTER_CHECKOUT_ENABLED!=='true')return send(res,503,{error:'Center-Onlinezahlungen sind noch nicht freigeschaltet.'});
         let b;try{b=await body(req);}catch{return send(res,400,{error:'Ungültige Eingabe'});}
+        if((b.paymentMethod||'online')==='online'&&process.env.CENTER_CHECKOUT_ENABLED!=='true'||b.paymentMethod==='onsite'&&process.env.CENTER_ONSITE_ENABLED==='false')return send(res,503,{error:'Diese Bestellart ist noch nicht freigeschaltet.'});
         try{return send(res,200,await guestCenterCheckout(pool,b));}catch(error){const {status,...data}=guestCheckoutError(error);return send(res,status,data);}
       }
       if (req.method !== 'GET') return send(res, 405, {error: 'Methode nicht erlaubt'});
@@ -102,16 +105,16 @@ export function createCenterHandler(pool) {
       if (!table) return send(res, 404, {error: 'Center-Code ungültig'});
       const restaurantId = url.searchParams.get('restaurantId');
       if (p === '/api/v1/guest/center/restaurants') {
-        const restaurants = (await pool.query(`SELECT r.id,r.name,r.logo_data,(cr.contract_status='signed' AND cr.payment_status='verified' AND EXISTS(
+        const restaurants = (await pool.query(`SELECT r.id,r.name,r.logo_data,cr.payment_mode,cr.contract_status,(cr.contract_status='signed' AND cr.payment_status='verified' AND EXISTS(
           SELECT 1 FROM center_mollie_credentials mc WHERE mc.restaurant_id=r.id
           AND mc.verified_at IS NOT NULL AND mc.profile_id IS NOT NULL AND mc.organization_id=cr.merchant_reference)) provider_ready
           FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id
           WHERE cr.center_id=$1 AND cr.active=true ORDER BY r.name,r.id`, [table.center_id])).rows;
-        return send(res, 200, {center: table.center_name, table: table.name, restaurants:restaurants.map(({provider_ready,...restaurant})=>({...restaurant,orderingAvailable:centerOrderingAvailable(provider_ready)})), orderingAvailable:process.env.CENTER_CHECKOUT_ENABLED==='true'});
+        return send(res, 200, {center: table.center_name, table: table.name, restaurants:restaurants.map(restaurant=>{const options=centerPaymentOptions(restaurant);return {id:restaurant.id,name:restaurant.name,logo_data:restaurant.logo_data,...options,orderingAvailable:options.onsiteAvailable||options.onlineAvailable}}), orderingAvailable:restaurants.some(restaurant=>{const options=centerPaymentOptions(restaurant);return options.onsiteAvailable||options.onlineAvailable})});
       }
       if (p !== '/api/v1/guest/center/menu') return send(res, 404, {error: 'Nicht gefunden'});
       if (!uuid.test(restaurantId || '')) return send(res, 404, {error: 'Restaurant nicht gefunden'});
-      const restaurant = (await pool.query(`SELECT r.id,r.name,r.logo_data,(cr.contract_status='signed' AND cr.payment_status='verified' AND EXISTS(
+      const restaurant = (await pool.query(`SELECT r.id,r.name,r.logo_data,cr.payment_mode,cr.contract_status,(cr.contract_status='signed' AND cr.payment_status='verified' AND EXISTS(
           SELECT 1 FROM center_mollie_credentials mc WHERE mc.restaurant_id=r.id
           AND mc.verified_at IS NOT NULL AND mc.profile_id IS NOT NULL AND mc.organization_id=cr.merchant_reference)) provider_ready FROM center_restaurants cr
         JOIN restaurants r ON r.id=cr.restaurant_id
@@ -125,7 +128,7 @@ export function createCenterHandler(pool) {
         FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN product_translations av ON av.product_id=p.id AND av.language_code='avl'
         LEFT JOIN product_translations pt ON pt.product_id=p.id AND pt.language_code=$2
         WHERE p.restaurant_id=$1 AND p.active=true ORDER BY c.sort_order,p.name,p.id`, [restaurantId, /^[a-z]{2,3}$/.test(lang) ? lang : 'de'])).rows;
-      return send(res, 200, {center: table.center_name, table: table.name, restaurant:{id:restaurant.id,name:restaurant.name,logo_data:restaurant.logo_data}, products: visibleCenterProducts(products), orderingAvailable:centerOrderingAvailable(restaurant.provider_ready)});
+      return send(res, 200, {center: table.center_name, table: table.name, restaurant:{id:restaurant.id,name:restaurant.name,logo_data:restaurant.logo_data}, products: visibleCenterProducts(products), ...centerPaymentOptions(restaurant), orderingAvailable:Object.values(centerPaymentOptions(restaurant)).some(x=>x===true)});
     }
     if(p==='/api/v1/centers/mollie/callback'){
       if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
@@ -199,6 +202,16 @@ export function createCenterHandler(pool) {
       if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
       if(!uuid.test(connect[1])||!uuid.test(connect[2]))return send(res,404,{error:'Nicht gefunden'});
       const {status,browserNonce,...data}=await beginRestaurantPaymentConnect(pool,user,connect[1],connect[2],b.provider);if(browserNonce)res.setHeader('set-cookie','center-mollie-nonce='+browserNonce+'; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/centers/mollie/callback; Max-Age=600');return send(res,status,data);
+    }
+    const paymentSettings=p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/payment-settings$/i);
+    if(paymentSettings){
+      if(req.method!=='PUT')return send(res,405,{error:'Methode nicht erlaubt'});
+      if(!['onsite','online','choice'].includes(b.paymentMode))return send(res,400,{error:'Bitte eine Zahlungsart auswählen.'});
+      const q=await pool.query(`UPDATE center_restaurants cr SET payment_mode=$4 FROM restaurants r
+       WHERE cr.center_id=$1 AND cr.restaurant_id=$2 AND r.id=cr.restaurant_id AND r.company_id=$3 AND cr.active=true
+       AND ($4='onsite' OR (cr.payment_status='verified' AND EXISTS(SELECT 1 FROM center_mollie_credentials mc WHERE mc.restaurant_id=r.id AND mc.verified_at IS NOT NULL AND mc.profile_id IS NOT NULL AND mc.organization_id=cr.merchant_reference)))
+       RETURNING cr.payment_mode`,[paymentSettings[1],paymentSettings[2],user.company_id,b.paymentMode]);
+      return q.rowCount?send(res,200,{paymentMode:q.rows[0].payment_mode}):send(res,409,{error:'Restaurant nicht verfügbar oder Online-Zahlungsanbindung noch nicht bestätigt.'});
     }
     const onboarding = p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/onboarding$/i);
     if (onboarding) {
@@ -274,7 +287,7 @@ export function createCenterHandler(pool) {
       if (!table) return send(res,403,{error:'Tischverwaltung gesperrt oder Ersteinrichtung nicht freigegeben'});
       return send(res, 201, {table});
     }
-    if (req.method === 'GET') return send(res, 200, {restaurants: (await pool.query(`SELECT r.id,r.name,(r.company_id=$2) can_manage,cr.active,cr.contract_status,cr.payment_status,cr.merchant_reference FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=$1 AND ($3::boolean OR r.company_id=$2 OR EXISTS(SELECT 1 FROM centers c WHERE c.id=cr.center_id AND c.company_id=$2)) ORDER BY r.name,r.id`, [centerId,user.company_id,!!user.platform_admin])).rows});
+    if (req.method === 'GET') return send(res, 200, {restaurants: (await pool.query(`SELECT r.id,r.name,(r.company_id=$2) can_manage,cr.active,cr.contract_status,cr.payment_status,cr.payment_mode,cr.merchant_reference,EXISTS(SELECT 1 FROM center_mollie_credentials mc WHERE mc.restaurant_id=r.id AND mc.verified_at IS NOT NULL AND mc.profile_id IS NOT NULL AND mc.organization_id=cr.merchant_reference AND cr.payment_status='verified') online_ready FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id WHERE cr.center_id=$1 AND ($3::boolean OR r.company_id=$2 OR EXISTS(SELECT 1 FROM centers c WHERE c.id=cr.center_id AND c.company_id=$2)) ORDER BY r.name,r.id`, [centerId,user.company_id,!!user.platform_admin])).rows});
     if (req.method !== 'PUT') return send(res, 405, {error: 'Methode nicht erlaubt'});
     if (!uuid.test(b.restaurantId || '') || typeof b.active !== 'boolean') return send(res, 400, {error: 'Restaurant und Aktivstatus erforderlich'});
     // Cross-company enrollment requires an invitation/approval flow; never attach someone else's business.

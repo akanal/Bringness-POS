@@ -74,7 +74,7 @@ test('guest status rejects a table token or malformed token without reading orde
  const r=await request(()=>{throw Error('no database read allowed')},'/api/v1/guest/center/status?token='+code);assert.equal(r.status,404);
 });
 test('guest status query exposes only status and restaurant with expiry',async()=>{
- const r=await request(async(sql,args)=>{assert.match(sql,/guest_status_token=\$1/);assert.match(sql,/24 hours/);assert.doesNotMatch(sql,/guest_email|merchant_reference|total_cents/);assert.equal(args[0],'a'.repeat(64));return rows({status:'ready',restaurant_name:'Restaurant',ready_at:'now'});},'/api/v1/guest/center/status?token='+'a'.repeat(64));assert.equal(r.status,200);assert.equal(r.data.order.status,'ready');
+ const r=await request(async(sql,args)=>{assert.match(sql,/guest_status_token=\$1/);assert.match(sql,/24 hours/);assert.doesNotMatch(sql,/guest_email|merchant_reference/);assert.equal(args[0],'a'.repeat(64));return rows({status:'ready',restaurant_name:'Restaurant',ready_at:'now'});},'/api/v1/guest/center/status?token='+'a'.repeat(64));assert.equal(r.status,200);assert.equal(r.data.order.status,'ready');
 });
 
 test('durable checkout token exposes pending status before provider binding exists',async()=>{

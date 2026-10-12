@@ -27,6 +27,7 @@ export async function migrateCenter() {
     CREATE UNIQUE INDEX IF NOT EXISTS center_restaurants_one_center_idx ON center_restaurants(restaurant_id);
     ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS contract_status text NOT NULL DEFAULT 'pending' CHECK(contract_status IN ('pending','signed','suspended'));
     ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'not_connected' CHECK(payment_status IN ('not_connected','pending','verified','blocked'));
+    ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS payment_mode text NOT NULL DEFAULT 'online' CHECK(payment_mode IN ('onsite','online','choice'));
     ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS merchant_reference text;
     ALTER TABLE center_restaurants ADD COLUMN IF NOT EXISTS enrolled_at timestamptz NOT NULL DEFAULT now();
     ALTER TABLE centers ADD COLUMN IF NOT EXISTS setup_user_id uuid REFERENCES users(id);
@@ -61,6 +62,7 @@ export async function migrateCenter() {
     ALTER TABLE center_checkout_attempts ADD COLUMN IF NOT EXISTS table_id uuid REFERENCES center_tables(id);
     ALTER TABLE center_checkout_attempts ADD COLUMN IF NOT EXISTS request_id uuid;
     ALTER TABLE center_checkout_attempts ADD COLUMN IF NOT EXISTS cart_hash text;
+    ALTER TABLE center_checkout_attempts ADD COLUMN IF NOT EXISTS payment_method text NOT NULL DEFAULT 'online' CHECK(payment_method IN ('online','onsite'));
     CREATE UNIQUE INDEX IF NOT EXISTS center_checkout_request_idx ON center_checkout_attempts(table_id,request_id);
     CREATE TABLE IF NOT EXISTS center_order_payments (
       payment_id text PRIMARY KEY,
@@ -95,6 +97,7 @@ export async function migrateCenter() {
     );
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS guest_checked_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS provider_status text;
+    ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS payment_method text NOT NULL DEFAULT 'online' CHECK(payment_method IN ('online','onsite'));
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS preparation_started_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS ready_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS guest_status_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');

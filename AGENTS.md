@@ -46,3 +46,10 @@ Continue authorized development autonomously and preserve established behavior a
 - Kellner-Statuslampe: online grün, offline rot. Klingeltonwahl in Mehr: fallend, melodisch, Türglocke, sanfter Dreiklang, kurzer Aufmerksamkeitston.
 
 - Mehr in der Kellneransicht: drei geschlossene Unterbereiche Mein Zugang, Klingelton & Vibration, Meine Dienstzeiten; Dienstplan innerhalb Meine Dienstzeiten.
+
+## Owner scope confirmed 2026-10-12: Center and display control only
+- Freeze the approved waiter app, POS interface, header and other POS areas. Do not alter their design, layout or behavior without explicit new authorization.
+- Current work is limited to Center management/guest/kitchen/status/payment policy and the dedicated screen editor/player/backend. `pos/displays.js` is the dedicated display editor; do not modify `pos/app.js`, waiter/service files or shared styles for this work.
+- Owners select onsite, online or guest choice per restaurant. Existing online policies are preserved until owners change them. Online choices require a verified merchant connection; the existing online checkout rollout switch remains unchanged.
+- Onsite Center orders transmit ordering, preparation and pickup notifications; they do not initiate payment, generate a payment record or issue a paid receipt. Payment confirmation requires an actual payment linked to the same order, never a guest claim.
+- A newly selected/uploaded single screen image or video displays indefinitely (`seconds:0`); switching to a timed playlist is explicit. A permanent item cannot be mixed with timed items. Preserve stable screen links and server media across restart.
