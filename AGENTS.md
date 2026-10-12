@@ -43,6 +43,6 @@ Continue authorized development autonomously and preserve established behavior a
 
 - Kellneransicht ohne Titel Service-Kasse. Speisemenü zuerst; Online/Offline in der schwarzen Kopfzeile (Dienststatus), Aktualisieren und Signal-Testmeldungen in Mehr. Bestellfehler bleiben an der Bestellung sichtbar.
 
-- Kellner-Statuslampe: online grün, offline schwarz. Klingeltonwahl in Mehr: fallend, melodisch, Türglocke, sanfter Dreiklang, kurzer Aufmerksamkeitston.
+- Kellner-Statuslampe: online grün, offline rot. Klingeltonwahl in Mehr: fallend, melodisch, Türglocke, sanfter Dreiklang, kurzer Aufmerksamkeitston.
 
 - Mehr in der Kellneransicht: drei geschlossene Unterbereiche Mein Zugang, Klingelton & Vibration, Meine Dienstzeiten; Dienstplan innerhalb Meine Dienstzeiten.
