@@ -42,3 +42,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Kellnerkopf ohne Begrüßung; Betriebsname und Abmelden ausschließlich in Mehr.
 
 - Kellneransicht ohne Titel Service-Kasse. Speisemenü zuerst; Online/Offline in der schwarzen Kopfzeile (Dienststatus), Aktualisieren und Signal-Testmeldungen in Mehr. Bestellfehler bleiben an der Bestellung sichtbar.
+
+- Kellner-Statuslampe: online grün, offline schwarz. Klingeltonwahl in Mehr: fallend, melodisch, Türglocke, sanfter Dreiklang, kurzer Aufmerksamkeitston.
