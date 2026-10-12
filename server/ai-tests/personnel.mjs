@@ -21,10 +21,16 @@ for(let i=0;i<5;i++)assert.equal((await call('/personnel/unlock',{pin:'999999'})
 assert(pinMatches('222222',pinHash('222222')));assert(!pinMatches('333333',pinHash('222222')));
 assert(!JSON.stringify((await call('/personnel/people?restaurantId='+rid)).people).includes('pin_hash'));
 
+assert.equal((await call('/personnel/my-pin',{currentPassword:'AccountPass!',pin:'654321',confirmPin:'654321'})).status,403);
 // Phone access is restricted to the linked employee and the report to own times.
 await query('DELETE FROM personnel_attempts');
 const serviceEmployee=await call('/personnel/employees',{restaurantId:rid,name:'Service',role:'waiter',pin:'333333'},'owner',(await call('/personnel/unlock',{pin:'123456'})).unlockToken);
 await query('UPDATE employees SET user_id=$1 WHERE id=$2',[waiter,serviceEmployee.id]);
+assert.equal((await call('/personnel/my-pin',{currentPassword:'wrong',pin:'654321',confirmPin:'654321'},'waiter')).status,403);
+assert.equal((await call('/personnel/my-pin',{currentPassword:'AccountPass!',pin:'654321',confirmPin:'123456'},'waiter')).status,400);
+assert.equal((await call('/personnel/my-pin',{currentPassword:'AccountPass!',pin:'654321',confirmPin:'654321'},'waiter')).status,200);
+assert(pinMatches('654321',(await query('SELECT pin_hash FROM employees WHERE id=$1',[serviceEmployee.id])).rows[0].pin_hash));
+await query('UPDATE employees SET pin_hash=$1 WHERE id=$2',[pinHash('333333'),serviceEmployee.id]);
 const phone={restaurantId:rid,employeeId:serviceEmployee.id,pin:'333333',action:'toggle',requestId:id()};
 assert.equal((await call('/personnel/clock',{...b,action:'start',requestId:id()},'waiter')).status,403);
 assert.equal((await call('/personnel/clock',phone,'waiter')).state,'working');

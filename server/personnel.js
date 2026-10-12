@@ -31,6 +31,15 @@ export function createPersonnel(pool){
  try{let platformBody;if(platform){if(!['/employees','/pin','/entries','/correct','/report','/schedules'].includes(p.slice(base.length)))return send(res,404,{error:'Personal-Funktion nicht freigegeben'});platformBody=req.method==='GET'?Object.fromEntries(url.searchParams):await body(req)}const u=platform?await systemActor(pool,req,res,platformBody.restaurantId??null):await actor(req);if(!u)return platform?true:send(res,401,{error:'Nicht angemeldet'});
  if(!own){if(!await unlock(req,u))return send(res,403,{error:'Verwaltungs-PIN erforderlich',code:'PERSONNEL_LOCKED'});return false}
  const route=p.slice(base.length),b=platformBody||(req.method==='GET'?Object.fromEntries(url.searchParams):await body(req));
+ if(route==='/my-pin'&&req.method==='POST'){
+  if(u.role!=='waiter')fail('Nur der eigene Kellnerzugang ist freigegeben',403);
+  const key='self-pin:'+u.id;await attempt(key);
+  if(!pinMatches(String(b.currentPassword||''),u.password_hash))fail('Dein Zugangscode oder Passwort stimmt nicht',403);
+  if(!/^\d{6}$/.test(String(b.pin||''))||b.pin!==b.confirmPin)fail('Neue PIN zweimal mit genau 6 Ziffern eingeben');
+  const changed=await pool.query("UPDATE employees e SET pin_hash=$1 FROM restaurants r WHERE e.user_id=$2 AND e.active=true AND e.role='waiter' AND r.id=e.restaurant_id AND r.company_id=$3 RETURNING e.id",[pinHash(b.pin),u.id,u.company_id]);
+  if(!changed.rowCount)fail('Kein aktiver Kellnerzugang',404);
+  await pool.query('DELETE FROM personnel_attempts WHERE key=$1',[key]);await audit(pool,u,'personnel.self-pin.changed',changed.rows[0].id,{});return send(res,200,{ok:true});
+ }
  if(route==='/access'&&req.method==='GET'){const configured=!!(await pool.query('SELECT user_id FROM personnel_admin_pins WHERE user_id=$1',[u.id])).rowCount;return send(res,200,{configured,canManage:['owner','admin'].includes(u.role)})}
  if(route==='/lock'&&req.method==='POST'){await pool.query('DELETE FROM personnel_unlocks WHERE session_hash=$1',[u.session_hash]);return send(res,200,{ok:true})}
  if((route==='/setup'||route==='/unlock')&&req.method==='POST'){
