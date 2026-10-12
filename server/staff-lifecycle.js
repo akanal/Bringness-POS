@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {pinHash} from './personnel.js';
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const pass=x=>crypto.scryptSync(x,process.env.PASSWORD_PEPPER||'bringness-pos',64).toString('hex');
 const reply=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
@@ -15,7 +16,7 @@ export function createStaffLifecycle(pool){return async function(req,res){
   if(!action){
    const invitation=(await c.query("SELECT i.token_hash,u.id FROM staff_invitations i JOIN users u ON u.id=i.user_id JOIN employees e ON e.user_id=u.id WHERE i.token_hash=$1 AND i.used_at IS NULL AND i.expires_at>now() AND u.status='pending' AND u.role='waiter' AND e.active=true FOR UPDATE OF u,e,i",[sha(b.token)])).rows[0];
    if(!invitation){await c.query('ROLLBACK');return reply(res,400,{error:'Einladungslink ungültig oder abgelaufen'})}
-   const name=b.name.trim();await c.query("UPDATE users SET display_name=$1,password_hash=$2,status='active',must_change_password=false WHERE id=$3",[name,pass(b.password),invitation.id]);await c.query('UPDATE employees SET display_name=$1 WHERE user_id=$2',[name,invitation.id]);await c.query('UPDATE staff_invitations SET used_at=now() WHERE user_id=$1 AND used_at IS NULL',[invitation.id]);await c.query('COMMIT');return reply(res,200,{message:'Zugang eingerichtet. Melde dich mit deiner E-Mail und deinem persönlichen Code an.'});
+   const name=b.name.trim();await c.query("UPDATE users SET display_name=$1,password_hash=$2,status='active',must_change_password=false WHERE id=$3",[name,pass(b.password),invitation.id]);await c.query('UPDATE employees SET display_name=$1,pin_hash=$3 WHERE user_id=$2',[name,invitation.id,pinHash(b.password)]);await c.query('UPDATE staff_invitations SET used_at=now() WHERE user_id=$1 AND used_at IS NULL',[invitation.id]);await c.query('COMMIT');return reply(res,200,{message:'Zugang eingerichtet. Melde dich mit deiner E-Mail und deinem persönlichen Code an.'});
   }
   const employee=(await c.query("SELECT e.id,e.user_id FROM employees e JOIN restaurants r ON r.id=e.restaurant_id JOIN users u ON u.id=e.user_id WHERE e.id=$1 AND e.role='waiter' AND u.role='waiter' AND r.company_id=$2 AND u.company_id=$2 FOR UPDATE OF u,e",[action[1],actor.company_id])).rows[0];
   if(!employee){await c.query('ROLLBACK');return reply(res,404,{error:'Kellner nicht gefunden'})}
