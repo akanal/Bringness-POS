@@ -11,10 +11,22 @@ const send=(res,status,value)=>{res.writeHead(status,{'content-type':'applicatio
 export async function migrateWaiterWorkflow(pool){await pool.query(`CREATE TABLE IF NOT EXISTS waiter_recovery(token_hash text PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),kind text NOT NULL CHECK(kind IN ('password','pin')),expires_at timestamptz NOT NULL,used_at timestamptz,created_at timestamptz NOT NULL DEFAULT now()); CREATE INDEX IF NOT EXISTS waiter_recovery_user_idx ON waiter_recovery(user_id,created_at); ALTER TABLE employees ADD COLUMN IF NOT EXISTS stamp_pin_digits int;`)}
 export function createWaiterWorkflow(pool){return async(req,res)=>{
  const url=new URL(req.url,'http://local'),p=url.pathname;
- if(!['/api/v1/staff/recovery','/api/v1/staff/reset','/api/v1/waiter/setup-pin','/api/v1/waiter/extras','/api/v1/waiter/qr-orders','/api/v1/waiter/order-v2'].includes(p))return false;
+ if(!['/api/v1/staff/invitation','/api/v1/staff/invitation/resend','/api/v1/staff/recovery','/api/v1/staff/reset','/api/v1/waiter/setup-pin','/api/v1/waiter/extras','/api/v1/waiter/qr-orders','/api/v1/waiter/order-v2'].includes(p))return false;
  let c;
  try{
  let b={};if(req.method==='POST'){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)fail('Anfrage zu groß',413)}try{b=JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
+ if((p==='/api/v1/staff/invitation'||p==='/api/v1/staff/invitation/resend')&&req.method==='POST'){
+  if(!/^[a-f0-9]{64}$/.test(String(b.token||'')))fail('Einladungslink ungültig');
+  c=await pool.connect();await c.query('BEGIN');const invitation=(await c.query("SELECT i.user_id,i.used_at,i.expires_at,u.status,u.email,u.company_id FROM staff_invitations i JOIN users u ON u.id=i.user_id WHERE i.token_hash=$1 AND u.role='waiter' AND EXISTS(SELECT 1 FROM employees e WHERE e.user_id=u.id AND e.active=true) FOR UPDATE OF i,u",[digest(b.token)])).rows[0];
+  if(!invitation||!['pending','active'].includes(invitation.status))fail('Einladungslink ungültig. Bitte den Inhaber um eine neue Einladung bitten.');
+  if(invitation.status==='active'){await c.query('COMMIT');return send(res,200,{state:'active',message:'Dein Kellnerkonto ist bereits eingerichtet. Melde dich mit deiner E-Mail und deinem Passwort an. Falls nötig, richte danach deine vierstellige Stempel-PIN ein.'})}
+  const expired=Date.parse(invitation.expires_at)<=Date.now()||invitation.used_at;
+  if(p==='/api/v1/staff/invitation'){await c.query('COMMIT');return send(res,200,{state:expired?'expired':'pending',message:expired?'Diese Einladung ist abgelaufen. Du kannst einen neuen Einrichtungslink per E-Mail anfordern.':''})}
+  if((await c.query("SELECT 1 FROM staff_invitations WHERE user_id=$1 AND created_at>now()-interval '2 minutes' AND used_at IS NULL AND expires_at>now()",[invitation.user_id])).rowCount){await c.query('COMMIT');return send(res,200,{state:'sent',message:'Eine aktuelle Einladung ist bereits unterwegs. Bitte prüfe deine E-Mail und den Spamordner.'})}
+  const next=crypto.randomBytes(32).toString('hex'),origin=new URL(process.env.PUBLIC_BASE_URL||'https://bringness.de');if(origin.protocol!=='https:')fail('Öffentliche HTTPS-Adresse fehlt',503);
+  await c.query('UPDATE staff_invitations SET used_at=now() WHERE user_id=$1 AND used_at IS NULL',[invitation.user_id]);await c.query("INSERT INTO staff_invitations(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '48 hours')",[digest(next),invitation.user_id]);
+  await enqueueMail(c,'staff-reinvite:'+digest(next),invitation.email,{expiresAt:new Date(Date.now()+172800000).toISOString(),subject:'Bringness – neuer Einrichtungslink',text:`Richte deinen Kellnerzugang über diesen Link ein:\n${origin.origin}/service/#activate=${next}\nLege Name und Passwort fest, danach deine vierstellige Stempel-PIN. Dieser Link gilt 48 Stunden.`});await c.query('COMMIT');return send(res,200,{state:'sent',message:'Ein neuer Einrichtungslink wird an deine hinterlegte E-Mail gesendet. Bitte auch den Spamordner prüfen.'});
+ }
  if(p==='/api/v1/staff/recovery'&&req.method==='POST'){
   const email=cleanMailAddress(b.email),kind=b.kind;if(!['password','pin'].includes(kind))fail('Passwort oder Stempel-PIN auswählen');
   const generic={message:'Wenn ein aktiver Kellnerzugang besteht, erhältst du einen Link per E-Mail. Bitte prüfe auch den Spamordner.'};
