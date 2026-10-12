@@ -40,3 +40,5 @@ Continue authorized development autonomously and preserve established behavior a
 
 - Kellnersignal: zwei Durchläufe, Startabstand fünf Sekunden, fallende Töne und synchrone Vibration. Optional melodischer Klingelton und Ansage „Sie haben eine Bestellung“; Ton und Vibration einzeln abschaltbar.
 - Kellnerkopf ohne Begrüßung; Betriebsname und Abmelden ausschließlich in Mehr.
+
+- Kellneransicht ohne Titel Service-Kasse. Speisemenü zuerst; Online/Offline in der schwarzen Kopfzeile (Dienststatus), Aktualisieren und Signal-Testmeldungen in Mehr. Bestellfehler bleiben an der Bestellung sichtbar.
