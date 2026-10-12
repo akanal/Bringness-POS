@@ -31,3 +31,9 @@ Continue authorized development autonomously and preserve established behavior a
 - Keep screen/background display content separate from product data. Product images render only as images in their intended field; image payloads must never be rendered as text. Verify image rendering before releases that affect it.
 - Owners invite waiters with email alone; waiters provide their own names and personal access codes. Owners control restaurant permissions.
 - Owners may revoke staff access or erase personal profiles with a deletion confirmation. Invalidate sessions and invitation/reset links; preserve orders, payments, receipts and required employment records using anonymized references where appropriate.
+
+## Kellnerablauf bestätigt 2026-10-12
+- Inhaber lädt per E-Mail ein. Kellner wählt Namen und eigenes Passwort, danach getrennte vierstellige Stempel-PIN mit Bestätigung.
+- Passwort und Stempel-PIN können nur über getrennte, einmalige E-Mail-Links zurückgesetzt werden.
+- Einstempeln ausschließlich an der Kasse mit Inhaber-/Kassensitzung; keine Stempelbuchung vom Kellnerhandy.
+- Handy: Speisen und Varianten zuerst, zugewiesene Tische darunter, QR-Bestellungen bearbeiten darunter, Mehr als letztes für Signal/Steuerung. Küchennotizen pro Artikel.

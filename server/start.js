@@ -1,3 +1,4 @@
+import {createWaiterWorkflow,migrateWaiterWorkflow} from './waiter-workflow.js';
 import {migrateTransactionalMail,createMailWorker,createMailStatus} from './transactional-mail.js';
 import {renderMailReceipt} from './payment-receipt.js';
 import {createSystemDirectory} from './system-access.js';
@@ -49,6 +50,7 @@ const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
+const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
 const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
@@ -60,6 +62,7 @@ http.createServer = function patchedCreateServer(listener) {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
+      if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
       if (appMode!=='ai' && await handleMailStatus(req,res)) return;
@@ -159,6 +162,7 @@ async function migrateWithRetry(){
     try{
       await migrateRestaurantOwnerFeatures();
       await migratePersonnel(platformGatewayPool);
+      await migrateWaiterWorkflow(platformGatewayPool);
       await migrateDisplays(platformGatewayPool);
       await migrateQrService();
       await migratePosStockEvents();

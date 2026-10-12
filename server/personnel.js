@@ -32,7 +32,7 @@ export function createPersonnel(pool){
  if(!own){if(!await unlock(req,u))return send(res,403,{error:'Verwaltungs-PIN erforderlich',code:'PERSONNEL_LOCKED'});return false}
  const route=p.slice(base.length),b=platformBody||(req.method==='GET'?Object.fromEntries(url.searchParams):await body(req));
  if(route==='/my-pin'&&req.method==='POST'){
-  if(u.role!=='waiter')fail('Nur der eigene Kellnerzugang ist freigegeben',403);
+  fail('Bitte den E-Mail-Link zum Einrichten oder Zurücksetzen der Stempel-PIN verwenden.',403);
   const key='self-pin:'+u.id;await attempt(key);
   if(!pinMatches(String(b.currentPassword||''),u.password_hash))fail('Dein Zugangscode oder Passwort stimmt nicht',403);
   if(!/^\d{6}$/.test(String(b.pin||''))||b.pin!==b.confirmPin)fail('Neue PIN zweimal mit genau 6 Ziffern eingeben');
@@ -50,6 +50,7 @@ export function createPersonnel(pool){
  }
  if(route==='/people'&&req.method==='GET'){if(u.role==='waiter')fail('Nur eigene Mitarbeiterdaten sind freigegeben',403);await allowedRestaurant(b.restaurantId,u);return send(res,200,{people:(await pool.query('SELECT e.id,e.display_name FROM employees e LEFT JOIN users u ON u.id=e.user_id WHERE e.restaurant_id=$1 AND e.active=true AND (e.user_id IS NULL OR u.status=\'active\') ORDER BY e.display_name',[b.restaurantId])).rows})}
  if(route==='/clock'&&req.method==='POST'){
+  if(u.role==='waiter')fail('Einstempeln ist nur an der Kasse im Betrieb möglich.',403);
   await allowedRestaurant(b.restaurantId,u);if(!uuid(b.employeeId))fail('Mitarbeiter wählen');const key='employee:'+b.employeeId;await attempt(key);
   const c=await pool.connect();try{await c.query('BEGIN');const e=(await c.query('SELECT id,pin_hash,user_id FROM employees WHERE id=$1 AND restaurant_id=$2 AND active=true FOR UPDATE',[b.employeeId,b.restaurantId])).rows[0];if(u.role==='waiter'&&e?.user_id!==u.id)fail('Nur die eigene Dienstzeit darf gebucht werden',403);if(!e||!pinMatches(String(b.pin||''),e.pin_hash))fail('PIN oder Mitarbeiter stimmt nicht',403);await pool.query('DELETE FROM personnel_attempts WHERE key=$1',[key]);
    const latest=(await c.query('SELECT action,effective_at FROM personnel_time_entries WHERE employee_id=$1 ORDER BY recorded_at DESC,id DESC LIMIT 1',[e.id])).rows[0];let state=latest?({start:'working',resume:'working',pause:'paused',end:'off'}[latest.action]):'off';
