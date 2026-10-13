@@ -172,7 +172,7 @@ export async function handleRestaurantOwnerFeature(req,res){
         await c.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,guest_note,extras_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[o.id,item.pr.id,item.pr.name,item.unitPrice,item.pr.tax_rate,item.qty,item.note||null,JSON.stringify(snapshot)]);
       }
       await c.query("UPDATE dining_tables SET status='open' WHERE id=$1",[t.id]);
-      const pushes=(await c.query("SELECT wps.endpoint,wps.subscription FROM dining_tables dt JOIN employees e ON e.id=dt.waiter_employee_id AND e.active=true JOIN waiter_push_subscriptions wps ON wps.user_id=e.user_id WHERE dt.id=$1",[t.id])).rows;
+      const pushes=(await c.query("SELECT wps.endpoint,wps.subscription FROM dining_tables dt JOIN employees e ON (e.id=dt.waiter_employee_id OR e.id=ANY(dt.waiter_employee_ids)) AND e.active=true JOIN waiter_push_subscriptions wps ON wps.user_id=e.user_id WHERE dt.id=$1",[t.id])).rows;
       await c.query("COMMIT");
       if(pushes.length&&process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY){
         webpush.setVapidDetails(process.env.VAPID_SUBJECT||"mailto:info@bringness.de",process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);

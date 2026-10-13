@@ -24,7 +24,7 @@ export function createStaffLifecycle(pool){return async function(req,res){
   const id=employee.user_id;await c.query("UPDATE employees SET active=false,duty_state='off',pin_hash=NULL WHERE id=$1",[employee.id]);await c.query("UPDATE users SET status='disabled' WHERE id=$1",[id]);
   await c.query('DELETE FROM sessions WHERE user_id=$1',[id]);await c.query('DELETE FROM waiter_recovery WHERE user_id=$1',[id]);await c.query('DELETE FROM staff_invitations WHERE user_id=$1',[id]);await c.query('DELETE FROM password_reset_tokens WHERE user_id=$1',[id]);await c.query('DELETE FROM waiter_push_subscriptions WHERE user_id=$1',[id]);
   await c.query("DELETE FROM transactional_mail WHERE dedupe_key=$1 OR dedupe_key=$2",['staff:'+id,'employee:'+employee.id]);
-  await c.query('UPDATE dining_tables SET waiter_employee_id=NULL WHERE waiter_employee_id=$1',[employee.id]);
+  await c.query('UPDATE dining_tables SET waiter_employee_ids=array_remove(waiter_employee_ids,$1) WHERE $1=ANY(waiter_employee_ids)',[employee.id]);await c.query('UPDATE dining_tables SET waiter_employee_id=NULL WHERE waiter_employee_id=$1',[employee.id]);
   if(action[2]==='delete'){
    await c.query("UPDATE employees SET display_name='Gelöschter Mitarbeiter' WHERE id=$1",[employee.id]);
    await c.query("UPDATE users SET display_name='Gelöschter Mitarbeiter',email=$1,password_hash=$2,avatar_data=NULL,must_change_password=false WHERE id=$3",['deleted-'+id+'@invalid.example',pass(crypto.randomBytes(32).toString('hex')),id]);

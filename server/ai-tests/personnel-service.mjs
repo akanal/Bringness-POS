@@ -1,11 +1,12 @@
+import {tableWaiterAssignments} from '../table-waiter-assignments.js';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {JSDOM} from 'jsdom';
 import fs from 'node:fs';
 const db=new PGlite();await db.waitReady;
 const user='00000000-0000-4000-8000-000000000001',employee='00000000-0000-4000-8000-000000000002',restaurant='00000000-0000-4000-8000-000000000003',company='00000000-0000-4000-8000-000000000004',table='00000000-0000-4000-8000-000000000005';
-await db.exec("CREATE TABLE employees(id uuid PRIMARY KEY,user_id uuid,restaurant_id uuid,active boolean,role text,duty_state text,stamp_pin_digits int);CREATE TABLE restaurants(id uuid,company_id uuid,name text,mode text);CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid,waiter_employee_id uuid,name text,area text,status text,sort_order int);CREATE TABLE orders(id uuid,table_id uuid,source text,status text,created_at timestamptz,total_cents int);CREATE TABLE products(id uuid,restaurant_id uuid,name text,price_cents int,active boolean,ai_stock_available boolean);CREATE TABLE waiter_push_subscriptions(user_id uuid,endpoint text,subscription jsonb);");
-await db.query("INSERT INTO employees VALUES($1,$2,$3,true,'waiter','off',4)",[employee,user,restaurant]);await db.query("INSERT INTO restaurants VALUES($1,$2,'Restaurant','restaurant')",[restaurant,company]);await db.query("INSERT INTO dining_tables VALUES($1,$2,$3,'Tisch 1','Saal','open',1)",[table,restaurant,employee]);await db.query("INSERT INTO orders VALUES(gen_random_uuid(),$1,'qr','open',now(),2500)",[table]);await db.query("INSERT INTO waiter_push_subscriptions VALUES($1,'https://push.example','{}')",[user]);
+await db.exec("CREATE TABLE employees(id uuid PRIMARY KEY,user_id uuid,restaurant_id uuid,active boolean,role text,duty_state text,stamp_pin_digits int);CREATE TABLE restaurants(id uuid,company_id uuid,name text,mode text);CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid,waiter_employee_ids uuid[] NOT NULL DEFAULT '{}',waiter_employee_id uuid,name text,area text,status text,sort_order int);CREATE TABLE orders(id uuid,table_id uuid,source text,status text,created_at timestamptz,total_cents int);CREATE TABLE products(id uuid,restaurant_id uuid,name text,price_cents int,active boolean,ai_stock_available boolean);CREATE TABLE waiter_push_subscriptions(user_id uuid,endpoint text,subscription jsonb);");
+await db.query("INSERT INTO employees VALUES($1,$2,$3,true,'waiter','off',4)",[employee,user,restaurant]);await db.query("INSERT INTO restaurants VALUES($1,$2,'Restaurant','restaurant')",[restaurant,company]);await db.query("INSERT INTO dining_tables(id,restaurant_id,waiter_employee_id,name,area,status,sort_order) VALUES($1,$2,$3,'Tisch 1','Saal','open',1)",[table,restaurant,employee]);await db.query("INSERT INTO orders VALUES(gen_random_uuid(),$1,'qr','open',now(),2500)",[table]);await db.query("INSERT INTO waiter_push_subscriptions VALUES($1,'https://push.example','{}')",[user]);
 await db.exec("ALTER TABLE orders ALTER COLUMN id SET DEFAULT gen_random_uuid();ALTER TABLE orders ADD COLUMN restaurant_id uuid;ALTER TABLE orders ADD COLUMN closed_at timestamptz;ALTER TABLE products ADD COLUMN tax_rate numeric DEFAULT 19;CREATE TABLE order_items(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),order_id uuid,product_id uuid,product_name_snapshot text,unit_price_cents int,tax_rate_snapshot numeric,quantity int,guest_note text,extras_snapshot jsonb,correction_note text,corrected_at timestamptz,corrected_by uuid);");
 await db.query('UPDATE orders SET restaurant_id=$1',[restaurant]);
 await db.exec("CREATE TABLE categories(id uuid,name text,sort_order int);ALTER TABLE products ADD COLUMN category_id uuid;ALTER TABLE products ADD COLUMN description text;ALTER TABLE products ADD COLUMN image_url text;");
@@ -24,10 +25,20 @@ const routes=['/api/v1/waiter/bootstrap','/api/v1/waiter/alerts','/api/v1/waiter
 routes.push(lines.find(l=>l.startsWith('if(/^\\/api\\/v1\\/waiter\\/tables')));
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const handler=new AsyncFunction('req','res','p','u','pool','auth','currentUser','requireFeature','json','body',guard+'\n'+routes.join('\n'));
-async function request(path,b=null){const u=new URL('https://example'+path);let result;await handler({method:b?'POST':'GET'},{},u.pathname,u,pool,async()=>({id:user,company_id:company,role:'waiter',display_name:'Service'}),async()=>({id:user}),async()=>true,(_res,status,data)=>{result={...data,status}},async()=>b);return result}
+async function request(path,b=null,as=user){const u=new URL('https://example'+path);let result;await handler({method:b?'POST':'GET'},{},u.pathname,u,pool,async()=>({id:as,company_id:company,role:'waiter',display_name:'Service'}),async()=>({id:as}),async()=>true,(_res,status,data)=>{result={...data,status}},async()=>b);return result}
 const off=await request('/api/v1/waiter/bootstrap');assert.equal(off.employee.duty_state,'off');assert.equal(off.tables.length,1);assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);assert.equal((await request('/api/v1/waiter/tables/'+table)).status,403);
 await db.query("UPDATE employees SET duty_state='working'");
 const working=await request('/api/v1/waiter/bootstrap');assert.equal(working.tables.length,1);assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);
+const employee2='00000000-0000-4000-8000-000000000020',user2='00000000-0000-4000-8000-000000000021';
+await db.query("INSERT INTO employees VALUES($1,$2,$3,true,'waiter','working',4)",[employee2,user2,restaurant]);
+await tableWaiterAssignments(pool,company,false,'PUT',{restaurantId:restaurant,tableId:table,waiterIds:[employee,employee2]});
+assert.equal((await request('/api/v1/waiter/bootstrap',null,user2)).tables.length,1);
+assert.equal((await request('/api/v1/waiter/tables/'+table,null,user2)).status,200);
+assert.equal((await request('/api/v1/waiter/orders/correct',{orderId:qrOrder,itemId:qrItem,qty:2},user2)).status,200);
+await db.query("INSERT INTO waiter_push_subscriptions VALUES($1,'https://push.second','{}')",[user2]);
+const multiPush=source.match(/const waiterPush=\(await c\.query\(\"([^\"]+)\"/)[1];assert.equal((await pool.query(multiPush,[table])).rowCount,2);
+await tableWaiterAssignments(pool,company,false,'PUT',{restaurantId:restaurant,tableId:table,waiterIds:[employee]});
+assert.equal((await request('/api/v1/waiter/tables/'+table,null,user2)).status,404);
 const pushSql=source.match(/const waiterPush=\(await c\.query\("([^"]+)"/)[1];assert.equal((await pool.query(pushSql,[table])).rowCount,1);
 await db.query("UPDATE employees SET duty_state='paused'");assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);assert.equal((await pool.query(pushSql,[table])).rowCount,1);
 await db.query("UPDATE employees SET duty_state='off'");assert.equal((await request('/api/v1/waiter/alerts')).dutyState,'off');assert.equal((await pool.query(pushSql,[table])).rowCount,1);assert.equal((await pool.query('SELECT id FROM orders')).rowCount,1);

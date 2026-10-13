@@ -20,7 +20,7 @@ export function createQrService(pool) {
   async function allowed(c,u,rid,tableId=null) {
     if(["owner","admin","manager","kitchen"].includes(u.role))return true;
     if(u.role!=="waiter")return false;
-    const q=await c.query("SELECT 1 FROM employees e JOIN dining_tables t ON t.waiter_employee_id=e.id WHERE e.user_id=$1 AND e.restaurant_id=$2 AND e.active=true AND ($3::uuid IS NULL OR t.id=$3) LIMIT 1",[u.id,rid,tableId]);
+    const q=await c.query("SELECT 1 FROM employees e JOIN dining_tables t ON (t.waiter_employee_id=e.id OR e.id=ANY(t.waiter_employee_ids)) WHERE e.user_id=$1 AND e.restaurant_id=$2 AND e.active=true AND ($3::uuid IS NULL OR t.id=$3) LIMIT 1",[u.id,rid,tableId]);
     return !!q.rowCount;
   }
   return async function handleQrService(req,res) {
@@ -89,7 +89,7 @@ export function createQrService(pool) {
       FROM orders o JOIN dining_tables t ON t.id=o.table_id
       WHERE o.restaurant_id=$1 AND o.source='qr' AND o.status<>'cancelled'
       AND (o.status<>'paid' OR (o.qr_service_mode='pickup' AND o.qr_ready_at IS NULL))
-      AND ($2::text<>'waiter' OR EXISTS(SELECT 1 FROM employees e WHERE e.id=t.waiter_employee_id AND e.user_id=$3 AND e.active=true))
+      AND ($2::text<>'waiter' OR EXISTS(SELECT 1 FROM employees e WHERE (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) AND e.user_id=$3 AND e.active=true))
       ORDER BY o.created_at,o.id`,[rid,u.role,u.id]);
     return send(res,200,{mode:r.rows[0].qr_service_mode,orders:queueOrder(q.rows)});
   };

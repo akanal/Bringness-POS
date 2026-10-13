@@ -59,3 +59,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Push ohne konfigurierte VAPID-Keys: servergeneriertes Schlüsselpaar dauerhaft in waiter_push_identity, keine Schlüssel in Logs. Signal-Test sendet echte Push-Nachricht über den Server und zeigt Fehler; /health zeigt ausschließlich Bereitschaft.
 
 - Kellnerkarten seitlich wischbar/aus Liste entfernbar mit Rückgängig, pro Mitarbeiter lokal gespeichert; Bestellungen/Küche/Abrechnung bleiben erhalten. Standby-Test nach 15 Sekunden trennt Anbieterannahme von Handy-Anzeigebestätigung. Diagnose maximal fünf Minuten im Speicher, bei Serverneustart erneut testen.
+
+- Mehrere Kellner je Tisch/Bereich: Auswahl mit Häkchen, gemeinsamer Zugriff/QR-Push. waiter_employee_id bleibt Erstzuweisung, waiter_employee_ids speichert weitere IDs; aktive Kellner desselben Restaurants prüfen, Entzug/Sperren räumt beide Felder auf. Bestehende Einzelzuweisungen bleiben erhalten.
