@@ -65,3 +65,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Tischansichten POS/Kellner zeigen ausschließlich offene Bestellungen; bezahlte/stornierte Aufträge automatisch ausblenden. Belege und Abrechnungsdaten dauerhaft erhalten, kein Löschen von Bestellungen.
 
 - Tresen: Gesehen ist Lesebestätigung; Abholbereit – Gast benachrichtigen ist serverseitige Freigabe direkt an der QR-Bestellkarte. Bezahlte, noch nicht abholbereite Tresenaufträge bleiben dort sichtbar. Kunde erhält Anzeige/Ton auf offener Bestellseite ohne App-/Push-Pflicht; Rückkehr-URL trägt Bestellcapability für Neuladen auch ohne SessionStorage.
+
+- Abholbereit-Freigabe sowohl QR-Liste als auch geöffneter Tisch in POS/Kellner; APIs liefern Service-Modell/Abholstatus. Bezahlte Tresenaufträge bis Freigabe sichtbar, bereits bezahlte Beträge nicht erneut offen summieren.
