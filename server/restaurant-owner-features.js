@@ -177,7 +177,7 @@ export async function handleRestaurantOwnerFeature(req,res){
       if(pushes.length&&process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY){
         webpush.setVapidDetails(process.env.VAPID_SUBJECT||"mailto:info@bringness.de",process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);
         const payload=JSON.stringify({title:"Neue Bestellung · "+t.table_name,body:"Eine neue QR-Bestellung ist eingegangen.",url:"/service/"});
-        Promise.allSettled(pushes.map(async row=>{try{await webpush.sendNotification(row.subscription,payload,{TTL:300})}catch(e){if(e.statusCode===404||e.statusCode===410)await pool.query("DELETE FROM waiter_push_subscriptions WHERE endpoint=$1",[row.endpoint])}}));
+        Promise.allSettled(pushes.map(async row=>{try{await webpush.sendNotification(row.subscription,payload,{TTL:300,urgency:"high"})}catch(e){if(e.statusCode===404||e.statusCode===410)await pool.query("DELETE FROM waiter_push_subscriptions WHERE endpoint=$1",[row.endpoint])}}));
       }
       json(res,201,{orderId:o.id,totalCents:total,emailReceiptRequested:!!email,emailDeliveryConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM)});
       return true;

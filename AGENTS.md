@@ -53,3 +53,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Owners select onsite, online or guest choice per restaurant. Existing online policies are preserved until owners change them. Online choices require a verified merchant connection; the existing online checkout rollout switch remains unchanged.
 - Onsite Center orders transmit ordering, preparation and pickup notifications; they do not initiate payment, generate a payment record or issue a paid receipt. Payment confirmation requires an actual payment linked to the same order, never a guest claim.
 - A newly selected/uploaded single screen image or video displays indefinitely (`seconds:0`); switching to a timed playlist is explicit. A permanent item cannot be mixed with timed items. Preserve stable screen links and server media across restart.
+
+- Kellner-Hintergrundmeldungen benötigen bestätigte Push-Registrierung; Fehler sichtbar unter Mehr. iPhone/iPad: Home-Screen-Web-App und Nutzerfreigabe. QR-Push mit hoher Dringlichkeit; vollständig ausgeschaltete Geräte empfangen keine Nachrichten.

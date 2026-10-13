@@ -1,0 +1,1 @@
+{"id": "/service/", "name": "Bringness Service", "short_name": "Bringness", "start_url": "/service/", "scope": "/service/", "display": "standalone", "background_color": "#f7f5f2", "theme_color": "#142537", "icons": [{"src": "/service/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any"}]}
