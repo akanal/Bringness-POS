@@ -13,7 +13,13 @@ const product='00000000-0000-4000-8000-000000000006';await db.query("INSERT INTO
 const pool={query:async(sql,args)=>{const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}}};
 pool.connect=async()=>({query:pool.query,release(){}});
 const source=fs.readFileSync(new URL('../index.js',import.meta.url),'utf8'),lines=source.split('\n');
-const guard=lines.find(l=>l.startsWith('if(p.startsWith("/api/v1/waiter/")&&!'));
+const guard=lines.find(l=>l.startsWith('if(p.startsWith("/api/v1/waiter/")&&!')&&l.includes("duty_state='working'"));
+assert(guard,'On-duty guard must be tested');
+const featureGuard=lines.find(l=>l.startsWith('if(p.startsWith("/api/v1/waiter/")')&&l.includes('requireFeature'));
+const GuardFunction=Object.getPrototypeOf(async function(){}).constructor;
+const featureCheck=new GuardFunction('p','auth','req','res','requireFeature',featureGuard);
+let checks=0;await featureCheck('/api/v1/waiter/push/receipt/'+'a'.repeat(64),async()=>{checks++;return null},{},{},async()=>true);assert.equal(checks,0);
+await featureCheck('/api/v1/waiter/bootstrap',async()=>{checks++;return null},{},{},async()=>true);assert.equal(checks,1);
 const routes=['/api/v1/waiter/bootstrap','/api/v1/waiter/alerts','/api/v1/waiter/orders','/api/v1/waiter/orders/correct'].map(p=>lines.find(l=>l.startsWith('if(p==="'+p+'"')));
 routes.push(lines.find(l=>l.startsWith('if(/^\\/api\\/v1\\/waiter\\/tables')));
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
