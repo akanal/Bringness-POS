@@ -137,7 +137,6 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {
-        if (!html.includes("/service/collection.js")) html = html.replace("</body>", '<script src="/service/collection.js"></script></body>');
         if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {

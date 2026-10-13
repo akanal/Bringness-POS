@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import {Readable} from 'node:stream';
+import {PGlite} from '@electric-sql/pglite';
+import {JSDOM} from 'jsdom';
+import {createQrService} from '../qr-service-core.js';
+const db=new PGlite();await db.waitReady;
+const id=()=>crypto.randomUUID(),user=id(),company=id(),restaurant=id(),table=id(),employee=id(),order=id(),key=id();
+await db.exec(`CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean);
+CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
+CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,qr_service_mode text);
+CREATE TABLE employees(id uuid PRIMARY KEY,user_id uuid,restaurant_id uuid,active boolean);
+CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid,waiter_employee_id uuid,waiter_employee_ids uuid[] DEFAULT '{}',qr_token text);
+CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,table_id uuid,status text,source text,guest_request_id uuid,qr_service_mode text,qr_ready_at timestamptz);`);
+await db.query("INSERT INTO users VALUES($1,$2,'waiter','active',false)",[user,company]);await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[user,crypto.createHash('sha256').update('waiter').digest('hex')]);
+await db.query("INSERT INTO restaurants VALUES($1,$2,'pickup')",[restaurant,company]);await db.query('INSERT INTO employees VALUES($1,$2,$3,true)',[employee,user,restaurant]);await db.query("INSERT INTO dining_tables VALUES($1,$2,$3,'{}',$4)",[table,restaurant,employee,'a'.repeat(48)]);await db.query("INSERT INTO orders VALUES($1,$2,$3,'paid','qr',$4,'pickup',NULL)",[order,restaurant,table,key]);
+const pool={query:async(sql,args)=>{const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}}};pool.connect=async()=>({query:pool.query,release(){}});const route=createQrService(pool);
+async function request(url,options={}){const req=Readable.from(options.body?[options.body]:[]);req.url=url;req.method=options.method||'GET';req.headers=options.headers||{};let status,result;const res={writeHead(s){status=s},end(text){result=JSON.parse(text)}};assert(await route(req,res));return {ok:status<400,status,json:async()=>result}}
+// Guest has no app, permission or usable sessionStorage: the return URL recovers it.
+const guest=new JSDOM('<main><div><p id="status"></p></div></main>',{url:'https://example/tisch/?collection='+'a'.repeat(48)+'&orderId='+order+'&requestId='+key,runScripts:'outside-only',pretendToBeVisual:true}).window;const timers=[];guest.setInterval=fn=>timers.push(fn);const inFlight=[];guest.fetch=(url,opts)=>{const task=request(url,opts);inFlight.push(task);return task};Object.defineProperty(guest,'sessionStorage',{value:{getItem(){throw Error('blocked')},setItem(){throw Error('blocked')}}});let tones=0,vibrations=0;guest.navigator.vibrate=()=>vibrations++;guest.AudioContext=class{state='running';currentTime=0;destination={};async resume(){}createOscillator(){return {frequency:{},connect(){},start(){tones++},stop(){}}}createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}}}};
+guest.eval(fs.readFileSync(new URL('../../apps/web/public/tisch/collection.js',import.meta.url),'utf8'));const flush=()=>new Promise(r=>setImmediate(r));await Promise.all(inFlight);await flush();guest.document.dispatchEvent(new guest.Event('pointerdown'));await timers[0]();assert.match(guest.document.getElementById('guestCollection').textContent,/Wird zubereitet/);
+const html=fs.readFileSync(new URL('../../apps/web/public/service/index.html',import.meta.url),'utf8'),source=fs.readFileSync(new URL('../../apps/web/public/service/app.js',import.meta.url),'utf8');const waiter=new JSDOM(html,{url:'https://example/service/',runScripts:'outside-only',pretendToBeVisual:true}).window;waiter.setInterval=()=>0;waiter.alert=()=>{};
+const ticket={id:order,status:'paid',qr_service_mode:'pickup',qr_ready_at:null,table_name:'Tresen',total_cents:100,items:[]};
+waiter.fetch=async(url,opts)=>{if(url.includes('/collection-ready'))return request(url,opts);return {ok:true,json:async()=>url.endsWith('/bootstrap')?{employee:{id:employee,restaurant_id:restaurant,restaurant_name:'Test',stamp_pin_digits:4,duty_state:'working'},tables:[],products:[]}:url.endsWith('/extras')?{extras:[]}:{orders:[]}}};
+waiter.eval(source+';token="waiter";data={employee:{id:'+JSON.stringify(employee)+',restaurant_id:'+JSON.stringify(restaurant)+',duty_state:"working"}};qrOrders=['+JSON.stringify(ticket)+'];renderQr();');
+const button=waiter.document.querySelector('[data-collection-ready]');assert(button);assert.match(button.textContent,/Gast benachrichtigen/);await button.onclick();
+const saved=(await db.query('SELECT status,qr_ready_at FROM orders')).rows[0];assert.equal(saved.status,'paid');assert(saved.qr_ready_at);
+await timers[0]();await timers[0]();assert.match(guest.document.getElementById('guestCollection').textContent,/Bitte am Tresen abholen/);assert.equal(vibrations,1);assert.equal(tones,3);assert.equal(guest.navigator.serviceWorker,undefined);assert.equal(guest.Notification,undefined);
+waiter.close();guest.close();await db.close();console.log('Pickup round trip passed: paid order remains actionable, waiter ready button commits, guest return URL survives blocked storage, collection message and one signal without app or notification permission, financial status unchanged.');

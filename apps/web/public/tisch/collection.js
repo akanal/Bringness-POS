@@ -5,6 +5,9 @@
   const key="bringness-collection-"+code;
   let orders=[],audio=null,busy=false,mode="restaurant";
   try{orders=JSON.parse(sessionStorage.getItem(key)||"[]").filter(o=>o.orderId&&o.requestId).slice(-40)}catch{}
+  // Keep the order capability in the return URL as well as session storage.
+  const urlOrder=params.get('orderId'),urlRequest=params.get('requestId'),valid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if(valid.test(urlOrder||'')&&valid.test(urlRequest||'')&&!orders.some(o=>o.orderId===urlOrder))orders.push({orderId:urlOrder,requestId:urlRequest,number:urlOrder.slice(0,8).toUpperCase()});
   const save=()=>{try{sessionStorage.setItem(key,JSON.stringify(orders))}catch{}};
   function unlock(){
     try{const C=window.AudioContext||window.webkitAudioContext;if(C){audio ||= new C();audio.resume().catch(()=>{})}}catch{}
@@ -32,13 +35,15 @@
     if(!visible.length){host.textContent="Abholung am Tresen";return}
     for(const o of visible){
       const row=document.createElement("p");row.style.margin="8px 0";
-      row.textContent=o.ready?"✓ "+o.number+" · Bitte am Tresen abholen":"Bestellung "+o.number;
+      row.textContent=o.ready?"✓ "+o.number+" · Bitte am Tresen abholen":"Bestellung "+o.number+" · Wird zubereitet. Bitte diese Seite für die Abholmeldung geöffnet lassen.";
       host.appendChild(row);
     }
-    if(visible.some(o=>o.ready))host.style.background="#dcfce7";
+    host.style.background=visible.some(o=>o.ready)?"#dcfce7":"#fff3e7";
+    if(visible.some(o=>o.ready))host.scrollIntoView?.({behavior:'smooth',block:'center'});
   }
   window.addEventListener("bringness-guest-order",event=>{
     const d=event.detail;if(!d?.orderId||!d?.requestId)return;
+    try{const next=new URL(location.href);next.searchParams.set('orderId',d.orderId);next.searchParams.set('requestId',d.requestId);history.replaceState(null,'',next.pathname+next.search+next.hash)}catch{}
     if(!orders.some(o=>o.orderId===d.orderId))orders.push({...d,number:d.orderId.slice(0,8).toUpperCase(),mode});
     orders=orders.slice(-40);save();poll();
   });

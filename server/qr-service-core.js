@@ -31,7 +31,7 @@ export function createQrService(pool) {
       const q=await pool.query("SELECT o.id,o.qr_service_mode,o.qr_ready_at,o.status FROM orders o WHERE o.id=$1 AND o.guest_request_id=$2 AND o.source='qr'",[id,key]);
       if(!q.rowCount)return send(res,404,{error:"Bestellung nicht gefunden"});
       const o=q.rows[0];
-      return send(res,200,{orderId:o.id,number:o.id.slice(0,8).toUpperCase(),mode:o.qr_service_mode,ready:!!o.qr_ready_at&&o.status!=="cancelled",closed:["paid","cancelled"].includes(o.status)});
+      return send(res,200,{orderId:o.id,number:o.id.slice(0,8).toUpperCase(),mode:o.qr_service_mode,ready:!!o.qr_ready_at&&o.status!=="cancelled",closed:o.status==="cancelled"||(o.status==="paid"&&(o.qr_service_mode!=="pickup"||!!o.qr_ready_at))});
     }
     if(p==="/api/v1/guest/service-mode"&&req.method==="GET") {
       const code=url.searchParams.get("code")||"";

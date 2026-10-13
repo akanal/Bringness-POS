@@ -63,3 +63,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Mehrere Kellner je Tisch/Bereich: Auswahl mit Häkchen, gemeinsamer Zugriff/QR-Push. waiter_employee_id bleibt Erstzuweisung, waiter_employee_ids speichert weitere IDs; aktive Kellner desselben Restaurants prüfen, Entzug/Sperren räumt beide Felder auf. Bestehende Einzelzuweisungen bleiben erhalten.
 
 - Tischansichten POS/Kellner zeigen ausschließlich offene Bestellungen; bezahlte/stornierte Aufträge automatisch ausblenden. Belege und Abrechnungsdaten dauerhaft erhalten, kein Löschen von Bestellungen.
+
+- Tresen: Gesehen ist Lesebestätigung; Abholbereit – Gast benachrichtigen ist serverseitige Freigabe direkt an der QR-Bestellkarte. Bezahlte, noch nicht abholbereite Tresenaufträge bleiben dort sichtbar. Kunde erhält Anzeige/Ton auf offener Bestellseite ohne App-/Push-Pflicht; Rückkehr-URL trägt Bestellcapability für Neuladen auch ohne SessionStorage.
