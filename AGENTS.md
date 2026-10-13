@@ -67,3 +67,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Tresen: Gesehen ist Lesebestätigung; Abholbereit – Gast benachrichtigen ist serverseitige Freigabe direkt an der QR-Bestellkarte. Bezahlte, noch nicht abholbereite Tresenaufträge bleiben dort sichtbar. Kunde erhält Anzeige/Ton auf offener Bestellseite ohne App-/Push-Pflicht; Rückkehr-URL trägt Bestellcapability für Neuladen auch ohne SessionStorage.
 
 - Abholbereit-Freigabe sowohl QR-Liste als auch geöffneter Tisch in POS/Kellner; APIs liefern Service-Modell/Abholstatus. Bezahlte Tresenaufträge bis Freigabe sichtbar, bereits bezahlte Beträge nicht erneut offen summieren.
+
+- Kunde darf optional Abhol-App/Home-Screen-Web-App nutzen und explizit Push erlauben. /tisch/sw.js empfängt Abholmeldung im Hintergrund; Zustimmung je Bestellung, widerrufbar, Zuordnung maximal 24 Stunden. QR-Push-Worker persistent, Sendestatus/Retry in qr_guest_push, bestehender Center-Push-Schalter unverändert. iPhone: vom Home-Screen starten; Android auch Browser-Push.

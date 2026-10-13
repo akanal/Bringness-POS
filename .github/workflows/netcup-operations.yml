@@ -78,6 +78,7 @@ jobs:
           node server/ai-tests/table-waiters.mjs
           node server/ai-tests/waiter-workflow.mjs
           node server/ai-tests/pickup-notify.mjs
+          node server/ai-tests/qr-guest-push.mjs
           node server/ai-tests/waiter-signal.mjs
           node server/ai-tests/waiter-push.mjs
           node server/ai-tests/staff-lifecycle.mjs
