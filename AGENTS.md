@@ -57,3 +57,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Kellner-Hintergrundmeldungen benötigen bestätigte Push-Registrierung; Fehler sichtbar unter Mehr. iPhone/iPad: Home-Screen-Web-App und Nutzerfreigabe. QR-Push mit hoher Dringlichkeit; vollständig ausgeschaltete Geräte empfangen keine Nachrichten.
 
 - Push ohne konfigurierte VAPID-Keys: servergeneriertes Schlüsselpaar dauerhaft in waiter_push_identity, keine Schlüssel in Logs. Signal-Test sendet echte Push-Nachricht über den Server und zeigt Fehler; /health zeigt ausschließlich Bereitschaft.
+
+- Kellnerkarten seitlich wischbar/aus Liste entfernbar mit Rückgängig, pro Mitarbeiter lokal gespeichert; Bestellungen/Küche/Abrechnung bleiben erhalten. Standby-Test nach 15 Sekunden trennt Anbieterannahme von Handy-Anzeigebestätigung. Diagnose maximal fünf Minuten im Speicher, bei Serverneustart erneut testen.
