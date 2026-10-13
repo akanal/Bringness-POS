@@ -50,6 +50,11 @@ assert.equal((await db.query('SELECT total_cents FROM orders WHERE id=$1',[qrOrd
 await db.query("UPDATE orders SET status='kitchen' WHERE id=$1",[qrOrder]);assert.equal((await request('/api/v1/waiter/orders/correct',{orderId:qrOrder,itemId:qrItem,qty:2})).status,400);
 assert.equal((await request('/api/v1/waiter/orders/correct',{orderId:qrOrder,itemId:qrItem,qty:2,reason:'Gast korrigiert Menge'})).status,200);
 await db.query("UPDATE orders SET status='paid' WHERE id=$1",[qrOrder]);assert.equal((await request('/api/v1/waiter/orders/correct',{orderId:qrOrder,itemId:qrItem,qty:0})).status,409);
+// Settled history stays in storage but disappears from both table APIs.
+assert(!(await request('/api/v1/waiter/tables/'+table)).orders.some(o=>o.id===qrOrder));
+const posDetailsSql=source.match(/const q=await pool.query\("([^"\n]*FROM orders o WHERE o.table_id=\$1 AND o.restaurant_id=\$2[^"\n]*LIMIT 40)"/)[1];
+assert(!(await pool.query(posDetailsSql,[table,restaurant])).rows.some(o=>o.id===qrOrder));
+assert.equal((await pool.query('SELECT status FROM orders WHERE id=$1',[qrOrder])).rows[0].status,'paid');
 await db.query('UPDATE dining_tables SET waiter_employee_id=NULL WHERE id=$1',[table]);assert.equal((await request('/api/v1/waiter/tables/'+table)).status,404);assert.equal((await request('/api/v1/waiter/orders',{tableId:table,items:[{productId:product,qty:1}]})).status,403);assert.equal((await request('/api/v1/waiter/orders/correct',{orderId:created.orderId,itemId:qrItem,qty:1})).status,409);
 await db.query('UPDATE dining_tables SET waiter_employee_id=$1 WHERE id=$2',[employee,table]);await db.query('UPDATE employees SET active=false');assert.equal((await request('/api/v1/waiter/orders',{tableId:table,items:[{productId:product,qty:1}]})).status,403);await db.query('UPDATE employees SET active=true');
 // Verify the actual phone UI shows off-duty state and provides private reporting.

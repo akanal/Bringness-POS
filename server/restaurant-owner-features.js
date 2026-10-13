@@ -212,9 +212,9 @@ export async function handleRestaurantOwnerFeature(req,res){
     const q=await pool.query(`SELECT o.id,o.status,o.total_cents,o.created_at,o.closed_at,o.source,o.guest_email,
       (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity,'note',oi.guest_note,'extras',oi.extras_snapshot)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
       FROM orders o WHERE o.table_id=$1 AND o.restaurant_id=$2
-      AND (o.status NOT IN ('paid','cancelled') OR coalesce(o.closed_at,o.created_at)>now()-interval '24 hours')
+      AND o.status NOT IN ('paid','cancelled')
       ORDER BY o.created_at DESC LIMIT 80`,[tableDetails[1],t.rows[0].restaurant_id]);
-    json(res,200,{table:t.rows[0],orders:q.rows,historyWindowHours:24});return true;
+    json(res,200,{table:t.rows[0],orders:q.rows,historyWindowHours:0});return true;
   }
 
   if(p==="/api/v1/owner/presence" && req.method==="GET"){
