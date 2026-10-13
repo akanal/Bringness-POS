@@ -54,7 +54,7 @@ export async function handleBillingStatus(req,res){
 
   const download=entitlements.rows.some(row=>row.code==='download_license'&&row.status==='active');
   const baseEntitlement=entitlements.rows.some(row=>row.code==='pos_base_monthly'&&row.status==='active'&&(!row.current_period_end||new Date(row.current_period_end)>new Date()));
-  const policy=billingPolicy({base:baseEntitlement||(featureMap.get('pos_base')?.payment_status==='trial'&&activeFeature('pos_base')),restaurant:activeFeature('restaurant'),tableQr:activeFeature('table_qr'),download});
+  const policy=billingPolicy({baseAccess:activeFeature('pos_base'),base:baseEntitlement||(featureMap.get('pos_base')?.payment_status==='trial'&&activeFeature('pos_base')),restaurant:activeFeature('restaurant'),tableQr:activeFeature('table_qr'),download});
   const state={...policy.features,pos_base:policy.features.pos_base||activeFeature("pos_base")},dependencyState=policy.plans;
 
   const latestEntitlement=new Map();

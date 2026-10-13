@@ -1,3 +1,4 @@
+import {createPackageAccess} from './package-access.js';
 import {createWaiterWorkflow,migrateWaiterWorkflow} from './waiter-workflow.js';
 import {migrateTransactionalMail,createMailWorker,createMailStatus} from './transactional-mail.js';
 import {renderMailReceipt} from './payment-receipt.js';
@@ -49,6 +50,7 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
 const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
+const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
@@ -62,6 +64,7 @@ http.createServer = function patchedCreateServer(listener) {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
+      if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
       if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;

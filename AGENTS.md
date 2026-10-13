@@ -71,3 +71,8 @@ Continue authorized development autonomously and preserve established behavior a
 - Kunde darf optional Abhol-App/Home-Screen-Web-App nutzen und explizit Push erlauben. /tisch/sw.js empfängt Abholmeldung im Hintergrund; Zustimmung je Bestellung, widerrufbar, Zuordnung maximal 24 Stunden. QR-Push-Worker persistent, Sendestatus/Retry in qr_guest_push, bestehender Center-Push-Schalter unverändert. iPhone: vom Home-Screen starten; Android auch Browser-Push.
 
 - Korrektur 2026-10-13: Kunde soll keine App hinzufügen. Kein Installationsangebot/Manifest in Kundenseite. Android: freiwilliger Browser-Push. iPhone ohne bestehende Home-Screen-App: offene Bestellseite nötig; keine Zusage für Sperrbildschirm-Web-Push. Andere Kanäle erst mit geklärtem Anbieter/Kosten/Einwilligung.
+
+## Owner package boundaries confirmed 2026-10-13
+- Download base: 399 EUR net once; online base: 29.99 EUR net/month. Optional table-QR subscription: 29.99 EUR net/month for either base or restaurant.
+- QR addon enables table ordering and service access, never Center, display control or personnel management. Center remains exclusive to restaurant. Preserve approved guest/waiter QR, reservation and counter/pickup workflows.
+- Cancellation takes effect after the paid period: base packages lose table access/new QR ordering, retain ordinary POS and all stored orders/receipts. Restaurant keeps its tables.

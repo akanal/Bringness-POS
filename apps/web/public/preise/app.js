@@ -3,8 +3,8 @@ const money=cents=>(cents/100).toLocaleString('de-DE',{style:'currency',currency
 const offerings=[
   {code:'pos_base_monthly',title:'Online-Basis',intro:'Die Kasse für den täglichen Verkauf im Browser.',items:['Artikel, Kategorien und Zahlungen','Konto und gemeinsame Datenbank','Monatlich kündbares Abo'],featured:true},
   {code:'restaurant_monthly',title:'Restaurant-Kasse',intro:'Vollständige Restaurant-Kasse inklusive normaler Kasse.',items:['Normale Kasse im Preis enthalten','Tische, Service, Bestellungen und Küche','Tisch-QR optional für 29,99 € netto / Monat']},
-  {code:'table_qr_monthly',title:'Tisch-QR',intro:'QR-Bestellungen direkt am Tisch als Ergänzung.',items:['QR-Code je Tisch','Digitale Speisekarte und Bestellung','Restaurant-Tarif erforderlich; separat buchbar']},
-  {code:'download_license',title:'Windows-Download',intro:'Einmalige Lizenz für die reine Windows-Kasse.',items:['Windows-Installation','Normale Kasse, Artikel, Mitarbeiter, Belege und Schicht','Ohne Restaurant-Funktionen und Tisch-QR','Download erst nach bestätigter Zahlung']}
+  {code:'table_qr_monthly',title:'Tisch-QR',intro:'QR-Bestellungen direkt am Tisch als Ergänzung.',items:['QR-Code je Tisch','Digitale Speisekarte und Bestellung','Für jede Kassenlizenz separat buchbar']},
+  {code:'download_license',title:'Windows-Download',intro:'Einmalige Lizenz für die reine Windows-Kasse.',items:['Windows-Installation','Normale Kasse, Artikel, Belege und Schicht','Tisch-QR optional für 29,99 € netto / Monat','Download erst nach bestätigter Zahlung']}
 ];
 let plans=new Map(),billingState=null,selected=null,selectedQuotedNet=null,accountMode='register',token=localStorage.getItem('bringness-pos-token'),downloadAccess=null;
 async function request(path,options={}){const response=await fetch('/api/v1'+path,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...options.headers}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Die Anfrage ist fehlgeschlagen.');return data}
@@ -15,7 +15,7 @@ function planState(code){
     if(state)return state;
   }
   if(code==='restaurant_monthly')return {active:false,eligible:true,requires:[]};
-  if(code==='table_qr_monthly')return {active:false,eligible:false,requires:['restaurant_monthly']};
+  if(code==='table_qr_monthly')return {active:false,eligible:false,requires:['pos_base']};
   return {active:false,eligible:true,requires:[]};
 }
 function dependencyText(code,state){
@@ -24,14 +24,14 @@ function dependencyText(code,state){
   if(state.eligible)return code==='download_license'?'Kauf möglich':'Jetzt buchbar';
   if(code==='restaurant_monthly')return 'Zuerst Online-Basis aktivieren';
   if(billingState?.downloadOnly)return 'In der Download-Kasse nicht buchbar';
-  if(code==='table_qr_monthly')return 'Zuerst Restaurant-Tarif aktivieren';
+  if(code==='table_qr_monthly')return 'Zuerst Kassenlizenz aktivieren';
   return 'Derzeit nicht buchbar';
 }
 function buttonText(code,state){
   if(state.active)return 'Bereits aktiv';
   if(!state.eligible){
     if(code==='restaurant_monthly')return 'Erst Online-Basis buchen';
-    if(code==='table_qr_monthly')return 'Erst Restaurant-Modul buchen';
+    if(code==='table_qr_monthly')return 'Erst Kassenlizenz aktivieren';
     return 'Noch nicht buchbar';
   }
   return code==='download_license'?'Download-Lizenz kaufen':'Jetzt kaufen';
