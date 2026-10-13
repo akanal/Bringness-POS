@@ -1,21 +1,19 @@
 (()=>{
-  let current=null,config=null,registration=null,subscription=null,installPrompt=null,generation=0;
+  let current=null,config=null,registration=null,subscription=null,generation=0;
   const apple=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const standalone=()=>navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches;
   const api=async(action,data={})=>{const r=await fetch('/api/v1/guest/collection-push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...current,action,...data})});const j=await r.json();if(!r.ok)throw Error(j.error||'Aktivierung fehlgeschlagen');return j};
   function controls(){
     let host=document.getElementById('guestPushControls');if(host)return host;
     host=document.createElement('section');host.id='guestPushControls';host.className='panel';
-    const title=document.createElement('h2');title.textContent='Abholung bei gesperrtem Bildschirm';
-    const text=document.createElement('p');text.textContent='Möchtest du eine Nachricht erhalten, sobald diese Bestellung abholbereit ist? Freiwillig, nur für diese Bestellung. Die Zuordnung wird spätestens nach 24 Stunden gelöscht.';
+    const title=document.createElement('h2');title.textContent='Abholmeldung';
+    const text=document.createElement('p');text.id='guestPushInfo';text.textContent='Möchtest du eine Nachricht erhalten, sobald diese Bestellung abholbereit ist? Freiwillig, nur für diese Bestellung. Die Zuordnung wird spätestens nach 24 Stunden gelöscht.';
     const button=document.createElement('button');button.id='guestPushEnable';button.className='primary';button.textContent='Abholmitteilungen erlauben';
     const disable=document.createElement('button');disable.id='guestPushDisable';disable.textContent='Mitteilungen für diese Bestellung ausschalten';disable.hidden=true;
-    const install=document.createElement('button');install.id='guestPushInstall';install.textContent='Abhol-App hinzufügen';install.hidden=standalone();
     const status=document.createElement('p');status.id='guestPushStatus';status.setAttribute('role','status');
-    host.append(title,text,button,disable,install,status);(document.getElementById('status')?.parentElement||document.body).appendChild(host);
-    install.onclick=async()=>{if(installPrompt){await installPrompt.prompt();installPrompt=null}else status.textContent=apple()?'Safari → Teilen → Zum Home-Bildschirm. Danach über das App-Symbol öffnen und hier Abholmitteilungen erlauben.':'Im Browser-Menü „App installieren“ oder „Zum Startbildschirm hinzufügen“ wählen. Mitteilungen sind auf Android auch ohne Installation möglich.'};
+    host.append(title,text,button,disable,status);(document.getElementById('status')?.parentElement||document.body).appendChild(host);
     button.onclick=async()=>{
-      if(apple()&&!standalone()){status.textContent='Auf dem iPhone zuerst: Safari → Teilen → Zum Home-Bildschirm. Danach über das App-Symbol öffnen und Abholmitteilungen erlauben.';return}
+      if(apple()&&!standalone()){status.textContent='Auf dem iPhone bitte diese Bestellseite geöffnet lassen. Browser-Abholmeldungen bei gesperrtem Bildschirm sind hier nicht verfügbar.';return}
       if(!('Notification'in window)||!('PushManager'in window)||!('serviceWorker'in navigator)){status.textContent='Dieser Browser unterstützt keine Hintergrundmeldungen. Die Abholmeldung erscheint weiterhin auf der geöffneten Bestellseite.';return}
       button.disabled=true;
       try{
@@ -40,16 +38,14 @@
     try{
       const response=await fetch('/api/v1/guest/collection-push?'+query,{cache:'no-store'});if(!response.ok)return;
       const result=await response.json();if(currentGeneration!==generation)return;config=result;
-      let manifest=document.getElementById('guestPickupManifest');if(!manifest){manifest=document.createElement('link');manifest.id='guestPickupManifest';manifest.rel='manifest';document.head.appendChild(manifest)}manifest.href='/api/v1/guest/collection-manifest?'+query;
       const host=controls(),button=host.querySelector('#guestPushEnable'),status=host.querySelector('#guestPushStatus');button.disabled=!config.publicKey;if(!config.publicKey)status.textContent='Hintergrundmeldungen sind derzeit nicht verfügbar. Bitte die Bestellseite geöffnet lassen.';
-      if(apple()&&!standalone())status.textContent='iPhone: Abhol-App zum Home-Bildschirm hinzufügen, über das Symbol öffnen und dann Mitteilungen erlauben.';
+      if(apple()&&!standalone()){button.hidden=true;host.querySelector('#guestPushInfo').textContent='Die Abholmeldung erscheint direkt auf dieser Bestellseite. Bitte lasse sie geöffnet.';status.textContent='Bei gesperrtem Bildschirm kann diese iPhone-Browserseite keine Abholmeldung empfangen.';return}
       if('serviceWorker'in navigator&&'Notification'in window&&Notification.permission==='granted'){
         registration=await navigator.serviceWorker.getRegistration('/tisch/');subscription=await registration?.pushManager.getSubscription();
         if(subscription){const state=await api('status',{subscription:subscription.toJSON()});if(state.subscribed){button.hidden=true;host.querySelector('#guestPushDisable').hidden=false;status.textContent='Abholmitteilungen für diese Bestellung sind aktiviert.'}}
       }
     }catch{}
   }
-  window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event});
   window.addEventListener('bringness-guest-order',event=>prepare(event.detail));
   const params=new URLSearchParams(location.search);prepare({orderId:params.get('orderId'),requestId:params.get('requestId')});
 })();

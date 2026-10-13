@@ -69,3 +69,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Abholbereit-Freigabe sowohl QR-Liste als auch geöffneter Tisch in POS/Kellner; APIs liefern Service-Modell/Abholstatus. Bezahlte Tresenaufträge bis Freigabe sichtbar, bereits bezahlte Beträge nicht erneut offen summieren.
 
 - Kunde darf optional Abhol-App/Home-Screen-Web-App nutzen und explizit Push erlauben. /tisch/sw.js empfängt Abholmeldung im Hintergrund; Zustimmung je Bestellung, widerrufbar, Zuordnung maximal 24 Stunden. QR-Push-Worker persistent, Sendestatus/Retry in qr_guest_push, bestehender Center-Push-Schalter unverändert. iPhone: vom Home-Screen starten; Android auch Browser-Push.
+
+- Korrektur 2026-10-13: Kunde soll keine App hinzufügen. Kein Installationsangebot/Manifest in Kundenseite. Android: freiwilliger Browser-Push. iPhone ohne bestehende Home-Screen-App: offene Bestellseite nötig; keine Zusage für Sperrbildschirm-Web-Push. Andere Kanäle erst mit geklärtem Anbieter/Kosten/Einwilligung.

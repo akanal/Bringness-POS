@@ -14,11 +14,10 @@ export function createQrGuestPush(pool,{env=process.env,sender=(sub,payload)=>we
   return {
     async handle(req,res){
       const url=new URL(req.url,'http://local'),p=url.pathname;
-      if(!['/api/v1/guest/collection-push','/api/v1/guest/collection-manifest'].includes(p))return false;
-      if(!['GET','POST'].includes(req.method)||p.endsWith('manifest')&&req.method!=='GET')return reply(res,405,{error:'Methode nicht erlaubt'});
+      if(p!=='/api/v1/guest/collection-push')return false;
+      if(!['GET','POST'].includes(req.method))return reply(res,405,{error:'Methode nicht erlaubt'});
       let b={};if(req.method==='POST'){let raw='';try{for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>8192)throw Error()}b=JSON.parse(raw)}catch{return reply(res,400,{error:'Ungültige Eingabe'})}}
       const o=await order(b.orderId||url.searchParams.get('orderId'),b.requestId||url.searchParams.get('requestId'));if(!o)return reply(res,404,{error:'Abholbestellung nicht gefunden oder abgelaufen'});
-      if(p.endsWith('manifest'))return reply(res,200,{id:'/tisch/',name:'Bringness Abholung',short_name:'Abholung',start_url:returnUrl(o),scope:'/tisch/',display:'standalone',theme_color:'#142537',background_color:'#f3f5f7',icons:[{src:'/service/icon.svg',type:'image/svg+xml',sizes:'any',purpose:'any'}]},'application/manifest+json');
       if(req.method==='GET')return reply(res,200,{publicKey:env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY?env.VAPID_PUBLIC_KEY:null});
       let sub;try{sub=validateGuestSubscription(b.subscription)}catch{return reply(res,400,{error:'Ungültiges Push-Abonnement'})}
       const hash=crypto.createHash('sha256').update(sub.endpoint).digest('hex');
