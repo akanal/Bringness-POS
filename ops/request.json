@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "pos",
-  "revision": "18de3f9f79ea8ecbe6c22d79cee65067c7d5632d",
-  "requestId": "product-photo-overlay-20261011-1822"
+  "revision": "6f2f34d5b0ba0f8e49ea5f3d0c90896df500686b",
+  "requestId": "brevo-sender-config-20261014-1410"
 }
