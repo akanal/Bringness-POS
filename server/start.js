@@ -1,3 +1,4 @@
+import {createSandboxWorker,migrateFiskalySandbox,sandboxStatus,requestFiskalySetup,onboardingRequest} from './fiskaly-sandbox.js';
 import {createFiskalyTest,migrateFiskalyTest} from './fiskaly-test.js';
 import {createPackageAccess} from './package-access.js';
 import {createWaiterWorkflow,migrateWaiterWorkflow} from './waiter-workflow.js';
@@ -57,7 +58,7 @@ const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
 const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
-const handleFiskalyTest=createFiskalyTest(platformGatewayPool);
+const handleFiskalyTest=createFiskalyTest(platformGatewayPool,{sandboxStatus:companyId=>sandboxStatus(platformGatewayPool,companyId),requestSetup:(companyId,credentials)=>requestFiskalySetup(platformGatewayPool,companyId,credentials)});
 
 // Add modular API routes without destabilising the large legacy server file.
 const originalCreateServer = http.createServer.bind(http);
@@ -65,6 +66,11 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
+      if(appMode!=='ai' && req.method==='GET' && new URL(req.url,'http://local').pathname==='/health/fiskaly-test'){
+        const row=(await platformGatewayPool.query('SELECT state FROM fiskaly_test_setup WHERE request_id=$1',[onboardingRequest.requestId])).rows[0];
+        res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
+        return res.end(JSON.stringify({mode:'TEST',state:row?.state||'waiting',signatureConfirmed:row?.state==='complete'}));
+      }
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
       if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
@@ -176,6 +182,7 @@ async function migrateWithRetry(){
       await migratePublicReceipts();
       await migrateTseIntegration();
       await migrateFiskalyTest(platformGatewayPool);
+      await migrateFiskalySandbox(platformGatewayPool);
       await migrateBillingAccess();
       await migrateDeviceLicense();
       await migrateRemoteSupport(platformGatewayPool);
@@ -206,7 +213,9 @@ async function migrateWithRetry(){
     }
   }
 }
-migrateWithRetry();
+migrateWithRetry().then(()=>{
+ if(appMode!=='ai'){const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
+});
 
 const availabilityPool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,

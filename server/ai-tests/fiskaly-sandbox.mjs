@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {PGlite} from '@electric-sql/pglite';
+import {migrateFiskalySandbox,requestFiskalySetup,runSandboxSetup,createSandboxWorker,credentialFingerprint,sandboxStatus} from '../fiskaly-sandbox.js';
+import {migrateFiskalyTest,sealTestCredentials} from '../fiskaly-test.js';
+const db=new PGlite(),env={PASSWORD_PEPPER:'sandbox-test-only'};
+const query=async(sql,args=[])=>{if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:true}],rowCount:1};if(sql.includes('pg_advisory_unlock'))return {rows:[],rowCount:1};const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows??r.rows.length}};
+const pool={query,connect:async()=>({query,release(){}})};
+await db.exec('CREATE TABLE companies(id uuid PRIMARY KEY)');await migrateFiskalyTest(pool);await migrateFiskalySandbox(pool);await migrateFiskalySandbox(pool);
+const company=crypto.randomUUID(),other=crypto.randomUUID(),credentials={apiKey:'test_sandbox_integration',apiSecret:'sandbox-secret-test'},request={requestId:crypto.randomUUID(),mode:'TEST',credentialFingerprint:credentialFingerprint(credentials.apiKey)};
+await query('INSERT INTO companies VALUES($1),($2)',[company,other]);
+function provider(){let tss=null,client=null,tx=null,createCount=0,finishCount=0,loseFinish=false;const calls=[];
+ const fetcher=async(url,options)=>{assert(url.startsWith('https://kassensichv-middleware.fiskaly.com/api/v2/'));assert.equal(options.redirect,'error');const path=url.split('/api/v2')[1],b=options.body?JSON.parse(options.body):null;calls.push({path,method:options.method});const response=(status,value)=>({status,ok:status===200,json:async()=>value});
+ if(path==='/auth'){assert.equal(b.api_secret,credentials.apiSecret);return response(200,{access_token:'never-return-this-token'})}
+ assert.equal(options.headers.authorization,'Bearer never-return-this-token');
+ const resource=(type,id,extra)=>({_env:'TEST',_type:type,_id:id,...extra});const parts=path.split('?')[0].split('/');
+ if(parts.length===3){if(options.method==='GET')return tss?response(200,{...tss}):response(404,{});if(options.method==='PUT'){if(!tss){createCount++;tss=resource('TSS',parts[2],{state:'CREATED',admin_puk:'private-test-puk'})}return response(200,{...tss})}if(options.method==='PATCH'){assert(['UNINITIALIZED','INITIALIZED'].includes(b.state));tss.state=b.state;return response(200,{...tss})}}
+ if(parts[3]==='admin'){assert(tss.state!=='CREATED');if(parts.length===4)assert.equal(b.admin_puk,'private-test-puk');return response(200,{})}
+ if(parts[3]==='client'){if(options.method==='GET')return client?response(200,{...client}):response(404,{});client=resource('CLIENT',parts[4],{serial_number:b.serial_number});return response(200,{...client})}
+ if(parts[3]==='tx'){if(options.method==='GET')return tx?response(200,{...tx}):response(404,{});assert.equal(tss.state,'INITIALIZED');if(b.state==='ACTIVE'){assert(path.endsWith('tx_revision=1'));tx=resource('TRANSACTION',parts[4],{state:'ACTIVE',revision:1,latest_revision:1,client_id:b.client_id,tss_id:tss._id})}else{assert(path.endsWith('tx_revision=2'));assert.equal(b.schema.standard_v1.receipt.amounts_per_vat_rate[0].amount,'10.00');finishCount++;tx={...tx,state:'FINISHED',revision:2,latest_revision:2,number:1,signature:{value:'mock-signed-proof',counter:'12',algorithm:'ecdsa-plain-SHA256'},qr_code_data:'V0;test-only',time_start:1,time_end:2};if(loseFinish){loseFinish=false;throw Error(credentials.apiSecret)}}return response(200,{...tx})}
+ throw Error('unexpected path '+path);
+ };return {fetcher,calls,get createCount(){return createCount},get finishCount(){return finishCount},loseNextFinish(){loseFinish=true}};
+}
+await query("INSERT INTO fiskaly_test_credentials(company_id,payload,status) VALUES($1,$2,'connected')",[company,sealTestCredentials({...credentials,companyId:company},env)]);
+const unrelated={apiKey:'test_other_company_key',apiSecret:'unrelated-secret'};await query("INSERT INTO fiskaly_test_credentials(company_id,payload,status) VALUES($1,$2,'connected')",[other,sealTestCredentials({...unrelated,companyId:other},env)]);
+const remote=provider(),worker=createSandboxWorker(pool,{env,fetcher:remote.fetcher,request});await Promise.all([worker(),worker()]);let status=await sandboxStatus(pool,company);assert.equal(status.state,'complete');assert.equal(status.proof.mode,'TEST');assert.equal(status.proof.signature.value,'mock-signed-proof');assert.equal(remote.createCount,1);assert.equal(remote.finishCount,1);assert.equal((await sandboxStatus(pool,other)).state,'not_started');await worker();assert.equal(remote.finishCount,1);assert(!JSON.stringify(status).includes(credentials.apiSecret));assert(!JSON.stringify(status).includes('never-return-this-token'));assert(!JSON.stringify(status).includes('private-test-puk'));
+const row=(await query('SELECT * FROM fiskaly_test_setup WHERE company_id=$1',[company])).rows[0];assert(!row.secret_payload.includes('private-test-puk'));await requestFiskalySetup(pool,company,credentials);assert.equal((await sandboxStatus(pool,company)).state,'complete');await assert.rejects(requestFiskalySetup(pool,company,unrelated));
+// Lost finish response: provider has signed already. Resume retrieves same transaction, never signs twice.
+await query('DELETE FROM fiskaly_test_setup WHERE company_id=$1',[company]);await requestFiskalySetup(pool,company,credentials);const interrupted=provider();interrupted.loseNextFinish();const restartRow=(await query('SELECT * FROM fiskaly_test_setup WHERE company_id=$1',[company])).rows[0];await assert.rejects(runSandboxSetup(pool,restartRow,credentials,{env,fetcher:interrupted.fetcher}));const resumed=(await query('SELECT * FROM fiskaly_test_setup WHERE company_id=$1',[company])).rows[0];await runSandboxSetup(pool,resumed,credentials,{env,fetcher:interrupted.fetcher});assert.equal(interrupted.createCount,1);assert.equal(interrupted.finishCount,1);assert.equal((await sandboxStatus(pool,company)).state,'complete');
+// A provider LIVE resource is rejected before administrative mutation.
+let writes=0;await assert.rejects(runSandboxSetup(pool,restartRow,credentials,{env,fetcher:async(url,options)=>{if(url.endsWith('/auth'))return {ok:true,status:200,json:async()=>({access_token:'x'})};if(options.method!=='GET')writes++;return {ok:true,status:200,json:async()=>({_env:'LIVE',state:'CREATED'})}}}),e=>e.safeCode==='environment_not_test');assert.equal(writes,0);
+// Wrong/live key never makes an outbound request.
+await assert.rejects(runSandboxSetup(pool,restartRow,{...credentials,apiKey:'live_wrong'},{env,fetcher:()=>{throw Error('must not call')}}));
+assert.equal((await query("SELECT count(*)::int n FROM information_schema.tables WHERE table_name IN ('orders','receipts','payments','tse_transactions')")).rows[0].n,0);
+await db.close();console.log('Fiskaly sandbox passed: scoped authorized request, encryption, TEST environment enforcement, persistent IDs, lifecycle ordering, advisory single-flight, signature evidence, restart after lost response without duplication, no sales/receipt mutations.');
