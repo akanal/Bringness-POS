@@ -1,0 +1,10 @@
+#categories>button{--category-bg:#fff0e3;--category-accent:#bd652d;background:var(--category-bg);color:#203347;border:1px solid color-mix(in srgb,var(--category-accent) 28%,white);box-shadow:inset 4px 0 var(--category-accent);transition:background .15s,border-color .15s,box-shadow .15s}
+#categories>button[data-tone="1"]{--category-bg:#e9f4ee;--category-accent:#46775b}
+#categories>button[data-tone="2"]{--category-bg:#eaf2fa;--category-accent:#4e779d}
+#categories>button[data-tone="3"]{--category-bg:#fbf3db;--category-accent:#96782d}
+#categories>button[data-tone="4"]{--category-bg:#f1ecf8;--category-accent:#80659d}
+#categories>button[data-tone="5"]{--category-bg:#faebef;--category-accent:#a56077}
+#categories>button[aria-pressed="true"]{background:var(--category-bg);color:#152638;border-color:var(--category-accent);box-shadow:inset 4px 0 var(--category-accent),0 0 0 2px var(--category-accent);font-weight:800}
+#categories>button:hover{border-color:var(--category-accent)}
+#categories>button:focus-visible{outline:3px solid #152638;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){#categories>button{transition:none}}

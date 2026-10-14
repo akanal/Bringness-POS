@@ -94,3 +94,5 @@ Continue authorized development autonomously and preserve established behavior a
 - Application-owned templates render before Brevo SMTP submission, no Brevo API/template IDs or credentials in source. Invitation/password/PIN preserve existing one-time links and expiration.
 - Paid platform billing events queue a deduplicated invoice PDF to the active account owner. Failed recurring payments only: one reminder after seven days; exact amount/subscription/status verified against Mollie immediately before sending, suppress after confirmed later subscription payment and on canceled/resolved events. No abandoned checkout reminders, fees, new debits or fabricated invoice numbers.
 - billing_mail_events starts with future webhook events; no bulk historical mail. Preserve encrypted transactional queue, retry and ambiguous-submission review.
+
+- 2026-10-14: Owner authorized subtle category colors in POS and waiter view. Shared stable category-ID palette; selected state remains explicit with border and weight. Preserve menu/order behavior.
