@@ -67,9 +67,9 @@ http.createServer = function patchedCreateServer(listener) {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
       if(appMode!=='ai' && req.method==='GET' && new URL(req.url,'http://local').pathname==='/health/fiskaly-test'){
-        const row=(await platformGatewayPool.query('SELECT state FROM fiskaly_test_setup WHERE request_id=$1',[onboardingRequest.requestId])).rows[0];
+        const row=(await platformGatewayPool.query('SELECT state,phase,last_error FROM fiskaly_test_setup WHERE request_id=$1',[onboardingRequest.requestId])).rows[0];
         res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
-        return res.end(JSON.stringify({mode:'TEST',state:row?.state||'waiting',signatureConfirmed:row?.state==='complete'}));
+        return res.end(JSON.stringify({mode:'TEST',state:row?.state||'waiting',signatureConfirmed:row?.state==='complete',phase:row?.phase||null,errorCode:row?.last_error||null}));
       }
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;

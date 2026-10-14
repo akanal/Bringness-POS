@@ -16,7 +16,7 @@ export async function runSandboxSetup(pool,row,credentials,{env=process.env,fetc
  validateTestCredentials(credentials);if(credentialFingerprint(credentials.apiKey)!==row.credential_fingerprint)problem('credential_changed');
  let token;
  async function call(method,path,data,{allow404=false,resource=false}={}){
-  let response;try{response=await fetcher(base+path,{method,redirect:'error',signal:AbortSignal.timeout(20000),headers:{'content-type':'application/json','request-id':crypto.randomUUID(),...(token?{authorization:'Bearer '+token}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{})})}catch{problem('provider_unreachable')}
+  let response;try{response=await fetcher(base+path,{method,redirect:'error',signal:AbortSignal.timeout(method==='PATCH'&&data?.state==='UNINITIALIZED'?45000:20000),headers:{'content-type':'application/json','request-id':crypto.randomUUID(),...(token?{authorization:'Bearer '+token}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{})})}catch{problem('provider_unreachable')}
   if(response.status===404&&allow404)return null;
   if(!response.ok)problem('provider_http_'+response.status);
   let result;try{result=await response.json()}catch{problem('provider_invalid_response')}
@@ -35,7 +35,7 @@ export async function runSandboxSetup(pool,row,credentials,{env=process.env,fetc
  let admin=false;
  try{
   await call('POST',tssPath+'/admin/auth',{admin_pin:secret.pin});admin=true;
-  if(tss.state==='UNINITIALIZED'){tss=await call('PATCH',tssPath,{state:'INITIALIZED'},{resource:true});await save('initialized')}
+  if(tss.state==='UNINITIALIZED'){tss=await call('PATCH',tssPath,{state:'INITIALIZED',description:'Bringness TEST TSE'},{resource:true});await save('initialized')}
   if(tss.state!=='INITIALIZED')problem('tss_not_initialized');
   let client=await call('GET',tssPath+'/client/'+row.client_id,undefined,{allow404:true,resource:true});
   if(!client)client=await call('PUT',tssPath+'/client/'+row.client_id,{serial_number:'BRINGNESS-TEST-'+row.client_id},{resource:true});
