@@ -104,3 +104,6 @@ Continue authorized development autonomously and preserve established behavior a
 - Integration/reseller inquiry sent to official sales@swissbit.com on 2026-10-14, requesting Windows SDK/redistribution terms, evaluation device, small-volume prices, lifetime, supply and support terms. Await actual response; do not invent contract or pricing.
 - At the next website editing session, revisit the Download/pricing TSE section. After supplier conditions and Bringness compatibility are confirmed, offer a direct link to the exact approved model first; own accessory sales are a later option once procurement/delivery/support are settled. No immediate shop implementation requested and no premature purchase recommendation.
 - Existing public price/download and pre-payment notices disclose separate hardware procurement and unfinished offline/TSE integration.
+
+## TSE navigation confirmed 2026-10-14
+- TSE belongs inside Settings, removed from More. Settings retains existing administrative PIN and manager/owner authorization. TSE direct module entry also requires the same administrative unlock; preserve timeout and lock on leaving protected modules. Service panel remains unchanged.
