@@ -38,8 +38,8 @@ async function sendResetMail(email,token,returnTo){
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   await sendSmtpMail({
     from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
-    html:`<h1>Passwort zurücksetzen</h1><p><a href="${escape(link)}" style="display:inline-block;background:#183d35;color:#fff;padding:16px 24px;border-radius:24px;text-decoration:none">Neues Passwort festlegen</a></p><p>Der Button ist 30 Minuten gültig. Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p>`,
-    text:"Öffne diesen Link, um dein Passwort innerhalb von 30 Minuten neu zu setzen:\n\n"+link+"\n\nWenn du den Reset nicht angefordert hast, ignoriere diese Nachricht."
+    html:`<h1>Passwort zurücksetzen</h1><p><a href="${escape(link)}" style="display:inline-block;background:#183d35;color:#fff;padding:16px 24px;border-radius:24px;text-decoration:none">Neues Passwort festlegen</a></p><p>Der Button ist 30 Minuten gültig. Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie bitte diese E-Mail.</p>`,
+    text:"Öffnen Sie diesen Link, um Ihr Passwort innerhalb von 30 Minuten neu zu setzen:\n\n"+link+"\n\nWenn Sie die Rücksetzung nicht angefordert haben, ignorieren Sie bitte diese Nachricht."
   });
 }
 

@@ -76,6 +76,7 @@ jobs:
           node server/ai-tests/fiskaly-test.mjs
           node server/ai-tests/fiskaly-sandbox.mjs
           node server/ai-tests/transactional-mail.mjs
+          node server/ai-tests/billing-mail.mjs
           node server/ai-tests/personnel.mjs
           node server/ai-tests/personnel-service.mjs
           node server/ai-tests/table-waiters.mjs

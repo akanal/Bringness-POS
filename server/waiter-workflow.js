@@ -1,3 +1,4 @@
+import {accessMail} from './mail-templates.js';
 import {clearLoginAttempts} from './auth-attempts.js';
 import crypto from 'node:crypto';
 import {pinHash} from './personnel.js';
@@ -25,7 +26,7 @@ export function createWaiterWorkflow(pool){return async(req,res)=>{
   if((await c.query("SELECT 1 FROM staff_invitations WHERE user_id=$1 AND created_at>now()-interval '2 minutes' AND used_at IS NULL AND expires_at>now()",[invitation.user_id])).rowCount){await c.query('COMMIT');return send(res,200,{state:'sent',message:'Eine aktuelle Einladung ist bereits unterwegs. Bitte prüfe deine E-Mail und den Spamordner.'})}
   const next=crypto.randomBytes(32).toString('hex'),origin=new URL(process.env.PUBLIC_BASE_URL||'https://bringness.de');if(origin.protocol!=='https:')fail('Öffentliche HTTPS-Adresse fehlt',503);
   await c.query('UPDATE staff_invitations SET used_at=now() WHERE user_id=$1 AND used_at IS NULL',[invitation.user_id]);await c.query("INSERT INTO staff_invitations(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '48 hours')",[digest(next),invitation.user_id]);
-  await enqueueMail(c,'staff-reinvite:'+digest(next),invitation.email,{expiresAt:new Date(Date.now()+172800000).toISOString(),subject:'Bringness – neuer Einrichtungslink',text:`Richte deinen Kellnerzugang über diesen Link ein:\n${origin.origin}/service/#activate=${next}\nLege Name und Passwort fest, danach deine vierstellige Stempel-PIN. Dieser Link gilt 48 Stunden.`});await c.query('COMMIT');return send(res,200,{state:'sent',message:'Ein neuer Einrichtungslink wird an deine hinterlegte E-Mail gesendet. Bitte auch den Spamordner prüfen.'});
+  await enqueueMail(c,'staff-reinvite:'+digest(next),invitation.email,{expiresAt:new Date(Date.now()+172800000).toISOString(),...accessMail('invitation',{link:origin.origin+'/service/#activate='+next})});await c.query('COMMIT');return send(res,200,{state:'sent',message:'Ein neuer Einrichtungslink wird an deine hinterlegte E-Mail gesendet. Bitte auch den Spamordner prüfen.'});
  }
  if(p==='/api/v1/staff/recovery'&&req.method==='POST'){
   const email=cleanMailAddress(b.email),kind=b.kind;if(!['password','pin'].includes(kind))fail('Passwort oder Stempel-PIN auswählen');
@@ -35,7 +36,7 @@ export function createWaiterWorkflow(pool){return async(req,res)=>{
   if((await c.query("SELECT 1 FROM waiter_recovery WHERE user_id=$1 AND created_at>now()-interval '2 minutes'",[user.id])).rowCount){await c.query('COMMIT');return send(res,200,generic)}
   const token=crypto.randomBytes(32).toString('hex'),origin=new URL(process.env.PUBLIC_BASE_URL||'https://bringness.de');if(origin.protocol!=='https:')fail('Öffentliche HTTPS-Adresse fehlt',503);
   await c.query('DELETE FROM waiter_recovery WHERE user_id=$1 AND kind=$2',[user.id,kind]);await c.query("INSERT INTO waiter_recovery(token_hash,user_id,kind,expires_at) VALUES($1,$2,$3,now()+interval '30 minutes')",[digest(token),user.id,kind]);
-  await enqueueMail(c,'waiter-reset:'+digest(token),user.email,{expiresAt:new Date(Date.now()+1800000).toISOString(),subject:kind==='pin'?'Bringness – Stempel-PIN zurücksetzen':'Bringness – Passwort zurücksetzen',text:`Über diesen Link kannst du ${kind==='pin'?'deine vierstellige Stempel-PIN':'dein Passwort'} neu festlegen:\n${origin.origin}/service/#reset=${token}\nDer Link gilt 30 Minuten und kann einmal verwendet werden. Falls du ihn nicht angefordert hast, ignoriere diese E-Mail.`});await c.query('COMMIT');return send(res,200,generic);
+  await enqueueMail(c,'waiter-reset:'+digest(token),user.email,{expiresAt:new Date(Date.now()+1800000).toISOString(),...accessMail(kind,{link:origin.origin+'/service/#reset='+token})});await c.query('COMMIT');return send(res,200,generic);
  }
  if(p==='/api/v1/staff/reset'&&req.method==='POST'){
   if(!/^[a-f0-9]{64}$/.test(String(b.token||'')))fail('Ungültiger Link');

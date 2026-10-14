@@ -1,6 +1,1 @@
-{
-  "operation": "deploy",
-  "target": "pos",
-  "revision": "6f2f34d5b0ba0f8e49ea5f3d0c90896df500686b",
-  "requestId": "brevo-sender-config-20261014-1410"
-}
+{"operation":"deploy","target":"pos","requestId":"mail-templates-20261014"}

@@ -1,3 +1,4 @@
+import {migrateBillingMail,createBillingMail} from './billing-mail.js';
 import {createDutyPlanning,migrateDutyPlanning} from './duty-planning.js';
 import {createWaiterDelivery,migrateWaiterDelivery} from './waiter-push-delivery.js';
 import {createSandboxWorker,migrateFiskalySandbox,sandboxStatus,requestFiskalySetup,onboardingRequest} from './fiskaly-sandbox.js';
@@ -199,8 +200,9 @@ async function migrateWithRetry(){
       await migrateAccountantAccess();
       await migrateBillingTerms();
       await migrateTransactionalMail(platformGatewayPool);
+      await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
-      if(appMode!=='ai'){const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt});setInterval(()=>deliver().catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
+      if(appMode!=='ai'){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
       if (aiFeatures) await aiFeatures.migrateAiPlatform();
       const pricingPool = new pg.Pool({

@@ -1,3 +1,4 @@
+import {formatMail} from './mail-templates.js';
 // Retry only the SMTP handshake. A message is submitted once, never retried after DATA.
 export async function connectSmtp({env=process.env,createTransport}={}){
  const port=Number(env.SMTP_PORT||587);
@@ -9,4 +10,4 @@ export async function connectSmtp({env=process.env,createTransport}={}){
   try{await transport.verify();return transport}catch(error){transport.close();if(index===ports.length-1||!['ETIMEDOUT','ECONNECTION','ECONNREFUSED','ESOCKET'].includes(error?.code))throw error}
  }
 }
-export async function sendSmtpMail(message,options){const transport=await connectSmtp(options);try{return await transport.sendMail(message)}finally{transport.close()}}
+export async function sendSmtpMail(message,options){const transport=await connectSmtp(options);try{return await transport.sendMail(formatMail(message))}finally{transport.close()}}
