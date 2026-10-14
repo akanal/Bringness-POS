@@ -172,13 +172,7 @@ export async function handleRestaurantOwnerFeature(req,res){
         await c.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,guest_note,extras_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[o.id,item.pr.id,item.pr.name,item.unitPrice,item.pr.tax_rate,item.qty,item.note||null,JSON.stringify(snapshot)]);
       }
       await c.query("UPDATE dining_tables SET status='open' WHERE id=$1",[t.id]);
-      const pushes=(await c.query("SELECT wps.endpoint,wps.subscription FROM dining_tables dt JOIN employees e ON (e.id=dt.waiter_employee_id OR e.id=ANY(dt.waiter_employee_ids)) AND e.active=true JOIN waiter_push_subscriptions wps ON wps.user_id=e.user_id WHERE dt.id=$1",[t.id])).rows;
       await c.query("COMMIT");
-      if(pushes.length&&process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY){
-        webpush.setVapidDetails(process.env.VAPID_SUBJECT||"mailto:info@bringness.de",process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);
-        const payload=JSON.stringify({title:"Neue Bestellung · "+t.table_name,body:"Eine neue QR-Bestellung ist eingegangen.",url:"/service/"});
-        Promise.allSettled(pushes.map(async row=>{try{await webpush.sendNotification(row.subscription,payload,{TTL:300,urgency:"high"})}catch(e){if(e.statusCode===404||e.statusCode===410)await pool.query("DELETE FROM waiter_push_subscriptions WHERE endpoint=$1",[row.endpoint])}}));
-      }
       json(res,201,{orderId:o.id,totalCents:total,emailReceiptRequested:!!email,emailDeliveryConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM)});
       return true;
     }catch(error){await c.query("ROLLBACK");if(error.code==="22P02")return json(res,400,{error:"Ungültiger Artikel oder Beilage"});throw error}finally{c.release()}
@@ -254,7 +248,7 @@ export async function handleRestaurantOwnerFeature(req,res){
     if(u.role!=="waiter")return json(res,403,{error:"Kein Kellnerkonto"});
     const q=await pool.query(`SELECT ws.id,ws.starts_at,ws.ends_at,ws.note,ws.recurrence,r.name restaurant_name
       FROM waiter_schedules ws JOIN employees e ON e.id=ws.employee_id JOIN restaurants r ON r.id=ws.restaurant_id
-      WHERE e.user_id=$1 AND e.active=true AND ws.ends_at>now()-interval '1 day'
+      WHERE e.user_id=$1 AND e.active=true AND ws.coverage_state<>'open' AND ws.ends_at>now()-interval '1 day'
       ORDER BY ws.starts_at LIMIT 100`,[u.id]);
     json(res,200,{schedules:q.rows}); return true;
   }

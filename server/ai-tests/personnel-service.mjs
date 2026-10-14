@@ -36,10 +36,10 @@ assert.equal((await request('/api/v1/waiter/bootstrap',null,user2)).tables.lengt
 assert.equal((await request('/api/v1/waiter/tables/'+table,null,user2)).status,200);
 assert.equal((await request('/api/v1/waiter/orders/correct',{orderId:qrOrder,itemId:qrItem,qty:2},user2)).status,200);
 await db.query("INSERT INTO waiter_push_subscriptions VALUES($1,'https://push.second','{}')",[user2]);
-const multiPush=source.match(/const waiterPush=\(await c\.query\(\"([^\"]+)\"/)[1];assert.equal((await pool.query(multiPush,[table])).rowCount,2);
+const deliverySource=fs.readFileSync(new URL('../waiter-push-delivery.js',import.meta.url),'utf8');const multiPush=deliverySource.match(/SELECT NEW.id,e.user_id,p.endpoint (FROM dining_tables[\s\S]*?) ON CONFLICT/)[1].replace('NEW.table_id','$1');const recipientSql='SELECT p.endpoint '+multiPush;assert.equal((await pool.query(recipientSql,[table])).rowCount,2);
 await tableWaiterAssignments(pool,company,false,'PUT',{restaurantId:restaurant,tableId:table,waiterIds:[employee]});
 assert.equal((await request('/api/v1/waiter/tables/'+table,null,user2)).status,404);
-const pushSql=source.match(/const waiterPush=\(await c\.query\("([^"]+)"/)[1];assert.equal((await pool.query(pushSql,[table])).rowCount,1);
+const pushSql=recipientSql;assert.equal((await pool.query(pushSql,[table])).rowCount,1);
 await db.query("UPDATE employees SET duty_state='paused'");assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);assert.equal((await pool.query(pushSql,[table])).rowCount,1);
 await db.query("UPDATE employees SET duty_state='off'");assert.equal((await request('/api/v1/waiter/alerts')).dutyState,'off');assert.equal((await pool.query(pushSql,[table])).rowCount,1);assert.equal((await pool.query('SELECT id FROM orders')).rowCount,1);
 await db.query("UPDATE employees SET duty_state='working'");

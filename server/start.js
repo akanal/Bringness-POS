@@ -1,3 +1,5 @@
+import {createDutyPlanning,migrateDutyPlanning} from './duty-planning.js';
+import {createWaiterDelivery,migrateWaiterDelivery} from './waiter-push-delivery.js';
 import {createSandboxWorker,migrateFiskalySandbox,sandboxStatus,requestFiskalySetup,onboardingRequest} from './fiskaly-sandbox.js';
 import {createFiskalyTest,migrateFiskalyTest} from './fiskaly-test.js';
 import {createPackageAccess} from './package-access.js';
@@ -54,6 +56,7 @@ const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
+const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
@@ -74,6 +77,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
       if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
+      if (appMode!=='ai' && await handleDutyPlanning(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
       if (appMode!=='ai' && await handleMailStatus(req,res)) return;
@@ -141,6 +145,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
         if (!html.includes('/personnel-report.js')) html = html.replace("</body>", '<script src="/personnel-report.js?v=20261012"></script></body>');
+        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js"></script></body>');
         if (!html.includes('/pos/personnel.js')) html = html.replace("</body>", '<script src="/pos/personnel.js"></script></body>');
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
       }
@@ -150,6 +155,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {
+        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js"></script></body>');
         if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
@@ -173,6 +179,8 @@ async function migrateWithRetry(){
   for(let attempt=1;attempt<=12;attempt++){
     try{
       await migrateRestaurantOwnerFeatures();
+      await migrateDutyPlanning(platformGatewayPool);
+      await migrateWaiterDelivery(platformGatewayPool);
       await migratePersonnel(platformGatewayPool);
       await migrateWaiterWorkflow(platformGatewayPool);
       await migrateDisplays(platformGatewayPool);
@@ -214,7 +222,7 @@ async function migrateWithRetry(){
   }
 }
 migrateWithRetry().then(()=>{
- if(appMode!=='ai'){const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
+ if(appMode!=='ai'){const deliver=createWaiterDelivery(platformGatewayPool);setInterval(()=>deliver().catch(()=>console.error('Waiter delivery unavailable')),3000).unref();const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
 });
 
 const availabilityPool = new pg.Pool({
