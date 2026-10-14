@@ -96,3 +96,5 @@ Continue authorized development autonomously and preserve established behavior a
 - billing_mail_events starts with future webhook events; no bulk historical mail. Preserve encrypted transactional queue, retry and ambiguous-submission review.
 
 - 2026-10-14: Owner authorized subtle category colors in POS and waiter view. Shared stable category-ID palette; selected state remains explicit with border and weight. Preserve menu/order behavior.
+
+- Waiter categories: owner authorized native horizontal swipe and dark selected category with white text, orange underline and check. Preserve horizontal scroll position when category contents rerender; POS category style unchanged.

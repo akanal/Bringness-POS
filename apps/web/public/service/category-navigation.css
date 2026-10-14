@@ -1,0 +1,7 @@
+/* Service menu: native horizontal swipe, with an unmistakable selected tab. */
+#categories.tabs{display:flex;flex-wrap:nowrap;gap:10px;width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;padding:4px 4px 12px;box-sizing:border-box;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#7890a2 #edf1f3;overscroll-behavior-x:contain}
+#categories.tabs>button{flex:0 0 auto;white-space:nowrap;min-height:44px;border-width:1px}
+#categories.tabs>button[aria-pressed="true"]{background:#142537;color:#fff;border-color:#142537;box-shadow:inset 0 -4px #ff7628;font-weight:800}
+#categories.tabs>button::before{content:"";display:inline-block;width:1em;margin-right:5px}
+#categories.tabs>button[aria-pressed="true"]::before{content:"✓";color:#ffb47d}
+#categories.tabs>button:focus-visible{outline:3px solid #ff7628;outline-offset:2px}
