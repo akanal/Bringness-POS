@@ -1,3 +1,4 @@
+import {createFiskalyTest,migrateFiskalyTest} from './fiskaly-test.js';
 import {createPackageAccess} from './package-access.js';
 import {createWaiterWorkflow,migrateWaiterWorkflow} from './waiter-workflow.js';
 import {migrateTransactionalMail,createMailWorker,createMailStatus} from './transactional-mail.js';
@@ -56,6 +57,7 @@ const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
 const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
+const handleFiskalyTest=createFiskalyTest(platformGatewayPool);
 
 // Add modular API routes without destabilising the large legacy server file.
 const originalCreateServer = http.createServer.bind(http);
@@ -99,6 +101,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;
+      if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
@@ -172,6 +175,7 @@ async function migrateWithRetry(){
       await migrateCenter();
       await migratePublicReceipts();
       await migrateTseIntegration();
+      await migrateFiskalyTest(platformGatewayPool);
       await migrateBillingAccess();
       await migrateDeviceLicense();
       await migrateRemoteSupport(platformGatewayPool);

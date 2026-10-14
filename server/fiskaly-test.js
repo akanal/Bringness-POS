@@ -1,0 +1,34 @@
+import crypto from 'node:crypto';
+// TEST onboarding only. Never selected by the receipt signing worker.
+export const FISKALY_AUTH_URL='https://kassensichv-middleware.fiskaly.com/api/v2/auth';
+const fail=(message,status=400)=>{throw Object.assign(Error(message),{status,publicMessage:message})};
+const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(data));return true};
+function encryptionKey(env){const material=env.FISKALY_CREDENTIAL_KEY||env.PASSWORD_PEPPER||env.DATABASE_URL;if(!material)fail('Geschützte Speicherung ist noch nicht verfügbar.',503);return crypto.createHash('sha256').update('bringness-fiskaly-test-v1\0'+material).digest()}
+export function sealTestCredentials(value,env=process.env){const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',encryptionKey(env),iv);cipher.setAAD(Buffer.from(value.companyId));return Buffer.concat([iv,cipher.update(JSON.stringify(value)),cipher.final(),cipher.getAuthTag()]).toString('base64')}
+export function openTestCredentials(payload,companyId,env=process.env){const b=Buffer.from(payload,'base64'),cipher=crypto.createDecipheriv('aes-256-gcm',encryptionKey(env),b.subarray(0,12));cipher.setAAD(Buffer.from(companyId));cipher.setAuthTag(b.subarray(-16));return JSON.parse(Buffer.concat([cipher.update(b.subarray(12,-16)),cipher.final()]).toString())}
+export async function migrateFiskalyTest(pool){await pool.query(`CREATE TABLE IF NOT EXISTS fiskaly_test_credentials(company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,payload text NOT NULL,updated_at timestamptz NOT NULL DEFAULT now(),checked_at timestamptz,status text NOT NULL CHECK(status IN ('connected','failed')));`)}
+async function body(req){let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>8192)fail('Anfrage zu groß.',413)}try{const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw Error();return value}catch{fail('Ungültige Anfrage.')}}
+export function validateTestCredentials(value){const apiKey=typeof value.apiKey==='string'?value.apiKey.trim():'',apiSecret=typeof value.apiSecret==='string'?value.apiSecret.trim():'';if(!/^test_[A-Za-z0-9_-]{8,250}$/.test(apiKey))fail('Bitte ausschließlich einen Fiskaly TEST-API-Schlüssel eingeben.');if(!apiSecret||apiSecret.length>2048||/[\s]/.test(apiSecret))fail('Bitte das API Secret vollständig eingeben.');return {apiKey,apiSecret}}
+export async function authenticateTest(credentials,fetcher=fetch){validateTestCredentials(credentials);let response;try{response=await fetcher(FISKALY_AUTH_URL,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json'},body:JSON.stringify({api_key:credentials.apiKey,api_secret:credentials.apiSecret})})}catch{fail('Fiskaly ist momentan nicht erreichbar. Bitte erneut testen.',502)}if(!response.ok){if([400,401,403].includes(response.status))fail('Fiskaly hat die TEST-Zugangsdaten abgelehnt. Bitte API-Schlüssel und Secret prüfen.',422);fail('Fiskaly konnte den Verbindungstest nicht abschließen. Bitte später erneut testen.',502)}let result;try{result=await response.json()}catch{fail('Ungültige Antwort von Fiskaly.',502)}if(typeof result.access_token!=='string'||!result.access_token)fail('Fiskaly hat keinen Zugang bestätigt.',502);return true}
+export function createFiskalyTest(pool,{env=process.env,fetcher=fetch}={}){
+ const attempts=new Map();
+ return async(req,res)=>{
+  const path=new URL(req.url,'http://local').pathname,base='/api/v1/fiskaly-test';if(path!==base&&path!==base+'/test')return false;
+  try{
+   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');if(!token)return send(res,401,{error:'Bitte zuerst in Bringness anmelden.'});
+   const user=(await pool.query(`SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)`,[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
+   if(!user)return send(res,401,{error:'Bitte erneut in Bringness anmelden.'});if(!['owner','admin'].includes(user.role))return send(res,403,{error:'Nur Inhaber und Administratoren dürfen TSE-Zugangsdaten verwalten.'});
+   const companyId=user.company_id;
+   if(path===base&&req.method==='GET'){const row=(await pool.query('SELECT status,updated_at,checked_at FROM fiskaly_test_credentials WHERE company_id=$1',[companyId])).rows[0];return send(res,200,{mode:'TEST',configured:!!row,status:row?.status||'not_configured',checkedAt:row?.checked_at||null})}
+   if(path===base&&req.method==='DELETE'){await pool.query('DELETE FROM fiskaly_test_credentials WHERE company_id=$1',[companyId]);return send(res,200,{mode:'TEST',configured:false,message:'TEST-Zugangsdaten entfernt.'})}
+   if(!(path===base&&req.method==='PUT'||path===base+'/test'&&req.method==='POST'))return send(res,405,{error:'Methode nicht erlaubt.'});
+   const now=Date.now();for(const [id,time] of attempts)if(now-time>10000)attempts.delete(id);if(attempts.has(companyId))return send(res,429,{error:'Bitte zehn Sekunden bis zum nächsten Verbindungstest warten.'});attempts.set(companyId,now);
+   let credentials,payload;
+   if(req.method==='PUT'){credentials=validateTestCredentials(await body(req));payload=sealTestCredentials({...credentials,companyId},env)}else{const row=(await pool.query('SELECT payload FROM fiskaly_test_credentials WHERE company_id=$1',[companyId])).rows[0];if(!row)fail('Bitte zuerst TEST-Zugangsdaten speichern.');payload=row.payload;try{credentials=openTestCredentials(payload,companyId,env)}catch{fail('Gespeicherte Zugangsdaten können nicht geöffnet werden. Bitte erneut eingeben.',503)}}
+   try{await authenticateTest(credentials,fetcher)}catch(error){if(req.method==='POST')await pool.query("UPDATE fiskaly_test_credentials SET status='failed',checked_at=now() WHERE company_id=$1 AND payload=$2",[companyId,payload]);throw error}
+   if(req.method==='PUT')await pool.query(`INSERT INTO fiskaly_test_credentials(company_id,payload,status,checked_at) VALUES($1,$2,'connected',now()) ON CONFLICT(company_id) DO UPDATE SET payload=excluded.payload,status='connected',updated_at=now(),checked_at=now()`,[companyId,payload]);
+   else await pool.query("UPDATE fiskaly_test_credentials SET status='connected',checked_at=now() WHERE company_id=$1 AND payload=$2",[companyId,payload]);
+   return send(res,200,{mode:'TEST',configured:true,status:'connected',message:'Fiskaly TEST-Verbindung erfolgreich. Zugangsdaten sind geschützt gespeichert. Die TSE ist noch nicht eingerichtet.'});
+  }catch(error){return send(res,error.status||500,{error:error.publicMessage||'TEST-Einrichtung momentan nicht verfügbar.'})}
+ };
+}

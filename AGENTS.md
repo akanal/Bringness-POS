@@ -76,3 +76,8 @@ Continue authorized development autonomously and preserve established behavior a
 - Download base: 399 EUR net once; online base: 29.99 EUR net/month. Optional table-QR subscription: 29.99 EUR net/month for either base or restaurant.
 - QR addon enables table ordering and service access, never Center, display control or personnel management. Center remains exclusive to restaurant. Preserve approved guest/waiter QR, reservation and counter/pickup workflows.
 - Cancellation takes effect after the paid period: base packages lose table access/new QR ordering, retain ordinary POS and all stored orders/receipts. Restaurant keeps its tables.
+
+## Fiskaly TEST onboarding 2026-10-14
+- Dedicated owner/admin page: /pos/fiskaly-test.html; API /api/v1/fiskaly-test. TEST credentials only, authenticated connection check before encrypted persistence. No secrets or provider tokens in browser storage, responses, logs or source.
+- Credentials are company-scoped in fiskaly_test_credentials. AES-256-GCM uses FISKALY_CREDENTIAL_KEY, otherwise existing PASSWORD_PEPPER or DATABASE_URL, with company binding. Preserve the encryption configuration across deployment; changing its source requires credential re-entry or a planned migration.
+- This module authenticates TEST access only; no TSS/client provisioning, sale signing, LIVE activation or contract. Keep local TSE worker and approved POS/waiter/guest flows separate.
