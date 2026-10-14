@@ -4,7 +4,7 @@ import {FISKALY_AUTH_URL,validateTestCredentials,sealTestCredentials,openTestCre
 const base=FISKALY_AUTH_URL.replace(/\/auth$/,'');
 export const credentialFingerprint=key=>crypto.createHash('sha256').update(key).digest('hex');
 const problem=code=>{throw Object.assign(Error('Fiskaly TEST setup failed'),{safeCode:code})};
-export const onboardingRequest=JSON.parse(fs.readFileSync(new URL('../ops/fiskaly-test-request.json',import.meta.url),'utf8'));
+export const onboardingRequest=JSON.parse(fs.readFileSync(new URL('./fiskaly-test-request.json',import.meta.url),'utf8'));
 export async function migrateFiskalySandbox(pool){await pool.query(`CREATE TABLE IF NOT EXISTS fiskaly_test_setup(company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,credential_fingerprint text NOT NULL,request_id uuid UNIQUE NOT NULL,tss_id uuid NOT NULL,client_id uuid NOT NULL,tx_id uuid NOT NULL,phase text NOT NULL DEFAULT 'pending',state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','running','failed','complete')),secret_payload text,proof jsonb,last_error text,updated_at timestamptz NOT NULL DEFAULT now(),signed_at timestamptz,attempts int NOT NULL DEFAULT 0);`)}
 export async function requestFiskalySetup(pool,companyId,credentials,requestId=crypto.randomUUID()){
  validateTestCredentials(credentials);await pool.query(`INSERT INTO fiskaly_test_setup(company_id,credential_fingerprint,request_id,tss_id,client_id,tx_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(company_id) DO NOTHING`,[companyId,credentialFingerprint(credentials.apiKey),requestId,crypto.randomUUID(),crypto.randomUUID(),crypto.randomUUID()]);

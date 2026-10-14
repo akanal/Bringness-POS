@@ -35,7 +35,7 @@ export function createFiskalyTest(pool,{env=process.env,fetcher=fetch,sandboxSta
    try{await authenticateTest(credentials,fetcher)}catch(error){if(req.method==='POST')await pool.query("UPDATE fiskaly_test_credentials SET status='failed',checked_at=now() WHERE company_id=$1 AND payload=$2",[companyId,payload]);throw error}
    if(req.method==='PUT')await pool.query(`INSERT INTO fiskaly_test_credentials(company_id,payload,status,checked_at) VALUES($1,$2,'connected',now()) ON CONFLICT(company_id) DO UPDATE SET payload=excluded.payload,status='connected',updated_at=now(),checked_at=now()`,[companyId,payload]);
    else await pool.query("UPDATE fiskaly_test_credentials SET status='connected',checked_at=now() WHERE company_id=$1 AND payload=$2",[companyId,payload]);
-   return send(res,200,{mode:'TEST',configured:true,status:'connected',message:'Fiskaly TEST-Verbindung erfolgreich. Zugangsdaten sind geschützt gespeichert. Die TSE ist noch nicht eingerichtet.'});
+   return send(res,200,{mode:'TEST',configured:true,status:'connected',message:'Fiskaly TEST-Verbindung erfolgreich. Zugangsdaten sind geschützt gespeichert. Der TEST-Zugang ist bereit.'});
   }catch(error){return send(res,error.status||500,{error:error.publicMessage||'TEST-Einrichtung momentan nicht verfügbar.'})}
  };
 }
