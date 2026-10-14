@@ -98,3 +98,9 @@ Continue authorized development autonomously and preserve established behavior a
 - 2026-10-14: Owner authorized subtle category colors in POS and waiter view. Shared stable category-ID palette; selected state remains explicit with border and weight. Preserve menu/order behavior.
 
 - Waiter categories: owner authorized native horizontal swipe and dark selected category with white text, orange underline and check. Preserve horizontal scroll position when category contents rerender; POS category style unchanged.
+
+## Hardware TSE procurement and deferred website follow-up 2026-10-14
+- Owner wants permanently offline Windows POS supported by tested local hardware TSE. Swissbit Hardware TSE 2 USB is an evaluation candidate, not an integrated or released device.
+- Integration/reseller inquiry sent to official sales@swissbit.com on 2026-10-14, requesting Windows SDK/redistribution terms, evaluation device, small-volume prices, lifetime, supply and support terms. Await actual response; do not invent contract or pricing.
+- At the next website editing session, revisit the Download/pricing TSE section. After supplier conditions and Bringness compatibility are confirmed, offer a direct link to the exact approved model first; own accessory sales are a later option once procurement/delivery/support are settled. No immediate shop implementation requested and no premature purchase recommendation.
+- Existing public price/download and pre-payment notices disclose separate hardware procurement and unfinished offline/TSE integration.
