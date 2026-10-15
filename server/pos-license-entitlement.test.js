@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {activateVerifiedPosLicense} from "./pos-license-entitlement.js";
 const expected={paymentId:"tr_123ABC",companyId:"company-test",planCode:"download_license",checkoutId:"checkout-test",ownerEmailConfirmed:true};
-const confirmed={verified:true,paymentId:"tr_123ABC",companyId:"company-test",planCode:"pos_base_monthly",checkoutId:"checkout-test"};
+const confirmed={verified:true,paymentId:"tr_123ABC",companyId:"company-test",planCode:"download_license",checkoutId:"checkout-test"};
 function mockPool(existing=null) {
  const calls=[];
  const client={
