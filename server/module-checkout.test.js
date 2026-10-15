@@ -21,3 +21,24 @@ test('only verified paid active subscriptions grant access',()=>{
  for(const values of [{paymentStatus:'paid',subscriptionActive:true},{verifiedPayment:true,paymentStatus:'open',subscriptionActive:true},{verifiedPayment:true,paymentStatus:'paid',subscriptionActive:false}])
   assert.equal(mayActivateModule(values),false);
 });
+
+import {planModuleBasket} from './module-checkout.js';
+test('Center includes mandatory table management at 39.89 net',()=>{
+ const p=planModuleCheckout({base:true,requestedModule:'center_monthly'});
+ assert.deepEqual(p.items,['center_monthly','table_management_monthly']);
+ assert.equal(p.amountNetCents,3989);
+});
+test('Center and restaurant QR cannot be booked together',()=>{
+ assert.throws(()=>planModuleBasket({base:true,requestedModules:['center_monthly','table_qr_monthly']}),/CONFLICTING_OPERATING_MODES/);
+});
+test('Existing Center blocks counter and restaurant QR',()=>{
+ for(const module of ['table_qr_monthly','waiter_order_monthly'])
+  assert.throws(()=>planModuleBasket({base:true,activeModules:['center_monthly'],requestedModules:[module]}),/CONFLICTING_OPERATING_MODES/);
+});
+test('Center can be combined with personnel and display',()=>{
+ const p=planModuleBasket({base:true,requestedModules:['center_monthly','personnel_monthly','display_control_monthly']});
+ assert.equal(p.amountNetCents,6487);
+});
+test('Restaurant QR and counter are mutually exclusive',()=>{
+ assert.throws(()=>planModuleBasket({base:true,requestedModules:['table_qr_monthly','waiter_order_monthly']}),/CONFLICTING_OPERATING_MODES/);
+});
