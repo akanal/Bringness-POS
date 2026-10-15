@@ -16,3 +16,15 @@ test("shell fragments and all-application destructive requests are rejected",()=
     assert.throws(()=>selectOperation({event:"push",sha,changed:["ops/request.json"],request}));
   }
 });
+
+test("workflow-only changes default to read-only status, not a production deploy",()=>{
+  for(const path of [".github/workflows/netcup-operations.yml","ops/select-operation.js","ops/netcup-sandbox-preflight.sh"]){
+    assert.deepEqual(selectOperation({event:"push",sha,changed:[path]}),{operation:"status",target:"all",revision:""});
+  }
+});
+test("actual application changes still deploy even alongside workflow changes",()=>{
+  assert.deepEqual(selectOperation({event:"push",sha,changed:[".github/workflows/netcup-operations.yml","server/index.js"]}),{operation:"deploy",target:"pos",revision:sha});
+});
+test("an explicit status request takes precedence over application changes",()=>{
+  assert.deepEqual(selectOperation({event:"push",sha,changed:["ops/request.json","server/index.js"],request:{operation:"status",target:"all"}}),{operation:"status",target:"all",revision:""});
+});
