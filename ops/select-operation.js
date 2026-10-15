@@ -10,8 +10,11 @@ export function selectOperation({event, before, sha, inputOperation, inputTarget
   }else if(changed.includes("ops/request.json")){
     operation=request.operation;target=request.target;
     if(operation==="deploy")revision=request.revision||sha;
-  }else{
+  }else if(changed.some(path => path.startsWith("server/") || path.startsWith("apps/web/") || path.startsWith("db/") || path === "package.json" || path === "package-lock.json")){
     operation="deploy";target="pos";revision=sha;
+  }else{
+    // Workflow-only or documentation-only changes must never trigger a production deployment.
+    operation="status";target="all";
   }
   if(!["status","backup","restart","deploy"].includes(operation)||!["all","pos","ai"].includes(target))throw Error("Unknown operation or target");
   if(["restart","deploy"].includes(operation)&&target==="all")throw Error("Choose one application");
