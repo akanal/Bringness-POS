@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {verifyMonthlyMolliePayment} from "./pos-license-recurring-mollie-readback.js";
 
 const payment = {id:"tr_123",mode:"test",status:"paid",customerId:"cst_123",
-  subscriptionId:"sub_123",amount:{currency:"EUR",value:"29.99"},
+  subscriptionId:"sub_123",amount:{currency:"EUR",value:"35.69"},
   metadata:{bringnessCompanyId:"company1",bringnessPlanCode:"online_pos"}};
 const subscription = {id:"sub_123",mode:"test",status:"active",customerId:"cst_123"};
 const args = {apiKey:"test_example",paymentId:"tr_123",customerId:"cst_123",
