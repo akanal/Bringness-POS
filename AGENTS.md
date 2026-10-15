@@ -114,3 +114,7 @@ Continue authorized development autonomously and preserve established behavior a
 - Preserve existing functional implementations, UI workflows, stored orders/receipts/employees and prior data. Change only module allocation, entitlement checks and booking/activation.
 - Module booking/management belongs in Settings, requires owner role plus existing service/administrative PIN. Send time-limited single-use confirmation to verified owner email. Email GET must not itself activate purchases. Show exact product, price and duration; activate paid modules only after explicit confirmation and verified provider payment. Staff cannot book modules or incur charges.
 - Prices for new modules remain proposals, not approved live charges: tables 9.99, kitchen 9.99, displays 9.99, personnel 14.99 EUR net/month. Existing QR proposal 29.99 EUR net/month. No guessed final prices or automatic billing migration.
+
+## Owner correction: TSE included in online base 2026-10-15
+- Supersedes the separate online TSE pricing decision above: online base stays 29.99 EUR net/month including Cloud-TSE, not a paid optional module. Supplier contracts/pricing and real payment/server/support costs still require margin validation; no claim of live fiscal readiness.
+- Download base stays 399 EUR net once; inclusion of physical TSE has not been decided. Keep hardware procurement costs separate pending confirmation.
