@@ -20,6 +20,16 @@ class ComposeIsolationTests(unittest.TestCase):
         self.assertNotIn("sandbox.test.env", source)
         self.assertNotIn("sandbox-db-password", source)
         self.assertIn("COPY server ./server", source)
+        self.assertIn("node server/pos-license-sandbox-start.js", source)
+        self.assertNotIn("npm start", source)
+        self.assertNotIn("COPY apps/web", source)
+        self.assertNotIn("COPY db", source)
+
+    def test_billing_only_entrypoint_never_starts_pos_workers(self):
+        source = (ROOT.parent / "server" / "pos-license-sandbox-start.js").read_text()
+        self.assertIn("handlePosLicenseWebhook", source)
+        self.assertNotIn("server/start.js", source.split("const pool")[1])
+        self.assertNotIn("migrateBilling", source)
 
 if __name__ == "__main__":
     unittest.main()
