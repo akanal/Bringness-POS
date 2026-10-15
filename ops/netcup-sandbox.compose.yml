@@ -29,6 +29,8 @@ services:
         condition: service_healthy
     env_file:
       - ./sandbox.test.env
+    secrets:
+      - sandbox_db_password
     environment:
       APP_MODE: pos
       PORT: "3000"
