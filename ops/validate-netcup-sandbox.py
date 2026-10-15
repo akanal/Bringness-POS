@@ -60,7 +60,7 @@ def main():
         expected = {"APP_MODE": "pos", "PORT": "3000", "PGHOST": "sandbox-db",
                     "PGDATABASE": "bringness_billing_sandbox", "PGUSER": "sandbox_app", "NODE_ENV": "test"}
         errors = ["Unexpected sandbox runtime setting"] if any(os.environ.get(k) != v for k, v in expected.items()) else []
-        values = "\\n".join(f"{k}={v}" for k, v in os.environ.items() if k not in expected)
+        values = "\n".join(f"{k}={v}" for k, v in os.environ.items() if k not in expected)
         errors += validate(values, password_file.read_text())
     else:
         errors = validate(env_file.read_text(), password_file.read_text())
