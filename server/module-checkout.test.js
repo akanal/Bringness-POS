@@ -63,3 +63,19 @@ test('Existing legacy QR flag blocks Center purchase',()=>{
 test('Existing legacy QR flag blocks counter purchase',()=>{
  assert.throws(()=>planModuleBasket({base:true,tableQr:true,requestedModules:['waiter_order_monthly']}),/CONFLICTING_OPERATING_MODES/);
 });
+
+test('New customer can buy base POS and Center in one basket',()=>{
+ const p=planModuleBasket({requestedModules:['pos_base_monthly','center_monthly']});
+ assert.equal(p.amountNetCents,7488);
+ assert.deepEqual(p.lines[1].items,['center_monthly','table_management_monthly']);
+});
+test('New customer can buy base POS, QR, personnel and display',()=>{
+ const p=planModuleBasket({requestedModules:['pos_base_monthly','table_qr_monthly','personnel_monthly','display_control_monthly']});
+ assert.equal(p.amountNetCents,9986);
+});
+test('Existing base subscription cannot be purchased twice',()=>{
+ assert.throws(()=>planModuleBasket({base:true,requestedModules:['pos_base_monthly']}),/BASE_LICENSE_ALREADY_ACTIVE/);
+});
+test('Without base in cart or active license extra modules are rejected',()=>{
+ assert.throws(()=>planModuleBasket({requestedModules:['center_monthly','display_control_monthly']}),/BASE_LICENSE_REQUIRED/);
+});
