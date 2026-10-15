@@ -6,11 +6,10 @@ import {registerSandboxMonthlySubscription} from "./pos-license-recurring-regist
 export async function bootstrapAndRegisterSandboxMonthlySubscription({
  pool,apiKey,paymentId,customerId,companyId,planCode,webhookUrl,fetcher=fetch
 }){
- // Reject a second request for an already-registered plan before contacting
- // Mollie. The controller still must serialize concurrent requests.
+ // Serialize per company and plan in the sandbox before contacting Mollie.\n // The lock is session-scoped because provider API calls cannot be part of\n // a database transaction. Keep this connection until registration completes.
  if (!companyId || !["online_pos","restaurant_module","qr_module"].includes(planCode))
   return {created:false,reason:"invalid_company_or_plan"};
- const existing=await pool.query(
+ const lockClient=await pool.connect();\n try {\n await lockClient.query(\"SELECT pg_advisory_lock(hashtext($1),hashtext($2))\",[companyId,planCode]);\n const existing=await lockClient.query(
   "SELECT mollie_subscription_id,mollie_customer_id FROM sandbox_pos_monthly_subscriptions WHERE company_id=$1 AND plan_code=$2",
   [companyId,planCode]);
  if(existing.rowCount){
@@ -25,5 +24,4 @@ export async function bootstrapAndRegisterSandboxMonthlySubscription({
   companyId,planCode,customerId,subscriptionId:result.subscriptionId
  });
  return {...result,registered:registered.registered,
-  registrationReason:registered.reason||null};
-}
+  registrationReason:registered.reason||null};\n } finally {\n  try { await lockClient.query(\"SELECT pg_advisory_unlock(hashtext($1),hashtext($2))\",[companyId,planCode]); }\n  finally { lockClient.release(); }\n }\n}
