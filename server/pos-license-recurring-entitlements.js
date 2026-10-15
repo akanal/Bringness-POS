@@ -11,6 +11,6 @@ export async function getSandboxMonthlyEntitlements(pool,{companyId,at=new Date(
  );
  return {ok:true,companyId,plans:result.rows.map(row=>({
   planCode:row.plan_code,status:row.status,
-  ...sandboxMonthlyAccess(row,at)
+  ...sandboxMonthlyAccess({status:row.status,paidThrough:row.paid_through},at)
  }))};
 }
