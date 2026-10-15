@@ -7,7 +7,7 @@ import sys
 from urllib.parse import urlsplit, unquote
 
 HERE = pathlib.Path(__file__).resolve().parent
-REQUIRED = {"DATABASE_URL", "MOLLIE_API_KEY"}
+REQUIRED = {"DATABASE_URL", "MOLLIE_API_KEY", "SANDBOX_CHECKOUT_TOKEN", "SANDBOX_PUBLIC_BASE_URL"}
 
 def validate(env_text: str, db_password: str) -> list[str]:
     errors = []
@@ -25,6 +25,16 @@ def validate(env_text: str, db_password: str) -> list[str]:
         values[key] = value.strip().strip('"').strip("'")
     if REQUIRED - values.keys():
         errors.append("Missing required sandbox environment keys")
+    token = values.get("SANDBOX_CHECKOUT_TOKEN", "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{32,}", token):
+        errors.append("Dedicated sandbox checkout token required")
+    base_url = values.get("SANDBOX_PUBLIC_BASE_URL", "")
+    try:
+        base = urlsplit(base_url)
+        if base.scheme != "https" or not base.hostname or base.username or base.password or base.query or base.fragment or base.path not in ("", "/"):
+            errors.append("Dedicated HTTPS sandbox public URL required")
+    except ValueError:
+        errors.append("Invalid sandbox public URL")
     mollie = values.get("MOLLIE_API_KEY", "")
     if not re.fullmatch(r"test_[A-Za-z0-9_-]{12,}", mollie):
         errors.append("Mollie TEST key required")
@@ -73,7 +83,7 @@ def main():
         # Do not silently ignore unexpected integration credentials supplied
         # through the container environment.
         credential_markers = ("SECRET", "TOKEN", "API_KEY", "PASSWORD", "PRIVATE_KEY")
-        approved = {"MOLLIE_API_KEY"}
+        approved = {"MOLLIE_API_KEY", "SANDBOX_CHECKOUT_TOKEN"}
         if any(k not in approved and any(marker in k.upper() for marker in credential_markers)
                for k in os.environ):
             errors.append("Unexpected integration credential in sandbox runtime")
