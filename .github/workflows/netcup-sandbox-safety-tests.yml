@@ -9,6 +9,9 @@ on:
       - 'ops/netcup-sandbox-preflight.test.py'
       - 'ops/netcup-sandbox-dispatcher.sh'
       - 'ops/netcup-sandbox-dispatcher.test.py'
+      - 'ops/netcup-sandbox.compose.yml'
+      - 'ops/netcup-sandbox.Dockerfile'
+      - 'ops/netcup-sandbox-compose.test.py'
       - '.github/workflows/netcup-sandbox-safety-tests.yml'
   pull_request:
     paths:
@@ -31,3 +34,5 @@ jobs:
       - run: python3 ops/netcup-sandbox-preflight.test.py
       - run: bash -n ops/netcup-sandbox-dispatcher.sh
       - run: python3 ops/netcup-sandbox-dispatcher.test.py
+      - run: python3 ops/netcup-sandbox-compose.test.py
+      - run: docker compose -f ops/netcup-sandbox.compose.yml config --quiet
