@@ -1,0 +1,44 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {activateVerifiedPosLicense} from "./pos-license-entitlement.js";
+const expected={paymentId:"tr_123ABC",companyId:"company-test",planCode:"pos_base_monthly",checkoutId:"checkout-test",ownerEmailConfirmed:true};
+const confirmed={verified:true,paymentId:"tr_123ABC",companyId:"company-test",planCode:"pos_base_monthly",checkoutId:"checkout-test"};
+function mockPool(existing=null) {
+ const calls=[];
+ const client={
+  query:async(sql,args=[])=>{
+   calls.push({sql,args});
+   if(sql.startsWith("SELECT id FROM billing_plans"))return {rows:[{id:"plan-1"}]};
+   if(sql.startsWith("SELECT id,company_id,plan_id"))return {rows:existing?[existing]:[]};
+   if(sql.startsWith("INSERT INTO company_entitlements"))return {rows:[{id:"entitlement-1"}]};
+   return {rows:[]};
+  },release:()=>{}
+ };
+ return {pool:{connect:async()=>client},calls};
+}
+test("rejects missing email confirmation without DB access",async()=>{
+ const result=await activateVerifiedPosLicense({connect:()=>{throw Error("unexpected DB call")}},confirmed,{...expected,ownerEmailConfirmed:false});
+ assert.equal(result.activated,false);
+});
+test("rejects mismatched provider confirmation",async()=>{
+ const result=await activateVerifiedPosLicense({connect:()=>{throw Error("unexpected DB call")}},{...confirmed,companyId:"other"},expected);
+ assert.equal(result.activated,false);
+});
+test("inserts entitlement after verification",async()=>{
+ const {pool,calls}=mockPool();const result=await activateVerifiedPosLicense(pool,confirmed,expected);
+ assert.equal(result.activated,true);assert.equal(result.alreadyActive,false);
+ assert.equal(calls.filter(x=>x.sql.startsWith("INSERT INTO company_entitlements")).length,1);
+ assert.equal(calls.at(-1).sql,"COMMIT");
+});
+test("does not insert duplicate entitlement on replay",async()=>{
+ const {pool,calls}=mockPool({id:"existing",company_id:"company-test",plan_id:"plan-1"});
+ const result=await activateVerifiedPosLicense(pool,confirmed,expected);
+ assert.equal(result.alreadyActive,true);
+ assert.equal(calls.some(x=>x.sql.startsWith("INSERT INTO company_entitlements")),false);
+});
+test("rejects payment reference owned by another company",async()=>{
+ const {pool,calls}=mockPool({id:"existing",company_id:"other",plan_id:"plan-1"});
+ const result=await activateVerifiedPosLicense(pool,confirmed,expected);
+ assert.equal(result.activated,false);
+ assert.equal(calls.some(x=>x.sql.startsWith("INSERT INTO company_entitlements")),false);
+});
