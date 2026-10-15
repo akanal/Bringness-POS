@@ -15,6 +15,10 @@ class ValidatorTests(unittest.TestCase):
         self.assertIn("validate-netcup-sandbox.py --runtime", dockerfile)
         self.assertIn("sandbox_db_password", compose)
         self.assertIn("    secrets:\n      - sandbox_db_password", compose)
+    def test_runtime_rejects_unexpected_credentials(self):
+        source = Path(__file__).with_name("validate-netcup-sandbox.py").read_text()
+        self.assertIn("Unexpected integration credential in sandbox runtime", source)
+        self.assertIn("credential_markers", source)
     def test_valid_synthetic_config(self):
         self.assertEqual(module.validate(base, password), [])
     def test_rejects_live_key(self):
