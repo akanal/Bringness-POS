@@ -56,3 +56,10 @@ test('Unpriced counter mode is never silently charged as zero',()=>{
  assert.equal(p.amountNetCents,null);
  assert.deepEqual(p.unpricedModules,['waiter_order_monthly']);
 });
+
+test('Existing legacy QR flag blocks Center purchase',()=>{
+ assert.throws(()=>planModuleBasket({base:true,tableQr:true,requestedModules:['center_monthly']}),/CONFLICTING_OPERATING_MODES/);
+});
+test('Existing legacy QR flag blocks counter purchase',()=>{
+ assert.throws(()=>planModuleBasket({base:true,tableQr:true,requestedModules:['waiter_order_monthly']}),/CONFLICTING_OPERATING_MODES/);
+});
