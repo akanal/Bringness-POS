@@ -17,9 +17,8 @@ export function planModuleBasket({base=false,download=false,baseAccess=base,tabl
  if(new Set(requestedModules).size!==requestedModules.length) throw new Error('DUPLICATE_MODULE');
  const orderingBase=requestedModules.includes('pos_base_monthly');
  if(!policy.features.pos_base&&!orderingBase) throw new Error('BASE_LICENSE_REQUIRED');
- if(orderingBase&&policy.features.pos_base) throw new Error('BASE_LICENSE_ALREADY_ACTIVE');
- if(orderingBase&&activeModules.includes('pos_base_monthly')) throw new Error('BASE_LICENSE_ALREADY_ACTIVE');
  if(!Array.isArray(activeModules)||activeModules.some(module=>typeof module!=='string')) throw new Error('INVALID_ACTIVE_MODULES');
+ if(orderingBase&&(base||download||activeModules.includes('pos_base_monthly'))) throw new Error('BASE_LICENSE_ALREADY_ACTIVE');
  const active=new Set(activeModules);
  if(tableQr) active.add('table_qr_monthly');
  // Operating modes are mutually exclusive: Center, restaurant QR, or counter/waiter ordering.
