@@ -8,7 +8,7 @@ export async function bootstrapAndRegisterSandboxMonthlySubscription({
 }){
  // Reject a second request for an already-registered plan before contacting
  // Mollie. The controller still must serialize concurrent requests.
- const existing=await pool.query(
+ if (!companyId || !["online_pos","restaurant_module","qr_module"].includes(planCode))\n  return {created:false,reason:"invalid_company_or_plan"};\n const existing=await pool.query(
   "SELECT mollie_subscription_id,mollie_customer_id FROM sandbox_pos_monthly_subscriptions WHERE company_id=$1 AND plan_code=$2",
   [companyId,planCode]);
  if(existing.rowCount){
