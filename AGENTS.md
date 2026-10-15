@@ -118,3 +118,6 @@ Continue authorized development autonomously and preserve established behavior a
 ## Owner correction: TSE included in online base 2026-10-15
 - Supersedes the separate online TSE pricing decision above: online base stays 29.99 EUR net/month including Cloud-TSE, not a paid optional module. Supplier contracts/pricing and real payment/server/support costs still require margin validation; no claim of live fiscal readiness.
 - Download base stays 399 EUR net once; inclusion of physical TSE has not been decided. Keep hardware procurement costs separate pending confirmation.
+
+## Final online base price confirmed 2026-10-15
+- Owner explicitly approved publishing 34.99 EUR net/month (41.64 EUR incl. 19% VAT) for new online base purchases, including Cloud-TSE. Supersedes 29.99 online base. Existing customer subscriptions and agreed special prices remain unchanged; recurring amounts continue from the paid transaction/provider contract. Download remains 399 EUR net once; QR price is unchanged. Clearly disclose that productive TSE activation remains pending. Modular sales migration is a separate unfinished change; do not describe it as deployed based solely on this price update.

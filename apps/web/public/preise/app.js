@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const money=cents=>(cents/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
 const offerings=[
-  {code:'pos_base_monthly',title:'Online-Basis',intro:'Die Kasse für den täglichen Verkauf im Browser.',items:['Artikel, Kategorien und Zahlungen','Konto und gemeinsame Datenbank','Monatlich kündbares Abo'],featured:true},
+  {code:'pos_base_monthly',title:'Online-Basis',intro:'Die Grundkasse für 34,99 € netto monatlich inklusive Cloud-TSE.',items:['Artikel, Kategorien und Zahlungen','Cloud-TSE im Preis enthalten – LIVE-Aktivierung noch ausstehend','Konto und gemeinsame Datenbank','Monatlich kündbares Abo'],featured:true},
   {code:'restaurant_monthly',title:'Restaurant-Kasse',intro:'Vollständige Restaurant-Kasse inklusive normaler Kasse.',items:['Normale Kasse im Preis enthalten','Tische, Service, Bestellungen und Küche','Tisch-QR optional für 29,99 € netto / Monat']},
   {code:'table_qr_monthly',title:'Tisch-QR',intro:'QR-Bestellungen direkt am Tisch als Ergänzung.',items:['QR-Code je Tisch','Digitale Speisekarte und Bestellung','Für jede Kassenlizenz separat buchbar']},
   {code:'download_license',title:'Windows-Download',intro:'Einmalige Lizenz für die reine Windows-Kasse.',items:['Windows-Installation','Normale Kasse, Artikel, Belege und Schicht','Tisch-QR optional für 29,99 € netto / Monat','Download erst nach bestätigter Zahlung']}
