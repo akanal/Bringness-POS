@@ -16,7 +16,6 @@ export function createModuleQuoteHandler(db=pool){
   if(!user){send(res,401,{error:'UNAUTHORIZED'});return true;}
   if(!['owner'].includes(user.role)){send(res,403,{error:'FORBIDDEN'});return true;}
   let raw='';
-  {
    for await(const part of req){raw+=part.toString();if(raw.length>8192)throw Error('PAYLOAD_TOO_LARGE');}
    const body=JSON.parse(raw);
    if(!Array.isArray(body.modules)||body.modules.length>12||body.modules.some(x=>typeof x!=='string'))throw Error('INVALID_MODULES');
