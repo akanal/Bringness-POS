@@ -60,3 +60,10 @@ test('Quote API does not grant access after a valid bundle preview',async()=>{
  assert.equal(res.result.payload.requiresVerifiedPayment,true);
  assert.equal(res.result.payload.amountNetCents,8987);
 });
+
+test('Quote API reports database outage as server error without leaking details',async()=>{
+ const failingDb={async query(){throw new Error('database password and private host');}};
+ const res=response();await createModuleQuoteHandler(failingDb)(request(['pos_base_monthly']),res);
+ assert.equal(res.result.status,500);
+ assert.deepEqual(res.result.payload,{error:'INTERNAL_ERROR'});
+});
