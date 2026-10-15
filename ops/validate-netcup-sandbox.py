@@ -35,7 +35,9 @@ def validate(env_text: str, db_password: str) -> list[str]:
     url = values.get("DATABASE_URL", "")
     try:
         parsed = urlsplit(url)
-        if parsed.scheme not in ("postgres", "postgresql") or parsed.hostname != "sandbox-db" or parsed.path != "/bringness_billing_sandbox" or parsed.username != "sandbox_app":
+        if (parsed.scheme not in ("postgres", "postgresql") or parsed.hostname != "sandbox-db"
+                or parsed.port != 5432 or parsed.path != "/bringness_billing_sandbox"
+                or parsed.username != "sandbox_app" or parsed.query or parsed.fragment):
             errors.append("Dedicated sandbox database URL required")
         if not parsed.password or unquote(parsed.password) != db_password.strip():
             errors.append("Database password does not match isolated secret")
