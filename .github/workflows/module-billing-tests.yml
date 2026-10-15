@@ -9,8 +9,9 @@ on:
       - 'server/module-checkout*'
       - 'server/module-quote-api*'
       - 'server/module-payment-verify*'
+      - 'server/mollie-billing-guard*'
       - 'server/module-sandbox*'
-      - 'server/qr-mode-isolation.test.js'
+      - 'server/qr-mode-isolation.test.js server/mollie-billing-guard.test.js'
       - '.github/workflows/module-billing-tests.yml'
   workflow_dispatch:
 jobs:
