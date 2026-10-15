@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mollieBillingPaymentMatches} from './mollie-billing-guard.js';
+import {mollieBillingPaymentMatches,canActivateBillingEntitlement} from './mollie-billing-guard.js';
 const tx={provider_payment_id:'tr_123',amount_cents:8911,currency:'EUR',company_id:'company-1',plan_code:'pos_base_monthly'};
 const paid={id:'tr_123',status:'paid',amount:{currency:'EUR',value:'89.11'},metadata:{companyId:'company-1',planCode:'pos_base_monthly'}};
 test('Mollie webhook payment must match the stored transaction',()=>{
@@ -37,4 +37,10 @@ test('Unknown provider status cannot pass webhook validation',()=>{
  for(const status of ['unknown','refunded','chargeback','']){
   assert.equal(mollieBillingPaymentMatches({...paid,status},tx,{requirePaid:false}),false,status);
  }
+});
+
+test('Entitlement activation requires newly paid transaction',()=>{
+ assert.equal(canActivateBillingEntitlement(paid,tx),true);
+ assert.equal(canActivateBillingEntitlement({...paid,status:'pending'},tx),false);
+ assert.equal(canActivateBillingEntitlement(paid,{...tx,paid_at:new Date()}),false);
 });
