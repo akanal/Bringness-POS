@@ -11,6 +11,8 @@ export async function activateVerifiedPosLicense(pool, confirmation, expected) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Serialize concurrent callbacks for the same Mollie reference.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [expected.paymentId]);
     const plan = (await client.query(
       "SELECT id FROM billing_plans WHERE code=$1 AND active=true FOR SHARE",
       [expected.planCode]
