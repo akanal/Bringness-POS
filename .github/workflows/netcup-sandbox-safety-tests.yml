@@ -40,6 +40,7 @@ jobs:
       - run: bash -n ops/netcup-sandbox-dispatcher.sh
       - run: python3 ops/netcup-sandbox-dispatcher.test.py
       - run: python3 ops/netcup-sandbox-compose.test.py
+      - run: python3 -m py_compile ops/validate-netcup-sandbox.py
       - run: python3 ops/validate-netcup-sandbox.test.py
       - name: Validate sandbox Compose without real credentials
         run: |
