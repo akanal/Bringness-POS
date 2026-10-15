@@ -21,6 +21,10 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(module.validate(base.replace("test_abcdefghijklmnopqrstuvwxyz", "live_abcdefghijklmnopqrstuvwxyz"), password))
     def test_rejects_production_database(self):
         self.assertTrue(module.validate(base.replace("@sandbox-db", "@bringness-db"), password))
+    def test_rejects_wrong_database_port(self):
+        self.assertTrue(module.validate(base.replace(":5432/", ":5433/"), password))
+    def test_rejects_database_query_overrides(self):
+        self.assertTrue(module.validate(base.replace("bringness_billing_sandbox", "bringness_billing_sandbox?host=production"), password))
     def test_rejects_wrong_password(self):
         self.assertTrue(module.validate(base, "another_long_password_value_123"))
     def test_rejects_production_email(self):
