@@ -2,6 +2,7 @@ import http from "node:http";
 import pg from "pg";
 import { handlePosLicenseWebhook } from "./pos-license-webhook-http.js";
 import { createSandboxCheckout } from "./pos-license-sandbox-checkout.js";
+import { confirmOwnerEmail } from "./pos-license-owner-confirmation.js";
 
 // Separate billing-only entrypoint. Never import server/start.js (POS workers,
 // restaurant routes, migrations or fiscal processing).
@@ -39,6 +40,30 @@ const server = http.createServer(async (req, res) => {
       const result = await createSandboxCheckout({pool,apiKey:process.env.MOLLIE_API_KEY,companyId:data.companyId,ownerEmail:data.ownerEmail,baseUrl:process.env.SANDBOX_PUBLIC_BASE_URL});
       res.writeHead(201,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(result));
     } catch { res.writeHead(422,{"content-type":"application/json"});res.end(JSON.stringify({error:"checkout_unavailable"})); }
+    return;
+  }
+  // Redirects are informational only. GET must never activate a license.
+  if (req.method === "GET" && req.url?.startsWith("/sandbox/billing/return?")) {
+    res.writeHead(200, {"content-type":"text/plain; charset=utf-8","cache-control":"no-store"});
+    res.end("Payment return received. License activation requires confirmed owner email and verified Mollie payment.");
+    return;
+  }
+  if (req.url === "/sandbox/billing/owner/confirm" && req.method === "POST") {
+    if (req.headers["content-type"] !== "application/json") { res.writeHead(415); res.end(); return; }
+    try {
+      let body = "";
+      for await (const chunk of req) {
+        body += chunk;
+        if (body.length > 512) { res.writeHead(413); res.end(); return; }
+      }
+      const { paymentId, token } = JSON.parse(body);
+      const confirmed = await confirmOwnerEmail(pool, paymentId, token);
+      res.writeHead(confirmed ? 200 : 400, {"content-type":"application/json","cache-control":"no-store"});
+      res.end(JSON.stringify({confirmed}));
+    } catch {
+      res.writeHead(400, {"content-type":"application/json","cache-control":"no-store"});
+      res.end(JSON.stringify({confirmed:false}));
+    }
     return;
   }
   if (await handlePosLicenseWebhook(req, res, {
