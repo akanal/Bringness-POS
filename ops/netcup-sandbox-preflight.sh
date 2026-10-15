@@ -18,7 +18,7 @@ if docker network inspect bringness-internal >/dev/null 2>&1; then
 else
   echo 'Production Docker network: missing'
 fi
-for port in 3015 3016; do
+for port in 3015; do
   if ! command -v ss >/dev/null; then
     printf 'Proposed sandbox port %s: unknown (ss unavailable)\n' "$port"
   else
