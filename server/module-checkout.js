@@ -12,11 +12,12 @@ const catalog={
 };
 export function planModuleBasket({base=false,download=false,baseAccess=base,restaurant=false,tableQr=false,activeModules=[],requestedModules=[]}={}){
  const policy=billingPolicy({base,download,baseAccess,restaurant,tableQr});
+ if(!Array.isArray(requestedModules)||requestedModules.length===0) throw new Error('EMPTY_BASKET');
+ if(requestedModules.some(module=>typeof module!=='string')) throw new Error('INVALID_MODULES');
+ if(new Set(requestedModules).size!==requestedModules.length) throw new Error('DUPLICATE_MODULE');
  const orderingBase=requestedModules.includes('pos_base_monthly');
  if(!policy.features.pos_base&&!orderingBase) throw new Error('BASE_LICENSE_REQUIRED');
  if(orderingBase&&policy.features.pos_base) throw new Error('BASE_LICENSE_ALREADY_ACTIVE');
- if(!Array.isArray(requestedModules)||requestedModules.length===0) throw new Error('EMPTY_BASKET');
- if(new Set(requestedModules).size!==requestedModules.length) throw new Error('DUPLICATE_MODULE');
  const active=new Set(activeModules);
  if(tableQr) active.add('table_qr_monthly');
  // Operating modes are mutually exclusive: Center, restaurant QR, or counter/waiter ordering.
