@@ -8,6 +8,7 @@ function mockPool(existing=null) {
  const client={
   query:async(sql,args=[])=>{
    calls.push({sql,args});
+   if(sql.startsWith("SELECT 1 FROM pg_indexes"))return {rows:[{exists:true}]};
    if(sql.startsWith("SELECT id FROM billing_plans"))return {rows:[{id:"plan-1"}]};
    if(sql.startsWith("SELECT id,company_id,plan_id"))return {rows:existing?[existing]:[]};
    if(sql.startsWith("INSERT INTO company_entitlements"))return {rows:[{id:"entitlement-1"}]};
@@ -41,4 +42,12 @@ test("rejects payment reference owned by another company",async()=>{
  const result=await activateVerifiedPosLicense(pool,confirmed,expected);
  assert.equal(result.activated,false);
  assert.equal(calls.some(x=>x.sql.startsWith("INSERT INTO company_entitlements")),false);
+});
+
+test("rejects database missing a unique provider reference index",async()=>{
+ const calls=[];const pool={connect:async()=>({query:async(sql)=>{calls.push(sql);return {rows:[]}},release:()=>{}})};
+ const result=await activateVerifiedPosLicense(pool,confirmed,expected);
+ assert.equal(result.activated,false);
+ assert.equal(result.reason,"unique_payment_constraint_missing");
+ assert.equal(calls.some(sql=>sql.startsWith("INSERT INTO company_entitlements")),false);
 });
