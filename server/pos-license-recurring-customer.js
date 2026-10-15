@@ -6,7 +6,7 @@ export async function createSandboxMollieCustomer({
  if(!String(apiKey||"").startsWith("test_"))
   return {created:false,reason:"sandbox_test_key_required"};
  if(!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(companyId||"")) ||
-    !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(ownerEmail||"")) ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(ownerEmail||"")) ||
     typeof ownerName!=="string" || !ownerName.trim() || ownerName.length>150)
   return {created:false,reason:"invalid_customer_details"};
  const response=await fetcher("https://api.mollie.com/v2/customers",{
