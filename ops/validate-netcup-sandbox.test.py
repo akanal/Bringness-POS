@@ -14,7 +14,7 @@ class ValidatorTests(unittest.TestCase):
         compose = Path(__file__).with_name("netcup-sandbox.compose.yml").read_text()
         self.assertIn("validate-netcup-sandbox.py --runtime", dockerfile)
         self.assertIn("sandbox_db_password", compose)
-        self.assertIn("    secrets:\\n      - sandbox_db_password", compose)
+        self.assertIn("    secrets:\n      - sandbox_db_password", compose)
     def test_valid_synthetic_config(self):
         self.assertEqual(module.validate(base, password), [])
     def test_rejects_live_key(self):
