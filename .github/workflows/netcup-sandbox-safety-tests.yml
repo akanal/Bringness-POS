@@ -6,6 +6,7 @@ on:
       - 'ops/select-operation.js'
       - 'ops/select-operation.test.js'
       - 'ops/netcup-sandbox-preflight.sh'
+      - 'ops/netcup-sandbox-preflight.test.py'
       - '.github/workflows/netcup-sandbox-safety-tests.yml'
   pull_request:
     paths:
@@ -25,3 +26,4 @@ jobs:
           node-version: 24
       - run: node --test ops/select-operation.test.js
       - run: bash -n ops/netcup-sandbox-preflight.sh
+      - run: python3 ops/netcup-sandbox-preflight.test.py
