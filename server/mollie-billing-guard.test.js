@@ -44,3 +44,12 @@ test('Entitlement activation requires newly paid transaction',()=>{
  assert.equal(canActivateBillingEntitlement({...paid,status:'pending'},tx),false);
  assert.equal(canActivateBillingEntitlement(paid,{...tx,paid_at:new Date()}),false);
 });
+
+test('Mollie payment cannot activate from zero, negative or malformed stored amounts',()=>{
+ for(const amount of [0,-1,'8911','89.11',null,undefined,NaN,Infinity]){
+  assert.equal(mollieBillingPaymentMatches(paid,{...tx,amount_cents:amount}),false,String(amount));
+ }
+ assert.equal(mollieBillingPaymentMatches({...paid,amount:{currency:'EUR',value:'0.00'}},{...tx,amount_cents:0}),false);
+ assert.equal(mollieBillingPaymentMatches(paid,{...tx,company_id:''}),false);
+ assert.equal(mollieBillingPaymentMatches(paid,{...tx,provider_payment_id:''}),false);
+});
