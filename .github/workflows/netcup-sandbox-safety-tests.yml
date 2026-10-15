@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - run: node --test ops/select-operation.test.js server/pos-license-payment-verification.test.js server/pos-license-mollie-confirmation.test.js server/pos-license-entitlement.test.js server/pos-license-webhook-flow.test.js server/pos-license-webhook-http.test.js server/pos-license-sandbox-start.test.js server/pos-license-sandbox-schema.test.js server/pos-license-sandbox-checkout.test.js
+      - run: node --test ops/select-operation.test.js server/pos-license-*.test.js
       - run: bash -n ops/netcup-sandbox-preflight.sh
       - run: python3 ops/netcup-sandbox-preflight.test.py
       - run: python3 ops/netcup-sandbox-command.test.py
@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           trap 'rm -f ops/sandbox.test.env ops/sandbox-db-password.txt' EXIT
-          printf 'DATABASE_URL=postgresql://sandbox_app:synthetic_test_password_123456789@sandbox-db:5432/bringness_billing_sandbox\nMOLLIE_API_KEY=test_abcdefghijklmnopqrstuvwxyz\n' > ops/sandbox.test.env
+          printf 'DATABASE_URL=postgresql://sandbox_app:synthetic_test_password_123456789@sandbox-db:5432/bringness_billing_sandbox\nMOLLIE_API_KEY=test_abcdefghijklmnopqrstuvwxyz\nSANDBOX_CHECKOUT_TOKEN=synthetic_sandbox_token_abcdefghijklmnopqrstuvwxyz\nSANDBOX_PUBLIC_BASE_URL=https://sandbox.example.invalid\n' > ops/sandbox.test.env
           printf 'synthetic_test_password_123456789\n' > ops/sandbox-db-password.txt
           python3 ops/validate-netcup-sandbox.py
           docker compose -f ops/netcup-sandbox.compose.yml config --quiet
