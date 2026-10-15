@@ -4,6 +4,7 @@ import {createWaiterDelivery,migrateWaiterDelivery} from './waiter-push-delivery
 import {createSandboxWorker,migrateFiskalySandbox,sandboxStatus,requestFiskalySetup,onboardingRequest} from './fiskaly-sandbox.js';
 import {createFiskalyTest,migrateFiskalyTest} from './fiskaly-test.js';
 import {createPackageAccess} from './package-access.js';
+import {createModuleQuoteHandler} from './module-quote-api.js';
 import {createWaiterWorkflow,migrateWaiterWorkflow} from './waiter-workflow.js';
 import {migrateTransactionalMail,createMailWorker,createMailStatus} from './transactional-mail.js';
 import {renderMailReceipt} from './payment-receipt.js';
@@ -56,6 +57,7 @@ const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
+const handleModuleQuote=createModuleQuoteHandler(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
@@ -112,6 +114,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;
+      if (appMode!=='ai' && await handleModuleQuote(req,res)) return;
       if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
@@ -173,6 +176,9 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
   return originalCreateReadStream(filePath, options);
 };
 
+const mollieKeyMode = process.env.MOLLIE_API_KEY?.startsWith('test_') ? 'test' : process.env.MOLLIE_API_KEY?.startsWith('live_') ? 'live' : 'missing-or-unrecognized';
+console.info('Mollie credential mode:', mollieKeyMode);
+if (process.env.RAILWAY_PROJECT_ID === '7b5d969a-6459-40cb-b542-8ec2f1363172' && mollieKeyMode !== 'test') console.error('SANDBOX PAYMENT SAFETY: Mollie test credentials not confirmed; do not initiate payment tests.');
 await import("./index.js");
 ensureLanguageDatabase().catch(error=>console.error("Language database startup:",error.code||error.name));
 

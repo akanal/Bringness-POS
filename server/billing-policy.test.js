@@ -1,21 +1,26 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {billingPolicy} from './billing-policy.js';
-const cases=[
- ['Normaler Tarif ist direkt buchbar',{},p=>assert(p.plans.pos_base_monthly.eligible)],
- ['Restaurant ist ohne Basis-Abo buchbar',{},p=>assert(p.plans.restaurant_monthly.eligible)],
- ['Restaurant verlangt kein Basis-Abo',{},p=>assert.deepEqual(p.plans.restaurant_monthly.requires,[])],
- ['Restaurant enthält die normale Kasse',{restaurant:true},p=>assert(p.features.pos_base)],
- ['Restaurant enthält kein Tisch-QR',{restaurant:true},p=>assert.equal(p.features.table_qr,false)],
- ['Keine doppelte Basisbuchung im Restaurant',{restaurant:true},p=>assert.equal(p.plans.pos_base_monthly.eligible,false)],
- ['Basis als enthalten gekennzeichnet',{restaurant:true},p=>assert(p.plans.pos_base_monthly.included)],
- ['QR braucht eine Kasse',{},p=>assert.equal(p.plans.table_qr_monthly.eligible,false)],
- ['QR zum Restaurant buchbar',{restaurant:true},p=>assert(p.plans.table_qr_monthly.eligible)],
- ['QR braucht kein zusätzliches Basis-Abo',{restaurant:true,tableQr:true},p=>assert(p.features.table_qr)],
- ['Download enthält nur die normale Kasse',{download:true},p=>assert.deepEqual(p.features,{pos_base:true,restaurant:false,table_qr:false})],
- ['Download erlaubt QR ohne Restaurant',{download:true},p=>{assert.equal(p.plans.restaurant_monthly.eligible,false);assert.equal(p.plans.table_qr_monthly.eligible,true)}],
- ['Download ist Alternative zum Monatsabo',{base:true},p=>assert.equal(p.plans.download_license.eligible,false)]
-];
-for(const [name,input,check]of cases)test(name,()=>check(billingPolicy(input)));
-
-for(const kind of ['base','download'])test(kind+' QR schaltet keine Restaurant-Funktionen frei',()=>{const p=billingPolicy({[kind]:true,tableQr:true});assert(p.features.table_qr);assert.equal(p.features.restaurant,false)});
+test('No retired restaurant subscription is offered',()=>{
+ const p=billingPolicy({base:true});
+ assert.equal(Object.hasOwn(p.plans,'restaurant_monthly'),false);
+});
+test('Base license required for restaurant QR',()=>{
+ assert.equal(billingPolicy().plans.table_qr_monthly.eligible,false);
+ assert.equal(billingPolicy({base:true}).plans.table_qr_monthly.eligible,true);
+});
+test('Restaurant QR requires table management',()=>{
+ const p=billingPolicy({base:true,tableQr:true});
+ assert.equal(p.features.table_qr,true);
+ assert.equal(p.features.table_management,true);
+ assert.equal(p.plans.table_management_monthly.monthlyNetCents,990);
+ assert.deepEqual(p.plans.table_qr_monthly.requires,['pos_base','table_management_monthly']);
+});
+test('Table management ends with restaurant QR',()=>{
+ assert.equal(billingPolicy({base:true,tableQr:false}).features.table_management,false);
+});
+test('Download license provides base eligibility',()=>{
+ const p=billingPolicy({download:true});
+ assert.equal(p.features.pos_base,true);
+ assert.equal(p.plans.table_qr_monthly.eligible,true);
+});

@@ -1,0 +1,32 @@
+name: Module billing tests
+on:
+  push:
+    branches:
+      - work/module-billing-validation-20261015
+  pull_request:
+    paths:
+      - 'server/billing-policy*'
+      - 'server/module-checkout*'
+      - 'server/module-quote-api*'
+      - 'server/module-payment-verify*'
+      - 'server/module-payment-scenario.test.js'
+      - 'server/mollie-billing-guard*'
+      - 'server/mollie-webhook-integration.test.js'
+      - 'server/index.js'
+      - 'server/module-sandbox*'
+      - 'server/module-generaltest.test.js'
+      - 'server/qr-mode-isolation.test.js'
+      - '.github/workflows/module-billing-tests.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run module billing tests
+        run: node --test server/billing-policy.test.js server/module-checkout.test.js server/module-quote-api.test.js server/module-payment-verify.test.js server/module-payment-scenario.test.js server/module-sandbox.test.js server/module-sandbox-modes.test.js server/qr-mode-isolation.test.js server/mollie-billing-guard.test.js server/mollie-webhook-integration.test.js server/module-generaltest.test.js
