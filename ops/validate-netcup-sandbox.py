@@ -28,7 +28,7 @@ def validate(env_text: str, db_password: str) -> list[str]:
     mollie = values.get("MOLLIE_API_KEY", "")
     if not re.fullmatch(r"test_[A-Za-z0-9_-]{12,}", mollie):
         errors.append("Mollie TEST key required")
-    if any(k in values for k in ("NODE_ENV", "APP_MODE", "PGHOST", "PGDATABASE", "PGUSER")):
+    if any(k in values for k in ("NODE_ENV", "APP_MODE", "PORT", "PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE", "PGOPTIONS")):
         errors.append("Runtime isolation keys must be set by Compose")
     if any("live_" in value for value in values.values()):
         errors.append("LIVE credentials forbidden")
@@ -70,6 +70,8 @@ def main():
                            "SMTP_PASS", "SMTP_PASSWORD", "BREVO_API_KEY", "FISKALY_API_KEY",
                            "MOLLIE_LIVE_KEY", "SENDGRID_API_KEY", "RESEND_API_KEY"))
         errors += validate(values, password_file.read_text())
+        if any(k in os.environ for k in ("PGPORT", "PGPASSWORD", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE", "PGOPTIONS")):
+            errors.append("Unexpected PostgreSQL runtime override")
     else:
         errors = validate(env_file.read_text(), password_file.read_text())
     if errors:
