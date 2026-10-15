@@ -8,6 +8,7 @@ on:
       - 'server/billing-policy*'
       - 'server/module-checkout*'
       - 'server/module-quote-api*'
+      - 'server/module-payment-verify*'
       - '.github/workflows/module-billing-tests.yml'
   workflow_dispatch:
 jobs:
@@ -21,4 +22,4 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
       - name: Run module billing tests
-        run: node --test server/billing-policy.test.js server/module-checkout.test.js server/module-quote-api.test.js
+        run: node --test server/billing-policy.test.js server/module-checkout.test.js server/module-quote-api.test.js server/module-payment-verify.test.js
