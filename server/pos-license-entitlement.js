@@ -18,6 +18,16 @@ export async function activateVerifiedPosLicense(pool, confirmation, expected) {
       "SELECT 1 FROM pg_indexes WHERE schemaname=current_schema() AND tablename='company_entitlements' AND indexdef ILIKE 'CREATE UNIQUE INDEX%' AND indexdef LIKE '%provider_reference%' LIMIT 1"
     )).rows[0];
     if (!constraint) { await client.query("ROLLBACK"); return {activated:false,reason:"unique_payment_constraint_missing"}; }
+    const checkout = (await client.query(
+      "SELECT company_id,plan_code,checkout_id,amount_cents,owner_email_confirmed_at FROM sandbox_pos_license_checkouts WHERE payment_id=$1 FOR UPDATE",
+      [expected.paymentId]
+    )).rows[0];
+    if (!checkout || String(checkout.company_id) !== expected.companyId ||
+        checkout.plan_code !== expected.planCode || checkout.checkout_id !== expected.checkoutId ||
+        Number(checkout.amount_cents) !== expected.amountCents || !checkout.owner_email_confirmed_at) {
+      await client.query("ROLLBACK");
+      return {activated:false,reason:"checkout_state_changed"};
+    }
     const plan = (await client.query(
       "SELECT id FROM billing_plans WHERE code=$1 AND active=true FOR SHARE",
       [expected.planCode]
