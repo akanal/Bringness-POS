@@ -42,3 +42,17 @@ test('Center can be combined with personnel and display',()=>{
 test('Restaurant QR and counter are mutually exclusive',()=>{
  assert.throws(()=>planModuleBasket({base:true,requestedModules:['table_qr_monthly','waiter_order_monthly']}),/CONFLICTING_OPERATING_MODES/);
 });
+
+test('Duplicate module selection is rejected',()=>{
+ assert.throws(()=>planModuleBasket({base:true,requestedModules:['personnel_monthly','personnel_monthly']}),/DUPLICATE_MODULE/);
+});
+test('Personnel and display are individually priced',()=>{
+ const p=planModuleBasket({base:true,requestedModules:['personnel_monthly','display_control_monthly']});
+ assert.equal(p.amountNetCents,2498);
+ assert.deepEqual(p.unpricedModules,[]);
+});
+test('Unpriced counter mode is never silently charged as zero',()=>{
+ const p=planModuleBasket({base:true,requestedModules:['waiter_order_monthly']});
+ assert.equal(p.amountNetCents,null);
+ assert.deepEqual(p.unpricedModules,['waiter_order_monthly']);
+});
