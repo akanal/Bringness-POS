@@ -5,7 +5,7 @@ const sample = {
   planCode: "online_pos", companyId: "company-1",
   subscription: { id: "sub_1", customerId: "cst_1", status: "active" },
   payment: { id: "tr_1", subscriptionId: "sub_1", customerId: "cst_1",
-    status: "paid", amount: { currency: "EUR", value: "29.99" },
+    status: "paid", amount: { currency: "EUR", value: "35.69" },
     metadata: { bringnessCompanyId: "company-1", bringnessPlanCode: "online_pos" } }
 };
 test("verified monthly payment renews", () => {
