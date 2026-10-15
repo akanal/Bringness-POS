@@ -11,6 +11,7 @@ class ComposeIsolationTests(unittest.TestCase):
         self.assertIn("sandbox_private:", source)
         self.assertIn('"127.0.0.1:3015:3000"', source)
         self.assertIn("sandbox-db-password.txt", source)
+        self.assertIn("pos-license-sandbox-init.sql:/docker-entrypoint-initdb.d/", source)
         self.assertNotIn("bringness-internal", source)
         self.assertNotIn("/opt/bringness", source)
         self.assertNotIn("bringness-pos/config/app.env", source)
