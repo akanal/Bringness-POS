@@ -15,11 +15,10 @@ export function planModuleBasket({base=false,download=false,baseAccess=base,rest
  if(!Array.isArray(requestedModules)||requestedModules.length===0) throw new Error('EMPTY_BASKET');
  if(new Set(requestedModules).size!==requestedModules.length) throw new Error('DUPLICATE_MODULE');
  const active=new Set(activeModules);
- if(restaurant) active.add('restaurant_monthly');
  if(tableQr) active.add('table_qr_monthly');
  // Operating modes are mutually exclusive: Center, restaurant QR, or counter/waiter ordering.
  const modes=['center_monthly','table_qr_monthly','waiter_order_monthly'];
- const selectedModes=modes.filter(m=>requestedModules.includes(m)||active.has(m));
+ const selectedModes=modes.filter(m=>requestedModules.includes(m)||active.has(m)||(m==='table_qr_monthly'&&tableQr));
  if(selectedModes.length>1) throw new Error('CONFLICTING_OPERATING_MODES');
  const lines=[];
  for(const module of requestedModules){
