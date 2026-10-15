@@ -11,3 +11,7 @@ export function mollieBillingPaymentMatches(payment,transaction,{requirePaid=tru
  if(transaction.plan_code&&payment.metadata?.planCode!==transaction.plan_code)return false;
  return true;
 }
+
+export function canActivateBillingEntitlement(payment,transaction){
+ return mollieBillingPaymentMatches(payment,transaction)&&!transaction.paid_at;
+}
