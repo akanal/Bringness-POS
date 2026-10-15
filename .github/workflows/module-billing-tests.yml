@@ -1,0 +1,21 @@
+name: Module billing tests
+on:
+  push:
+    branches:
+      - work/module-billing-validation-20261015
+  pull_request:
+    paths:
+      - 'server/billing-policy*'
+      - 'server/module-checkout*'
+      - '.github/workflows/module-billing-tests.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run module billing tests
+        run: node --test server/billing-policy.test.js server/module-checkout.test.js
