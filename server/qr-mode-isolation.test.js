@@ -34,9 +34,13 @@ test('center guest QR endpoint rejects a restaurant-only token',async()=>{
 });
 test('center guest QR endpoint resolves center token only in center table storage',async()=>{
  const pool={async query(sql,args){
-  assert.match(sql,/FROM center_tables t JOIN centers c/);
-  assert.deepEqual(args,[centerCode]);
-  return rows({id:'table',name:'Center Tisch',center_id:'center',center_name:'Center'});
+  if(sql.includes('FROM center_tables t JOIN centers c')){
+   assert.deepEqual(args,[centerCode]);
+   return rows({id:'table',name:'Center Tisch',center_id:'center',center_name:'Center'});
+  }
+  assert.match(sql,/FROM center_restaurants cr JOIN restaurants r/);
+  assert.deepEqual(args,['center']);
+  return rows();
  }};
  const res=await call(createCenterHandler,pool,'/api/v1/guest/center/restaurants?code='+centerCode);
  assert.equal(res.status,200);
