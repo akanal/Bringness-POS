@@ -40,6 +40,11 @@ export async function reconcileSandboxMonthlyPayment({
   // Caller must supply paidThrough from independently verified billing records;
   // this module never infers it from webhook, local clock or payment status.
   if(!paidThrough) return {processed:false,reason:"verified_paid_through_required"};
+  // Reject malformed period input before the storage layer; never extend a
+  // license based on a webhook-provided or guessed timestamp.
+  if(typeof paidThrough!=="string" || !/^\\d{4}-\\d{2}-\\d{2}T/.test(paidThrough) ||
+     !Number.isFinite(Date.parse(paidThrough)))
+    return {processed:false,reason:"invalid_verified_paid_through"};
   return persistVerifiedMonthlyRenewal(pool,{
    companyId:subscription.company_id,planCode:subscription.plan_code,
    subscriptionId:subscription.mollie_subscription_id,paymentId,paidThrough,decision
