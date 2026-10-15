@@ -7,7 +7,8 @@ function database(){
  const calls=[];
  const pool={connect:async()=>({query:async(sql,args=[])=>{
   calls.push(sql);
-  if(sql.startsWith("SELECT 1 FROM pg_indexes"))return {rows:[{exists:true}]};
+  if(sql.startsWith("SELECT 1 FROM pg_index"))return {rows:[{exists:true}]};
+  if(sql.startsWith("SELECT company_id,plan_code,checkout_id,amount_cents"))return {rows:[{company_id:"company-test",plan_code:"download_license",checkout_id:"checkout-test",amount_cents:39900,owner_email_confirmed_at:"2026-10-15T12:00:00Z"}]};
   if(sql.startsWith("SELECT id FROM billing_plans"))return {rows:[{id:"plan-1"}]};
   if(sql.startsWith("SELECT id,company_id,plan_id"))return {rows:[]};
   if(sql.startsWith("INSERT INTO company_entitlements"))return {rows:[{id:"license-1"}]};
