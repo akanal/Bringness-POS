@@ -48,12 +48,22 @@ def validate(env_text: str, db_password: str) -> list[str]:
     return errors
 
 def main():
+    runtime = "--runtime" in sys.argv[1:]
     env_file = HERE / "sandbox.test.env"
-    password_file = HERE / "sandbox-db-password.txt"
-    if not env_file.is_file() or not password_file.is_file():
+    password_file = pathlib.Path("/run/secrets/sandbox_db_password") if runtime else HERE / "sandbox-db-password.txt"
+    if (not runtime and not env_file.is_file()) or not password_file.is_file():
         print("Sandbox configuration files missing", file=sys.stderr)
         return 2
-    errors = validate(env_file.read_text(), password_file.read_text())
+    if runtime:
+        # Compose owns runtime isolation keys, so exclude only those from the
+        # env-file validation while independently checking their exact values.
+        expected = {"APP_MODE": "pos", "PORT": "3000", "PGHOST": "sandbox-db",
+                    "PGDATABASE": "bringness_billing_sandbox", "PGUSER": "sandbox_app", "NODE_ENV": "test"}
+        errors = ["Unexpected sandbox runtime setting"] if any(os.environ.get(k) != v for k, v in expected.items()) else []
+        values = "\\n".join(f"{k}={v}" for k, v in os.environ.items() if k not in expected)
+        errors += validate(values, password_file.read_text())
+    else:
+        errors = validate(env_file.read_text(), password_file.read_text())
     if errors:
         for error in errors:
             print(error, file=sys.stderr)
