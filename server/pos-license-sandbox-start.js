@@ -3,6 +3,7 @@ import pg from "pg";
 import { handlePosLicenseWebhook } from "./pos-license-webhook-http.js";
 import { createSandboxCheckout } from "./pos-license-sandbox-checkout.js";
 import { confirmOwnerEmail } from "./pos-license-owner-confirmation.js";
+import { processPosLicenseWebhook } from "./pos-license-webhook-flow.js";
 
 // Separate billing-only entrypoint. Never import server/start.js (POS workers,
 // restaurant routes, migrations or fiscal processing).
@@ -60,6 +61,15 @@ const server = http.createServer(async (req, res) => {
       const confirmed = await confirmOwnerEmail(pool, paymentId, token);
       res.writeHead(confirmed ? 200 : 400, {"content-type":"application/json","cache-control":"no-store"});
       res.end(JSON.stringify({confirmed}));
+      // A confirmed mailbox may complete a payment whose earlier webhook was
+      // received before confirmation. Always re-fetch the payment from Mollie.
+      if (confirmed) {
+        try {
+          await processPosLicenseWebhook({paymentId,lookupCheckout,pool,apiKey:process.env.MOLLIE_API_KEY});
+        } catch (error) {
+          console.error("Sandbox owner confirmation reconciliation failed", error?.message);
+        }
+      }
     } catch {
       res.writeHead(400, {"content-type":"application/json","cache-control":"no-store"});
       res.end(JSON.stringify({confirmed:false}));
