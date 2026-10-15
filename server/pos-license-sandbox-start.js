@@ -2,7 +2,8 @@ import http from "node:http";
 import pg from "pg";
 import { handlePosLicenseWebhook } from "./pos-license-webhook-http.js";
 import { createSandboxCheckout } from "./pos-license-sandbox-checkout.js";
-import { confirmOwnerEmail } from "./pos-license-owner-confirmation.js";
+import { confirmOwnerEmail, issueOwnerConfirmation } from "./pos-license-owner-confirmation.js";
+import { sendSandboxOwnerConfirmation } from "./pos-license-sandbox-mail.js";
 import { processPosLicenseWebhook } from "./pos-license-webhook-flow.js";
 
 // Separate billing-only entrypoint. Never import server/start.js (POS workers,
@@ -39,6 +40,8 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) { body += chunk; if (body.length > 2048) { res.writeHead(413); res.end(); return; } }
       const data = JSON.parse(body);
       const result = await createSandboxCheckout({pool,apiKey:process.env.MOLLIE_API_KEY,companyId:data.companyId,ownerEmail:data.ownerEmail,baseUrl:process.env.SANDBOX_PUBLIC_BASE_URL});
+      const confirmation = await issueOwnerConfirmation(pool,result.paymentId);
+      await sendSandboxOwnerConfirmation({...confirmation,paymentId:result.paymentId,baseUrl:process.env.SANDBOX_PUBLIC_BASE_URL});
       res.writeHead(201,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(result));
     } catch { res.writeHead(422,{"content-type":"application/json"});res.end(JSON.stringify({error:"checkout_unavailable"})); }
     return;
