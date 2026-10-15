@@ -12,6 +12,11 @@ class SandboxPreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 64)
         self.assertIn("Use --read-only", result.stdout + result.stderr)
 
+    def test_preflight_checks_configured_port_only(self):
+        source = (ROOT / "netcup-sandbox-preflight.sh").read_text()
+        compose = (ROOT / "netcup-sandbox.compose.yml").read_text()
+        self.assertIn("for port in 3015; do", source)
+        self.assertIn("127.0.0.1:3015:3000", compose)
     def test_socket_inspection_failure_is_not_reported_as_free(self):
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = Path(tmp)
