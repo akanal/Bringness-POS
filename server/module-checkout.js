@@ -3,10 +3,9 @@ import {billingPolicy} from './billing-policy.js';
 // Quote several optional modules together without activating any entitlement.
 // Prices not yet configured are explicitly left unresolved, never charged as zero.
 const catalog={
- restaurant_monthly:{items:['restaurant_monthly'],amountNetCents:null},
  table_qr_monthly:{items:['table_qr_monthly','table_management_monthly'],amountNetCents:3989},
- personnel_monthly:{items:['personnel_monthly'],amountNetCents:null},
- display_control_monthly:{items:['display_control_monthly'],amountNetCents:null},
+ personnel_monthly:{items:['personnel_monthly'],amountNetCents:1499},
+ display_control_monthly:{items:['display_control_monthly'],amountNetCents:999},
  waiter_order_monthly:{items:['waiter_order_monthly'],amountNetCents:null},
  center_monthly:{items:['center_monthly'],amountNetCents:null}
 };
