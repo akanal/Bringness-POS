@@ -29,3 +29,7 @@ Status at creation: checklist only. Sandbox provisioning, checkout and license a
 The repository contains `server/center-mollie-checkout.js` and `server/center-mollie-payment.js`. These implement **Center restaurant order payments** using a merchant OAuth token and a Mollie payment-status readback. They do **not** establish a verified Bringness POS subscription purchase or write a POS module entitlement. Do not reuse the Center webhook as evidence that POS billing works.
 
 For POS subscription billing, the missing link is a distinct, testable checkout and provider-confirmed entitlement transition. Keep Center merchant credentials and Center order funds separate from Bringness POS licensing and its operator billing account.
+
+## Database compatibility gate
+
+`db/schema.sql` does not define `billing_plans` or `company_entitlements`; those tables originate in another startup migration. The standalone entitlement writer is **not deployment-ready** until the actual table DDL, required columns, and provider-reference uniqueness have been inspected. An advisory transaction lock protects only writers using the same lock; it is not a substitute for a database UNIQUE constraint. Verify `company_features` activation and billing period semantics before enabling monthly licenses. Do not infer a complete subscription lifecycle from an inserted `company_entitlements` row.
