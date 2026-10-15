@@ -6,7 +6,7 @@ export function verifyPosLicensePayment(payment, expected) {
   if (!/^tr_[A-Za-z0-9]+$/.test(String(expected.paymentId || "")) ||
       payment.id !== expected.paymentId) return { verified: false, reason: "payment_id_mismatch" };
   if (payment.status !== "paid") return { verified: false, reason: "not_paid" };
-  if (payment.amount?.currency !== "EUR" || !/^\\d+\\.\\d{2}$/.test(String(payment.amount?.value || ""))) return { verified: false, reason: "invalid_amount" };
+  if (payment.amount?.currency !== "EUR" || !/^\d+\.\d{2}$/.test(String(payment.amount?.value || ""))) return { verified: false, reason: "invalid_amount" };
   const [euros, cents] = payment.amount.value.split(".");
   const paidCents = Number(euros) * 100 + Number(cents);
   if (!Number.isSafeInteger(paidCents) || paidCents !== expected.amountCents || paidCents <= 0) return { verified: false, reason: "amount_mismatch" };
