@@ -33,6 +33,10 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(module.validate(base + "SMTP_PASSWORD=synthetic_secret\\n", password))
     def test_rejects_overridden_runtime(self):
         self.assertTrue(module.validate(base + "APP_MODE=combined\n", password))
+    def test_rejects_pgservice_override(self):
+        self.assertTrue(module.validate(base + "PGSERVICE=production\\n", password))
+    def test_rejects_port_override(self):
+        self.assertTrue(module.validate(base + "PORT=80\\n", password))
     def test_rejects_duplicate_database_key(self):
         self.assertTrue(module.validate(base + "DATABASE_URL=postgresql://user@host/db\n", password))
 
