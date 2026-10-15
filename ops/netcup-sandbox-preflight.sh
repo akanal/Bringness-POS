@@ -21,10 +21,14 @@ fi
 for port in 3015 3016; do
   if ! command -v ss >/dev/null; then
     printf 'Proposed sandbox port %s: unknown (ss unavailable)\n' "$port"
-  elif ss -lnt "( sport = :$port )" | tail -n +2 | grep -q .; then
-    printf 'Proposed sandbox port %s: occupied\n' "$port"
   else
-    printf 'Proposed sandbox port %s: no TCP listener observed\n' "$port"
+    if ! listeners=$(ss -lnt "( sport = :$port )" 2>/dev/null); then
+      printf 'Proposed sandbox port %s: unknown (socket inspection failed)\n' "$port"
+    elif printf '%s\n' "$listeners" | tail -n +2 | grep -q .; then
+      printf 'Proposed sandbox port %s: occupied\n' "$port"
+    else
+      printf 'Proposed sandbox port %s: no TCP listener observed\n' "$port"
+    fi
   fi
 done
 if [[ -d /opt/bringness/sandbox ]]; then
