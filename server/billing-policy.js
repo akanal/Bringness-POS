@@ -6,7 +6,7 @@ export function billingPolicy({base=false,tableQr=false,download=false,baseAcces
   return {
     features:{pos_base:hasBase,table_qr:qrActive,table_management:qrActive},
     plans:{
-      pos_base_monthly:{active:base,eligible:!hasBase,requires:[],included:download},
+      pos_base_monthly:{active:base,eligible:!base&&!download,requires:[],included:download},
       table_qr_monthly:{active:qrActive,eligible:hasBase&&!tableQr,requires:['pos_base','table_management_monthly']},
       table_management_monthly:{active:qrActive,eligible:false,requires:['table_qr_monthly'],mandatoryWith:'table_qr_monthly',monthlyNetCents:990},
       download_license:{active:download,eligible:!hasBase,requires:[]}
