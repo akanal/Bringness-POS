@@ -15,7 +15,7 @@ export async function activateVerifiedPosLicense(pool, confirmation, expected) {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [expected.paymentId]);
     // Never write without a database-enforced unique provider reference.
     const constraint = (await client.query(
-      "SELECT 1 FROM pg_indexes WHERE schemaname=current_schema() AND tablename='company_entitlements' AND indexdef ILIKE 'CREATE UNIQUE INDEX%' AND indexdef LIKE '%provider_reference%' LIMIT 1"
+      "SELECT 1 FROM pg_index i JOIN pg_class t ON t.oid=i.indrelid JOIN pg_namespace n ON n.oid=t.relnamespace JOIN pg_attribute a ON a.attrelid=t.oid AND a.attname='provider_reference' WHERE n.nspname=current_schema() AND t.relname='company_entitlements' AND i.indisunique AND i.indisvalid AND i.indpred IS NULL AND i.indexprs IS NULL AND i.indnkeyatts=1 AND i.indkey[0]=a.attnum LIMIT 1"
     )).rows[0];
     if (!constraint) { await client.query("ROLLBACK"); return {activated:false,reason:"unique_payment_constraint_missing"}; }
     const checkout = (await client.query(
@@ -41,7 +41,7 @@ export async function activateVerifiedPosLicense(pool, confirmation, expected) {
     )).rows[0];
     if (existing) {
       await client.query("COMMIT");
-      return existing.company_id === expected.companyId && existing.plan_id === plan.id
+      return String(existing.company_id) === expected.companyId && String(existing.plan_id) === String(plan.id)
         ? {activated:true,alreadyActive:true,entitlementId:existing.id}
         : {activated:false,reason:"payment_reference_conflict"};
     }
