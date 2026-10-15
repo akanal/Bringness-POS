@@ -15,8 +15,8 @@ const lookupCheckout = async (paymentId) => {
        FROM sandbox_pos_license_checkouts WHERE payment_id=$1`, [paymentId]);
   const row = result.rows[0];
   return row && {
-    paymentId: row.payment_id, companyId: row.company_id, planCode: row.plan_code,
-    checkoutId: row.checkout_id, amountCents: row.amount_cents,
+    paymentId: row.payment_id, companyId: String(row.company_id), planCode: row.plan_code,
+    checkoutId: row.checkout_id, amountCents: Number(row.amount_cents),
     ownerEmailConfirmed: row.owner_email_confirmed_at !== null, mode: "test"
   };
 };
