@@ -29,5 +29,7 @@ CREATE TABLE IF NOT EXISTS sandbox_pos_license_checkouts (
   amount_cents integer NOT NULL CHECK (amount_cents = 39900),
   owner_email text NOT NULL CHECK (length(trim(owner_email)) > 3),
   owner_email_confirmed_at timestamptz,
+  owner_token_hash text,
+  owner_token_expires_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
