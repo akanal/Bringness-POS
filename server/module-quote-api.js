@@ -24,7 +24,7 @@ export function createModuleQuoteHandler(db=pool){
    const activeModules=[...ent,...features.map(x=>({center:'center_monthly',table_qr:'table_qr_monthly',waiter_order:'waiter_order_monthly',personnel:'personnel_monthly',display_control:'display_control_monthly'}[x])).filter(Boolean)];
    const quote=planModuleBasket({base:ent.includes('pos_base_monthly'),download:ent.includes('download_license'),baseAccess:features.includes('pos_base'),tableQr:features.includes('table_qr'),activeModules,requestedModules:body.modules});
    send(res,200,{...quote,checkoutEnabled:false,notice:'Unverbindliche Vorschau. Keine Buchung und keine Freischaltung.'});
-  }catch(e){send(res,e.message==='PAYLOAD_TOO_LARGE'?413:400,{error:['BASE_LICENSE_REQUIRED','BASE_LICENSE_ALREADY_ACTIVE','EMPTY_BASKET','DUPLICATE_MODULE','CONFLICTING_OPERATING_MODES','MODULE_ALREADY_ACTIVE','UNKNOWN_MODULE','INVALID_MODULES'].includes(e.message)?e.message:'INVALID_REQUEST'});}
+  }catch(e){const known=['BASE_LICENSE_REQUIRED','BASE_LICENSE_ALREADY_ACTIVE','EMPTY_BASKET','DUPLICATE_MODULE','CONFLICTING_OPERATING_MODES','MODULE_ALREADY_ACTIVE','UNKNOWN_MODULE','INVALID_MODULES'];const clientError=known.includes(e.message)||e instanceof SyntaxError;send(res,e.message==='PAYLOAD_TOO_LARGE'?413:clientError?400:500,{error:known.includes(e.message)?e.message:clientError?'INVALID_REQUEST':'INTERNAL_ERROR'});}
   return true;
  };
 }
