@@ -21,6 +21,9 @@ on:
     paths:
       - 'ops/select-operation.js'
       - 'ops/select-operation.test.js'
+      - 'ops/netcup-command.sh'
+      - 'ops/netcup-sandbox*'
+      - 'ops/validate-netcup-sandbox*'
       - '.github/workflows/netcup-sandbox-safety-tests.yml'
 permissions:
   contents: read
@@ -46,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           trap 'rm -f ops/sandbox.test.env ops/sandbox-db-password.txt' EXIT
-          printf 'DATABASE_URL=postgresql://sandbox_app:placeholder@sandbox-db:5432/bringness_billing_sandbox\\nMOLLIE_API_KEY=test_placeholder\\n' > ops/sandbox.test.env
-          printf 'placeholder\\n' > ops/sandbox-db-password.txt
+          printf 'DATABASE_URL=postgresql://sandbox_app:synthetic_test_password_123456789@sandbox-db:5432/bringness_billing_sandbox\\nMOLLIE_API_KEY=test_abcdefghijklmnopqrstuvwxyz\\n' > ops/sandbox.test.env
+          printf 'synthetic_test_password_123456789\\n' > ops/sandbox-db-password.txt
+          python3 ops/validate-netcup-sandbox.py
           docker compose -f ops/netcup-sandbox.compose.yml config --quiet
