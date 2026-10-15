@@ -17,22 +17,15 @@ export function planModuleBasket({base=false,download=false,baseAccess=base,rest
  const active=new Set(activeModules);
  if(restaurant) active.add('restaurant_monthly');
  if(tableQr) active.add('table_qr_monthly');
+ // Operating modes are mutually exclusive: Center, restaurant QR, or counter/waiter ordering.
+ const modes=['center_monthly','table_qr_monthly','waiter_order_monthly'];
+ const selectedModes=modes.filter(m=>requestedModules.includes(m)||active.has(m));
+ if(selectedModes.length>1) throw new Error('CONFLICTING_OPERATING_MODES');
  const lines=[];
- const needsTables=requestedModules.includes('center_monthly')||requestedModules.includes('table_qr_monthly');
- const tablesAlreadyIncluded=tableQr||active.has('table_management_monthly');
  for(const module of requestedModules){
   if(!Object.hasOwn(catalog,module)) throw new Error('UNKNOWN_MODULE');
   if(active.has(module)) throw new Error('MODULE_ALREADY_ACTIVE');
-  const option={...catalog[module]};
-  if(needsTables && module==='center_monthly' && (requestedModules.includes('table_qr_monthly')||tablesAlreadyIncluded)) option.amountNetCents=2999;
-  if(needsTables && module==='table_qr_monthly' && tablesAlreadyIncluded) option.amountNetCents=2999;
-  if(needsTables && module==='table_qr_monthly' && requestedModules.includes('center_monthly')) option.amountNetCents=3989;
-  lines.push({module,...option});
- }
- // Shared table management is billed once even if Center and QR are selected together.
- if(requestedModules.includes('center_monthly')&&requestedModules.includes('table_qr_monthly')){
-  const centerLine=lines.find(x=>x.module==='center_monthly');
-  centerLine.amountNetCents=2999;
+  lines.push({module,...catalog[module]});
  }
  const unresolved=lines.filter(x=>x.amountNetCents===null).map(x=>x.module);
  return {lines,amountNetCents:unresolved.length?null:lines.reduce((sum,x)=>sum+x.amountNetCents,0),unpricedModules:unresolved,currency:'EUR',grantAccess:false,requiresVerifiedPayment:true};
