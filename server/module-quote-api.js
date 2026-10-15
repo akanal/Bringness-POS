@@ -11,11 +11,12 @@ export function createModuleQuoteHandler(db=pool){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   if(!token){send(res,401,{error:'UNAUTHORIZED'});return true;}
   const hash=crypto.createHash('sha256').update(token).digest('hex');
+  try {
   const user=(await db.query("SELECT u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash])).rows[0];
   if(!user){send(res,401,{error:'UNAUTHORIZED'});return true;}
-  if(!['owner','admin','platform_admin','manager'].includes(user.role)){send(res,403,{error:'FORBIDDEN'});return true;}
+  if(!['owner'].includes(user.role)){send(res,403,{error:'FORBIDDEN'});return true;}
   let raw='';
-  try{
+  {
    for await(const part of req){raw+=part.toString();if(raw.length>8192)throw Error('PAYLOAD_TOO_LARGE');}
    const body=JSON.parse(raw);
    if(!Array.isArray(body.modules)||body.modules.length>12||body.modules.some(x=>typeof x!=='string'))throw Error('INVALID_MODULES');
