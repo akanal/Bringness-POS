@@ -5,6 +5,8 @@ on:
     paths:
       - 'ops/select-operation.js'
       - 'ops/select-operation.test.js'
+      - 'ops/netcup-command.sh'
+      - 'ops/netcup-sandbox-command.test.py'
       - 'ops/netcup-sandbox-preflight.sh'
       - 'ops/netcup-sandbox-preflight.test.py'
       - 'ops/netcup-sandbox-dispatcher.sh'
@@ -34,6 +36,7 @@ jobs:
       - run: node --test ops/select-operation.test.js
       - run: bash -n ops/netcup-sandbox-preflight.sh
       - run: python3 ops/netcup-sandbox-preflight.test.py
+      - run: python3 ops/netcup-sandbox-command.test.py
       - run: bash -n ops/netcup-sandbox-dispatcher.sh
       - run: python3 ops/netcup-sandbox-dispatcher.test.py
       - run: python3 ops/netcup-sandbox-compose.test.py
