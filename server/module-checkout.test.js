@@ -79,3 +79,9 @@ test('Existing base subscription cannot be purchased twice',()=>{
 test('Without base in cart or active license extra modules are rejected',()=>{
  assert.throws(()=>planModuleBasket({requestedModules:['center_monthly','display_control_monthly']}),/BASE_LICENSE_REQUIRED/);
 });
+
+test('Malformed module basket is rejected safely',()=>{
+ for(const requestedModules of [null,undefined,{},'center_monthly',[]])
+  assert.throws(()=>planModuleBasket({base:true,requestedModules}),/EMPTY_BASKET/);
+ assert.throws(()=>planModuleBasket({base:true,requestedModules:[null]}),/INVALID_MODULES/);
+});
