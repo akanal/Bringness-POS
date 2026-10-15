@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {activateVerifiedPosLicense} from "./pos-license-entitlement.js";
-const expected={paymentId:"tr_123ABC",companyId:"company-test",planCode:"pos_base_monthly",checkoutId:"checkout-test",ownerEmailConfirmed:true};
+const expected={paymentId:"tr_123ABC",companyId:"company-test",planCode:"download_license",checkoutId:"checkout-test",ownerEmailConfirmed:true};
 const confirmed={verified:true,paymentId:"tr_123ABC",companyId:"company-test",planCode:"pos_base_monthly",checkoutId:"checkout-test"};
 function mockPool(existing=null) {
  const calls=[];
@@ -50,4 +50,12 @@ test("rejects database missing a unique provider reference index",async()=>{
  assert.equal(result.activated,false);
  assert.equal(result.reason,"unique_payment_constraint_missing");
  assert.equal(calls.some(sql=>sql.startsWith("INSERT INTO company_entitlements")),false);
+});
+
+test("does not grant perpetual monthly POS access for a one-off payment",async()=>{
+ const {pool,calls}=mockPool();
+ const result=await activateVerifiedPosLicense(pool,{...confirmed,planCode:"pos_base_monthly"},{...expected,planCode:"pos_base_monthly"});
+ assert.equal(result.activated,false);
+ assert.equal(result.reason,"recurring_billing_not_implemented");
+ assert.equal(calls.some(x=>x.sql.startsWith("INSERT INTO company_entitlements")),false);
 });
