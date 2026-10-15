@@ -20,6 +20,12 @@ services:
       test: ["CMD-SHELL", "pg_isready -U sandbox_app -d bringness_billing_sandbox"]
       interval: 5s
       retries: 10
+  sandbox-mailpit:
+    image: axllent/mailpit:v1.24
+    restart: "no"
+    networks:
+      - sandbox_private
+    # Mail is captured inside the private network, never delivered externally.
   sandbox-app:
     build:
       context: ../
