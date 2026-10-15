@@ -82,6 +82,46 @@ document.getElementById("owner-form").addEventListener("submit",async function(e
 </script></html>`);
     return;
   }
+  // Internal reconciliation for a confirmed checkout after transient provider
+  // failures. Only the trusted sandbox controller may invoke this endpoint.
+  // A replay never bypasses owner confirmation or Mollie payment verification.
+  if (req.url === "/sandbox/billing/reconcile" && req.method === "POST") {
+    const auth = process.env.SANDBOX_CHECKOUT_TOKEN;
+    if (!auth || auth.length < 32 || req.headers.authorization !== "Bearer " + auth) {
+      res.writeHead(403, {"cache-control":"no-store"}); res.end(); return;
+    }
+    if (req.headers["content-type"] !== "application/json") {
+      res.writeHead(415); res.end(); return;
+    }
+    try {
+      let body = "";
+      for await (const chunk of req) {
+        body += chunk;
+        if (body.length > 256) { res.writeHead(413); res.end(); return; }
+      }
+      const {paymentId} = JSON.parse(body);
+      if (!/^tr_[A-Za-z0-9]+$/.test(String(paymentId || ""))) {
+        res.writeHead(400); res.end(); return;
+      }
+      const checkout = await lookupCheckout(paymentId);
+      if (!checkout?.ownerEmailConfirmed) {
+        res.writeHead(403, {"content-type":"application/json","cache-control":"no-store"});
+        res.end(JSON.stringify({activated:false,reason:"owner_confirmation_required"}));
+        return;
+      }
+      const outcome = await processPosLicenseWebhook({
+        paymentId,lookupCheckout,pool,apiKey:process.env.MOLLIE_API_KEY
+      });
+      res.writeHead(outcome.activated ? 200 : 202, {
+        "content-type":"application/json","cache-control":"no-store"
+      });
+      res.end(JSON.stringify({activated:outcome.activated === true}));
+    } catch {
+      res.writeHead(503, {"content-type":"application/json","cache-control":"no-store"});
+      res.end(JSON.stringify({activated:false,reason:"reconciliation_unavailable"}));
+    }
+    return;
+  }
   // Redirects are informational only. GET must never activate a license.
   if (req.method === "GET" && req.url?.startsWith("/sandbox/billing/return?")) {
     res.writeHead(200, {"content-type":"text/plain; charset=utf-8","cache-control":"no-store"});
