@@ -22,7 +22,7 @@ class ValidatorTests(unittest.TestCase):
     def test_valid_synthetic_config(self):
         self.assertEqual(module.validate(base, password), [])
     def test_rejects_missing_checkout_token(self):
-        self.assertTrue(module.validate(base.replace("SANDBOX_CHECKOUT_TOKEN=abcdefghijklmnopqrstuvwxyzABCDEF123456\\n", ""), password))
+        self.assertTrue(module.validate(base.replace("SANDBOX_CHECKOUT_TOKEN=abcdefghijklmnopqrstuvwxyzABCDEF123456\n", ""), password))
     def test_rejects_insecure_public_origin(self):
         self.assertTrue(module.validate(base.replace("https://sandbox.example.org", "http://sandbox.example.org"), password))
     def test_rejects_live_key(self):
