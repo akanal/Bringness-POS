@@ -13,6 +13,7 @@ services:
       - sandbox_db_password
     volumes:
       - sandbox_pgdata:/var/lib/postgresql/data
+      - ./pos-license-sandbox-init.sql:/docker-entrypoint-initdb.d/01-pos-license-sandbox.sql:ro
     networks:
       - sandbox_private
     healthcheck:
