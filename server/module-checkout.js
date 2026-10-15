@@ -7,7 +7,7 @@ const catalog={
  personnel_monthly:{items:['personnel_monthly'],amountNetCents:1499},
  display_control_monthly:{items:['display_control_monthly'],amountNetCents:999},
  waiter_order_monthly:{items:['waiter_order_monthly'],amountNetCents:null},
- center_monthly:{items:['center_monthly'],amountNetCents:null}
+ center_monthly:{items:['center_monthly'],amountNetCents:2999}
 };
 export function planModuleBasket({base=false,download=false,baseAccess=base,restaurant=false,tableQr=false,activeModules=[],requestedModules=[]}={}){
  const policy=billingPolicy({base,download,baseAccess,restaurant,tableQr});
