@@ -8,7 +8,7 @@ export function createModuleQuoteHandler(db=pool){
  return async function handleModuleQuote(req,res){
   if(new URL(req.url,'http://localhost').pathname!=='/api/v1/billing/module-quote')return false;
   if(req.method!=='POST'){send(res,405,{error:'METHOD_NOT_ALLOWED'});return true;}
-  const token=String(req.headers.authorization||'').replace(/^Bearer\\s+/i,'');
+  const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   if(!token){send(res,401,{error:'UNAUTHORIZED'});return true;}
   const hash=crypto.createHash('sha256').update(token).digest('hex');
   const user=(await db.query("SELECT u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash])).rows[0];
