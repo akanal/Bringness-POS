@@ -23,3 +23,9 @@ Status at creation: checklist only. Sandbox provisioning, checkout and license a
 - The current Docker Compose and credential checks are configuration safeguards only. Passing CI is not evidence of successful Mollie checkout, signed callback verification, isolated startup, or a Netcup deployment.
 
 **Gate:** Do not provision the current full POS sandbox container as a billing-only service until the above runtime risks have been addressed and tested. Production POS must remain unchanged.
+
+## Payment integration separation
+
+The repository contains `server/center-mollie-checkout.js` and `server/center-mollie-payment.js`. These implement **Center restaurant order payments** using a merchant OAuth token and a Mollie payment-status readback. They do **not** establish a verified Bringness POS subscription purchase or write a POS module entitlement. Do not reuse the Center webhook as evidence that POS billing works.
+
+For POS subscription billing, the missing link is a distinct, testable checkout and provider-confirmed entitlement transition. Keep Center merchant credentials and Center order funds separate from Bringness POS licensing and its operator billing account.
