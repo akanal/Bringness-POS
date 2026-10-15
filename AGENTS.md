@@ -107,3 +107,10 @@ Continue authorized development autonomously and preserve established behavior a
 
 ## TSE navigation confirmed 2026-10-14
 - TSE belongs inside Settings, removed from More. Settings retains existing administrative PIN and manager/owner authorization. TSE direct module entry also requires the same administrative unlock; preserve timeout and lock on leaving protected modules. Service panel remains unchanged.
+
+## Modular sales model confirmed 2026-10-15 (supersedes old restaurant package boundaries)
+- Two base products only: online 29.99 EUR net/month and Windows download 399 EUR net once. Retire restaurant tariff for new purchases; never reprice or revoke existing subscriptions automatically.
+- Base includes ordinary cash register and necessary administration only. Tables, kitchen, table QR, display control and personnel are separately bookable paid modules, including for download base. Tables and kitchen are independent modules; no generic restaurant package. TSE separately priced once supplier terms are known, not a claim that fiscal protection is optional for production.
+- Preserve existing functional implementations, UI workflows, stored orders/receipts/employees and prior data. Change only module allocation, entitlement checks and booking/activation.
+- Module booking/management belongs in Settings, requires owner role plus existing service/administrative PIN. Send time-limited single-use confirmation to verified owner email. Email GET must not itself activate purchases. Show exact product, price and duration; activate paid modules only after explicit confirmation and verified provider payment. Staff cannot book modules or incur charges.
+- Prices for new modules remain proposals, not approved live charges: tables 9.99, kitchen 9.99, displays 9.99, personnel 14.99 EUR net/month. Existing QR proposal 29.99 EUR net/month. No guessed final prices or automatic billing migration.
