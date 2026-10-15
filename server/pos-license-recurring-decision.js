@@ -1,10 +1,10 @@
 // Pure decision layer for provider-verified recurring POS payments.
 // This module does not grant entitlements or contact Mollie. Callers must
 // verify the payment against Mollie's API and persist transitions atomically.
-const MONTHLY_PLANS = Object.freeze({
-  online_pos: 2999,
-  restaurant_module: 6999,
-  qr_module: 2999,
+// EUR cents including 19% VAT, consistent with Mollie subscription creation.\nconst MONTHLY_PLANS = Object.freeze({
+  online_pos: 3569,
+  restaurant_module: 8329,
+  qr_module: 3569,
 });
 export function decideMonthlyLicenseTransition({planCode, payment, subscription, companyId, previousPaymentIds = []}) {
   if (!Object.hasOwn(MONTHLY_PLANS, planCode)) return {action:"reject",reason:"unknown_plan"};
