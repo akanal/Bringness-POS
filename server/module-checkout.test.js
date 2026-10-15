@@ -85,3 +85,11 @@ test('Malformed module basket is rejected safely',()=>{
   assert.throws(()=>planModuleBasket({base:true,requestedModules}),/EMPTY_BASKET/);
  assert.throws(()=>planModuleBasket({base:true,requestedModules:[null]}),/INVALID_MODULES/);
 });
+
+test('Malformed existing entitlement data cannot bypass validation',()=>{
+ assert.throws(()=>planModuleBasket({base:true,activeModules:null,requestedModules:['center_monthly']}),/INVALID_ACTIVE_MODULES/);
+ assert.throws(()=>planModuleBasket({base:true,activeModules:[null],requestedModules:['center_monthly']}),/INVALID_ACTIVE_MODULES/);
+});
+test('Existing base entitlement cannot be bought again even if feature cache is stale',()=>{
+ assert.throws(()=>planModuleBasket({activeModules:['pos_base_monthly'],requestedModules:['pos_base_monthly']}),/BASE_LICENSE_ALREADY_ACTIVE/);
+});
