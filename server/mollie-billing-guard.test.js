@@ -32,3 +32,9 @@ test('Nonpaid callback may be identity-verified without implying payment',()=>{
  }
  assert.equal(mollieBillingPaymentMatches({...paid,status:'failed',amount:{currency:'EUR',value:'0.01'}},tx,{requirePaid:false}),false);
 });
+
+test('Unknown provider status cannot pass webhook validation',()=>{
+ for(const status of ['unknown','refunded','chargeback','']){
+  assert.equal(mollieBillingPaymentMatches({...paid,status},tx,{requirePaid:false}),false,status);
+ }
+});
