@@ -9,6 +9,7 @@ function mockPool(existing=null) {
   query:async(sql,args=[])=>{
    calls.push({sql,args});
    if(sql.startsWith("SELECT 1 FROM pg_indexes"))return {rows:[{exists:true}]};
+   if(sql.startsWith("SELECT company_id,plan_code,checkout_id,amount_cents"))return {rows:[{company_id:"company-test",plan_code:"download_license",checkout_id:"checkout-test",amount_cents:39900,owner_email_confirmed_at:"2026-10-15T12:00:00Z"}]};
    if(sql.startsWith("SELECT id FROM billing_plans"))return {rows:[{id:"plan-1"}]};
    if(sql.startsWith("SELECT id,company_id,plan_id"))return {rows:existing?[existing]:[]};
    if(sql.startsWith("INSERT INTO company_entitlements"))return {rows:[{id:"entitlement-1"}]};
@@ -58,4 +59,16 @@ test("does not grant perpetual monthly POS access for a one-off payment",async()
  assert.equal(result.activated,false);
  assert.equal(result.reason,"recurring_billing_not_implemented");
  assert.equal(calls.some(x=>x.sql.startsWith("INSERT INTO company_entitlements")),false);
+});
+
+test("rejects owner confirmation revoked before database commit",async()=>{
+ const calls=[];const pool={connect:async()=>({query:async(sql)=>{
+  calls.push(sql);
+  if(sql.startsWith("SELECT 1 FROM pg_indexes"))return {rows:[{exists:true}]};
+  return {rows:[]};
+ },release:()=>{}})};
+ const result=await activateVerifiedPosLicense(pool,confirmed,expected);
+ assert.equal(result.activated,false);
+ assert.equal(result.reason,"checkout_state_changed");
+ assert.equal(calls.some(sql=>sql.startsWith("INSERT INTO company_entitlements")),false);
 });
