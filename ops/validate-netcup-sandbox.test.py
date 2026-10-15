@@ -25,6 +25,8 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(module.validate(base, "another_long_password_value_123"))
     def test_rejects_production_email(self):
         self.assertTrue(module.validate(base + "SMTP_HOST=production-mail.example\n", password))
+    def test_rejects_mail_password(self):
+        self.assertTrue(module.validate(base + "SMTP_PASSWORD=synthetic_secret\\n", password))
     def test_rejects_overridden_runtime(self):
         self.assertTrue(module.validate(base + "APP_MODE=combined\n", password))
     def test_rejects_duplicate_database_key(self):
