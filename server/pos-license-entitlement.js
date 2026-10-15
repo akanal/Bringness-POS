@@ -35,6 +35,9 @@ export async function activateVerifiedPosLicense(pool, confirmation, expected) {
         ? {activated:true,alreadyActive:true,entitlementId:existing.id}
         : {activated:false,reason:"payment_reference_conflict"};
     }
+    // A one-off entitlement is not a recurring subscription. Do not activate
+    // monthly plans until recurring billing and expiry are implemented.
+    if (expected.planCode !== "download_license") { await client.query("ROLLBACK"); return {activated:false,reason:"recurring_billing_not_implemented"}; }
     const result = await client.query(
       "INSERT INTO company_entitlements(company_id,plan_id,status,provider_reference,purchased_at) VALUES($1,$2,'active',$3,now()) RETURNING id",
       [expected.companyId,plan.id,expected.paymentId]
