@@ -59,16 +59,24 @@ const server = http.createServer(async (req, res) => {
       }
       const { paymentId, token } = JSON.parse(body);
       const confirmed = await confirmOwnerEmail(pool, paymentId, token);
-      res.writeHead(confirmed ? 200 : 400, {"content-type":"application/json","cache-control":"no-store"});
-      res.end(JSON.stringify({confirmed}));
-      // A confirmed mailbox may complete a payment whose earlier webhook was
-      // received before confirmation. Always re-fetch the payment from Mollie.
-      if (confirmed) {
+      // Return a final state only after provider reconciliation. Email ownership
+      // confirmation alone is never evidence of a paid Mollie transaction.
+      if (!confirmed) {
+        res.writeHead(400, {"content-type":"application/json","cache-control":"no-store"});
+        res.end(JSON.stringify({confirmed:false,activated:false}));
+      } else {
+        let outcome;
         try {
-          await processPosLicenseWebhook({paymentId,lookupCheckout,pool,apiKey:process.env.MOLLIE_API_KEY});
-        } catch (error) {
-          console.error("Sandbox owner confirmation reconciliation failed", error?.message);
+          outcome = await processPosLicenseWebhook({
+            paymentId,lookupCheckout,pool,apiKey:process.env.MOLLIE_API_KEY
+          });
+        } catch {
+          res.writeHead(503, {"content-type":"application/json","cache-control":"no-store"});
+          res.end(JSON.stringify({confirmed:true,activated:false,reason:"provider_temporarily_unavailable"}));
+          return;
         }
+        res.writeHead(outcome.activated ? 200 : 202, {"content-type":"application/json","cache-control":"no-store"});
+        res.end(JSON.stringify({confirmed:true,activated:outcome.activated === true}));
       }
     } catch {
       res.writeHead(400, {"content-type":"application/json","cache-control":"no-store"});
