@@ -1,6 +1,6 @@
 // Validate the provider-fetched payment against the recorded transaction before any entitlement changes.
 export function mollieBillingPaymentMatches(payment,transaction){
- if(!payment||!transaction||payment.id!==transaction.provider_payment_id)return false;
+ if(!payment||!transaction||payment.status!=='paid'||payment.id!==transaction.provider_payment_id)return false;
  if(payment.amount?.currency!==transaction.currency||payment.amount.currency!=='EUR')return false;
  const value=payment.amount?.value;
  if(typeof value!=='string'||!/^\d+\.\d{2}$/.test(value))return false;
