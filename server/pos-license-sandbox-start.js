@@ -46,6 +46,42 @@ const server = http.createServer(async (req, res) => {
     } catch { res.writeHead(422,{"content-type":"application/json"});res.end(JSON.stringify({error:"checkout_unavailable"})); }
     return;
   }
+  // Owner enters the one-time code from the isolated sandbox mail inbox.
+  // This page only displays a form; it cannot activate a license via GET.
+  if (req.url === "/sandbox/billing/owner/confirm" && req.method === "GET") {
+    res.writeHead(200, {
+      "content-type":"text/html; charset=utf-8",
+      "cache-control":"no-store",
+      "content-security-policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "x-content-type-options":"nosniff"
+    });
+    res.end(`<!doctype html><html lang="de"><meta charset="utf-8">
+<title>Bringness POS – E-Mail bestätigen (Sandbox)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{font:16px system-ui;max-width:32rem;margin:3rem auto;padding:1rem}label{display:block;margin:1rem 0}input,button{font:inherit;padding:.7rem;width:100%;box-sizing:border-box}button{cursor:pointer}#result{margin-top:1rem}</style>
+<h1>E-Mail-Adresse bestätigen</h1><p>Nur Testumgebung. Gib die Zahlungs-ID und den Code aus der Sandbox-Mail ein.</p>
+<form id="owner-form"><label>Zahlungs-ID<input name="paymentId" pattern="tr_[A-Za-z0-9]+" required autocomplete="off"></label>
+<label>Bestätigungscode<input name="token" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+<button type="submit">Bestätigen</button></form><p id="result" role="status"></p>
+<script>
+document.getElementById("owner-form").addEventListener("submit",async function(event){
+ event.preventDefault();
+ const result=document.getElementById("result");result.textContent="Wird geprüft …";
+ const form=new FormData(this);
+ try{
+  const response=await fetch("/sandbox/billing/owner/confirm",{
+   method:"POST",headers:{"content-type":"application/json"},
+   body:JSON.stringify({paymentId:form.get("paymentId"),token:form.get("token")})
+  });
+  const data=await response.json();
+  result.textContent=data.activated?"E-Mail bestätigt und Lizenz aktiviert.":
+   data.confirmed?"E-Mail bestätigt. Zahlung noch nicht als bezahlt verifiziert.":
+   "Bestätigung nicht möglich. Bitte Code und Zahlungs-ID prüfen.";
+ }catch{result.textContent="Verbindung fehlgeschlagen. Bitte später erneut versuchen.";}
+});
+</script></html>`);
+    return;
+  }
   // Redirects are informational only. GET must never activate a license.
   if (req.method === "GET" && req.url?.startsWith("/sandbox/billing/return?")) {
     res.writeHead(200, {"content-type":"text/plain; charset=utf-8","cache-control":"no-store"});
