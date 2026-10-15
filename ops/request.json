@@ -1,1 +1,5 @@
-{"operation":"deploy","target":"pos","requestId":"waiter-category-swipe-20261014"}
+{
+  "operation": "status",
+  "target": "all",
+  "requestId": "netcup-status-20261015"
+}
