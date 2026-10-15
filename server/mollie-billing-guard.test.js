@@ -18,3 +18,9 @@ test('Mollie webhook rejects altered amount, currency, identity, and plan',()=>{
   null
  ])assert.equal(mollieBillingPaymentMatches(change,tx),false);
 });
+
+test('Mollie webhook rejects all non-paid statuses',()=>{
+ for(const status of ['open','pending','failed','canceled','expired','authorized']){
+  assert.equal(mollieBillingPaymentMatches({...paid,status},tx),false,status);
+ }
+});
