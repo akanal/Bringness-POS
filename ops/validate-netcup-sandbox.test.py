@@ -6,7 +6,7 @@ spec = importlib.util.spec_from_file_location("validator", Path(__file__).with_n
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 password = "a_very_long_unique_test_password_123"
-base = f"DATABASE_URL=postgresql://sandbox_app:{password}@sandbox-db:5432/bringness_billing_sandbox\nMOLLIE_API_KEY=test_abcdefghijklmnopqrstuvwxyz\n"
+base = f"DATABASE_URL=postgresql://sandbox_app:{password}@sandbox-db:5432/bringness_billing_sandbox\nMOLLIE_API_KEY=test_abcdefghijklmnopqrstuvwxyz\nSANDBOX_CHECKOUT_TOKEN=abcdefghijklmnopqrstuvwxyzABCDEF123456\nSANDBOX_PUBLIC_BASE_URL=https://sandbox.example.org\n"
 
 class ValidatorTests(unittest.TestCase):
     def test_runtime_guard_is_invoked_by_container(self):
@@ -21,6 +21,10 @@ class ValidatorTests(unittest.TestCase):
         self.assertIn("credential_markers", source)
     def test_valid_synthetic_config(self):
         self.assertEqual(module.validate(base, password), [])
+    def test_rejects_missing_checkout_token(self):
+        self.assertTrue(module.validate(base.replace("SANDBOX_CHECKOUT_TOKEN=abcdefghijklmnopqrstuvwxyzABCDEF123456\\n", ""), password))
+    def test_rejects_insecure_public_origin(self):
+        self.assertTrue(module.validate(base.replace("https://sandbox.example.org", "http://sandbox.example.org"), password))
     def test_rejects_live_key(self):
         self.assertTrue(module.validate(base.replace("test_abcdefghijklmnopqrstuvwxyz", "live_abcdefghijklmnopqrstuvwxyz"), password))
     def test_rejects_production_database(self):
