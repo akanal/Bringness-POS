@@ -12,6 +12,8 @@ on:
       - 'ops/netcup-sandbox.compose.yml'
       - 'ops/netcup-sandbox.Dockerfile'
       - 'ops/netcup-sandbox-compose.test.py'
+      - 'ops/validate-netcup-sandbox.py'
+      - 'ops/validate-netcup-sandbox.test.py'
       - '.github/workflows/netcup-sandbox-safety-tests.yml'
   pull_request:
     paths:
@@ -35,6 +37,7 @@ jobs:
       - run: bash -n ops/netcup-sandbox-dispatcher.sh
       - run: python3 ops/netcup-sandbox-dispatcher.test.py
       - run: python3 ops/netcup-sandbox-compose.test.py
+      - run: python3 ops/validate-netcup-sandbox.test.py
       - name: Validate sandbox Compose without real credentials
         run: |
           set -euo pipefail
