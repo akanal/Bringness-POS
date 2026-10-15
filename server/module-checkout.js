@@ -10,14 +10,16 @@ const catalog={
  waiter_order_monthly:{items:['waiter_order_monthly'],amountNetCents:null},
  center_monthly:{items:['center_monthly','table_management_monthly'],amountNetCents:3989}
 };
-export function planModuleBasket({base=false,download=false,baseAccess=base,restaurant=false,tableQr=false,activeModules=[],requestedModules=[]}={}){
- const policy=billingPolicy({base,download,baseAccess,restaurant,tableQr});
+export function planModuleBasket({base=false,download=false,baseAccess=base,tableQr=false,activeModules=[],requestedModules=[]}={}){
+ const policy=billingPolicy({base,download,baseAccess,tableQr});
  if(!Array.isArray(requestedModules)||requestedModules.length===0) throw new Error('EMPTY_BASKET');
  if(requestedModules.some(module=>typeof module!=='string')) throw new Error('INVALID_MODULES');
  if(new Set(requestedModules).size!==requestedModules.length) throw new Error('DUPLICATE_MODULE');
  const orderingBase=requestedModules.includes('pos_base_monthly');
  if(!policy.features.pos_base&&!orderingBase) throw new Error('BASE_LICENSE_REQUIRED');
  if(orderingBase&&policy.features.pos_base) throw new Error('BASE_LICENSE_ALREADY_ACTIVE');
+ if(orderingBase&&activeModules.includes('pos_base_monthly')) throw new Error('BASE_LICENSE_ALREADY_ACTIVE');
+ if(!Array.isArray(activeModules)||activeModules.some(module=>typeof module!=='string')) throw new Error('INVALID_ACTIVE_MODULES');
  const active=new Set(activeModules);
  if(tableQr) active.add('table_qr_monthly');
  // Operating modes are mutually exclusive: Center, restaurant QR, or counter/waiter ordering.
