@@ -3,6 +3,7 @@ import {billingPolicy} from './billing-policy.js';
 // Quote several optional modules together without activating any entitlement.
 // Prices not yet configured are explicitly left unresolved, never charged as zero.
 const catalog={
+ pos_base_monthly:{items:['pos_base_monthly'],amountNetCents:3499},
  table_qr_monthly:{items:['table_qr_monthly','table_management_monthly'],amountNetCents:3989},
  personnel_monthly:{items:['personnel_monthly'],amountNetCents:1499},
  display_control_monthly:{items:['display_control_monthly'],amountNetCents:999},
@@ -11,7 +12,9 @@ const catalog={
 };
 export function planModuleBasket({base=false,download=false,baseAccess=base,restaurant=false,tableQr=false,activeModules=[],requestedModules=[]}={}){
  const policy=billingPolicy({base,download,baseAccess,restaurant,tableQr});
- if(!policy.features.pos_base) throw new Error('BASE_LICENSE_REQUIRED');
+ const orderingBase=requestedModules.includes('pos_base_monthly');
+ if(!policy.features.pos_base&&!orderingBase) throw new Error('BASE_LICENSE_REQUIRED');
+ if(orderingBase&&policy.features.pos_base) throw new Error('BASE_LICENSE_ALREADY_ACTIVE');
  if(!Array.isArray(requestedModules)||requestedModules.length===0) throw new Error('EMPTY_BASKET');
  if(new Set(requestedModules).size!==requestedModules.length) throw new Error('DUPLICATE_MODULE');
  const active=new Set(activeModules);
