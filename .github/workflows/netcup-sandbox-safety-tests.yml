@@ -5,6 +5,7 @@ on:
     paths:
       - 'ops/select-operation.js'
       - 'ops/select-operation.test.js'
+      - 'ops/netcup-sandbox-preflight.sh'
       - '.github/workflows/netcup-sandbox-safety-tests.yml'
   pull_request:
     paths:
@@ -23,3 +24,4 @@ jobs:
         with:
           node-version: 24
       - run: node --test ops/select-operation.test.js
+      - run: bash -n ops/netcup-sandbox-preflight.sh
