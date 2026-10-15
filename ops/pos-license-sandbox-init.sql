@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS sandbox_pos_license_checkouts (
   plan_code text NOT NULL CHECK (plan_code = 'download_license'),
   checkout_id text NOT NULL UNIQUE,
   amount_cents integer NOT NULL CHECK (amount_cents = 39900),
+  owner_email text NOT NULL DEFAULT '',
   owner_email_confirmed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
