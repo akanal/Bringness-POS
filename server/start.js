@@ -4,6 +4,7 @@ import {createWaiterDelivery,migrateWaiterDelivery} from './waiter-push-delivery
 import {createSandboxWorker,migrateFiskalySandbox,sandboxStatus,requestFiskalySetup,onboardingRequest} from './fiskaly-sandbox.js';
 import {createFiskalyTest,migrateFiskalyTest} from './fiskaly-test.js';
 import {createPackageAccess} from './package-access.js';
+import {createModuleQuoteHandler} from './module-quote-api.js';
 import {createWaiterWorkflow,migrateWaiterWorkflow} from './waiter-workflow.js';
 import {migrateTransactionalMail,createMailWorker,createMailStatus} from './transactional-mail.js';
 import {renderMailReceipt} from './payment-receipt.js';
@@ -56,6 +57,7 @@ const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
+const handleModuleQuote=createModuleQuoteHandler(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
@@ -112,6 +114,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;
+      if (appMode!=='ai' && await handleModuleQuote(req,res)) return;
       if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
