@@ -24,3 +24,11 @@ test('Mollie webhook rejects all non-paid statuses',()=>{
   assert.equal(mollieBillingPaymentMatches({...paid,status},tx),false,status);
  }
 });
+
+test('Nonpaid callback may be identity-verified without implying payment',()=>{
+ for(const status of ['pending','failed','canceled','expired']){
+  assert.equal(mollieBillingPaymentMatches({...paid,status},tx,{requirePaid:false}),true,status);
+  assert.equal(mollieBillingPaymentMatches({...paid,status},tx),false,status);
+ }
+ assert.equal(mollieBillingPaymentMatches({...paid,status:'failed',amount:{currency:'EUR',value:'0.01'}},tx,{requirePaid:false}),false);
+});
