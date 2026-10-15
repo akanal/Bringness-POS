@@ -93,3 +93,12 @@ test('Malformed existing entitlement data cannot bypass validation',()=>{
 test('Existing base entitlement cannot be bought again even if feature cache is stale',()=>{
  assert.throws(()=>planModuleBasket({activeModules:['pos_base_monthly'],requestedModules:['pos_base_monthly']}),/BASE_LICENSE_ALREADY_ACTIVE/);
 });
+
+test('Free base feature may upgrade to paid base subscription with Center',()=>{
+ const p=planModuleBasket({baseAccess:true,requestedModules:['pos_base_monthly','center_monthly']});
+ assert.equal(p.amountNetCents,7488);
+ assert.equal(p.grantAccess,false);
+});
+test('Download license cannot be charged a second base license',()=>{
+ assert.throws(()=>planModuleBasket({download:true,requestedModules:['pos_base_monthly']}),/BASE_LICENSE_ALREADY_ACTIVE/);
+});
