@@ -67,3 +67,5 @@ test('Quote API reports database outage as server error without leaking details'
  assert.equal(res.result.status,500);
  assert.deepEqual(res.result.payload,{error:'INTERNAL_ERROR'});
 });
+
+test('Only owner may request module pricing', async()=>{for(const role of ['manager','admin','platform_admin','waiter']){const mock={async query(){return {rows:[{company_id:'company-1',role}]};}};const res=response();await createModuleQuoteHandler(mock)(request(['pos_base_monthly']),res);assert.equal(res.result.status,403);}});
