@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - run: node --test ops/select-operation.test.js server/pos-license-payment-verification.test.js server/pos-license-mollie-confirmation.test.js server/pos-license-entitlement.test.js
+      - run: node --test ops/select-operation.test.js server/pos-license-payment-verification.test.js server/pos-license-mollie-confirmation.test.js server/pos-license-entitlement.test.js server/pos-license-webhook-flow.test.js
       - run: bash -n ops/netcup-sandbox-preflight.sh
       - run: python3 ops/netcup-sandbox-preflight.test.py
       - run: python3 ops/netcup-sandbox-command.test.py
