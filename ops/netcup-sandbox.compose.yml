@@ -1,5 +1,5 @@
 # Isolated Netcup billing test stack. Never run with production env files.
-# Required: a dedicated external Docker network, test-only credentials, and
+# Required: a dedicated Compose-managed Docker network, test-only credentials, and
 # separate sandbox database volume. This file does not create public routes.
 services:
   sandbox-db:
@@ -45,7 +45,8 @@ services:
     # No production network, production database, or production bind mount.
 networks:
   sandbox_private:
-    # Dedicated network with outbound HTTPS for Mollie TEST API; no production attachment.
+    # Dedicated network; the sandbox app can reach Mollie TEST over HTTPS.
+    # Never attach this network to production services.
 volumes:
   sandbox_pgdata:
 secrets:
