@@ -13,6 +13,11 @@ export async function activateVerifiedPosLicense(pool, confirmation, expected) {
     await client.query("BEGIN");
     // Serialize concurrent callbacks for the same Mollie reference.
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [expected.paymentId]);
+    // Never write without a database-enforced unique provider reference.
+    const constraint = (await client.query(
+      "SELECT 1 FROM pg_indexes WHERE schemaname=current_schema() AND tablename='company_entitlements' AND indexdef ILIKE 'CREATE UNIQUE INDEX%' AND indexdef LIKE '%provider_reference%' LIMIT 1"
+    )).rows[0];
+    if (!constraint) { await client.query("ROLLBACK"); return {activated:false,reason:"unique_payment_constraint_missing"}; }
     const plan = (await client.query(
       "SELECT id FROM billing_plans WHERE code=$1 AND active=true FOR SHARE",
       [expected.planCode]
