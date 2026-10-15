@@ -70,6 +70,13 @@ def main():
                            "SMTP_PASS", "SMTP_PASSWORD", "BREVO_API_KEY", "FISKALY_API_KEY",
                            "MOLLIE_LIVE_KEY", "SENDGRID_API_KEY", "RESEND_API_KEY"))
         errors += validate(values, password_file.read_text())
+        # Do not silently ignore unexpected integration credentials supplied
+        # through the container environment.
+        credential_markers = ("SECRET", "TOKEN", "API_KEY", "PASSWORD", "PRIVATE_KEY")
+        approved = {"MOLLIE_API_KEY"}
+        if any(k not in approved and any(marker in k.upper() for marker in credential_markers)
+               for k in os.environ):
+            errors.append("Unexpected integration credential in sandbox runtime")
         if any(k in os.environ for k in ("PGPORT", "PGPASSWORD", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE", "PGOPTIONS")):
             errors.append("Unexpected PostgreSQL runtime override")
     else:
