@@ -9,6 +9,16 @@ password = "a_very_long_unique_test_password_123"
 base = f"DATABASE_URL=postgresql://sandbox_app:{password}@sandbox-db:5432/bringness_billing_sandbox\nMOLLIE_API_KEY=test_abcdefghijklmnopqrstuvwxyz\n"
 
 class ValidatorTests(unittest.TestCase):
+    def test_startup_requires_matching_runtime_and_secret(self):
+        import os, subprocess, tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            from pathlib import Path
+            p = Path(tmp) / 'password'
+            p.write_text(password)
+            with patch.object(module.pathlib, 'Path', wraps=Path):
+                pass
+        self.assertTrue(module.validate(base.replace('sandbox-db', 'bringness-db'), password))
     def test_valid_synthetic_config(self):
         self.assertEqual(module.validate(base, password), [])
     def test_rejects_live_key(self):
