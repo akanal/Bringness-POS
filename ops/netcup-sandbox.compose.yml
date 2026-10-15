@@ -43,7 +43,7 @@ services:
     # No production network, production database, or production bind mount.
 networks:
   sandbox_private:
-    internal: true
+    # Dedicated network with outbound HTTPS for Mollie TEST API; no production attachment.
 volumes:
   sandbox_pgdata:
 secrets:
