@@ -3,6 +3,12 @@ set -Eeuo pipefail
 umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 request="${SSH_ORIGINAL_COMMAND:-}"
+# Separate read-only sandbox operation. Must be installed on Netcup by an
+# authorized administrator before SSH can invoke it; repo edits alone do not
+# change the currently installed forced-command handler.
+if [[ "$request" == "sandbox-preflight read-only" ]]; then
+  exec /usr/local/libexec/bringness/netcup-sandbox-preflight.sh --read-only
+fi
 if [[ ! "$request" =~ ^(status|backup|restart|deploy)[[:space:]](all|pos|ai)([[:space:]][0-9a-f]{40})?$ ]]; then
   echo "Invalid operation" >&2; exit 64
 fi
