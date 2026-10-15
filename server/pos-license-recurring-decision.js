@@ -1,7 +1,8 @@
 // Pure decision layer for provider-verified recurring POS payments.
 // This module does not grant entitlements or contact Mollie. Callers must
 // verify the payment against Mollie's API and persist transitions atomically.
-// EUR cents including 19% VAT, consistent with Mollie subscription creation.\nconst MONTHLY_PLANS = Object.freeze({
+// EUR cents including 19% VAT, consistent with Mollie subscription creation.
+const MONTHLY_PLANS = Object.freeze({
   online_pos: 3569,
   restaurant_module: 8329,
   qr_module: 3569,
