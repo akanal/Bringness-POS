@@ -1,0 +1,44 @@
+name: Netcup sandbox read-only probe
+on:
+  push:
+    branches: [netcup-isolated-mollie-sandbox-20261015]
+    paths:
+      - '.github/workflows/netcup-sandbox-readonly-probe.yml'
+permissions:
+  contents: read
+concurrency:
+  group: netcup-sandbox-readonly-probe
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NETCUP_SSH_KEY: ${{ secrets.NETCUP_SSH_KEY }}
+      NETCUP_KNOWN_HOSTS: ${{ secrets.NETCUP_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check read-only script
+        run: |
+          bash -n ops/netcup-sandbox-preflight.sh
+          python3 ops/netcup-sandbox-preflight.test.py
+      - name: Run existing approved SSH status operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ -n "$NETCUP_SSH_KEY" && -n "$NETCUP_KNOWN_HOSTS" ]] || { echo 'Existing SSH configuration unavailable'; exit 2; }
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          printf '%s\n' "$NETCUP_SSH_KEY" > "$work/key"
+          printf '%s\n' "$NETCUP_KNOWN_HOSTS" > "$work/known_hosts"
+          chmod 600 "$work/key" "$work/known_hosts"
+          ssh -T -i "$work/key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
+            -o ConnectTimeout=15 root@152.53.196.43 'status all'
+      - name: Record preflight boundary
+        run: |
+          echo 'Authenticated Netcup status only. Extended sandbox preflight requires a separately installed, audited server allowlist.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No server scripts were installed, no database was created, and no production service was modified.' >> "$GITHUB_STEP_SUMMARY"
