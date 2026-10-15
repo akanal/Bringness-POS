@@ -1,0 +1,51 @@
+# Isolated Netcup billing test stack. Never run with production env files.
+# Required: a dedicated external Docker network, test-only credentials, and
+# separate sandbox database volume. This file does not create public routes.
+services:
+  sandbox-db:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: bringness_billing_sandbox
+      POSTGRES_USER: sandbox_app
+      POSTGRES_PASSWORD_FILE: /run/secrets/sandbox_db_password
+    secrets:
+      - sandbox_db_password
+    volumes:
+      - sandbox_pgdata:/var/lib/postgresql/data
+    networks:
+      - sandbox_private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sandbox_app -d bringness_billing_sandbox"]
+      interval: 5s
+      retries: 10
+  sandbox-app:
+    build:
+      context: ../
+      dockerfile: ops/netcup-sandbox.Dockerfile
+    restart: "no"
+    depends_on:
+      sandbox-db:
+        condition: service_healthy
+    env_file:
+      - ./sandbox.test.env
+    environment:
+      APP_MODE: pos
+      PORT: "3000"
+      PGHOST: sandbox-db
+      PGDATABASE: bringness_billing_sandbox
+      PGUSER: sandbox_app
+      NODE_ENV: test
+    ports:
+      - "127.0.0.1:3015:3000"
+    networks:
+      - sandbox_private
+    # No production network, production database, or production bind mount.
+networks:
+  sandbox_private:
+    internal: true
+volumes:
+  sandbox_pgdata:
+secrets:
+  sandbox_db_password:
+    file: ./sandbox-db-password.txt
