@@ -43,7 +43,10 @@ def validate(env_text: str, db_password: str) -> list[str]:
         errors.append("Invalid sandbox database URL")
     if len(db_password.strip()) < 24:
         errors.append("Sandbox database password too short")
-    if any(k in values for k in ("SMTP_HOST", "BREVO_API_KEY", "FISKALY_API_KEY", "MOLLIE_LIVE_KEY")):
+    forbidden = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_PASSWORD",
+                 "BREVO_API_KEY", "FISKALY_API_KEY", "MOLLIE_LIVE_KEY",
+                 "SENDGRID_API_KEY", "RESEND_API_KEY")
+    if any(k in values for k in forbidden):
         errors.append("Outbound production integrations forbidden")
     return errors
 
@@ -60,7 +63,10 @@ def main():
         expected = {"APP_MODE": "pos", "PORT": "3000", "PGHOST": "sandbox-db",
                     "PGDATABASE": "bringness_billing_sandbox", "PGUSER": "sandbox_app", "NODE_ENV": "test"}
         errors = ["Unexpected sandbox runtime setting"] if any(os.environ.get(k) != v for k, v in expected.items()) else []
-        values = "\n".join(f"{k}={v}" for k, v in os.environ.items() if k not in expected)
+        values = "\n".join(f"{k}={v}" for k, v in os.environ.items()
+                           if k in REQUIRED or k in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER",
+                           "SMTP_PASS", "SMTP_PASSWORD", "BREVO_API_KEY", "FISKALY_API_KEY",
+                           "MOLLIE_LIVE_KEY", "SENDGRID_API_KEY", "RESEND_API_KEY"))
         errors += validate(values, password_file.read_text())
     else:
         errors = validate(env_file.read_text(), password_file.read_text())
