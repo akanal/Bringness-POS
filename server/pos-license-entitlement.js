@@ -8,6 +8,7 @@ export async function activateVerifiedPosLicense(pool, confirmation, expected) {
       expected.ownerEmailConfirmed !== true) {
     return { activated: false, reason: "confirmation_required" };
   }
+  if (expected.planCode !== "download_license") return {activated:false,reason:"recurring_billing_not_implemented"};
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
