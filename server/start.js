@@ -176,6 +176,9 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
   return originalCreateReadStream(filePath, options);
 };
 
+const mollieKeyMode = process.env.MOLLIE_API_KEY?.startsWith('test_') ? 'test' : process.env.MOLLIE_API_KEY?.startsWith('live_') ? 'live' : 'missing-or-unrecognized';
+console.info('Mollie credential mode:', mollieKeyMode);
+if (process.env.RAILWAY_PROJECT_ID === '7b5d969a-6459-40cb-b542-8ec2f1363172' && mollieKeyMode !== 'test') console.error('SANDBOX PAYMENT SAFETY: Mollie test credentials not confirmed; do not initiate payment tests.');
 await import("./index.js");
 ensureLanguageDatabase().catch(error=>console.error("Language database startup:",error.code||error.name));
 
