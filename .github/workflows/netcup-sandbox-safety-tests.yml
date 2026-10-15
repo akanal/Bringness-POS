@@ -35,4 +35,10 @@ jobs:
       - run: bash -n ops/netcup-sandbox-dispatcher.sh
       - run: python3 ops/netcup-sandbox-dispatcher.test.py
       - run: python3 ops/netcup-sandbox-compose.test.py
-      - run: docker compose -f ops/netcup-sandbox.compose.yml config --quiet
+      - name: Validate sandbox Compose without real credentials
+        run: |
+          set -euo pipefail
+          trap 'rm -f ops/sandbox.test.env ops/sandbox-db-password.txt' EXIT
+          printf 'DATABASE_URL=postgresql://sandbox_app:placeholder@sandbox-db:5432/bringness_billing_sandbox\\nMOLLIE_API_KEY=test_placeholder\\n' > ops/sandbox.test.env
+          printf 'placeholder\\n' > ops/sandbox-db-password.txt
+          docker compose -f ops/netcup-sandbox.compose.yml config --quiet
