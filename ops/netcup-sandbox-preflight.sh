@@ -19,7 +19,9 @@ else
   echo 'Production Docker network: missing'
 fi
 for port in 3015 3016; do
-  if command -v ss >/dev/null && ss -lnt "( sport = :$port )" | tail -n +2 | grep -q .; then
+  if ! command -v ss >/dev/null; then
+    printf 'Proposed sandbox port %s: unknown (ss unavailable)\\n' "$port"
+  elif ss -lnt "( sport = :$port )" | tail -n +2 | grep -q .; then
     printf 'Proposed sandbox port %s: occupied\n' "$port"
   else
     printf 'Proposed sandbox port %s: no TCP listener observed\n' "$port"
