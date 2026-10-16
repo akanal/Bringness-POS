@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
+import pg from 'pg';
 import {createDeviceLicenseHandler,migrateDeviceLicense} from '../device-license.js';
 
-const db=new PGlite(),id=()=>crypto.randomUUID(),hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+const postgres=!!process.env.DEVICE_TEST_DATABASE_URL;
+const db=postgres?new pg.Pool({connectionString:process.env.DEVICE_TEST_DATABASE_URL}):new PGlite();
+if(postgres){db.exec=sql=>db.query(sql);db.close=()=>db.end();}
+const id=()=>crypto.randomUUID(),hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 try{
  await db.exec(`CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,email text,display_name text,role text,status text,must_change_password boolean DEFAULT false);
   CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
@@ -12,7 +16,7 @@ try{
   CREATE TABLE devices(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid,device_key text UNIQUE,name text,platform text,app_version text,status text,last_seen_at timestamptz,entitlement_id uuid);
   CREATE TABLE software_releases(id uuid PRIMARY KEY,version text,active boolean,platform text,channel text,created_at timestamptz DEFAULT now());
   CREATE TABLE audit_log(company_id uuid,actor_user_id uuid,event_type text,entity_type text,entity_id uuid,payload jsonb);`);
- const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length};};
+ const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.rowCount??r.affectedRows??r.rows.length};};
  const pool={query,connect:async()=>({query,release(){}})};
  await migrateDeviceLicense(pool);await migrateDeviceLicense(pool);
  const company=id(),other=id(),owner=id(),staff=id(),otherOwner=id(),plan=id(),entitlement=id(),otherEntitlement=id();
@@ -54,5 +58,16 @@ try{
  assert.equal((await http('check','staff')).status,402);
  assert.equal((await http('activate','other',{deviceKey:[otherKey]})).status,400);
  assert.equal((await query("SELECT count(*) n FROM audit_log WHERE event_type='download_device_activated'")).rows[0].n,2);
+ if(postgres){
+  const concurrentOwner=id(),concurrentCompany=id(),concurrentEntitlement=id();
+  await query("INSERT INTO users(id,company_id,email,display_name,role,status) VALUES($1,$2,'parallel@example.test','Parallel','owner','active')",[concurrentOwner,concurrentCompany]);
+  await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[concurrentOwner,hash('parallel')]);
+  await query("INSERT INTO company_entitlements(id,company_id,plan_id,status) VALUES($1,$2,$3,'active')",[concurrentEntitlement,concurrentCompany,plan]);
+  const parallel=await Promise.all(['c','d'].map(letter=>http('activate','parallel',{deviceKey:letter.repeat(64)})));
+  assert.deepEqual(parallel.map(r=>r.status).sort(),[200,409]);
+  assert.equal((await query("SELECT 1 FROM devices WHERE entitlement_id=$1 AND status='active' AND activation_status='active'",[concurrentEntitlement])).rowCount,1);
+  assert.equal((await query('SELECT 1 FROM audit_log WHERE company_id=$1',[concurrentCompany])).rowCount,1);
+  console.log('PostgreSQL concurrent activation passed: two simultaneous device claims produce one activation, one 409 and one audit entry.');
+ }
  console.log('Device licensing passed: owner activation, staff renewal, one-device limit, tenant ownership, atomic audit, disabled devices, password gate, entitlement revocation and independent update discovery.');
 }finally{await db.close();}

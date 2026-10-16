@@ -11,6 +11,17 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: device_test
+          POSTGRES_PASSWORD: device_test
+          POSTGRES_DB: bringness_device_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U device_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +35,10 @@ jobs:
       - run: node server/ai-tests/remote-support.mjs
       - run: node server/ai-tests/admin-audit.mjs
       - run: node server/ai-tests/device-license.mjs
+      - name: Verify simultaneous device activation on PostgreSQL
+        run: node server/ai-tests/device-license.mjs
+        env:
+          DEVICE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/offline-accountant.mjs
       - run: node server/ai-tests/automatic-policy.mjs
       - run: node server/ai-tests/consumption-history.mjs

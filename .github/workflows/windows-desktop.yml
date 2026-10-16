@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
   push:
-    branches: [main]
+    branches: [main, 'finish/**']
     paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
 permissions:
   contents: write
@@ -17,7 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: 20}
       - run: npm ci
-      - run: node --test offline-sync.test.mjs
+      - run: npm test
+      - run: node --check main.cjs
       - run: npm run prepare:offline
       - name: Verify offline cash UI and native IPC isolation
         run: npx electron offline-smoke.cjs
@@ -44,7 +45,7 @@ jobs:
           "signed=$($valid.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           if (-not $valid) { "Unsigned test build only; public installer was not replaced." >> $env:GITHUB_STEP_SUMMARY }
       - name: Publish latest installer asset
-        if: github.event_name != 'pull_request' && steps.signature.outputs.signed == 'true'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.signature.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-latest
