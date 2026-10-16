@@ -64,3 +64,9 @@ test('offline sale rejects non-string timestamps',()=>{
   assert.throws(()=>quoteOfflineSale(snapshot,{...sale,createdAt}),/Offline-Zeit/);
  }
 });
+
+test('offline sale rejects malformed identifier types',()=>{
+ for(const id of [null,123,{},[],true]){
+  assert.throws(()=>quoteOfflineSale(snapshot,{...sale,id}),/Offline-Kennung/);
+ }
+});
