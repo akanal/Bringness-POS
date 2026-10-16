@@ -81,3 +81,14 @@ test('unrepresentable total is explicitly flagged for manual review',()=>{
  assert.deepEqual(result.unresolved.map(x=>x.stockId),['a','b']);
  assert(result.unresolved.every(x=>/Gesamtbetrag/.test(x.reason)));
 });
+
+test('unmet minimum on one supplier cannot create a partially approved multi-supplier order',()=>{
+ const result=prepareProcurement([
+  item('first',[offer('a','A',100,1000)]),
+  item('second',[offer('b','B',300,0)])
+ ]);
+ assert.equal(result.complete,false);
+ assert.equal(result.lines.length,0);
+ assert.equal(result.netCents,0);
+ assert.deepEqual(result.unresolved.map(x=>x.stockId),['first','second']);
+});
