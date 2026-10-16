@@ -26,10 +26,14 @@ export async function createOfflineLedger(db,quote) {
    const counts=(await db.query('SELECT count(*) FILTER (WHERE synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE synced_at IS NULL AND error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE synced_at IS NOT NULL)::bigint AS synced FROM offline_sales')).rows[0];
    return {snapshot,sales,counts:{pending:Number(counts.pending),errors:Number(counts.errors),synced:Number(counts.synced)}};
   },
-  async sale(request){return db.transaction(async tx=>{
+  async sale(request,expectedDeviceKey){return db.transaction(async tx=>{
    if(!request||typeof request!=='object'||Array.isArray(request)||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.snapshotId))throw Error('Ungültige Offline-Verkaufskennung.');
    const old=(await tx.query('SELECT receipt,request=$2::jsonb AS matches FROM offline_sales WHERE id=$1',[request.id,JSON.stringify(request)])).rows[0];
    if(old){if(!old.matches)throw Error('Verkaufskennung bereits verwendet');return old.receipt;}
+   if(expectedDeviceKey){
+    const current=(await tx.query('SELECT payload->>\'deviceKey\' AS device_key FROM offline_catalog WHERE current')).rows[0];
+    if(current?.device_key!==expectedDeviceKey)throw Error('Offline-Katalog gehört nicht zu diesem Gerät.');
+   }
    const snapshot=(await tx.query("SELECT c.payload FROM offline_catalog c WHERE c.id=$1 AND c.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current) AND c.payload->>'deviceKey'=(SELECT payload->>'deviceKey' FROM offline_catalog WHERE current)",[request.snapshotId])).rows[0]?.payload;
    if(!snapshot||typeof snapshot.validUntil!=='string'||!Number.isFinite(Date.parse(snapshot.validUntil))||Date.now()>Date.parse(snapshot.validUntil))throw Error('Offline-Freigabe abgelaufen. Bitte online anmelden.');
    const receipt=quote(snapshot,request);if(!receipt||receipt.id!==request.id||!Array.isArray(receipt.items)||receipt.items.length===0||!Number.isSafeInteger(receipt.totalCents)||receipt.totalCents<=0||receipt.items.some(item=>!item||!Number.isSafeInteger(item.lineCents)||item.lineCents<0)||receipt.items.reduce((sum,item)=>sum+item.lineCents,0)!==receipt.totalCents)throw Error('Ungültiger Offline-Beleg');
