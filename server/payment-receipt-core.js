@@ -80,7 +80,8 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
-  const height = Math.max(640, 470 + items.length * 34 + payments.length * 20);
+  const tseFieldCount = receipt.fiscal_status === "signed" && receipt.tse_snapshot && typeof receipt.tse_snapshot === "object" ? ["serialNumber","transactionNumber","signatureCounter","signatureAlgorithm","startedAt","finishedAt","signature"].filter(key => receipt.tse_snapshot[key] !== undefined && receipt.tse_snapshot[key] !== null && receipt.tse_snapshot[key] !== "").length : 0;
+  const height = Math.max(640, 470 + items.length * 34 + payments.length * 20 + tseFieldCount * 30);
   let pdf;
   try {
     pdf=await new Promise((resolve,reject)=>{
