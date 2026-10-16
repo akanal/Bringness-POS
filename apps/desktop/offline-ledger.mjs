@@ -5,7 +5,7 @@ export async function createOfflineLedger(db,quote) {
  CREATE TABLE IF NOT EXISTS offline_sales(id uuid PRIMARY KEY,snapshot_id uuid NOT NULL REFERENCES offline_catalog(id),request jsonb NOT NULL,receipt jsonb NOT NULL,synced_at timestamptz,cloud_receipt jsonb,error text,created_at timestamptz NOT NULL DEFAULT now());
  CREATE INDEX IF NOT EXISTS offline_sales_pending_idx ON offline_sales(created_at,id) WHERE synced_at IS NULL;
  CREATE INDEX IF NOT EXISTS offline_sales_recent_idx ON offline_sales(created_at DESC,id DESC);
- UPDATE offline_catalog SET current=false WHERE current=true AND id<>(SELECT id FROM offline_catalog WHERE current=true ORDER BY id DESC LIMIT 1);
+ UPDATE offline_catalog SET current=false WHERE current=true AND id<>(SELECT id FROM offline_catalog WHERE current=true ORDER BY (payload->>'createdAt')::timestamptz DESC NULLS LAST,id DESC LIMIT 1);
  CREATE UNIQUE INDEX IF NOT EXISTS offline_catalog_one_current_idx ON offline_catalog(current) WHERE current=true;`);
  return {
   async catalog(snapshot){
