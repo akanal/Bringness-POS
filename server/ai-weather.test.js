@@ -80,3 +80,13 @@ test('weather parser rejects invalid evaluation clocks',()=>{
  '<dwd:Forecast dwd:elementName="RR1c"><dwd:value>1</dwd:value></dwd:Forecast>';
  for(const invalid of [new Date(NaN),null])assert.throws(()=>parseMosmix(xml,invalid),/Forecast stale/);
 });
+
+
+test('invalid calendar event dates do not break demand forecast evaluation',()=>{
+ const context={settings:{demandRules:{enabled:true,eventPercent:30}},events:[
+  {id:'bad',status:'active',starts_at:'not-a-date',ends_at:'2026-10-18T00:00:00Z'},
+  {id:'reversed',status:'active',starts_at:'2026-10-18T00:00:00Z',ends_at:'2026-10-17T00:00:00Z'}
+ ]};
+ const effect=demandEffect('2026-10-17',context);
+ assert.equal(effect.factor,1);assert.deepEqual(effect.adjustments,[]);
+});
