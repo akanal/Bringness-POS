@@ -30,11 +30,10 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     // Do not resend rejected sales repeatedly during the same sync cycle.
     pending=await ledger.pending(Array.from(skipped));
    }
-   if(failed)throw Error(failed+' Offline-Verkäufe benötigen eine Prüfung. Bestätigte Verkäufe wurden übernommen.');
    if(force||!lastCatalog||now()-lastCatalog>6*3600000){
     const {snapshot}=await request('catalog',{});await ledger.catalog(snapshot);lastCatalog=now();
    }
-   publish({state:'success',message:'Alle gespeicherten Verkäufe übertragen.',lastSuccess:new Date(now()).toISOString()});
+   publish({state:failed?'warning':'success',message:failed?failed+' Offline-Verkäufe benötigen eine Prüfung. Andere Verkäufe wurden übertragen.':'Alle gespeicherten Verkäufe übertragen.',lastSuccess:new Date(now()).toISOString()});
   }catch(error){publish({state:'error',message:error.message||'Synchronisierung nicht verfügbar. Erneut versuchen.'});}
   return {...status};
  };
