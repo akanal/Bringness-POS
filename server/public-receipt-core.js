@@ -41,7 +41,7 @@ return async function handlePublicReceipt(req, res) {
   let receiptQrHtml = '';
   try {
     const origin = new URL(configuredOrigin);
-    if (origin.protocol === 'https:' && !origin.username && !origin.password && receipt.public_token) {
+    if (origin.protocol === 'https:' && !origin.username && !origin.password && !origin.port && /^[a-z0-9.-]+$/i.test(origin.hostname) && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(receipt.public_token || ''))) {
       const receiptUrl = new URL('/beleg/' + receipt.public_token, origin.origin).toString();
       const {default: QRCode} = await import('qrcode');
       const svg = await QRCode.toString(receiptUrl, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, width: 190 });
