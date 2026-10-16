@@ -1,4 +1,4 @@
-const {ipcMain,Menu,dialog}=require('electron');
+const {ipcMain,Menu}=require('electron');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOffline=true})=>{
