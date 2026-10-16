@@ -25,6 +25,7 @@ try{
   let status,body;const req={url:path.startsWith('/')?path:'/api/v1/license/device/'+path,method:path.startsWith('status')?'GET':'POST',headers:{authorization:'Bearer '+token},async *[Symbol.asyncIterator](){yield JSON.stringify(data)}};
   await handle(req,{writeHead(code){status=code},end(raw){body=JSON.parse(raw)}});return {status,body};
  }
+ assert.equal((await http('check','staff')).body.activationRequired,true);
  assert.equal((await http('activate','staff')).status,403);
  assert.equal((await http('/api/v1/devices/activate','staff')).status,403);
  assert.equal((await http('activate')).status,200);
@@ -39,7 +40,7 @@ try{
  assert.equal((await query('SELECT 1 FROM devices WHERE device_key=$1',[otherKey])).rowCount,0);
  assert.equal((await http('activate','other',{deviceKey:otherKey})).status,200);
  await query("UPDATE devices SET status='disabled',license_valid_until=now()-interval '1 day' WHERE device_key=$1",[key]);
- assert.equal((await http('check','staff')).status,409);
+ const disabled=await http('check','staff');assert.equal(disabled.status,409);assert.equal(disabled.body.activationRequired,false);
  assert.equal((await http('status?deviceKey='+key,'staff')).body.active,false);
  assert.equal((await query('SELECT license_valid_until<now() expired FROM devices WHERE device_key=$1',[key])).rows[0].expired,true);
  await query("UPDATE devices SET status='active' WHERE device_key=$1",[key]);

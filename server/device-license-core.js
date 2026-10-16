@@ -37,7 +37,12 @@ export async function renewLicensedDevice(db,user,entitlementId,deviceKey,appVer
   const device=(await c.query(`UPDATE devices SET app_version=$4,last_seen_at=now(),last_license_check_at=now(),license_valid_until=$5
    WHERE company_id=$1 AND device_key=$2 AND entitlement_id=$3 AND status='active' AND activation_status='active'
    RETURNING id,name,platform,app_version,activation_status,activated_at,last_seen_at,license_valid_until`,[user.company_id,deviceKey,entitlementId,appVersion,validUntil])).rows[0];
+  let activationRequired=false;
+  if(!device){
+   const registered=(await c.query('SELECT status,activation_status,entitlement_id FROM devices WHERE company_id=$1 AND device_key=$2',[user.company_id,deviceKey])).rows[0];
+   activationRequired=!registered||(registered.status==='active'&&registered.activation_status==='unbound'&&(!registered.entitlement_id||registered.entitlement_id===entitlementId));
+  }
   await c.query('COMMIT');
-  return device?{active:true,device}:{active:false,device:null,error:'Dieses Gerät ist für die Download-Lizenz nicht aktiviert.'};
+  return device?{active:true,device}:{active:false,device:null,activationRequired,error:'Dieses Gerät ist für die Download-Lizenz nicht aktiviert.'};
  }catch(error){await c.query('ROLLBACK');throw error}finally{c.release()}
 }
