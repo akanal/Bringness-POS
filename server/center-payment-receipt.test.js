@@ -31,6 +31,7 @@ for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  const {res,documents}=await run(fiscalStatus);assert.equal(res.status,200);assert.equal(res.headers['content-type'],'application/pdf');
  assert.equal(res.pdf.toString(),'%PDF-simulated');
  const doc=documents[0],text=doc.texts.join('\n');
+ assert.ok(doc.options.size[1]>=640,'receipt must reserve space for enlarged QR');
  assert.equal(doc.ended,true);assert.match(text,/Historisches Restaurant/);assert.match(text,/Historischer Betrieb/);
  assert.equal(doc.images.length,1);assert.equal(doc.images[0].width,112);assert.equal(doc.images[0].height,112);assert.equal(doc.images[0].x,(doc.page.width-doc.images[0].width)/2);assert.equal(doc.x,doc.page.margins.left);
  const label=doc.textPositions.find(t=>t.value==="QR: Digitalen Beleg öffnen");assert.ok(label.y>=doc.images[0].y+doc.images[0].height+8);
