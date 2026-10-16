@@ -111,3 +111,10 @@ test('non-array event collections do not influence demand',()=>{
  assert.equal(effect.factor,1);
  assert.deepEqual(effect.adjustments,[]);
 });
+
+
+test('weather availability must be explicitly true',()=>{
+ const effect=demandEffect('2026-10-16',{settings:{demandRules:{enabled:true,warmPercent:40}},weather:{available:'true',days:[{date:'2026-10-16',partial:false,maxC:35}]}});
+ assert.equal(effect.factor,1);
+ assert.deepEqual(effect.adjustments,[]);
+});
