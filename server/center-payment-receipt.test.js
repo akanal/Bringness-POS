@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',publicToken='33333333-3333-4333-8333-333333333333';
-async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null,nearPageEnd=false}={}){
+async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null,nearPageEnd=false,tseSnapshot=undefined}={}){
  const documents=[],queries=[];
  class Pdf extends EventEmitter {
  constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:options.size[0],height:options.size[1],margins:{left:options.margin,bottom:options.margin}};this.y=nearPageEnd?600:100;this.addedPages=0;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
@@ -15,7 +15,7 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  if(sql.includes('FROM sessions')){assert.match(sql,/coalesce\(u.must_change_password,false\)=false/);return {rows:authenticated?[{id:receiptId,company_id:company,role:'owner'}]:[]};}
  if(sql.includes('FROM receipts rc')){
  assert.match(sql,/rc.id=\$1 AND c.id=\$2/);assert.deepEqual(args,[receiptId,company]);
- return {rowCount:found?1:0,rows:found?[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,tse_snapshot:{serialNumber:'TSE-DEVICE-1',transactionNumber:'TX-123',signatureCounter:42,signatureAlgorithm:'ecdsa-plain-SHA256',startedAt:'2026-10-06T12:00:00Z',finishedAt:'2026-10-06T12:01:00Z',signature:'signed-value'},order_id:'order',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
+ return {rowCount:found?1:0,rows:found?[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,tse_snapshot:tseSnapshot===undefined?{serialNumber:'TSE-DEVICE-1',transactionNumber:'TX-123',signatureCounter:42,signatureAlgorithm:'ecdsa-plain-SHA256',startedAt:'2026-10-06T12:00:00Z',finishedAt:'2026-10-06T12:01:00Z',signature:'signed-value'}:tseSnapshot,order_id:'order',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
  }
  if(sql.includes('FROM order_items'))return {rows:[{product_name_snapshot:'Gericht',unit_price_cents:1190,tax_rate_snapshot:19,quantity:1}]};
  if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:1190}]};
@@ -123,4 +123,12 @@ test('long TSE signature and long item name still produce a valid real PDF',{ski
  assert.ok(pdf.length>1000);
  assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
  assert.match(pdf.subarray(-100).toString(),/%%EOF/);
+});
+
+test('signed receipt without TSE snapshot does not invent signing details',async()=>{
+ const {res,documents}=await run('signed',{tseSnapshot:null});
+ assert.equal(res.status,200);
+ const text=documents[0].texts.join('\n');
+ assert.doesNotMatch(text,/TSE-Seriennummer|Signaturzähler|Signatur: /);
+ assert.equal(documents[0].images.length,1,'digital receipt QR remains available');
 });
