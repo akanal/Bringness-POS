@@ -84,5 +84,11 @@ test('offline sale rejects a mismatched device key without writing a receipt',as
   const repeated=await ledger.sale(request,'a'.repeat(64));
   assert.equal(repeated.id,request.id);
   assert.equal(await ledger.pendingCount(),1);
+  await ledger.acknowledge(request.id,{id:'cloud-device-a',receiptNumber:'DEV-A-1'});
+  const replacement={...snapshot,id:randomUUID(),deviceKey:'b'.repeat(64),createdAt:new Date().toISOString()};
+  await ledger.catalog(replacement);
+  await assert.rejects(ledger.sale(request,'a'.repeat(64)),/gehört nicht zu diesem Gerät/);
+  await assert.rejects(ledger.sale(request,'b'.repeat(64)),/gehört nicht zu diesem Gerät|Offline-Freigabe/);
+  assert.equal(await ledger.pendingCount(),0);
  }finally{await db.close();}
 });
