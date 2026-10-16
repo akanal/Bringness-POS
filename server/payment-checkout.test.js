@@ -49,3 +49,10 @@ test('client-reported card confirmation cannot create a paid order',async()=>{
  const {res,calls}=await run(body);
  assert.equal(res.status,409);assert.equal(calls.length,1);
 });
+
+test('mixed cash and card cannot bypass card verification',async()=>{
+ const body=valid();body.payments=[{method:'cash',amountCents:50},{method:'card',amountCents:50}];body.externalCardConfirmed=true;
+ const result=await run(body);
+ assert.equal(result.res.status,409);
+ assert.equal(result.calls.length,1);
+});
