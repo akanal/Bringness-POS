@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Netcup staging host bootstrap, run only on a verified non-production staging host.
-# Never run this on the production Netcup instance.
+# Staging-only bootstrap. Never run on the production host.
 set -euo pipefail
-if [[ "${BRINGNESS_STAGING_HOST_CONFIRMED:-}" != "yes" ]]; then
-  echo "Refusing bootstrap: staging host confirmation missing" >&2; exit 1
-fi
-if [[ "${BRINGNESS_PRODUCTION_HOST:-unknown}" == "${HOSTNAME:-unknown}" ]]; then
-  echo "Refusing bootstrap on production host" >&2; exit 1
-fi
-if [[ "${EUID}" -ne 0 ]]; then echo "Run as root on staging host" >&2; exit 1; fi
+fail() { echo "Refusing staging bootstrap: $*" >&2; exit 1; }
+[[ "${BRINGNESS_STAGING_HOST_CONFIRMED:-}" == yes ]] || fail "explicit staging confirmation missing"
+[[ -n "${BRINGNESS_PRODUCTION_HOST:-}" ]] || fail "production hostname is required"
+[[ -n "${BRINGNESS_STAGING_HOST:-}" ]] || fail "staging hostname is required"
+[[ "${BRINGNESS_STAGING_HOST}" != "${BRINGNESS_PRODUCTION_HOST}" ]] || fail "staging and production hostname match"
+[[ "${HOSTNAME:-}" == "${BRINGNESS_STAGING_HOST}" ]] || fail "actual hostname does not match staging hostname"
+[[ "${HOSTNAME}" != "${BRINGNESS_PRODUCTION_HOST}" ]] || fail "running on production hostname"
+[[ "${EUID}" -eq 0 ]] || fail "root required on isolated staging host"
+[[ ! -e /opt/bringness/app ]] || fail "production application path detected"
+[[ ! -e /usr/local/sbin/bringness-operations ]] || fail "production operation handler detected"
 install -d -m 0750 /opt/bringness/staging/preview
 install -d -m 0750 /opt/bringness/staging/preview/data
-echo "Created staging directories only; no services, DNS, database or production configuration changed."
+echo "Staging directories created; no service, database, DNS or production changes."
