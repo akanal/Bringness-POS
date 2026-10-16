@@ -17,8 +17,8 @@ export function quoteOfflineSale(snapshot,sale) {
  if(!Array.isArray(sale.items)||!sale.items.length||sale.items.length>100)fail('1 bis 100 Positionen erforderlich');
  const seen=new Set();let totalCents=0;
  const items=sale.items.map(i=>{
-  const product=snapshot.products.find(p=>p.id===i.productId&&p.restaurantId===restaurant.id);
-  if(!product||seen.has(i.productId)||!Number.isInteger(i.quantity)||i.quantity<1||i.quantity>999)fail('Ungültiger Offline-Artikel oder Menge');
+  const product=snapshot.products.find(p=>p.id===i?.productId&&p.restaurantId===restaurant.id);
+  if(!product||seen.has(i?.productId)||!Number.isInteger(i?.quantity)||i.quantity<1||i.quantity>999)fail('Ungültiger Offline-Artikel oder Menge');
   seen.add(i.productId);if(!Number.isSafeInteger(product.priceCents)||product.priceCents<0||!Number.isFinite(product.taxRate)||product.taxRate<0||product.taxRate>100)fail('Ungültiger Katalogpreis');
   const lineCents=product.priceCents*i.quantity;totalCents+=lineCents;
   return {productId:product.id,name:product.name,unitPriceCents:product.priceCents,taxRate:product.taxRate,quantity:i.quantity,lineCents};
