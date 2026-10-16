@@ -58,3 +58,10 @@ test('offline sales require nonempty catalog product and restaurant identifiers'
  const restaurant=fixture();restaurant.snapshot.restaurants[0].id=' ';restaurant.sale.restaurantId=' ';
  assert.throws(()=>quoteOfflineSale(restaurant.snapshot,restaurant.sale),/Offline-Katalog/);
 });
+
+
+test('offline seller details must belong to the restaurant map itself',()=>{
+ const {snapshot,sale}=fixture();
+ snapshot.merchant=Object.create({restaurant:{name:'Inherited Cafe'}});
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Verkäuferdaten/);
+});
