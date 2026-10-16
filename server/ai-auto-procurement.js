@@ -5,12 +5,12 @@ import {berlinClock} from './ai-forecast-core.js';
 import {uuid} from './ai-policy.js';
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status})};
 export function procurementPolicy(b){
- if(typeof b.enabled!=='boolean')fail('Aktivierung erforderlich');
+ if(!b||typeof b!=='object'||Array.isArray(b)||typeof b.enabled!=='boolean')fail('Aktivierung erforderlich');
  if(!Number.isInteger(b.days)||b.days<1||b.days>30||!Number.isInteger(b.leadDays)||b.leadDays<1||b.leadDays>30)fail('Planungs- und Lieferfrist: 1 bis 30 Tage');
  if(!Number.isSafeInteger(b.maxDailyNetCents)||b.maxDailyNetCents<100||b.maxDailyNetCents>1000000)fail('Netto-Warenwertgrenze: 1 bis 10.000 Euro pro Tag');
- if(!Array.isArray(b.supplierIds)||!b.supplierIds.length||b.supplierIds.length>50||!b.supplierIds.every(x=>uuid.test(x))||new Set(b.supplierIds).size!==b.supplierIds.length)fail('1 bis 50 eindeutige Lieferanten erforderlich');
+ if(!Array.isArray(b.supplierIds)||!b.supplierIds.length||b.supplierIds.length>50||!b.supplierIds.every(x=>typeof x==='string'&&uuid.test(x))||new Set(b.supplierIds.map(x=>x.toLowerCase())).size!==b.supplierIds.length)fail('1 bis 50 eindeutige Lieferanten erforderlich');
  if(b.enabled&&b.confirmed!==true)fail('Automatische verbindliche Bestellungen und Lieferbedingungen ausdrücklich freigeben');
- return {enabled:b.enabled,days:b.days,leadDays:b.leadDays,maxDailyNetCents:b.maxDailyNetCents,supplierIds:b.supplierIds};
+ return {enabled:b.enabled,days:b.days,leadDays:b.leadDays,maxDailyNetCents:b.maxDailyNetCents,supplierIds:b.supplierIds.map(x=>x.toLowerCase())};
 }
 export async function migrateAutoProcurement(db=aiPool()){await db.query(`
 CREATE TABLE IF NOT EXISTS ai_auto_procurement(account_id uuid PRIMARY KEY REFERENCES ai_accounts(id),policy jsonb NOT NULL,version int NOT NULL DEFAULT 1,updated_at timestamptz NOT NULL DEFAULT now());
@@ -60,15 +60,29 @@ export async function automaticProcurementTick({db=aiPool(),run=runAutomaticProc
   }
  }finally{running=false}
 }
-export async function automaticProcurementRoutes(path,method,b,user){
- if(user.role!=='restaurant')fail('Nur Restaurants können Beschaffung freigeben',403);const db=aiPool();
- if(path.endsWith('/run')&&method==='POST')return runAutomaticProcurement(user);
+export async function saveProcurementPolicy(db,user,b){
+ if(!b||typeof b!=='object'||Array.isArray(b))fail('Ungültige Beschaffungsfreigabe');
+ const disable=b.enabled===false&&!b.supplierIds,policy=disable?null:procurementPolicy(b);
+ const c=await db.connect();try{
+  await c.query('BEGIN');
+  if(!(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active' FOR UPDATE",[user.id])).rowCount)fail('Restaurantkonto nicht mehr freigegeben',403);
+  if(disable){
+   const changed=await c.query("UPDATE ai_auto_procurement SET policy=jsonb_set(policy,'{enabled}','false'),version=version+1,updated_at=now() WHERE account_id=$1 AND policy->>'enabled' IS DISTINCT FROM 'false' RETURNING account_id",[user.id]);
+   if(changed.rowCount)await c.query("INSERT INTO ai_audit(actor_id,action) VALUES($1,'automatic_procurement_disabled')",[user.id]);
+  }else{
+   const suppliers=await c.query("SELECT id,delivery_area,delivery_terms,minimum_order_cents FROM ai_accounts WHERE id=ANY($1::uuid[]) AND status='active' AND role IN ('dealer','wholesaler','manufacturer') ORDER BY id FOR SHARE",[policy.supplierIds]);
+   if(suppliers.rowCount!==policy.supplierIds.length)fail('Lieferantenliste prüfen');
+   policy.supplierTerms=Object.fromEntries(suppliers.rows.map(s=>[s.id,[s.delivery_area,s.delivery_terms,Number(s.minimum_order_cents)]]));
+   await c.query('INSERT INTO ai_auto_procurement(account_id,policy) VALUES($1,$2) ON CONFLICT(account_id) DO UPDATE SET policy=EXCLUDED.policy,version=ai_auto_procurement.version+1,updated_at=now()',[user.id,JSON.stringify(policy)]);
+   await c.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'automatic_procurement_policy',$2::jsonb)",[user.id,JSON.stringify(policy)]);
+  }
+  await c.query('COMMIT');return {ok:true};
+ }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+}
+export async function automaticProcurementRoutes(path,method,b,user,options={}){
+ if(user.role!=='restaurant')fail('Nur Restaurants können Beschaffung freigeben',403);const db=options.db||aiPool();
+ if(path.endsWith('/run')&&method==='POST')return (options.run||runAutomaticProcurement)(user,{db});
  if(method==='GET')return {policy:(await db.query('SELECT policy,version FROM ai_auto_procurement WHERE account_id=$1',[user.id])).rows[0]||null,runs:(await db.query('SELECT * FROM ai_auto_procurement_runs WHERE account_id=$1 ORDER BY day DESC LIMIT 30',[user.id])).rows,suppliers:(await db.query("SELECT id,business_name,delivery_area,delivery_terms FROM ai_accounts WHERE status='active' AND role IN ('dealer','wholesaler','manufacturer') ORDER BY business_name LIMIT 500")).rows};
- if(method==='POST'){
-  if(b.enabled===false&&!b.supplierIds){await db.query("UPDATE ai_auto_procurement SET policy=jsonb_set(policy,'{enabled}','false'),version=version+1,updated_at=now() WHERE account_id=$1",[user.id]);await db.query("INSERT INTO ai_audit(actor_id,action) VALUES($1,'automatic_procurement_disabled')",[user.id]);return {ok:true}}
-  const policy=procurementPolicy(b);const suppliers=await db.query("SELECT id,delivery_area,delivery_terms,minimum_order_cents FROM ai_accounts WHERE id=ANY($1::uuid[]) AND status='active' AND role IN ('dealer','wholesaler','manufacturer')",[policy.supplierIds]);if(suppliers.rowCount!==policy.supplierIds.length)fail('Lieferantenliste prüfen');policy.supplierTerms=Object.fromEntries(suppliers.rows.map(s=>[s.id,[s.delivery_area,s.delivery_terms,Number(s.minimum_order_cents)]]));
-  await db.query('INSERT INTO ai_auto_procurement(account_id,policy) VALUES($1,$2) ON CONFLICT(account_id) DO UPDATE SET policy=EXCLUDED.policy,version=ai_auto_procurement.version+1,updated_at=now()',[user.id,JSON.stringify(policy)]);
-  await db.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'automatic_procurement_policy',$2::jsonb)",[user.id,JSON.stringify(policy)]);return {ok:true};
- }
+ if(method==='POST')return saveProcurementPolicy(db,user,b);
  fail('Methode nicht erlaubt',405);
 }
