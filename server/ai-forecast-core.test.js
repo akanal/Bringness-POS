@@ -10,3 +10,12 @@ test('insufficient data stays unknown, empty history is not a confident zero',()
 test('completed hour pace increases forecast, outliers are bounded',()=>{const r=approximateDay([...samples(),{day:clock.date,hour:12,orders:100,revenue_cents:100000}],clock);assert.equal(r.pace,2);assert.equal(r.expectedOrders,100);assert.equal(r.outlook,'Eher stark')});
 test('future data excluded, fallback marked, seasonal samples preserve weekday',()=>{const r=approximateDay([...samples(),{day:dateAgo(364),hour:12,orders:20,revenue_cents:20000},{day:'2026-10-04',hour:12,orders:999,revenue_cents:999000}],clock);assert.equal(r.seasonalDays,1);assert.equal(r.sampleDays,7);assert(!r.history.some(x=>x.date==='2026-10-04'));const fallback=approximateDay([1,2,3].map(d=>({day:dateAgo(d),hour:12,orders:5,revenue_cents:5000})),clock);assert.equal(fallback.fallback,true);assert.equal(fallback.ready,true)});
 test('Berlin business date and DST hours are independent of server timezone',()=>{assert.deepEqual(berlinClock(new Date('2026-10-03T22:30:00Z')),{date:'2026-10-04',hour:0});assert.deepEqual(berlinClock(new Date('2026-10-25T01:30:00Z')),{date:'2026-10-25',hour:2})});
+
+test('zero historical completed orders never produces an infinite pace ratio',()=>{
+ const history=[7,14,21].flatMap(days=>[{day:dateAgo(days),hour:18,orders:10,revenue_cents:10000}]);
+ const result=approximateDay([...history,{day:clock.date,hour:12,orders:3,revenue_cents:3000}],clock);
+ assert.equal(result.ready,true);
+ assert.equal(result.outlook,'Noch offen');
+ assert.equal(result.pace,1);
+ assert(Number.isFinite(result.expectedOrders));
+});
