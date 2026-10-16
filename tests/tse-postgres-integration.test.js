@@ -30,6 +30,10 @@ test('PostgreSQL enforces guarded TSE state transitions',{skip:!process.env.TSE_
   assert.equal(signed.state,'signed');
   assert.equal(signed.signature,'signature');
   assert.equal(await markTransactionSigned(client,tx.id,result),null);
+  await assert.rejects(
+   client.query("INSERT INTO tse_transactions(restaurant_id,receipt_id,client_transaction_id,process_data,state) VALUES($1,$2,'test-tx','{}','prepared')",[restaurant,receipt]),
+   error=>error.code==='23505'
+  );
  }finally{
   try{await client.query('ROLLBACK')}finally{client.release();await pool.end()}
  }
