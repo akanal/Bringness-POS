@@ -22,7 +22,7 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
    await tx.query('INSERT INTO offline_sales(id,snapshot_id,request,receipt) VALUES($1,$2,$3,$4)',[request.id,request.snapshotId,JSON.stringify(request),JSON.stringify(receipt)]);
    return receipt;
   });},
-  async pending(){return (await db.query('SELECT id,request FROM offline_sales WHERE synced_at IS NULL ORDER BY created_at,id LIMIT 100')).rows;},
+  async pending(excludeIds=[]){return (await db.query('SELECT id,request FROM offline_sales WHERE synced_at IS NULL AND NOT (id = ANY($1::uuid[])) ORDER BY created_at,id LIMIT 100',[excludeIds])).rows;},
   async acknowledge(id,receipt){await db.query('UPDATE offline_sales SET synced_at=now(),cloud_receipt=$2,error=NULL WHERE id=$1 AND synced_at IS NULL',[id,JSON.stringify(receipt)]);},
   async error(id,message){await db.query('UPDATE offline_sales SET error=$2 WHERE id=$1 AND synced_at IS NULL',[id,String(message).slice(0,300)]);}
  };
