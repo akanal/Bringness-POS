@@ -104,3 +104,10 @@ test('malformed weather day collection cannot influence demand',()=>{
  assert.equal(effect.factor,1);
  assert.deepEqual(effect.adjustments,[]);
 });
+
+
+test('non-array event collections do not influence demand',()=>{
+ const effect=demandEffect('2026-10-16',{settings:{demandRules:{enabled:true,eventPercent:30}},events:{status:'active'}});
+ assert.equal(effect.factor,1);
+ assert.deepEqual(effect.adjustments,[]);
+});
