@@ -70,3 +70,13 @@ test('oversized UTF-8 checkout body is rejected by byte size',async()=>{
  assert.equal(res.status,413);
  assert.equal(calls.length,1);
 });
+
+test('split UTF-8 characters survive streamed JSON parsing',async()=>{
+ const body=valid();body.note='ä';body.payments=[{method:'card',amountCents:100}];
+ const bytes=Buffer.from(JSON.stringify(body));
+ const position=bytes.indexOf(Buffer.from('ä'));
+ assert(position>0);
+ const result=await run(body,{chunks:[bytes.subarray(0,position+1),bytes.subarray(position+1)]});
+ assert.equal(result.res.status,409);
+ assert.equal(result.calls.length,1);
+});
