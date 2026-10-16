@@ -12,7 +12,7 @@ function setup({claimed=true,commitFails=false,receiptFails=false,rollbackFails=
   if(sql.includes("state='starting'")&&sql.includes('RETURNING *'))return {rows:claimed?[tx]:[]};
   if(sql.startsWith('SELECT serial_number'))return {rows:[{serial_number:'serial',certified:true,status:'connected'}]};
   if(sql.includes("state='signed'")&&sql.includes('RETURNING *'))return {rows:[signed]};
-  if(sql.startsWith("UPDATE receipts")&&receiptFails)throw Error('receipt write failed');
+  if(sql.startsWith("UPDATE receipts")){if(receiptFails)throw Error('receipt write failed');return {rowCount:1,rows:[]};}
   if(sql==='COMMIT'&&commitFails)throw Error('commit outcome unknown');
   if(sql==='ROLLBACK'&&rollbackFails)throw Error('rollback unavailable');
   return {rows:[]};
