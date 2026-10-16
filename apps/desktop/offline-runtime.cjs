@@ -22,8 +22,13 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  }});
  const sync=()=>coordinator.sync();
  for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{onlineWindow()?.show();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
+ // Resume the durable queue promptly when the online POS becomes available again.
+ // The coordinator is single-flight, so reconnect signals cannot overlap uploads.
+ const onlineContents=onlineWindow()?.webContents;
+ const resumeAfterLoad=()=>setTimeout(sync,1500);
+ onlineContents?.on('did-finish-load',resumeAfterLoad);
  setTimeout(sync,12000);const timer=setInterval(sync,60000);timer.unref();
- app.on('before-quit',()=>clearInterval(timer));
+ app.on('before-quit',()=>{clearInterval(timer);onlineContents?.removeListener('did-finish-load',resumeAfterLoad);});
  onlineWindow()?.webContents.on('did-fail-load',(_,code)=>{if(code!==-3)open()});
  return {ledger,open,close:async()=>{clearInterval(timer);offlineWindow?.destroy();await db.close()}};
 };
