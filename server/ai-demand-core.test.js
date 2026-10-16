@@ -33,3 +33,13 @@ test('demand forecast accepts absent context as neutral',()=>{
  assert.equal(result.expectedOrders,100);
  assert.equal(result.demand.enabled,false);
 });
+
+test('AI planning rejects invalid dates and unbounded horizons',()=>{
+ for(const count of [-1,1.5,32,Infinity]){
+  assert.throws(()=>planningDemandDays(context,base.date,count),/Prognosezeitraum/);
+  assert.throws(()=>nextDemandForecasts([],context,base.date,count),/Prognosezeitraum/);
+ }
+ assert.throws(()=>planningDemandDays(context,'2026-02-30',3),/Prognosezeitraum/);
+ assert.throws(()=>nextDemandForecasts([],context,'invalid',3),/Prognosezeitraum/);
+ assert.deepEqual(planningDemandDays(context,base.date,0),[]);
+});
