@@ -24,3 +24,11 @@ test('invalid dates cannot become exceptional closure days',()=>{
 test('date validation rejects non-string values',()=>{
  for(const value of [null,undefined,0,false,{},[]])assert.equal(validDay(value),false);
 });
+
+test('opening hours reject array-shaped and coerced entries',()=>{
+ const hours=Array(7).fill(null);
+ hours[0]=['10:00','12:00'];
+ assert.throws(()=>validateHours(hours),/Öffnungs/);
+ hours[0]={open:{toString(){return '10:00'}},close:'12:00'};
+ assert.throws(()=>validateHours(hours),/Öffnungs/);
+});
