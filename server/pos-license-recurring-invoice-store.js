@@ -31,7 +31,9 @@ export async function saveSandboxMonthlyInvoiceDraft(pool,{
    return {saved:true,alreadyExists:true,invoiceNumber:existing.rows[0].invoice_number};
   }
   const seq=await client.query("SELECT nextval('sandbox_pos_invoice_number_seq') AS n");
-  const invoiceNumber="TEST-"+String(date.getUTCFullYear())+"-"+String(seq.rows[0].n).padStart(7,"0");
+  const n=seq.rows[0]?.n;
+  if(seq.rowCount!==1||!/^\\d+$/.test(String(n??""))||BigInt(n)<=0n){await client.query("ROLLBACK");return {saved:false,reason:"invoice_sequence_unavailable"};}
+  const invoiceNumber="TEST-"+String(date.getUTCFullYear())+"-"+String(n).padStart(7,"0");
   const d=candidate.draft;
   const inserted=await client.query(
    "INSERT INTO sandbox_pos_monthly_invoice_drafts(mollie_payment_id,company_id,plan_code,invoice_number,invoice_date,net_cents,vat_cents,gross_cents,customer_billing) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
