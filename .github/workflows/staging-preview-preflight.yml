@@ -54,3 +54,17 @@ jobs:
             echo 'Missing isolation confirmation unexpectedly passed' >&2
             exit 1
           fi
+      - name: Reject production database naming
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_live
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
+          STAGING_PAYMENT_MODE: sandbox
+          STAGING_TSE_MODE: disabled
+          STAGING_DB_ISOLATION_CONFIRMED: yes
+        run: |
+          if bash ops/staging-preflight.sh; then
+            echo 'Production database naming unexpectedly passed' >&2
+            exit 1
+          fi
