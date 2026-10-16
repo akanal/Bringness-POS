@@ -31,7 +31,7 @@ export async function createOfflineLedger(db,quote) {
    if(old){if(!old.matches)throw Error('Verkaufskennung bereits verwendet');return old.receipt;}
    const snapshot=(await tx.query("SELECT c.payload FROM offline_catalog c WHERE c.id=$1 AND c.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current) AND c.payload->>'deviceKey'=(SELECT payload->>'deviceKey' FROM offline_catalog WHERE current)",[request.snapshotId])).rows[0]?.payload;
    if(!snapshot||typeof snapshot.validUntil!=='string'||!Number.isFinite(Date.parse(snapshot.validUntil))||Date.now()>Date.parse(snapshot.validUntil))throw Error('Offline-Freigabe abgelaufen. Bitte online anmelden.');
-   const receipt=quote(snapshot,request);if(!receipt||receipt.id!==request.id||!Number.isSafeInteger(receipt.totalCents)||receipt.totalCents<=0)throw Error('Ungültiger Offline-Beleg');
+   const receipt=quote(snapshot,request);if(!receipt||receipt.id!==request.id||!Array.isArray(receipt.items)||receipt.items.length===0||!Number.isSafeInteger(receipt.totalCents)||receipt.totalCents<=0)throw Error('Ungültiger Offline-Beleg');
    await tx.query('INSERT INTO offline_sales(id,snapshot_id,request,receipt) VALUES($1,$2,$3,$4)',[request.id,request.snapshotId,JSON.stringify(request),JSON.stringify(receipt)]);
    return receipt;
   });},
