@@ -1,5 +1,5 @@
 import {berlinClock,approximateDay} from './ai-forecast-core.js';
-import {closedOn} from './ai-planning-core.js';
+import {closedOn,validDay} from './ai-planning-core.js';
 export function demandRules(value={}){
  if(value===null||typeof value!=='object'||Array.isArray(value))throw Error('Ungültige Prognoseregeln');
  const defaults={enabled:false,warmC:25,rainMm:5,warmPercent:0,rainPercent:0,eventPercent:0};
@@ -30,5 +30,6 @@ export function demandEffect(date,context,progress=0){
  const factor=1+(rawFactor-1)*(1-safeProgress);
  return {enabled:true,factor,rawFactor,adjustments,rules,weatherSkipped:!weather||weather.partial!==false,method:'Betrieblich konfigurierte Szenarioregeln, keine gelernte Wetterwirkung'};
 }
-export function planningDemandDays(context,today,days){return Array.from({length:days},(_,i)=>{const date=new Date(Date.parse(today+'T12:00:00Z')+i*86400000).toISOString().slice(0,10),closed=closedOn(date,context?.settings),effect=demandEffect(date,context);return {date,closed,factor:closed?0:effect.factor,adjustments:closed?[]:effect.adjustments}})}
-export function nextDemandForecasts(rows,context,today,days=6){const history=rows.filter(r=>r.day<today);return Array.from({length:days},(_,i)=>{const date=new Date(Date.parse(today+'T12:00:00Z')+(i+1)*86400000).toISOString().slice(0,10),closed=closedOn(date,context?.settings),forecast=applyDemandContext(approximateDay(history,{date,hour:0}),{...context,closedToday:closed});delete forecast.history;if(closed){forecast.ready=false;forecast.expectedOrders=null;forecast.expectedRevenueCents=null;forecast.ordersBand=null;forecast.revenueBand=null;forecast.outlook='Ruhetag'}return {...forecast,closed}})}
+function validateDemandHorizon(today,days){if(!validDay(today)||!Number.isInteger(days)||days<0||days>31)throw Error('Ungültiger Prognosezeitraum')}
+export function planningDemandDays(context,today,days){validateDemandHorizon(today,days);return Array.from({length:days},(_,i)=>{const date=new Date(Date.parse(today+'T12:00:00Z')+i*86400000).toISOString().slice(0,10),closed=closedOn(date,context?.settings),effect=demandEffect(date,context);return {date,closed,factor:closed?0:effect.factor,adjustments:closed?[]:effect.adjustments}})}
+export function nextDemandForecasts(rows,context,today,days=6){validateDemandHorizon(today,days);const history=rows.filter(r=>r.day<today);return Array.from({length:days},(_,i)=>{const date=new Date(Date.parse(today+'T12:00:00Z')+(i+1)*86400000).toISOString().slice(0,10),closed=closedOn(date,context?.settings),forecast=applyDemandContext(approximateDay(history,{date,hour:0}),{...context,closedToday:closed});delete forecast.history;if(closed){forecast.ready=false;forecast.expectedOrders=null;forecast.expectedRevenueCents=null;forecast.ordersBand=null;forecast.revenueBand=null;forecast.outlook='Ruhetag'}return {...forecast,closed}})}
