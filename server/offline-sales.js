@@ -7,19 +7,28 @@ export async function migrateOfflineSales(db=pool){await db.query(`
  CREATE TABLE IF NOT EXISTS pos_offline_sales(id uuid PRIMARY KEY,catalog_id uuid NOT NULL REFERENCES pos_offline_catalogs(id),order_id uuid NOT NULL UNIQUE REFERENCES orders(id),fingerprint text NOT NULL,stock_state text NOT NULL DEFAULT 'pending',stock_error text,created_at timestamptz NOT NULL DEFAULT now());
 `);}
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status})};
+async function requireOfflineActor(db,user){
+ if(!user||!['owner','admin'].includes(user.role)||typeof user.id!=='string'||!offlineUuid.test(user.id)||typeof user.company_id!=='string'||!offlineUuid.test(user.company_id))fail('Betriebsverwaltung nicht mehr zugänglich oder freigegeben',403);
+ if(!(await db.query("SELECT 1 FROM users WHERE id=$1 AND company_id=$2 AND status='active' AND role IN ('owner','admin') AND NOT coalesce(must_change_password,false) FOR SHARE",[user.id,user.company_id])).rowCount)fail('Betriebsverwaltung nicht mehr zugänglich oder freigegeben',403);
+}
+function requireDeviceKey(deviceKey){if(typeof deviceKey!=='string'||!/^[a-f0-9]{64}$/.test(deviceKey))fail('Ungültige Gerätekennung');}
 export async function issueOfflineCatalog(db,user,deviceKey){
- const device=(await db.query(`SELECT d.id,d.license_valid_until FROM devices d JOIN company_entitlements ce ON ce.id=d.entitlement_id JOIN billing_plans bp ON bp.id=ce.plan_id WHERE d.company_id=$1 AND d.device_key=$2 AND d.status='active' AND d.activation_status='active' AND d.license_valid_until>now() AND ce.status='active' AND bp.code='download_license'`,[user.company_id,deviceKey])).rows[0];
+ requireDeviceKey(deviceKey);
+ const c=await db.connect();try{await c.query('BEGIN');await requireOfflineActor(c,user);
+ const device=(await c.query(`SELECT d.id,d.license_valid_until FROM devices d JOIN company_entitlements ce ON ce.id=d.entitlement_id JOIN billing_plans bp ON bp.id=ce.plan_id WHERE d.company_id=$1 AND d.device_key=$2 AND d.status='active' AND d.activation_status='active' AND d.license_valid_until>now() AND ce.status='active' AND bp.code='download_license' FOR SHARE OF d,ce,bp`,[user.company_id,deviceKey])).rows[0];
  if(!device)fail('Aktive Download-Lizenz und Gerätefreigabe erforderlich',403);
- const restaurants=(await db.query('SELECT id,name FROM restaurants WHERE company_id=$1 ORDER BY id',[user.company_id])).rows;
- const products=(await db.query('SELECT p.id,p.restaurant_id "restaurantId",p.name,p.price_cents "priceCents",p.tax_rate::float "taxRate" FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE r.company_id=$1 AND p.active AND p.ai_stock_available ORDER BY p.id',[user.company_id])).rows;
- const sellers=(await db.query(`SELECT r.id,jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),c.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) seller FROM restaurants r JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE r.company_id=$1`,[user.company_id])).rows;
+ const restaurants=(await c.query('SELECT id,name FROM restaurants WHERE company_id=$1 ORDER BY id',[user.company_id])).rows;
+ const products=(await c.query('SELECT p.id,p.restaurant_id "restaurantId",p.name,p.price_cents "priceCents",p.tax_rate::float "taxRate" FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE r.company_id=$1 AND p.active AND p.ai_stock_available ORDER BY p.id',[user.company_id])).rows;
+ const sellers=(await c.query(`SELECT r.id,jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),c.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) seller FROM restaurants r JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE r.company_id=$1`,[user.company_id])).rows;
  const issuedAt=new Date();
  const snapshot={id:crypto.randomUUID(),companyId:user.company_id,deviceKey,createdAt:issuedAt.toISOString(),validUntil:offlineCatalogValidUntil(device.license_valid_until,issuedAt),restaurants,products,merchant:Object.fromEntries(sellers.map(s=>[s.id,s.seller]))};
- await db.query('INSERT INTO pos_offline_catalogs(id,company_id,device_id,actor_id,payload) VALUES($1,$2,$3,$4,$5)',[snapshot.id,user.company_id,device.id,user.id,JSON.stringify(snapshot)]);return snapshot;
+ await c.query('INSERT INTO pos_offline_catalogs(id,company_id,device_id,actor_id,payload) VALUES($1,$2,$3,$4,$5)',[snapshot.id,user.company_id,device.id,user.id,JSON.stringify(snapshot)]);await c.query('COMMIT');return snapshot;
+ }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
 export async function importOfflineSale(db,user,deviceKey,request){
- if(!request||typeof request!=='object'||!offlineUuid.test(request.id||'')||!offlineUuid.test(request.snapshotId||''))fail('Ungültiger Offline-Verkauf');
- const c=await db.connect();try{await c.query('BEGIN');
+ requireDeviceKey(deviceKey);
+ if(!request||typeof request!=='object'||Array.isArray(request)||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!offlineUuid.test(request.id)||!offlineUuid.test(request.snapshotId))fail('Ungültiger Offline-Verkauf');
+ const c=await db.connect();try{await c.query('BEGIN');await requireOfflineActor(c,user);
  const snapshot=(await c.query(`SELECT s.payload FROM pos_offline_catalogs s JOIN devices d ON d.id=s.device_id WHERE s.id=$1 AND s.company_id=$2 AND d.device_key=$3 FOR SHARE OF s,d`,[request.snapshotId,user.company_id,deviceKey])).rows[0]?.payload;
  if(!snapshot)fail('Offline-Katalog nicht zugänglich',403);
  const receipt=quoteOfflineSale(snapshot,request),fingerprint=offlineFingerprint(receipt);
