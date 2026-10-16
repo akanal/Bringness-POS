@@ -15,7 +15,13 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
     await tx.query('INSERT INTO offline_catalog VALUES($1,$2,true) ON CONFLICT(id) DO UPDATE SET current=true',[snapshot.id,JSON.stringify(snapshot)]);
    });
   },
-  async view(){const snapshot=(await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;const sales=(await db.query('SELECT receipt,synced_at,cloud_receipt,error FROM offline_sales ORDER BY created_at DESC LIMIT 100')).rows;return {snapshot,sales};},
+  async view(){
+   const snapshot=(await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
+   // Always show every unresolved sale before historical synced receipts.
+   const sales=(await db.query('SELECT receipt,synced_at,cloud_receipt,error FROM offline_sales ORDER BY (synced_at IS NULL) DESC,created_at DESC,id DESC LIMIT 100')).rows;
+   const counts=(await db.query('SELECT count(*) FILTER (WHERE synced_at IS NULL)::int AS pending,count(*) FILTER (WHERE synced_at IS NULL AND error IS NOT NULL)::int AS errors FROM offline_sales')).rows[0];
+   return {snapshot,sales,counts};
+  },
   async sale(request){return db.transaction(async tx=>{
    if(!request||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.snapshotId))throw Error('Ungültige Offline-Verkaufskennung.');
    const old=(await tx.query('SELECT request,receipt FROM offline_sales WHERE id=$1',[request.id])).rows[0];
