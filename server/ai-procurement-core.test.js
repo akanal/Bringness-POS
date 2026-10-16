@@ -154,3 +154,9 @@ test('proposed purchase line uses trimmed offer identifier',()=>{
  assert.equal(result.complete,true);
  assert.equal(result.lines[0].productId,'offer-1');
 });
+
+test('purchase lines use canonical stock identifiers',()=>{
+ const result=prepareProcurement([item(' stock-1 ',[offer('offer-1','A',100)])]);
+ assert.equal(result.complete,true);
+ assert.equal(result.lines[0].stockId,'stock-1');
+});
