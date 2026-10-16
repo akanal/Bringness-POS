@@ -1,3 +1,4 @@
+import {normalizeSandboxInvoiceDate} from './pos-license-recurring-invoice-date.js';
 // Sandbox-only draft storage. Caller must supply trusted company ownership
 // and customer billing details; never accept webhook data as verification.
 import {buildSandboxMonthlyInvoiceDraft} from "./pos-license-recurring-invoice-draft.js";
@@ -9,8 +10,8 @@ export async function saveSandboxMonthlyInvoiceDraft(pool,{
  });
  if(!candidate.ready) return {saved:false,reason:candidate.reason};
  if(typeof paymentId!=="string"||!paymentId.trim()||typeof companyId!=="string"||!companyId.trim()||typeof planCode!=="string"||!planCode.trim())return {saved:false,reason:"invalid_input"};
- const date=new Date(invoiceDate);
- if(!Number.isFinite(date.getTime())) return {saved:false,reason:"invalid_invoice_date"};
+ const date=normalizeSandboxInvoiceDate(invoiceDate);
+ if(!date) return {saved:false,reason:"invalid_invoice_date"};
  const client=await pool.connect();
  try{
   await client.query("BEGIN");
@@ -32,7 +33,7 @@ export async function saveSandboxMonthlyInvoiceDraft(pool,{
   }
   const seq=await client.query("SELECT nextval('sandbox_pos_invoice_number_seq') AS n");
   const n=seq.rows[0]?.n;
-  if(seq.rowCount!==1||!/^\\d+$/.test(String(n??""))||BigInt(n)<=0n){await client.query("ROLLBACK");return {saved:false,reason:"invoice_sequence_unavailable"};}
+  if(seq.rowCount!==1||!/^[0-9]+$/.test(String(n??""))||BigInt(n)<=0n){await client.query("ROLLBACK");return {saved:false,reason:"invoice_sequence_unavailable"};}
   const invoiceNumber="TEST-"+String(date.getUTCFullYear())+"-"+String(n).padStart(7,"0");
   const d=candidate.draft;
   const inserted=await client.query(
