@@ -23,7 +23,8 @@ export async function saveSandboxMonthlyInvoiceDraft(pool,{
   const existing=await client.query(
    "SELECT invoice_number,company_id,plan_code FROM sandbox_pos_monthly_invoice_drafts WHERE mollie_payment_id=$1",
    [paymentId]);
-  if(existing.rowCount){
+  if(existing.rowCount>1){await client.query("ROLLBACK");return {saved:false,reason:"duplicate_invoice_drafts"};}
+  if(existing.rowCount===1){
    if(existing.rows[0].company_id!==companyId||existing.rows[0].plan_code!==planCode){await client.query("ROLLBACK");return {saved:false,reason:"invoice_owner_mismatch"};}
    await client.query("COMMIT");
    return {saved:true,alreadyExists:true,invoiceNumber:existing.rows[0].invoice_number};
