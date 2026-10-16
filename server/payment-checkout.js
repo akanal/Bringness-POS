@@ -89,8 +89,10 @@ return async function handlePaymentCheckout(req, res) {
     return true;
   }
 
-  if (payments.some(p => p.method === "card") && body.externalCardConfirmed !== true) {
-    send(res, 400, { error: "Externe Kartenzahlung muss vor dem Verbuchen bestätigt werden" });
+  // A client-supplied confirmation flag is not proof of a settled terminal payment.
+  // Keep card settlement disabled until a server-verified provider integration exists.
+  if (payments.some(p => p.method === "card")) {
+    send(res, 409, { error: "Kartenzahlung erst nach serverseitig verifizierter Terminalbestätigung verfügbar" });
     return true;
   }
 
