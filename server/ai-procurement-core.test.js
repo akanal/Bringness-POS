@@ -92,3 +92,11 @@ test('unmet minimum on one supplier cannot create a partially approved multi-sup
  assert.equal(result.netCents,0);
  assert.deepEqual(result.unresolved.map(x=>x.stockId),['first','second']);
 });
+
+test('one unavailable stock item blocks the entire purchase proposal',()=>{
+ const result=prepareProcurement([item('available',[offer('valid','A',500)]),item('unavailable',[])]);
+ assert.equal(result.complete,false);
+ assert.equal(result.lines.length,0);
+ assert.equal(result.netCents,0);
+ assert.deepEqual(new Set(result.unresolved.map(x=>x.stockId)),new Set(['available','unavailable']));
+});
