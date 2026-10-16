@@ -17,7 +17,7 @@ export function applyDemandContext(forecast,context){
 }
 
 export function demandEffect(date,context,progress=0){
- const rules=demandRules(context.settings?.demandRules??{}),adjustments=[];
+ const rules=demandRules(context?.settings?.demandRules??{}),adjustments=[];
  if(!rules.enabled)return {enabled:false,factor:1,rawFactor:1,adjustments,rules};
  const matchingWeather=context.weather?.available===true&&Array.isArray(context.weather.days)?context.weather.days.filter(d=>d&&typeof d==='object'&&!Array.isArray(d)&&d.date===date):[];
  const weather=matchingWeather.length===1?matchingWeather[0]:null;
