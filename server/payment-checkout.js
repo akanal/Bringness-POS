@@ -58,6 +58,7 @@ return async function handlePaymentCheckout(req, res) {
     return true;
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) { send(res, 400, { error: "Ungültige Anfrage" }); return true; }
   let receiptEmail='';try{if(body.receiptEmail)receiptEmail=cleanMailAddress(body.receiptEmail);}catch{send(res,400,{error:'Gültige Beleg-E-Mail erforderlich'});return true;}
   const items = Array.isArray(body.items) ? body.items : [];
   const payments = Array.isArray(body.payments) ? body.payments : [];
@@ -70,7 +71,7 @@ return async function handlePaymentCheckout(req, res) {
     send(res, 400, { error: "Mindestens eine Zahlungsart ist erforderlich" });
     return true;
   }
-  if (payments.some(p => !["cash", "card"].includes(String(p.method)) || !Number.isSafeInteger(p.amountCents) || p.amountCents <= 0)) {
+  if (payments.some(p => !p || typeof p !== "object" || !["cash", "card"].includes(String(p.method)) || !Number.isSafeInteger(p.amountCents) || p.amountCents <= 0)) {
     send(res, 400, { error: "Ungültige Zahlungsaufteilung" });
     return true;
   }
@@ -80,6 +81,7 @@ return async function handlePaymentCheckout(req, res) {
     return true;
   }
 
+  if (items.some(i => !i || typeof i !== "object")) { send(res, 400, { error: "Ungültiger Artikel im Warenkorb" }); return true; }
   const ids = [...new Set(items.map(i => String(i.productId || "")).filter(Boolean))];
   if (!ids.length || ids.length !== items.length) {
     send(res, 400, { error: "Ungültiger Artikel im Warenkorb" });
