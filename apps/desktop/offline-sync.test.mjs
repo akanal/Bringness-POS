@@ -206,3 +206,17 @@ test('nonboolean replay flags never acknowledge a sale',async()=>{
  assert.equal(f.pending.size,1);
  assert.equal(f.errors.length,1);
 });
+
+
+test('closing the UI during synchronization cannot abort sale acknowledgement or recovery',async()=>{
+ const f=fixture(['a','b']);let notifications=0;
+ const sync=createOfflineSync({...f,notify:()=>{notifications++;throw Error('webContents destroyed');}});
+ const result=await sync.sync();
+ assert.equal(result.state,'success');
+ assert.equal(f.pending.size,0);
+ assert.deepEqual(f.calls,[['a','b']]);
+ assert.ok(notifications>1);
+ const retry=await sync.sync(true);
+ assert.equal(retry.state,'success');
+ assert.equal(f.calls.length,1);
+});

@@ -2,7 +2,10 @@
 export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
  let running=null,lastCatalog=0;
  let status={state:'idle',message:'Noch keine Synchronisierung',lastSuccess:null};
- const publish=(next)=>{status={...status,...next};notify();};
+ // UI windows may close while a transfer is in flight. Observer failures
+ // must never abort durable acknowledgements or the background recovery loop.
+ const notifySafely=()=>{try{notify();}catch{}};
+ const publish=(next)=>{status={...status,...next};notifySafely();};
  const run=async(force)=>{
   publish({state:'syncing',message:'Verkäufe werden übertragen …'});
   try {
@@ -71,7 +74,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
      }
     }
     // Do not resend rejected sales repeatedly during the same sync cycle.
-    notify();
+    notifySafely();
     pending=await ledger.pending(Array.from(attempted));
     if(pending.length===0&&skipped.size)publish({state:'syncing',message:skipped.size+' Verkäufe benötigen eine Prüfung; übrige Übertragungen sind abgeschlossen.'});
    }
@@ -84,7 +87,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     }catch(error){catalogError=error;}
    }
    const remaining=await ledger.pendingCount();
-   notify();
+   notifySafely();
    const message=remaining?acknowledged+' Verkäufe bestätigt. '+remaining+' Offline-Verkäufe sind weiterhin offen.'+(failed?' '+failed+' davon benötigen eine Prüfung.':''):'Alle gespeicherten Verkäufe übertragen.';
    publish({state:failed||remaining||catalogError?'warning':'success',message:catalogError?message+' Katalogaktualisierung fehlgeschlagen: '+(catalogError.message||'nicht verfügbar'):message,...(!failed&&!remaining&&!catalogError?{lastSuccess:new Date(now()).toISOString()}:{})});
   }catch(error){publish({state:'error',message:error.message||'Synchronisierung nicht verfügbar. Erneut versuchen.'});}
