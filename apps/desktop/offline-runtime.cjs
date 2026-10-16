@@ -69,7 +69,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
    throw error;
   }finally{await fs.unlink(temporary).catch(()=>{});}
   return {saved:true,count:report.sales.length};
- },'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return track(run(event,...args))});
+ },'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale,deviceKey);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return track(run(event,...args))});
  // Resume the durable queue promptly when the online POS becomes available again.
  // The coordinator is single-flight, so reconnect signals cannot overlap uploads.
  const onlineContents=onlineWindow()?.webContents;
