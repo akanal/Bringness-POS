@@ -17,6 +17,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    const skipped=new Set();
    const attempted=new Set();
    const serverReceiptIds=new Map();
+   const serverReceiptNumbers=new Map();
    let acknowledged=0;
    let pending=await ledger.pending();
    let failed=0;
