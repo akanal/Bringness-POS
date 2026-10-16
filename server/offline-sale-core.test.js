@@ -110,3 +110,10 @@ test('offline sale requires structured inputs',()=>{
  assert.throws(()=>quoteOfflineSale(snapshot,[]),/Offline-Kennung/);
  assert.throws(()=>quoteOfflineSale([],sale),/Offline-Kennung/);
 });
+
+
+test('null catalog products are ignored without crashing',()=>{
+ const {snapshot,sale}=fixture();
+ snapshot.products.unshift(null);
+ assert.equal(quoteOfflineSale(snapshot,sale).totalCents,500);
+});
