@@ -90,3 +90,10 @@ test('invalid calendar event dates do not break demand forecast evaluation',()=>
  const effect=demandEffect('2026-10-17',context);
  assert.equal(effect.factor,1);assert.deepEqual(effect.adjustments,[]);
 });
+
+
+test('invalid progress produces a finite demand factor',()=>{
+ const context={settings:{demandRules:{enabled:true,eventPercent:30}},events:[{id:'event',status:'active',starts_at:'2026-10-16T10:00:00Z',ends_at:'2026-10-17T10:00:00Z'}]};
+ const effect=demandEffect('2026-10-16',context,Number.NaN);
+ assert.equal(effect.factor,1.3);
+});
