@@ -15,7 +15,7 @@ export async function signPreparedTse(pool,id,adapter){
  await pool.query("UPDATE tse_transactions SET state='finishing',tse_transaction_number=$2,started_at=$3 WHERE id=$1",[id,String(start.transactionNumber),start.startedAt]);
  const finish=await adapter.finishTransaction({...tx.process_data,transactionNumber:String(start.transactionNumber)});
  if(finish.certified!==true||finish.serialNumber!==device.serial_number||String(finish.transactionNumber)!==String(start.transactionNumber)||!finish.signature||!finish.signatureCounter||!finish.signatureAlgorithm||!finish.finishedAt)throw Error('INVALID_TSE_SIGNATURE');
- const client=await pool.connect();try{await client.query('BEGIN');const signed=await markTransactionSigned(client,id,finish);await client.query("UPDATE receipts SET fiscal_status='signed',tse_snapshot=$2::jsonb WHERE id=$1",[tx.receipt_id,JSON.stringify(receiptTseSnapshot(signed))]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+ const client=await pool.connect();try{await client.query('BEGIN');const signed=await markTransactionSigned(client,id,finish);if(!signed)throw Error('TSE_TRANSACTION_NOT_FOUND');await client.query("UPDATE receipts SET fiscal_status='signed',tse_snapshot=$2::jsonb WHERE id=$1",[tx.receipt_id,JSON.stringify(receiptTseSnapshot(signed))]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
  return {signed:true};
  }catch{
  // The hardware may have applied the action before the connection failed.
