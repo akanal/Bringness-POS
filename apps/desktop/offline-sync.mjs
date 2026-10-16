@@ -31,10 +31,16 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     // Do not resend rejected sales repeatedly during the same sync cycle.
     pending=await ledger.pending(Array.from(skipped));
    }
+   let catalogError=null;
    if(force||!lastCatalog||now()-lastCatalog>6*3600000){
-    const {snapshot}=await request('catalog',{});await ledger.catalog(snapshot);lastCatalog=now();
+    try{
+     const {snapshot}=await request('catalog',{});
+     if(!snapshot?.id||!snapshot?.validUntil)throw Error('Ungültiger Offline-Katalog');
+     await ledger.catalog(snapshot);lastCatalog=now();
+    }catch(error){catalogError=error;}
    }
-   publish({state:failed?'warning':'success',message:failed?failed+' Offline-Verkäufe benötigen eine Prüfung. Andere Verkäufe wurden übertragen.':'Alle gespeicherten Verkäufe übertragen.',lastSuccess:new Date(now()).toISOString()});
+   const message=failed?failed+' Offline-Verkäufe benötigen eine Prüfung. Andere Verkäufe wurden übertragen.':'Alle gespeicherten Verkäufe übertragen.';
+   publish({state:failed||catalogError?'warning':'success',message:catalogError?message+' Katalogaktualisierung fehlgeschlagen: '+(catalogError.message||'nicht verfügbar'):message,lastSuccess:new Date(now()).toISOString()});
   }catch(error){publish({state:'error',message:error.message||'Synchronisierung nicht verfügbar. Erneut versuchen.'});}
   return {...status};
  };
