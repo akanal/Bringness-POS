@@ -58,3 +58,9 @@ test('offline catalog rejects expired and invalid license dates',()=>{
  assert.throws(()=>offlineCatalogValidUntil('2026-10-16T09:59:59.000Z',issued),/Offline-Lizenz abgelaufen/);
  assert.throws(()=>offlineCatalogValidUntil('invalid',issued),/Offline-Lizenz abgelaufen/);
 });
+
+test('offline sale rejects non-string timestamps',()=>{
+ for(const createdAt of [null,0,1234567890,{},[]]){
+  assert.throws(()=>quoteOfflineSale(snapshot,{...sale,createdAt}),/Offline-Zeit/);
+ }
+});
