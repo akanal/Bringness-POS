@@ -124,3 +124,10 @@ test('offline sale rejects unsafe quantity integers',()=>{
  sale.items[0].quantity=Number.MAX_SAFE_INTEGER+1;
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Artikel/);
 });
+
+
+test('offline seller must have a nonempty display name',()=>{
+ const {snapshot,sale}=fixture();
+ snapshot.merchant.restaurant.name=' ';
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Verkäuferdaten/);
+});
