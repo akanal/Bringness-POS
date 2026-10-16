@@ -15,6 +15,7 @@ export function quoteOfflineSale(snapshot,sale) {
  if(!Number.isFinite(time)||time<start-60000||time>end||time>Date.now()+60000)fail('Verkauf außerhalb der freigegebenen Offline-Zeit');
  if(!snapshot||!Array.isArray(snapshot.restaurants)||!Array.isArray(snapshot.products))fail('Ungültiger Offline-Katalog');
  const restaurant=snapshot.restaurants.find(r=>r?.id===sale.restaurantId);if(!restaurant)fail('Betrieb nicht im Offline-Katalog');
+ if(!snapshot.merchant||typeof snapshot.merchant!=='object')fail('Fehlende Verkäuferdaten');
  if(!Array.isArray(sale.items)||!sale.items.length||sale.items.length>100)fail('1 bis 100 Positionen erforderlich');
  const seen=new Set();let totalCents=0;
  const items=sale.items.map(i=>{
