@@ -4,7 +4,7 @@ const fail=message=>{throw Object.assign(Error(message),{status:400})};
 // Shared by local PostgreSQL and the cloud importer. Prices always come from a
 // server-issued immutable catalog, never from fields in the sales request.
 export function offlineCatalogValidUntil(licenseValidUntil,issuedAt=new Date()) {
- const issuedMs=new Date(issuedAt).getTime();
+ const issuedMs=typeof issuedAt==='string'||issuedAt instanceof Date?new Date(issuedAt).getTime():NaN;
  const licenseMs=typeof licenseValidUntil==='string'||licenseValidUntil instanceof Date?new Date(licenseValidUntil).getTime():NaN;
  if(licenseValidUntil==null||!Number.isFinite(issuedMs)||!Number.isFinite(licenseMs)||licenseMs<=issuedMs)fail('Offline-Lizenz abgelaufen');
  return new Date(Math.min(licenseMs,issuedMs+24*60*60*1000)).toISOString();
