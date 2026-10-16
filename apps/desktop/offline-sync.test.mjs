@@ -76,3 +76,25 @@ test('missing login preserves all pending sales',async()=>{
  assert.equal(status.state,'login');
  assert.equal(f.pending.size,1);
 });
+
+test('invalid success receipt remains pending for review',async()=>{
+ const f=fixture(['a'],{reply:()=>({results:[{offlineId:'a',ok:true,id:'cloud-a'}]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.equal(f.pending.size,1);
+ assert.equal(f.errors.length,1);
+});
+
+test('out-of-order valid acknowledgements match by offline ID',async()=>{
+ const f=fixture(['a','b'],{reply:sales=>({results:sales.map(s=>({offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id})).reverse()})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'success');
+ assert.equal(f.pending.size,0);
+});
+
+test('unknown server acknowledgement ID leaves the entire batch pending',async()=>{
+ const f=fixture(['a'],{reply:()=>({results:[{offlineId:'foreign',ok:true,id:'cloud-a',receiptNumber:'R-a'}]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.pending.size,1);
+});
