@@ -17,7 +17,7 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
   },
   async view(){const snapshot=(await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;const sales=(await db.query('SELECT receipt,synced_at,cloud_receipt,error FROM offline_sales ORDER BY created_at DESC LIMIT 100')).rows;return {snapshot,sales};},
   async sale(request){return db.transaction(async tx=>{
-   if(!request||typeof request.id!=='string'||typeof request.snapshotId!=='string')throw Error('Ungültige Offline-Verkaufskennung.');
+   if(!request||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.snapshotId))throw Error('Ungültige Offline-Verkaufskennung.');
    const old=(await tx.query('SELECT request,receipt FROM offline_sales WHERE id=$1',[request.id])).rows[0];
    if(old){if(canonical(old.request)!==canonical(request))throw Error('Verkaufskennung bereits verwendet');return old.receipt;}
    const snapshot=(await tx.query("SELECT c.payload FROM offline_catalog c WHERE c.id=$1 AND c.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current)",[request.snapshotId])).rows[0]?.payload;
