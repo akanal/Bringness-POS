@@ -1,6 +1,6 @@
 // PGlite is PostgreSQL compiled to WASM. With a file dataDir and default
 // durability, the transaction completes only after persistent storage flushes.
-export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
+export async function createOfflineLedger(db,quote) {
  await db.exec(`CREATE TABLE IF NOT EXISTS offline_catalog(id uuid PRIMARY KEY,payload jsonb NOT NULL,current boolean NOT NULL DEFAULT false);
  CREATE TABLE IF NOT EXISTS offline_sales(id uuid PRIMARY KEY,snapshot_id uuid NOT NULL REFERENCES offline_catalog(id),request jsonb NOT NULL,receipt jsonb NOT NULL,synced_at timestamptz,cloud_receipt jsonb,error text,created_at timestamptz NOT NULL DEFAULT now());`);
  return {
