@@ -61,6 +61,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
      }
     }
     // Do not resend rejected sales repeatedly during the same sync cycle.
+    notify();
     pending=await ledger.pending(Array.from(skipped));
    }
    let catalogError=null;
