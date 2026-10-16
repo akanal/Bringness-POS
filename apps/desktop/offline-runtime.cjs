@@ -31,15 +31,16 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   if(typeof token!=='string'||!token.trim())return null;
   return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(typeof data?.error==='string'?data.error:'Synchronisierung nicht verfügbar');return data;};
  }});
- const sync=()=>coordinator.sync();
+ let closed=false;
+ const sync=()=>closed?Promise.resolve(coordinator.status()):coordinator.sync();
  const {powerMonitor}=require('electron');
- const resumeAfterSuspend=()=>{sync().catch(()=>{});};
+ const resumeAfterSuspend=()=>{if(!closed)sync().catch(()=>{});};
  powerMonitor.on('resume',resumeAfterSuspend);
  // A restarted desktop process reopens the same durable PGlite directory.
  // Trigger recovery once the authenticated online page has loaded; its token
  // may be written shortly after load, so retry on the regular timer as well.
  let startupRecoveryTimer;
- const recoverOnStartup=()=>{clearTimeout(startupRecoveryTimer);startupRecoveryTimer=setTimeout(sync,2500);};
+ const recoverOnStartup=()=>{if(closed)return;clearTimeout(startupRecoveryTimer);startupRecoveryTimer=setTimeout(()=>{if(!closed)sync().catch(()=>{});},2500);};
  for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:export':async()=>{
   const report=await ledger.reconciliation({limit:500});
   const selected=await dialog.showSaveDialog(offlineWindow,{title:'Offline-Verkäufe exportieren',defaultPath:'bringness-offline-abgleich-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'JSON',extensions:['json']}]});
@@ -69,7 +70,6 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  const resumeOnFocus=()=>{if(!closed)recoverOnStartup();};
  app.on('browser-window-focus',resumeOnFocus);
  onlineContents?.on('did-fail-load',showOfflineOnFailure);
- let closed=false;
  const stopRecovery=()=>{
   clearInterval(timer);
   clearTimeout(startupRecoveryTimer);
