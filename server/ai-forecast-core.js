@@ -25,7 +25,7 @@ export function approximateDay(rows,clock=berlinClock()) {
  const expectedCompleted=median(samples.map(d=>d.hours.filter(h=>h.hour<clock.hour).reduce((s,h)=>s+h.orders,0)));
  const progress=baseOrders?expectedCompleted/baseOrders:0;
  const pace=ready&&progress>=0.2&&expectedCompleted>0?Math.max(0.5,Math.min(2,completed/expectedCompleted)):1;
- const ratio=ready&&progress>=0.2?completed/expectedCompleted:null;
+ const ratio=ready&&progress>=0.2&&expectedCompleted>0?completed/expectedCompleted:null;
  const estimate=(base,current)=>Math.max(current,Math.round(base*pace));
  const orders=estimate(baseOrders,currentOrders),revenue=estimate(baseRevenue,currentRevenue);
  const band=(values,current,estimate)=>{const spread=median(values.map(v=>Math.abs(v-median(values))));const margin=Math.max(estimate*0.25,spread*1.5);return {low:Math.max(current,Math.floor(estimate-margin)),high:Math.max(current,Math.ceil(estimate+margin))}};
