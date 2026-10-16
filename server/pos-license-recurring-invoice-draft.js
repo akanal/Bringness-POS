@@ -9,13 +9,13 @@ export function buildSandboxMonthlyInvoiceDraft({
  if(!companyId || !/^tr_[A-Za-z0-9]+$/.test(String(paymentId||"")) ||
     !net || currency!=="EUR" || paymentStatus!=="paid")
   return {ready:false,reason:"verified_paid_payment_required"};
- if(!customerBilling?.name || !customerBilling?.address)
+ if(typeof customerBilling?.name!=="string"||!customerBilling.name.trim()||typeof customerBilling?.address!=="string"||!customerBilling.address.trim())
   return {ready:false,reason:"customer_billing_details_required"};
  const vat=Math.round(net*19/100);
  return {ready:true,draft:{
   companyId,planCode,paymentId,currency,netCents:net,
   vatRatePercent:19,vatCents:vat,grossCents:net+vat,
-  customerBilling:{name:customerBilling.name,address:customerBilling.address},
+  customerBilling:{name:customerBilling.name.trim(),address:customerBilling.address.trim()},
   status:"draft",invoiceNumber:null,issueDate:null
  }};
 }
