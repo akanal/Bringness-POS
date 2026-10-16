@@ -162,3 +162,14 @@ test('duplicate cloud receipt number in later batch remains pending',async()=>{
  assert.deepEqual([...f.pending.keys()],['sale-20']);
  assert.equal(f.calls.length,2);
 });
+
+test('different restaurants may legitimately use the same receipt number',async()=>{
+ const f=fixture(['a','b'],{reply:sales=>({results:sales.map(s=>({
+  offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-1'
+ }))})});
+ f.pending.get('a').request.restaurantId='restaurant-a';
+ f.pending.get('b').request.restaurantId='restaurant-b';
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'success');
+ assert.equal(f.pending.size,0);
+});
