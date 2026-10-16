@@ -70,7 +70,7 @@ test('durable acknowledgements reject reused receipts after reopening the databa
 test('offline sale rejects a mismatched device key without writing a receipt',async()=>{
  const db=new PGlite();
  try{
-  const ledger=await createOfflineLedger(db,(_snapshot,request)=>({id:request.id,items:[],totalCents:0}));
+  const ledger=await createOfflineLedger(db,(_snapshot,request)=>({id:request.id,items:[{lineCents:100}],totalCents:100}));
   const restaurantId=randomUUID();
   const snapshot={id:randomUUID(),companyId:randomUUID(),deviceKey:'a'.repeat(64),createdAt:new Date().toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),restaurants:[{id:restaurantId,name:'Test'}],products:[],merchant:{}};
   await ledger.catalog(snapshot);
