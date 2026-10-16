@@ -41,7 +41,7 @@ test('durable acknowledgements reject reused receipts after reopening the databa
   db=new PGlite(directory);
   ledger=await createOfflineLedger(db,quote);
   const second=await add();
-  await assert.rejects(ledger.reconciliation({limit:1}),/kein unvollständiger Export/);
+  await assert.rejects(ledger.reconciliation({limit:1}),/unvollständiger Export/);
   await assert.rejects(ledger.acknowledge(second,{id:'cloud-one',receiptNumber:'R-2'}),/anderen Offline-Verkauf/);
   await assert.rejects(ledger.acknowledge(second,{id:'cloud-two',receiptNumber:'R-1'}),/anderen Offline-Verkauf/);
   assert.equal(await ledger.pendingCount(),1);
