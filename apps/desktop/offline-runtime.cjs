@@ -34,7 +34,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // may be written shortly after load, so retry on the regular timer as well.
  let startupRecoveryTimer;
  const recoverOnStartup=()=>{clearTimeout(startupRecoveryTimer);startupRecoveryTimer=setTimeout(sync,2500);};
- for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{onlineWindow()?.show();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
+ for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
  // Resume the durable queue promptly when the online POS becomes available again.
  // The coordinator is single-flight, so reconnect signals cannot overlap uploads.
  const onlineContents=onlineWindow()?.webContents;
