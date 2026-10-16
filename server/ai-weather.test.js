@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseMosmix} from './ai-weather.js';
-import {demandEffect} from './ai-demand-core.js';
+import {demandEffect,applyDemandContext} from './ai-demand-core.js';
 
 function forecast(start,hours,{omit=[],duplicate=false,missingRain=false}={}){
  const points=Array.from({length:hours},(_,i)=>new Date(Date.parse(start)+i*3600000).toISOString()).filter((_,i)=>!omit.includes(i));
@@ -148,4 +148,12 @@ test('duplicate event IDs appear once in demand provenance',()=>{
  const effect=demandEffect('2026-10-16',{settings:{demandRules:{enabled:true,eventPercent:30}},events:[event,{...event}]});
  assert.equal(effect.factor,1.3);
  assert.deepEqual(effect.adjustments[0].events,[{id:'market',version:1}]);
+});
+
+
+test('unready demand forecast requires explicit boolean enable flag',()=>{
+ const forecast={ready:false,date:'2026-10-16'};
+ const result=applyDemandContext(forecast,{settings:{demandRules:{enabled:'false'}}});
+ assert.equal(result.demand.enabled,false);
+ assert.equal(result.demand.factor,1);
 });
