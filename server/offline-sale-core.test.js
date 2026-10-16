@@ -53,8 +53,8 @@ test('offline sale rejects catalog authorization windows exceeding 24 hours',()=
 
 
 test('offline sales require nonempty catalog product and restaurant identifiers',()=>{
- const product=fixture();product.snapshot.products[0].id='';product.sale.items[0].productId='';
+ const product=fixture();product.snapshot.products[0].id=' ';product.sale.items[0].productId=' ';
  assert.throws(()=>quoteOfflineSale(product.snapshot,product.sale),/Offline-Artikel/);
- const restaurant=fixture();restaurant.snapshot.restaurants[0].id='';restaurant.sale.restaurantId='';
+ const restaurant=fixture();restaurant.snapshot.restaurants[0].id=' ';restaurant.sale.restaurantId=' ';
  assert.throws(()=>quoteOfflineSale(restaurant.snapshot,restaurant.sale),/Offline-Katalog/);
 });
