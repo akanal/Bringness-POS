@@ -16,13 +16,18 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     const batch=pending.slice(0,20);
     const response=await request('batch',{sales:batch.map(s=>s.request)});
     if(!Array.isArray(response?.results)||response.results.length!==batch.length)throw Error('Unvollständige Antwort der Offline-Synchronisierung');
-    // A malformed result must not discard valid acknowledgements from the same batch.
-    // Process valid sales individually; keep uncertain sales queued for safe retry.
-    if(response.results.some((result,index)=>result?.offlineId!==batch[index].id))throw Error('Offline-Antwort enthält fremde Verkaufskennungen');
+    // Match acknowledgements by immutable sale ID, not response ordering.
+    // Duplicate or unknown IDs make the entire response ambiguous: retry safely.
+    const resultsById=new Map();
+    for(const result of response.results){
+     if(typeof result?.offlineId!=='string'||resultsById.has(result.offlineId))throw Error('Offline-Antwort enthält doppelte oder ungültige Verkaufskennungen');
+     resultsById.set(result.offlineId,result);
+    }
+    if(batch.some(sale=>!resultsById.has(sale.id)))throw Error('Offline-Antwort enthält fremde oder fehlende Verkaufskennungen');
     // Server replies must not claim a sale succeeded without a usable receipt.
     // Invalid entries remain queued while valid entries can still be acknowledged.
     for(let index=0;index<batch.length;index++){
-     const sale=batch[index],result=response.results[index];
+     const sale=batch[index],result=resultsById.get(sale.id);
      if(result?.offlineId!==sale.id)throw Error('Offline-Antwort stimmt nicht mit der Verkaufskennung überein');
      if(result.ok===true&&typeof result.id==='string'&&result.id.trim()&&typeof result.receiptNumber==='string'&&result.receiptNumber.trim()){
       await ledger.acknowledge(sale.id,{id:result.id,receiptNumber:result.receiptNumber,replayed:!!result.replayed});
