@@ -40,7 +40,7 @@ export async function createOfflineLedger(db,quote) {
   async pendingCount(){return Number((await db.query('SELECT count(*)::bigint AS total FROM offline_sales WHERE synced_at IS NULL')).rows[0]?.total||0);},
   async pending(excludeIds=[]){if(!Array.isArray(excludeIds)||excludeIds.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))throw Error('Ungültige Ausschlussliste für Offline-Verkäufe');return (await db.query('SELECT id,request FROM offline_sales WHERE synced_at IS NULL AND NOT (id = ANY($1::uuid[])) ORDER BY created_at,id LIMIT 100',[excludeIds])).rows;},
   async acknowledge(id,receipt){
-   if(typeof id!=='string'||!id.trim())throw Error('Ungültige Offline-Verkaufskennung');
+   if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw Error('Ungültige Offline-Verkaufskennung');
    // Never mark a sale as synced without a durable, identifiable cloud receipt.
    if(!receipt||typeof receipt.id!=='string'||!receipt.id.trim()||typeof receipt.receiptNumber!=='string'||!receipt.receiptNumber.trim())throw Error('Ungültige Serverbestätigung für Offline-Verkauf.');
    const result=await db.query('UPDATE offline_sales SET synced_at=now(),cloud_receipt=$2,error=NULL WHERE id=$1 AND synced_at IS NULL RETURNING id',[id,JSON.stringify(receipt)]);
