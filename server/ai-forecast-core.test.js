@@ -62,3 +62,9 @@ test('missing forecast clock and invalid hours are rejected',()=>{
   assert.throws(()=>approximateDay([],value),/forecast clock/);
  }
 });
+
+test('forecast clock rejects malformed and impossible business dates',()=>{
+ for(const day of ['2026-02-30','2026-13-01','2026-10-03T00:00:00Z','yesterday','']){
+  assert.throws(()=>approximateDay(samples(),{date:day,hour:14}),/forecast clock/);
+ }
+});
