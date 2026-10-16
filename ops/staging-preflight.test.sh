@@ -25,6 +25,7 @@ reject() {
 accept
 reject STAGING_PAYMENT_MODE=live
 reject STAGING_TSE_MODE=enabled
+reject STAGING_PAYMENT_MODE=production
 reject STAGING_OUTBOUND_MESSAGES=enabled
 reject STAGING_DB_ISOLATION_CONFIRMED=no
 reject STAGING_HOST=bringness-pos.de
