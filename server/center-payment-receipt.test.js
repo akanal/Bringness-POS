@@ -132,3 +132,21 @@ test('signed receipt without TSE snapshot does not invent signing details',async
  assert.doesNotMatch(text,/TSE-Seriennummer|Signaturzähler|Signatur: /);
  assert.equal(documents[0].images.length,1,'digital receipt QR remains available');
 });
+
+test('PDF download does not send PDF headers or bytes when QR generation fails',async()=>{
+ const {res,documents}=await run('signed',{qrFails:true});
+ assert.equal(res.status,503);
+ assert.equal(res.headers['content-type'],'application/json');
+ assert.equal(res.pdf,undefined);
+ assert.equal(documents.length,0);
+ assert.match(res.body.error,/PDF/);
+});
+
+test('PDF writer stream failure does not send a partial PDF',async()=>{
+ const {res,documents}=await run('signed',{writerFailure:'stream'});
+ assert.equal(res.status,503);
+ assert.equal(res.headers['content-type'],'application/json');
+ assert.equal(res.pdf,undefined);
+ assert.equal(documents.length,1);
+ assert.equal(documents[0].destroyed,true);
+});
