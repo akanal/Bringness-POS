@@ -11,7 +11,7 @@ export async function signPreparedTse(pool,id,adapter){
  let start;
  try{
  start=await adapter.startTransaction(tx.process_data);
- if(!start.transactionNumber||start.certified!==true||start.serialNumber!==device.serial_number)throw Error('INVALID_TSE_START');
+ if(start.transactionNumber==null||String(start.transactionNumber)===''||start.certified!==true||start.serialNumber!==device.serial_number)throw Error('INVALID_TSE_START');
  await pool.query("UPDATE tse_transactions SET state='finishing',tse_transaction_number=$2,started_at=$3 WHERE id=$1",[id,String(start.transactionNumber),start.startedAt]);
  const finish=await adapter.finishTransaction({...tx.process_data,transactionNumber:String(start.transactionNumber)});
  if(finish.certified!==true||finish.serialNumber!==device.serial_number||String(finish.transactionNumber)!==String(start.transactionNumber)||!finish.signature||!finish.signatureCounter||!finish.signatureAlgorithm||!finish.finishedAt)throw Error('INVALID_TSE_SIGNATURE');
