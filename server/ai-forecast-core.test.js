@@ -45,3 +45,14 @@ test('timestamp-shaped dates cannot silently be interpreted as historical busine
  assert.equal(result.expectedOrders,clean.expectedOrders);
  assert.equal(result.expectedRevenueCents,clean.expectedRevenueCents);
 });
+
+test('cumulative integer overflow excludes the entire affected sales day',()=>{
+ const history=samples();
+ const affected=dateAgo(7);
+ const corrupted=[...history,{day:affected,hour:8,orders:Number.MAX_SAFE_INTEGER,revenue_cents:Number.MAX_SAFE_INTEGER}];
+ const result=approximateDay(corrupted,clock);
+ assert.equal(result.comparisonDates.includes(affected),false);
+ assert.equal(result.sampleDays,5);
+ assert.equal(result.expectedOrders,20);
+ assert.equal(result.expectedRevenueCents,20000);
+});
