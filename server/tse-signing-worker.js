@@ -1,4 +1,5 @@
 import {markTransactionSigned,receiptTseSnapshot} from './tse-core.js';
+import {classifyTseRecovery} from './tse-recovery.js';
 export async function signPreparedTse(pool,id,adapter){
  const deviceStatus=await adapter.status();
  if(deviceStatus.certified!==true||!deviceStatus.serialNumber)return {signed:false,reason:'device_not_ready'};
@@ -15,7 +16,7 @@ export async function signPreparedTse(pool,id,adapter){
  await pool.query("UPDATE tse_transactions SET state='finishing',tse_transaction_number=$2,started_at=$3 WHERE id=$1",[id,String(start.transactionNumber),start.startedAt]);
  const finish=await adapter.finishTransaction({...tx.process_data,transactionNumber:String(start.transactionNumber)});
  if(finish.certified!==true||finish.serialNumber!==device.serial_number||String(finish.transactionNumber)!==String(start.transactionNumber)||!finish.signature||!finish.signatureCounter||!finish.signatureAlgorithm||!finish.finishedAt)throw Error('INVALID_TSE_SIGNATURE');
- const client=await pool.connect();try{await client.query('BEGIN');const signed=await markTransactionSigned(client,id,finish);await client.query("UPDATE receipts SET fiscal_status='signed',tse_snapshot=$2::jsonb WHERE id=$1",[tx.receipt_id,JSON.stringify(receiptTseSnapshot(signed))]);await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+ const client=await pool.connect();try{await client.query('BEGIN');const signed=await markTransactionSigned(client,id,finish);if(signed===null)throw Error('TSE_SIGN_STATE_CONFLICT');const receiptUpdate=await client.query("UPDATE receipts SET fiscal_status='signed',tse_snapshot=$2::jsonb,tse_transaction_id=$3 WHERE id=$1 AND (tse_transaction_id IS NULL OR tse_transaction_id=$3)",[tx.receipt_id,JSON.stringify(receiptTseSnapshot(signed)),id]);if(receiptUpdate.rowCount!==1)throw Error('TSE_RECEIPT_UPDATE_MISSING');await client.query('COMMIT');}catch(error){try{await client.query('ROLLBACK');}catch{ /* Preserve original uncertainty; do not retry hardware. */ }throw error;}finally{client.release();}
  return {signed:true};
  }catch{
  // The hardware may have applied the action before the connection failed.
@@ -38,4 +39,20 @@ export async function processPreparedTse(pool,adapterForRestaurant){
   }
  }
  return outcomes;
+}
+
+/**
+ * Read-only inspection of potentially stranded TSE transactions.
+ * This function does not change database state or contact the TSE device.
+ */
+export async function inspectTseRecovery(pool,{limit=100,staleAfterMs=300000,now=new Date()}={}){
+ const safeLimit=Math.min(500,Math.max(1,Math.trunc(Number(limit)||100)));
+ const rows=(await pool.query(
+  "SELECT id,restaurant_id,receipt_id,state,updated_at FROM tse_transactions WHERE state IN ('starting','started','finishing','needs_review','failed') ORDER BY updated_at,id LIMIT $1",
+  [safeLimit]
+ )).rows;
+ return rows.map(row=>({
+  id:row.id,restaurantId:row.restaurant_id,receiptId:row.receipt_id,state:row.state,
+  ...classifyTseRecovery(row,now,staleAfterMs)
+ }));
 }

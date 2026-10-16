@@ -10,14 +10,21 @@ export async function migratePublicReceipts() {
 }
 
 export function receiptUrl(req, token) {
-  const host = String(req.headers.host || "");
-  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/i.test(host) || !/^[0-9a-f-]{36}$/i.test(String(token))) throw new Error("Ungültiger Beleglink");
-  if (process.env.APP_MODE === "pos" && process.env.NODE_ENV === "production" && process.env.PUBLIC_BASE_URL) {
-    const origin = new URL(process.env.PUBLIC_BASE_URL);
-    if (origin.protocol !== "https:" || origin.username || origin.password) throw new Error("Ungültige öffentliche Adresse");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(token))) {
+    throw new Error("Ungültiger Beleglink");
+  }
+  const configured = process.env.PUBLIC_RECEIPT_ORIGIN || process.env.PUBLIC_BASE_URL;
+  if (configured) {
+    const origin = new URL(configured);
+    if (origin.protocol !== "https:" || origin.username || origin.password || origin.port || !/^[a-z0-9.-]+$/i.test(origin.hostname)) {
+      throw new Error("Ungültige öffentliche Adresse");
+    }
     return `${origin.origin}/beleg/${token}`;
   }
-  return `${process.env.NODE_ENV === "production" ? "https" : "http"}://${host}/beleg/${token}`;
+  if (process.env.NODE_ENV === "production") throw new Error("Öffentliche Belegadresse fehlt");
+  const host = String(req.headers.host || "");
+  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/i.test(host)) throw new Error("Ungültiger Beleglink");
+  return `http://${host}/beleg/${token}`;
 }
 
 export const handlePublicReceipt=createPublicReceiptHandler(pool);

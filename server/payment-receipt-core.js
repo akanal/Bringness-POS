@@ -32,7 +32,7 @@ return async function handlePaymentReceipt(req, res) {
 
   const receiptId = match[1];
   const q = await pool.query(
-    "SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.fiscal_status,rc.merchant_snapshot,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.id=$1 AND c.id=$2",
+    "SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.fiscal_status,rc.tse_snapshot,rc.merchant_snapshot,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.id=$1 AND c.id=$2",
     [receiptId, user.company_id]
   );
   if (!q.rowCount) {
@@ -46,7 +46,7 @@ return async function handlePaymentReceipt(req, res) {
   catch{send(res,503,{error:'Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen.'});return true;}
   res.writeHead(200,{
     "content-type":"application/pdf",
-    "content-disposition":"attachment; filename=Beleg-"+receipt.receipt_number+".pdf",
+    "content-disposition":"attachment; filename=Beleg-"+String(receipt.receipt_number || "unbekannt").replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,80)+".pdf",
     "cache-control":"private, no-store"
   });
   res.end(pdf);
@@ -76,11 +76,12 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   let qrBuffer;
   try {
     const qrPayload=receiptUrl(req,receipt.public_token);
-    qrBuffer=await QRCode.toBuffer(qrPayload,{width:120,margin:1});
+    qrBuffer=await QRCode.toBuffer(qrPayload,{width:224,margin:4,errorCorrectionLevel:'M'});
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
-  const height = Math.max(560, 390 + items.length * 34 + payments.length * 20);
+  const tseFieldCount = receipt.fiscal_status === "signed" && receipt.tse_snapshot && typeof receipt.tse_snapshot === "object" ? ["serialNumber","transactionNumber","signatureCounter","signatureAlgorithm","startedAt","finishedAt","signature"].filter(key => receipt.tse_snapshot[key] !== undefined && receipt.tse_snapshot[key] !== null && receipt.tse_snapshot[key] !== "").length : 0;
+  const height = Math.max(640, 470 + items.length * 34 + payments.length * 20 + tseFieldCount * 30);
   let pdf;
   try {
     pdf=await new Promise((resolve,reject)=>{
@@ -132,8 +133,25 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
     doc.text("Steuer: " + euro(group.tax) + " · Brutto: " + euro(group.gross));
   }
 
+  if (receipt.fiscal_status === "signed" && receipt.tse_snapshot && typeof receipt.tse_snapshot === "object") {
+    const tse = receipt.tse_snapshot;
+    const fields = [
+      ["TSE-Seriennummer", tse.serialNumber],
+      ["TSE-Transaktion", tse.transactionNumber],
+      ["Signaturzähler", tse.signatureCounter],
+      ["Signaturverfahren", tse.signatureAlgorithm],
+      ["Beginn", tse.startedAt],
+      ["Ende", tse.finishedAt],
+      ["Signatur", tse.signature]
+    ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+    if (fields.length) {
+      doc.moveDown().font("Helvetica-Bold").fontSize(8).text("TSE-Daten");
+      doc.font("Helvetica").fontSize(7);
+      for (const [label, value] of fields) doc.text(label + ": " + String(value));
+    }
+  }
   doc.moveDown();
-  const qrSize = 78;
+  const qrSize = 112;
   // Reserve the entire QR/footer block; PDFKit images with explicit coordinates do not advance y.
   if (doc.y + qrSize + 58 > doc.page.height - doc.page.margins.bottom) doc.addPage();
   const qrX = (doc.page.width - qrSize) / 2;

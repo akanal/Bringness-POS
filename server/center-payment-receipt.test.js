@@ -3,11 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',publicToken='33333333-3333-4333-8333-333333333333';
-async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null}={}){
+async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null,nearPageEnd=false,tseSnapshot=undefined,receiptNumber='BN-2026-000042'}={}){
  const documents=[],queries=[];
  class Pdf extends EventEmitter {
- constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:226.77,margins:{left:options.margin}};this.y=100;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
- fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(buffer,x,y,options){this.images.push({x,y,...options});return this;}
+ constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:options.size[0],height:options.size[1],margins:{left:options.margin,bottom:options.margin}};this.y=nearPageEnd?600:100;this.addedPages=0;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
+ addPage(){this.addedPages++;this.y=18;return this;}fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(buffer,x,y,options){this.images.push({x,y,...options});return this;}
  text(value){if(writerFailure==='draw')throw Error('render failed');this.texts.push(value);this.textPositions.push({value,y:this.y});return this;}destroy(){this.destroyed=true;return this;}end(){this.ended=true;if(writerFailure==='stream')this.emit('error',Error('stream failed'));else this.emit('data',Buffer.from('%PDF-simulated'));this.emit('end');return this;}
  }
  const pool={query:async(sql,args)=>{
@@ -15,30 +15,62 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  if(sql.includes('FROM sessions')){assert.match(sql,/coalesce\(u.must_change_password,false\)=false/);return {rows:authenticated?[{id:receiptId,company_id:company,role:'owner'}]:[]};}
  if(sql.includes('FROM receipts rc')){
  assert.match(sql,/rc.id=\$1 AND c.id=\$2/);assert.deepEqual(args,[receiptId,company]);
- return {rowCount:found?1:0,rows:found?[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,order_id:'order',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
+ return {rowCount:found?1:0,rows:found?[{receipt_number:receiptNumber,issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,tse_snapshot:tseSnapshot===undefined?{serialNumber:'TSE-DEVICE-1',transactionNumber:'TX-123',signatureCounter:42,signatureAlgorithm:'ecdsa-plain-SHA256',startedAt:'2026-10-06T12:00:00Z',finishedAt:'2026-10-06T12:01:00Z',signature:'signed-value'}:tseSnapshot,order_id:'order',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
  }
  if(sql.includes('FROM order_items'))return {rows:[{product_name_snapshot:'Gericht',unit_price_cents:1190,tax_rate_snapshot:19,quantity:1}]};
  if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:1190}]};
  throw Error('Unexpected query');
  }};
- const handler=createPaymentReceiptHandler(pool,PdfWriter||Pdf,QrWriter||{toBuffer:async(url)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
+ const handler=createPaymentReceiptHandler(pool,PdfWriter||Pdf,QrWriter||{toBuffer:async(url,options)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);assert.deepEqual(options,{width:224,margin:4,errorCorrectionLevel:'M'});return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
  const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){if(Buffer.isBuffer(raw))this.pdf=raw;else this.body=JSON.parse(raw);}};
  assert.equal(await handler({url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
- return {res,documents,queries};
+ return {res,documents,queries,handler};
 }
 for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  test('PDF template respects stored fiscal status: '+fiscalStatus,async()=>{
  const {res,documents}=await run(fiscalStatus);assert.equal(res.status,200);assert.equal(res.headers['content-type'],'application/pdf');
  assert.equal(res.pdf.toString(),'%PDF-simulated');
  const doc=documents[0],text=doc.texts.join('\n');
+ assert.ok(doc.options.size[1]>=640,'receipt must reserve space for enlarged QR');
+ if(fiscalStatus==='signed')assert.ok(doc.options.size[1]>=680,'signed receipt must reserve extra height for TSE fields');
  assert.equal(doc.ended,true);assert.match(text,/Historisches Restaurant/);assert.match(text,/Historischer Betrieb/);
- assert.equal(doc.images.length,1);assert.equal(doc.images[0].x,(doc.page.width-doc.images[0].width)/2);assert.equal(doc.x,doc.page.margins.left);
+ assert.equal(doc.images.length,1);assert.equal(doc.images[0].width,112);assert.equal(doc.images[0].height,112);assert.equal(doc.images[0].x,(doc.page.width-doc.images[0].width)/2);assert.equal(doc.x,doc.page.margins.left);
  const label=doc.textPositions.find(t=>t.value==="QR: Digitalen Beleg öffnen");assert.ok(label.y>=doc.images[0].y+doc.images[0].height+8);
  const footer=doc.textPositions.find(t=>t.value.includes("Nicht TSE-signiert"));if(footer)assert.ok(footer.y>=label.y);
  assert.match(text,/Gesamt: 11,90 EUR/);assert.match(text,/Steuer: 1,90 EUR/);assert.match(text,/Online-Zahlung/);assert.doesNotMatch(text,/mollie_center/);
+ assert.equal(text.includes('TSE-Seriennummer: TSE-DEVICE-1'),fiscalStatus==='signed');
+ assert.equal(text.includes('Signatur: signed-value'),fiscalStatus==='signed');
+ assert.equal(text.includes('Signaturzähler: 42'),fiscalStatus==='signed');
  assert.equal(text.includes('Nicht TSE-signiert'),fiscalStatus!=='signed');assert.doesNotMatch(text,/Eine TSE ist nicht angeschlossen/);
  });
 }
+test('reprinting a receipt preserves its public QR destination and never creates another receipt',async()=>{
+ const {res,documents,queries,handler}=await run('signed');
+ const second={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){this.pdf=raw;}};
+ const request={url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}};
+ assert.equal(await handler(request,second),true);
+ assert.equal(res.status,200);
+ assert.equal(second.status,200);
+ assert.deepEqual(second.pdf,res.pdf);
+ assert.equal(documents.length,2,'each print generates a PDF, not a new receipt');
+ assert.equal(documents[0].images.length,1);
+ assert.equal(documents[1].images.length,1);
+ const receiptReads=queries.filter(q=>q.sql.includes('FROM receipts rc'));
+ assert.equal(receiptReads.length,2);
+ for(const q of receiptReads)assert.deepEqual(q.args,[receiptId,company]);
+ assert.ok(queries.every(q=>/^\\s*SELECT\\b/i.test(q.sql)),'printing must never insert, update or delete receipts or payments');
+});
+
+test('PDF download never exposes another company receipt',async()=>{
+ const {res,documents,queries}=await run('signed',{found:false});
+ assert.equal(res.status,404);
+ assert.equal(res.pdf,undefined);
+ assert.equal(documents.length,0);
+ assert.equal(queries.length,2);
+ assert.deepEqual(queries[1].args,[receiptId,company]);
+ assert.match(queries[1].sql,/rc.id=\$1 AND c.id=\$2/);
+});
+
 test('PDF download requires an active session and company-scoped receipt lookup',async()=>{
  const unauth=await run('signed',{authenticated:false});assert.equal(unauth.res.status,401);assert.equal(unauth.documents.length,0);assert.equal(unauth.queries.length,1);
  const missing=await run('signed',{found:false});assert.equal(missing.res.status,404);assert.equal(missing.documents.length,0);assert.equal(missing.queries.length,2);
@@ -74,4 +106,81 @@ test('real PDFKit and QR encoder produce a complete buffered receipt',{skip:!pro
  assert.equal(res.status,200);assert.equal(res.headers['content-type'],'application/pdf');
  assert.ok(res.pdf.length>1000);assert.equal(res.pdf.subarray(0,5).toString(),'%PDF-');
  assert.match(res.pdf.subarray(-100).toString(),/%%EOF/);
+});
+
+test('QR and footer move together to a fresh PDF page when remaining space is insufficient',async()=>{
+ const {res,documents}=await run('signed',{nearPageEnd:true});
+ assert.equal(res.status,200);
+ const doc=documents[0];
+ assert.equal(doc.addedPages,1);
+ assert.equal(doc.images.length,1);
+ assert.equal(doc.images[0].y,18);
+ assert.ok(doc.textPositions.find(t=>t.value==='QR: Digitalen Beleg öffnen').y>=doc.images[0].y+112+8);
+});
+
+test('printed QR PNG decodes to the exact public receipt URL at thermal-print resolution',{skip:!process.env.CENTER_TEST_QRCODE||!process.env.CENTER_TEST_PNGJS||!process.env.CENTER_TEST_JSQR},async()=>{
+ const [{default:QrWriter},pngModule,jsqrModule]=await Promise.all([
+  import(process.env.CENTER_TEST_QRCODE),
+  import(process.env.CENTER_TEST_PNGJS),
+  import(process.env.CENTER_TEST_JSQR)
+ ]);
+ const PNG=pngModule.PNG||pngModule.default?.PNG;
+ const decode=jsqrModule.default||jsqrModule;
+ const url='https://pos.example.test/beleg/'+publicToken;
+ const png=PNG.sync.read(await QrWriter.toBuffer(url,{width:224,margin:4,errorCorrectionLevel:'M'}));
+ const pixels=new Uint8ClampedArray(png.data);
+ const scanned=decode(pixels,png.width,png.height);
+ assert.ok(scanned,'QR must be readable by a scanner');
+ assert.equal(scanned.data,url);
+ const otherToken='44444444-4444-4444-8444-444444444444';
+ const otherUrl='https://pos.example.test/beleg/'+otherToken;
+ const otherPng=PNG.sync.read(await QrWriter.toBuffer(otherUrl,{width:224,margin:4,errorCorrectionLevel:'M'}));
+ const otherScan=decode(new Uint8ClampedArray(otherPng.data),otherPng.width,otherPng.height);
+ assert.ok(otherScan,'second receipt QR must also be scannable');
+ assert.equal(otherScan.data,otherUrl);
+ assert.notEqual(otherScan.data,scanned.data,'different receipts must never share the same QR destination');
+});
+
+test('long TSE signature and long item name still produce a valid real PDF',{skip:!process.env.CENTER_TEST_PDFKIT||!process.env.CENTER_TEST_QRCODE},async()=>{
+ const [{default:PdfWriter},{default:QrWriter}]=await Promise.all([import(process.env.CENTER_TEST_PDFKIT),import(process.env.CENTER_TEST_QRCODE)]);
+ const receipt={receipt_number:'BN-LONG-TEST',issued_at:'2026-10-16T12:00:00Z',public_token:publicToken,fiscal_status:'signed',tse_snapshot:{serialNumber:'TSE-DEVICE-1',transactionNumber:'TX-999',signatureCounter:42,signatureAlgorithm:'ecdsa-plain-SHA256',startedAt:'2026-10-16T12:00:00Z',finishedAt:'2026-10-16T12:01:00Z',signature:'a'.repeat(512)},order_id:'order',total_cents:1190,restaurant_name:'Testrestaurant',company_name:'Testfirma'};
+ const pool={query:async sql=>sql.includes('FROM order_items')?{rows:[{product_name_snapshot:'Sehr lange Speisenbezeichnung '.repeat(15),unit_price_cents:1190,tax_rate_snapshot:19,quantity:1}]}:{rows:[{method:'cash',amount_cents:1190}]}};
+ const {renderPaymentReceipt}=await import('./payment-receipt-core.js');
+ const pdf=await renderPaymentReceipt(pool,PdfWriter,QrWriter,()=> 'https://pos.example.test/beleg/'+publicToken,{headers:{}},receipt);
+ assert.ok(pdf.length>1000);
+ assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+ assert.match(pdf.subarray(-100).toString(),/%%EOF/);
+});
+
+test('signed receipt without TSE snapshot does not invent signing details',async()=>{
+ const {res,documents}=await run('signed',{tseSnapshot:null});
+ assert.equal(res.status,200);
+ const text=documents[0].texts.join('\n');
+ assert.doesNotMatch(text,/TSE-Seriennummer|Signaturzähler|Signatur: /);
+ assert.equal(documents[0].images.length,1,'digital receipt QR remains available');
+});
+
+test('PDF download does not send PDF headers or bytes when QR generation fails',async()=>{
+ const {res,documents}=await run('signed',{qrFails:true});
+ assert.equal(res.status,503);
+ assert.equal(res.headers['content-type'],'application/json');
+ assert.equal(res.pdf,undefined);
+ assert.equal(documents.length,0);
+ assert.match(res.body.error,/PDF/);
+});
+
+test('PDF writer stream failure does not send a partial PDF',async()=>{
+ const {res,documents}=await run('signed',{writerFailure:'stream'});
+ assert.equal(res.status,503);
+ assert.equal(res.headers['content-type'],'application/json');
+ assert.equal(res.pdf,undefined);
+ assert.equal(documents.length,1);
+ assert.equal(documents[0].destroyed,true);
+});
+
+test('unsafe receipt number cannot inject PDF response headers',async()=>{
+ const {res}=await run('signed',{receiptNumber:'BN-123"\r\nX-Injected: yes'});
+ assert.equal(res.status,200);
+ assert.equal(res.headers['content-disposition'],'attachment; filename=Beleg-BN-123___X-Injected__yes.pdf');
+ assert.equal(res.headers['x-injected'],undefined);
 });

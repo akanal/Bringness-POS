@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node server/start.js",
-    "dev": "node --watch server/start.js"
+    "dev": "node --watch server/start.js",
+    "test": "node --test tests/*.test.js"
   },
   "engines": {
     "node": ">=20"

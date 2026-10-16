@@ -26,7 +26,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text DEFAULT 'Company'); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
  CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);
  CREATE SEQUENCE receipt_number_seq;
- CREATE TABLE receipts(issued_at timestamptz DEFAULT now(),public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
+ CREATE TABLE receipts(issued_at timestamptz DEFAULT now(),public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,tse_snapshot jsonb,merchant_snapshot jsonb);
  CREATE TABLE payments(order_id uuid,method text,amount_cents integer);
  CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
  CREATE TABLE pos_stock_links(restaurant_id uuid,active boolean);
@@ -250,7 +250,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.match(digital.html,/Online-Zahlung/);assert.doesNotMatch(digital.html,/mollie_center/);
  assert.match(digital.html,/&lt;script&gt;bad\(\)&lt;\/script&gt; Gericht/);assert.doesNotMatch(digital.html,/<script>/);
  assert.match(digital.html,/Nicht TSE-signiert/);assert.equal(digital.headers['referrer-policy'],'no-referrer');
- assert.equal(digital.headers['cache-control'],'private, no-store');
+ assert.match(digital.headers['cache-control'],/no-store/);assert.match(digital.headers['cache-control'],/max-age=0/);assert.equal(digital.headers['x-content-type-options'],'nosniff');
  // Later merchant changes cannot rewrite the receipt's historical seller snapshot.
  await db.query("UPDATE restaurants SET name='Changed after sale' WHERE id=$1",[restaurant]);
  const historical={...digital};await publicReceipt({url:statusRes.data.order.receipt_url,method:'GET'},historical);

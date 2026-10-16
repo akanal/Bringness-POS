@@ -10,6 +10,7 @@ test('a broken restaurant bridge does not prevent another restaurant from signin
   if(sql.includes("SET state='starting'"))return {rows:[{id:args[0],restaurant_id:'two',receipt_id:'receipt',process_data:{totalsMatch:true}}]};
   if(sql.startsWith('SELECT serial_number'))return {rows:[{serial_number:'serial-two',certified:true,status:'connected'}]};
   if(sql.includes("state='signed'"))return {rows:[{state:'signed',tse_transaction_number:'7',signature:'signed-proof'}]};
+  if(sql.startsWith('UPDATE receipts'))return {rowCount:1,rows:[]};
   return {rows:[]};
  },connect:async()=>({query:(...args)=>pool.query(...args),release(){}})};
  const outcomes=await processPreparedTse(pool,async restaurantId=>{
