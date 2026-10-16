@@ -26,3 +26,14 @@ exports.cachedLicenseResult=(state,now=Date.now())=>{
 exports.externalHttpsUrl=(target,base)=>{
  try{const url=new URL(target,base);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null}catch{return null}
 };
+exports.trustedPosUrl=(target,base)=>{
+ try{const url=new URL(target);return url.protocol==='https:'&&url.origin===new URL(base).origin&&!url.username&&!url.password}catch{return false}
+};
+exports.singleFlight=run=>{
+ let running=null;
+ return (...args)=>{
+  if(running)return running;
+  running=Promise.resolve().then(()=>run(...args)).finally(()=>{running=null});
+  return running;
+ };
+};

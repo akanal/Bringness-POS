@@ -49,3 +49,15 @@ test('native update navigation allows HTTPS and rejects executable schemes or em
  assert.equal(license.externalHttpsUrl('https://bringness.com/download',base),'https://bringness.com/download');
  for(const target of ['javascript:alert(1)','file:///tmp/a','http://example.test','https://user:secret@example.test'])assert.equal(license.externalHttpsUrl(target,base),null);
 });
+test('native maintenance refuses empty, foreign and insecure page origins',()=>{
+ const base='https://bringness.de/pos/';
+ assert.equal(license.trustedPosUrl('https://bringness.de/pos/?desktop=1',base),true);
+ for(const target of ['',null,'about:blank','file:///offline.html','http://bringness.de/pos/','https://bringness.de.evil.test/','https://bringness.de:444/pos/','https://user@bringness.de/pos/'])assert.equal(license.trustedPosUrl(target,base),false);
+});
+test('overlapping maintenance ticks share one operation and recover after rejection',async()=>{
+ let calls=0,release;const gate=new Promise(resolve=>{release=resolve});
+ const run=license.singleFlight(async()=>{calls++;await gate;if(calls===1)throw Error('window closed');return 'recovered';});
+ const first=run(),second=run();assert.equal(first,second);
+ release();await assert.rejects(first,/window closed/);assert.equal(calls,1);
+ assert.equal(await run(),'recovered');assert.equal(calls,2);
+});
