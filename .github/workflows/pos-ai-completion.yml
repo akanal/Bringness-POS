@@ -23,5 +23,6 @@ jobs:
       - run: node server/ai-tests/billing-eligibility.mjs
       - run: node server/ai-tests/remote-support.mjs
       - run: node server/ai-tests/offline-accountant.mjs
+      - run: node server/ai-tests/consumption-history.mjs
       - run: node server/ai-tests/pos-stock-bridge.mjs
       - run: node server/ai-tests/integration.mjs

@@ -232,7 +232,6 @@ await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,t
 const sourcePaid=(await query('SELECT closed_at FROM orders WHERE id=$1',[posOrder])).rows[0].closed_at;
 assert.equal(new Date((await query('SELECT occurred_at FROM ai_sale_events WHERE external_id=$1',["pos:"+posOrder])).rows[0].occurred_at).toISOString(),new Date(sourcePaid).toISOString());
 await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
-const sourcePaid=(await query('SELECT closed_at FROM orders WHERE id=$1',[posOrder])).rows[0].closed_at;
 assert.equal(new Date((await query('SELECT occurred_at FROM ai_sale_events WHERE external_id=$1',["pos:"+posOrder])).rows[0].occurred_at).toISOString(),new Date(sourcePaid).toISOString());
 await db.exec('ALTER TABLE orders ADD COLUMN total_cents int NOT NULL DEFAULT 0');
 const mapping=await call('pos-products?connectorId='+posLink.id,null,tokens.buyer);assert.equal(mapping.status,200);assert.equal(mapping.unmapped,0);assert.equal(mapping.products[0].id,posProduct);assert.equal((await call('pos-products?connectorId='+posLink.id,null,tokens.other)).status,404);

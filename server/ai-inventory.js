@@ -1,3 +1,4 @@
+import {migrateConsumptionHistory} from './ai-consumption.js';
 import {blockUnavailableRecipes} from './ai-stock-lifecycle.js';
 import {aiPool} from './ai-database.js';
 import {uuid,hash} from './ai-policy.js';
@@ -28,7 +29,7 @@ CREATE TABLE IF NOT EXISTS ai_inventory_requests(actor_id uuid NOT NULL REFERENC
 CREATE TABLE IF NOT EXISTS ai_monitor_state(account_id uuid PRIMARY KEY REFERENCES ai_accounts(id),last_checked timestamptz,last_error text NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS ai_monitor_findings(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),finding_key text NOT NULL,kind text NOT NULL,severity text NOT NULL,title text NOT NULL,message text NOT NULL,detail jsonb NOT NULL,first_seen timestamptz NOT NULL DEFAULT now(),last_seen timestamptz NOT NULL DEFAULT now(),resolved_at timestamptz,acknowledged_at timestamptz,UNIQUE(account_id,finding_key));
 CREATE INDEX IF NOT EXISTS ai_monitor_account_idx ON ai_monitor_findings(account_id,resolved_at);
-`)}
+`);await migrateConsumptionHistory(aiPool())}
 async function movement(c,s,u,delta,kind,why,after){await c.query('INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after) VALUES($1,$2,$3,$4,$5,$6,$7)',[s.id,u.id,delta,why,kind,s.quantity,after])}
 async function inventoryWrite(path,b,u){
  const count=path.endsWith('/count');id(b.requestKey);if(b.confirmed!==true)fail('Lagerbuchung ausdrücklich bestätigen');const why=reason(b.reason);let lines;
@@ -45,15 +46,15 @@ export async function refreshMonitor(accountId){
  const stock=(await c.query(`SELECT s.*,l.name location_name,
  COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted' AND NOT o.unavailable AND COALESCE(o.confirmed_delivery_date,o.delivery_date)>=(now() AT TIME ZONE 'Europe/Berlin')::date AND NOT EXISTS(SELECT 1 FROM ai_order_replacements r WHERE r.order_id=o.id AND r.status='pending') AND COALESCE(o.confirmed_delivery_date,o.delivery_date)<=((now() AT TIME ZONE 'Europe/Berlin')::date+6)),0) incoming
  FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY s.id`,[accountId])).rows;
- const sales=(await c.query(`SELECT e.stock_id,
- sum(-e.delta) consumption,
- sum(-e.delta) FILTER(WHERE v.created_at>=now()-interval '7 days') recent,
- sum(-e.delta) FILTER(WHERE v.created_at<now()-interval '7 days') previous,
- count(DISTINCT (v.created_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale') days,
- count(DISTINCT (v.created_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.created_at>=now()-interval '7 days') recent_days,
- count(DISTINCT (v.created_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.created_at<now()-interval '7 days') previous_days,
- LEAST(28,GREATEST(1,1+(now() AT TIME ZONE 'Europe/Berlin')::date-((min(v.created_at) FILTER(WHERE v.event_type='sale')) AT TIME ZONE 'Europe/Berlin')::date)) observed_days
- FROM ai_sale_effects e JOIN ai_sale_events v ON v.id=e.event_id WHERE v.account_id=$1 AND v.created_at>=now()-interval '28 days' GROUP BY e.stock_id`,[accountId])).rows;
+ const sales=(await c.query(`SELECT v.stock_id,
+ sum(-v.delta) consumption,
+ sum(-v.delta) FILTER(WHERE v.occurred_at>=now()-interval '7 days') recent,
+ sum(-v.delta) FILTER(WHERE v.occurred_at<now()-interval '7 days') previous,
+ count(DISTINCT (v.occurred_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale') days,
+ count(DISTINCT (v.occurred_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.occurred_at>=now()-interval '7 days') recent_days,
+ count(DISTINCT (v.occurred_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.occurred_at<now()-interval '7 days') previous_days,
+ LEAST(28,GREATEST(1,1+(now() AT TIME ZONE 'Europe/Berlin')::date-((min(v.occurred_at) FILTER(WHERE v.event_type='sale')) AT TIME ZONE 'Europe/Berlin')::date)) observed_days
+ FROM ai_consumption_events v WHERE v.account_id=$1 AND v.occurred_at>=now()-interval '28 days' AND v.occurred_at<=now() GROUP BY v.stock_id`,[accountId])).rows;
  const losses=(await c.query("SELECT m.stock_id,sum(-m.delta) quantity,count(*) records FROM ai_stock_moves m JOIN ai_stock s ON s.id=m.stock_id WHERE s.account_id=$1 AND m.kind IN ('waste','spoilage') AND m.created_at>=now()-interval '28 days' GROUP BY m.stock_id",[accountId])).rows;
  const findings=[];const add=(kind,subject,severity,title,message,detail)=>findings.push({key:kind+':'+subject,kind,severity,title,message,detail});
  for(const s of stock){const sale=sales.find(x=>x.stock_id===s.id),loss=losses.find(x=>x.stock_id===s.id),quantity=Math.max(0,Number(s.quantity)-Number(s.reserved_quantity||0)),minimum=Number(s.minimum),incoming=Number(s.incoming),days=Number(sale?.days||0),daily=sale?Math.max(0,Number(sale.consumption))/Math.max(1,Number(sale.observed_days)||1):0;

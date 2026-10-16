@@ -31,6 +31,6 @@ jobs:
       - name: Run desktop persistence and synchronization tests
         run: npm test --prefix apps/desktop
       - name: Run AI weather and purchasing regression tests
-        run: node --test server/ai-weather.test.js server/ai-auto-procurement.test.js server/ai-demand-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+        run: node --test server/ai-weather.test.js server/ai-sales-contract.test.js server/offline-stock.test.js server/ai-auto-procurement.test.js server/ai-demand-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
       - name: Run TSE regression tests
         run: node --test tests/tse-signing-worker.test.js tests/offline-sale-core.test.js tests/center-guest-push.test.js tests/tse-core.test.js server/tse-signing-worker.test.js

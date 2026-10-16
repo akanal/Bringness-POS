@@ -16,6 +16,8 @@ CREATE TABLE ai_recipes(id uuid PRIMARY KEY,account_id uuid REFERENCES ai_accoun
 CREATE TABLE ai_recipe_items(recipe_id uuid REFERENCES ai_recipes(id),stock_id uuid REFERENCES ai_stock(id),quantity numeric(15,3));
 CREATE TABLE ai_connectors(id uuid PRIMARY KEY,account_id uuid,location_id uuid,active boolean,kind text);
 CREATE TABLE ai_stock_moves(id bigserial PRIMARY KEY,stock_id uuid,actor_id uuid,delta numeric(15,3),reason text,kind text,quantity_before numeric(15,3),quantity_after numeric(15,3),created_at timestamptz DEFAULT now());
+CREATE TABLE ai_sale_events(id uuid PRIMARY KEY,account_id uuid,event_type text,occurred_at timestamptz,created_at timestamptz DEFAULT now());
+CREATE TABLE ai_sale_effects(event_id uuid,stock_id uuid,delta numeric);
 CREATE TABLE ai_audit(id bigserial PRIMARY KEY,actor_id uuid,target_id uuid,action text,detail jsonb);
 `);
 const account=crypto.randomUUID(),other=crypto.randomUUID(),location=crypto.randomUUID(),otherLocation=crypto.randomUUID(),stock=crypto.randomUUID(),recipe=crypto.randomUUID();
@@ -67,7 +69,7 @@ await assert.rejects(act('start','API-A'),/nicht gefunden/);checks++;
 globalThis.stockTestPool=pool;
 let inventorySource=fs.readFileSync(new URL('../ai-inventory.js',import.meta.url),'utf8');
 inventorySource=inventorySource.replace("import {aiPool} from './ai-database.js';","const aiPool=()=>globalThis.stockTestPool;");
-for(const path of ['ai-stock-lifecycle.js','ai-policy.js'])inventorySource=inventorySource.replace("'./"+path+"'",JSON.stringify(new URL('../'+path,import.meta.url).href));
+for(const path of ['ai-stock-lifecycle.js','ai-policy.js','ai-consumption.js'])inventorySource=inventorySource.replace("'./"+path+"'",JSON.stringify(new URL('../'+path,import.meta.url).href));
 const inventory=await import('data:text/javascript;base64,'+Buffer.from(inventorySource).toString('base64'));await inventory.migrateAiInventory();
 await query('UPDATE ai_stock SET quantity=3 WHERE id=$1',[stock]);
 for(const kind of ['spillage','own_use','spoilage','waste']){
