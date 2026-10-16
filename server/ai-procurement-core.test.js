@@ -108,3 +108,7 @@ test('large procurement requests are rejected even without offers',()=>{
  assert.equal(result.lines.length,0);
  assert.equal(result.unresolved.length,51);
 });
+
+test('whitespace variants of stock identifiers cannot duplicate a purchase',()=>{
+ assert.throws(()=>prepareProcurement([item('stock',[offer('a','A',100)]),item(' stock ',[offer('b','A',100)])]),/Lagerposition/);
+});
