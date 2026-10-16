@@ -89,3 +89,10 @@ test('offline catalog rejects future authorization start',()=>{
  sale.createdAt=new Date(Date.now()+5*60000).toISOString();
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Zeit/);
 });
+
+
+test('offline sale rejects duplicate catalog product records',()=>{
+ const {snapshot,sale}=fixture();
+ snapshot.products.push({...snapshot.products[0],priceCents:1});
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Artikel/);
+});
