@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS sandbox_pos_monthly_invoice_drafts (
  customer_billing JSONB NOT NULL,
  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','issued')),
  issued_at TIMESTAMPTZ,
+ issued_details JSONB,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
