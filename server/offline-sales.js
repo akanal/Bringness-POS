@@ -49,13 +49,21 @@ export async function importOfflineSale(db,user,deviceKey,request){
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
 export async function handleOfflineSales(req,res){
- const path=new URL(req.url,'http://local').pathname;if(!['/api/v1/offline/catalog','/api/v1/offline/sales','/api/v1/offline/status','/api/v1/offline/retry','/api/v1/offline/batch'].includes(path))return false;
+ const path=new URL(req.url,'http://local').pathname;if(!['/api/v1/offline/catalog','/api/v1/offline/sales','/api/v1/offline/status','/api/v1/offline/summary','/api/v1/offline/retry','/api/v1/offline/batch'].includes(path))return false;
  const send=(status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
  try{
-  if(req.method!=='POST'&&!(path.endsWith('/status')&&req.method==='GET'))return send(405,{error:'Methode nicht erlaubt'});
+  if(req.method!=='POST'&&!((path.endsWith('/status')||path.endsWith('/summary'))&&req.method==='GET'))return send(405,{error:'Methode nicht erlaubt'});
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   const user=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
   if(!user)return send(401,{error:'Nicht angemeldet'});if(!['owner','admin'].includes(user.role))return send(403,{error:'Nur Betriebsverwaltung'});
+  if(path.endsWith('/summary')){
+   const rows=(await pool.query(
+    "SELECT s.stock_state, count(*)::integer AS count FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id WHERE c.company_id=$1 GROUP BY s.stock_state ORDER BY s.stock_state",
+    [user.company_id])).rows;
+   const counts={pending:0,applied:0,conflict:0};
+   for(const row of rows)counts[row.stock_state]=row.count;
+   return send(200,{counts,total:rows.reduce((sum,row)=>sum+row.count,0)});
+  }
   if(path.endsWith('/status')){
    const params=new URL(req.url,'http://local').searchParams;
    const state=params.get('state');
