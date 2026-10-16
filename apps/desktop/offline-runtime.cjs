@@ -71,6 +71,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  app.on('browser-window-focus',resumeOnFocus);
  onlineContents?.on('did-fail-load',showOfflineOnFailure);
  const stopRecovery=()=>{
+  app.removeListener('before-quit',stopRecovery);
   clearInterval(timer);
   clearTimeout(startupRecoveryTimer);
   onlineContents?.removeListener('did-finish-load',resumeAfterLoad);
@@ -84,6 +85,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   closed=true;
   stopRecovery();
   offlineWindow?.destroy();
+  for(const channel of ['offline:view','offline:sync','offline:export','offline:sale','offline:online'])ipcMain.removeHandler(channel);
   await db.close();
  }};
 };
