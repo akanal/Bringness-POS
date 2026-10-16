@@ -8,7 +8,7 @@ export function demandRules(value={}){
  return Object.fromEntries(Object.keys(defaults).map(k=>[k,r[k]]));
 }
 export function applyDemandContext(forecast,context){
- const result={...forecast};if(!forecast.ready||context.closedToday){result.demand={enabled:!!context.settings.demandRules?.enabled,factor:1,adjustments:[]};return result}
+ const result={...forecast};if(!forecast.ready||context.closedToday){result.demand={enabled:context.settings?.demandRules?.enabled===true,factor:1,adjustments:[]};return result}
  const effect=demandEffect(forecast.date,context,forecast.progress||0),factor=effect.factor;
  result.pace=forecast.pace*factor;result.expectedOrders=Math.max(forecast.currentOrders,Math.round(forecast.expectedOrders*factor));result.expectedRevenueCents=Math.max(forecast.currentRevenueCents,Math.round(forecast.expectedRevenueCents*factor));
  const band=(b,current,estimate)=>b?{low:Math.min(estimate,Math.max(current,Math.floor(b.low*factor))),high:Math.max(estimate,current,Math.ceil(b.high*factor))}:null;
