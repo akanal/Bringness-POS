@@ -17,11 +17,12 @@ function send(res, status, payload) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let raw = "";
+    let bytes = 0;
     let finished = false;
     req.on("data", chunk => {
       if (finished) return;
-      raw += chunk;
-      if (raw.length > 65536) {
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > 65536) {
         finished = true;
         reject(Object.assign(new Error("Request too large"), { status: 413 }));
         req.resume();
