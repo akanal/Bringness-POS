@@ -32,3 +32,8 @@ test('opening hours reject array-shaped and coerced entries',()=>{
  hours[0]={open:{toString(){return '10:00'}},close:'12:00'};
  assert.throws(()=>validateHours(hours),/Öffnungs/);
 });
+
+test('regional distance rejects missing and invalid coordinates',()=>{
+ const berlin={latitude:52.5,longitude:13.4};
+ for(const bad of [null,{latitude:91,longitude:13},{latitude:52,longitude:181},{latitude:'52',longitude:13},{latitude:NaN,longitude:13}])assert.throws(()=>distanceKm(berlin,bad),/Koordinaten/);
+});
