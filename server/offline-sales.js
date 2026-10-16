@@ -57,12 +57,14 @@ export async function handleOfflineSales(req,res){
   const user=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
   if(!user)return send(401,{error:'Nicht angemeldet'});if(!['owner','admin'].includes(user.role))return send(403,{error:'Nur Betriebsverwaltung'});
   if(path.endsWith('/summary')){
+   const restaurantId=new URL(req.url,'http://local').searchParams.get('restaurantId');
+   if(restaurantId!==null&&!offlineUuid.test(restaurantId))fail('Ungültige Betriebskennung');
    const rows=(await pool.query(
-    "SELECT s.stock_state, count(*)::integer AS count FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id WHERE c.company_id=$1 GROUP BY s.stock_state ORDER BY s.stock_state",
-    [user.company_id])).rows;
+    "SELECT s.stock_state, count(*)::integer AS count FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::uuid IS NULL OR o.restaurant_id=$2) GROUP BY s.stock_state ORDER BY s.stock_state",
+    [user.company_id,restaurantId])).rows;
    const counts={pending:0,applied:0,conflict:0};
    for(const row of rows)counts[row.stock_state]=row.count;
-   return send(200,{counts,total:rows.reduce((sum,row)=>sum+row.count,0)});
+   return send(200,{counts,total:rows.reduce((sum,row)=>sum+row.count,0),restaurantId});
   }
   if(path.endsWith('/status')){
    const params=new URL(req.url,'http://local').searchParams;
