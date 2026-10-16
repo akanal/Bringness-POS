@@ -44,6 +44,16 @@ for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  assert.equal(text.includes('Nicht TSE-signiert'),fiscalStatus!=='signed');assert.doesNotMatch(text,/Eine TSE ist nicht angeschlossen/);
  });
 }
+test('PDF download never exposes another company receipt',async()=>{
+ const {res,documents,queries}=await run('signed',{found:false});
+ assert.equal(res.status,404);
+ assert.equal(res.pdf,undefined);
+ assert.equal(documents.length,0);
+ assert.equal(queries.length,2);
+ assert.deepEqual(queries[1].args,[receiptId,company]);
+ assert.match(queries[1].sql,/rc.id=\$1 AND c.id=\$2/);
+});
+
 test('PDF download requires an active session and company-scoped receipt lookup',async()=>{
  const unauth=await run('signed',{authenticated:false});assert.equal(unauth.res.status,401);assert.equal(unauth.documents.length,0);assert.equal(unauth.queries.length,1);
  const missing=await run('signed',{found:false});assert.equal(missing.res.status,404);assert.equal(missing.documents.length,0);assert.equal(missing.queries.length,2);
