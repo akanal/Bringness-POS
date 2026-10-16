@@ -16,16 +16,18 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     const batch=pending.slice(0,20);
     const response=await request('batch',{sales:batch.map(s=>s.request)});
     if(!Array.isArray(response?.results)||response.results.length!==batch.length)throw Error('Unvollständige Antwort der Offline-Synchronisierung');
-    if(response.results.some((result,index)=>result?.offlineId!==batch[index].id||(result.ok===true&&(!result.id||!result.receiptNumber))))throw Error('Offline-Antwort enthält ungültige Verkaufsbestätigungen');
+    // A malformed result must not discard valid acknowledgements from the same batch.
+    // Process valid sales individually; keep uncertain sales queued for safe retry.
+    if(response.results.some((result,index)=>result?.offlineId!==batch[index].id))throw Error('Offline-Antwort enthält fremde Verkaufskennungen');
     for(let index=0;index<batch.length;index++){
      const sale=batch[index],result=response.results[index];
      if(result?.offlineId!==sale.id)throw Error('Offline-Antwort stimmt nicht mit der Verkaufskennung überein');
-     if(result.ok===true&&result.id&&result.receiptNumber){
+     if(result.ok===true&&typeof result.id==='string'&&result.id.trim()&&typeof result.receiptNumber==='string'&&result.receiptNumber.trim()){
       await ledger.acknowledge(sale.id,{id:result.id,receiptNumber:result.receiptNumber,replayed:!!result.replayed});
      }else{
       failed++;
       skipped.add(sale.id);
-      await ledger.error(sale.id,result?.error||'Verkauf nicht bestätigt');
+      await ledger.error(sale.id,result?.ok===true?'Ungültige Serverbestätigung; Verkauf bleibt zur Prüfung offen.':result?.error||'Verkauf nicht bestätigt');
      }
     }
     // Do not resend rejected sales repeatedly during the same sync cycle.
