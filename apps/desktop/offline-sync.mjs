@@ -19,7 +19,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    let failed=0;
    while(pending.length){
     publish({state:'syncing',message:(await ledger.pendingCount())+' offene Verkäufe werden abgeglichen …'});
-    const batch=pending.slice(0,20);
+    const batch=pending.slice(0,20);if(batch.some(sale=>!sale||typeof sale.id!=='string'||!sale.request))throw Error('Ungültiger Offline-Verkauf in der Warteschlange');
     let response;
     try{response=await request('batch',{sales:batch.map(s=>s.request)});}
     catch(error){
