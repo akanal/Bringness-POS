@@ -220,3 +220,21 @@ test('closing the UI during synchronization cannot abort sale acknowledgement or
  assert.equal(retry.state,'success');
  assert.equal(f.calls.length,1);
 });
+
+test('a malformed batch response never drops local sales',async()=>{
+ const f=fixture(['a','b'],{reply:()=>({results:[{offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a'}]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.pending.size,2);
+ assert.equal(f.calls.length,1);
+});
+
+test('offline catalog is not replaced when a device-bound ledger rejects it',async()=>{
+ const f=fixture([]);
+ let rejected=0;
+ f.ledger.catalog=async()=>{rejected++;throw Error('Offline-Katalog gehört nicht zu diesem Gerät.')};
+ const status=await createOfflineSync(f).sync(true);
+ assert.equal(rejected,1);
+ assert.equal(status.state,'warning');
+ assert.match(status.message,/Katalogaktualisierung fehlgeschlagen/);
+});
