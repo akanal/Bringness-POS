@@ -150,7 +150,7 @@ export async function markTransactionSigned(pool,id,result={}){
       error_code=NULL,
       error_message=NULL,
       updated_at=now()
-    WHERE id=$1 RETURNING *
+    WHERE id=$1 AND state='finishing' RETURNING *
   `,[
     id,
     result.transactionNumber ?? null,
