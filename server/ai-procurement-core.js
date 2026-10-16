@@ -1,7 +1,13 @@
 const norm=x=>String(x||'').normalize('NFKC').trim().toLocaleLowerCase('de-DE');
 export function deliveryMatches(area,city,postal){const regions=String(area||'').split(/[,;\n]/).map(norm);return regions.some(r=>['deutschland','bundesweit','deutschlandweit'].includes(r)||(norm(city)&&r===norm(city))||(norm(postal)&&r===norm(postal)))}
 export function prepareProcurement(items){
+ if(!Array.isArray(items))throw Error('Ungültige Einkaufsliste');
  const unresolved=[],eligible=[];
+ const ids=new Set();
+ for(const item of items){
+  if(!item||typeof item!=='object'||typeof item.id!=='string'||!item.id.trim()||ids.has(item.id))throw Error('Doppelte oder ungültige Lagerposition');
+  ids.add(item.id);
+ }
  for(const item of items){const offers=(Array.isArray(item?.offers)?item.offers:[]).filter(o=>o&&typeof o==='object'&&typeof o.id==='string'&&o.id.trim()&&typeof o.supplier_id==='string'&&o.supplier_id.trim()&&o.tradeReady===true&&o.address&&o.city&&deliveryMatches(o.delivery_area,item.delivery_city,item.delivery_postal_code)&&Number.isSafeInteger(o.netCents)&&o.netCents>=0&&typeof o.minimum_order_cents==='number'&&Number.isSafeInteger(o.minimum_order_cents)&&Number(o.minimum_order_cents)>=0&&Number.isInteger(o.packs)&&o.packs>0&&o.packs<=10000).sort((a,b)=>a.netCents-b.netCents||a.id.localeCompare(b.id)).slice(0,5);if(!offers.length)unresolved.push({stockId:item.id,name:item.name,location:item.location_name,reason:'Kein eindeutig passendes, bestellfähiges Angebot mit bestätigtem Liefergebiet. Manuell prüfen.'});else eligible.push({item,offers});}
  if(eligible.length>50)return {lines:[],unresolved:items.map(i=>({stockId:i.id,name:i.name,reason:'Mehr als 50 Positionen: Einkaufsliste aufteilen.'})),netCents:0,complete:false};
  let candidates=[{lines:[],cost:0}];
