@@ -63,7 +63,7 @@ test('ambiguous provider outcome requires manual review and is never retried aut
   assert.deepEqual(result,{signed:false,reason:'outcome_unconfirmed'});
   assert.equal(startCount,1);
   assert.ok(calls.some(x=>x.sql.includes("state='needs_review'")));
-  assert.equal(calls.filter(x=>x.sql.includes("state='prepared'")).length,0);
+  assert.equal(calls.filter(x=>x.sql.includes("SET state='prepared'")).length,0);
 });
 
 test('only one worker claims an already-claimed transaction',async()=>{
