@@ -113,3 +113,14 @@ test('printed QR PNG decodes to the exact public receipt URL at thermal-print re
  assert.equal(otherScan.data,otherUrl);
  assert.notEqual(otherScan.data,scanned.data,'different receipts must never share the same QR destination');
 });
+
+test('long TSE signature and long item name still produce a valid real PDF',{skip:!process.env.CENTER_TEST_PDFKIT||!process.env.CENTER_TEST_QRCODE},async()=>{
+ const [{default:PdfWriter},{default:QrWriter}]=await Promise.all([import(process.env.CENTER_TEST_PDFKIT),import(process.env.CENTER_TEST_QRCODE)]);
+ const receipt={receipt_number:'BN-LONG-TEST',issued_at:'2026-10-16T12:00:00Z',public_token:publicToken,fiscal_status:'signed',tse_snapshot:{serialNumber:'TSE-DEVICE-1',transactionNumber:'TX-999',signatureCounter:42,signatureAlgorithm:'ecdsa-plain-SHA256',startedAt:'2026-10-16T12:00:00Z',finishedAt:'2026-10-16T12:01:00Z',signature:'a'.repeat(512)},order_id:'order',total_cents:1190,restaurant_name:'Testrestaurant',company_name:'Testfirma'};
+ const pool={query:async sql=>sql.includes('FROM order_items')?{rows:[{product_name_snapshot:'Sehr lange Speisenbezeichnung '.repeat(15),unit_price_cents:1190,tax_rate_snapshot:19,quantity:1}]}:{rows:[{method:'cash',amount_cents:1190}]}};
+ const {renderPaymentReceipt}=await import('./payment-receipt-core.js');
+ const pdf=await renderPaymentReceipt(pool,PdfWriter,QrWriter,()=> 'https://pos.example.test/beleg/'+publicToken,{headers:{}},receipt);
+ assert.ok(pdf.length>1000);
+ assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+ assert.match(pdf.subarray(-100).toString(),/%%EOF/);
+});
