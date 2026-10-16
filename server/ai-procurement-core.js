@@ -7,8 +7,8 @@ export function prepareProcurement(items){
  if(items.length>50)return {lines:[],unresolved:items.map(i=>({stockId:i?.id,name:i?.name,reason:'Mehr als 50 Positionen: Einkaufsliste aufteilen.'})),netCents:0,complete:false,searchLimit:256};
  const ids=new Set();
  for(const item of items){
-  if(!item||typeof item!=='object'||typeof item.id!=='string'||!item.id.trim()||ids.has(item.id.trim()))throw Error('Doppelte oder ungültige Lagerposition');
-  ids.add(item.id.trim());
+  if(!item||typeof item!=='object'||typeof item.id!=='string'||!item.id.trim()||ids.has(item.id.normalize('NFKC').trim()))throw Error('Doppelte oder ungültige Lagerposition');
+  ids.add(item.id.normalize('NFKC').trim());
  }
  for(const item of items){const offers=(Array.isArray(item?.offers)?item.offers:[]).filter(o=>o&&typeof o==='object'&&typeof o.id==='string'&&o.id.trim()&&typeof o.supplier_id==='string'&&o.supplier_id.trim()&&o.tradeReady===true&&typeof o.name==='string'&&o.name.trim()&&typeof o.business_name==='string'&&o.business_name.trim()&&Number.isSafeInteger(o.pack_quantity)&&o.pack_quantity>0&&typeof o.address==='string'&&o.address.trim()&&typeof o.city==='string'&&o.city.trim()&&deliveryMatches(o.delivery_area,item.delivery_city,item.delivery_postal_code)&&Number.isSafeInteger(o.netCents)&&o.netCents>=0&&typeof o.minimum_order_cents==='number'&&Number.isSafeInteger(o.minimum_order_cents)&&Number(o.minimum_order_cents)>=0&&Number.isInteger(o.packs)&&o.packs>0&&o.packs<=10000).sort((a,b)=>a.netCents-b.netCents||a.id.localeCompare(b.id));if(new Set(offers.map(o=>o.id.normalize('NFKC').trim())).size!==offers.length){unresolved.push({stockId:item.id.trim(),name:item.name,location:item.location_name,reason:'Mehrdeutige Angebotskennung. Manuell prüfen.'});continue;}if(!offers.length)unresolved.push({stockId:item.id.trim(),name:item.name,location:item.location_name,reason:'Kein eindeutig passendes, bestellfähiges Angebot mit bestätigtem Liefergebiet. Manuell prüfen.'});else eligible.push({item,offers:offers.slice(0,5)});}
  let candidates=[{lines:[],cost:0}];
