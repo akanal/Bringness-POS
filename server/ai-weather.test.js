@@ -125,3 +125,11 @@ test('non-string event timestamps do not adjust demand',()=>{
  assert.equal(effect.factor,1);
  assert.deepEqual(effect.adjustments,[]);
 });
+
+
+test('invalid weather day records are ignored',()=>{
+ const context={settings:{demandRules:{enabled:true,warmPercent:40}},weather:{available:true,days:[null,'2026-10-16',{date:'2026-10-17',partial:false,maxC:35}]}};
+ const effect=demandEffect('2026-10-16',context);
+ assert.equal(effect.factor,1);
+ assert.deepEqual(effect.adjustments,[]);
+});
