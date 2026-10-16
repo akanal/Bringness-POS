@@ -133,3 +133,11 @@ test('invalid weather day records are ignored',()=>{
  assert.equal(effect.factor,1);
  assert.deepEqual(effect.adjustments,[]);
 });
+
+
+test('events without identifiers cannot change demand',()=>{
+ const context={settings:{demandRules:{enabled:true,eventPercent:30}},events:[{status:'active',starts_at:'2026-10-16T10:00:00Z',ends_at:'2026-10-17T10:00:00Z'}]};
+ const effect=demandEffect('2026-10-16',context);
+ assert.equal(effect.factor,1);
+ assert.deepEqual(effect.adjustments,[]);
+});
