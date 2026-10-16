@@ -260,10 +260,12 @@ test('concurrent sync calls share one upload and acknowledge once',async()=>{
  const gate=new Promise(resolve=>{release=resolve;});
  const original=f.connect;
  let requests=0;
+ let uploadStarted;
+ const started=new Promise(resolve=>{uploadStarted=resolve;});
  f.connect=async()=>{
   const request=await original();
   return async(type,payload)=>{
-   if(type==='sales'){requests++;await gate;}
+   if(type==='sales'){requests++;uploadStarted();await gate;}
    return request(type,payload);
   };
  };
@@ -271,6 +273,7 @@ test('concurrent sync calls share one upload and acknowledge once',async()=>{
  const first=coordinator.sync();
  const second=coordinator.sync(true);
  assert.equal(first,second);
+ await started;
  release();
  const [a,b]=await Promise.all([first,second]);
  assert.equal(a.state,'success');
