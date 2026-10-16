@@ -7,7 +7,7 @@ import {issueSandboxMonthlyInvoice} from "./pos-license-recurring-invoice-issue.
 
 export async function reconcileAndDraftSandboxMonthlyPayment({
  pool,apiKey,paymentId,paidThrough,customerBilling,fetcher=fetch,
- issueInvoice=false,invoiceComplianceApproved=false,issuer,servicePeriod
+ issueInvoice=false,invoiceComplianceApproved=false,issuer,servicePeriod,serviceDescription
 }) {
  const payment=await reconcileSandboxMonthlyPayment({
   pool,apiKey,paymentId,paidThrough,fetcher
@@ -29,6 +29,6 @@ export async function reconcileAndDraftSandboxMonthlyPayment({
  if(!draft.saved || !issueInvoice) return {payment,invoice:draft};
  if(invoiceComplianceApproved!==true)
   return {payment,invoice:{...draft,issued:false,reason:"invoice_compliance_approval_required"}};
- const issuance=await issueSandboxMonthlyInvoice(pool,{companyId,paymentId,issuer,servicePeriod});
+ const issuance=await issueSandboxMonthlyInvoice(pool,{companyId,paymentId,issuer,servicePeriod,serviceDescription});
  return {payment,invoice:{...draft,...issuance}};
 }
