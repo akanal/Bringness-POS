@@ -265,7 +265,7 @@ test('concurrent sync calls share one upload and acknowledge once',async()=>{
  f.connect=async()=>{
   const request=await original();
   return async(type,payload)=>{
-   if(type==='sales'){requests++;uploadStarted();await gate;}
+   if(type==='batch'){requests++;uploadStarted();await gate;}
    return request(type,payload);
   };
  };
