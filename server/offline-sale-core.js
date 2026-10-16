@@ -13,7 +13,7 @@ export function quoteOfflineSale(snapshot,sale) {
  if(!snapshot||typeof snapshot!=='object'||typeof sale?.id!=='string'||!offlineUuid.test(sale.id)||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
  const time=typeof sale.createdAt==='string'?Date.parse(sale.createdAt):NaN,start=Date.parse(snapshot.createdAt),end=Date.parse(snapshot.validUntil);
  if(typeof snapshot.createdAt!=='string'||typeof snapshot.validUntil!=='string'||!Number.isFinite(start)||!Number.isFinite(end)||end<=start||!Number.isFinite(time)||time<start-60000||time>end||time>Date.now()+60000)fail('Verkauf außerhalb der freigegebenen Offline-Zeit');
- if(!snapshot||!Array.isArray(snapshot.restaurants)||!Array.isArray(snapshot.products))fail('Ungültiger Offline-Katalog');
+ if(!Array.isArray(snapshot.restaurants)||!Array.isArray(snapshot.products))fail('Ungültiger Offline-Katalog');
  const restaurant=snapshot.restaurants.find(r=>r?.id===sale.restaurantId);if(!restaurant)fail('Betrieb nicht im Offline-Katalog');if(!snapshot.merchant||typeof snapshot.merchant!=='object'||Array.isArray(snapshot.merchant))fail('Fehlende Verkäuferdaten');
  if(!snapshot.merchant[restaurant.id])fail('Verkäuferdaten für Betrieb fehlen');
  if(!Array.isArray(sale.items)||!sale.items.length||sale.items.length>100)fail('1 bis 100 Positionen erforderlich');
