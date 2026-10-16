@@ -124,7 +124,7 @@ test('cloud receipt reused for another sale cannot acknowledge that sale',async(
  ]})});
  const status=await createOfflineSync(f).sync();
  assert.equal(status.state,'warning');
- assert.deepEqual([...f.pending.keys()],['b']);
+ assert.deepEqual([...f.pending.keys()],['a','b']);
  assert.equal(f.errors.length,1);
 });
 
@@ -147,7 +147,7 @@ test('same cloud receipt number for distinct sales is rejected',async()=>{
  ]})});
  const status=await createOfflineSync(f).sync();
  assert.equal(status.state,'warning');
- assert.deepEqual([...f.pending.keys()],['b']);
+ assert.deepEqual([...f.pending.keys()],['a','b']);
  assert.equal(f.errors.length,1);
 });
 
