@@ -25,3 +25,11 @@ test('malformed offers and missing supplier identities cannot be selected',()=>{
  assert.equal(r.complete,false);assert.equal(r.lines.length,0);assert.equal(r.unresolved.length,1);
  assert.equal(prepareProcurement([item('s',null)]).complete,false);
 });
+
+test('duplicate or invalid stock entries never create multiple purchase lines',()=>{
+ const stock=item('stock',[offer('a','A',100)]);
+ assert.throws(()=>prepareProcurement([stock,stock]),/Lagerposition/);
+ assert.throws(()=>prepareProcurement([null]),/Lagerposition/);
+ assert.throws(()=>prepareProcurement([item('',[offer('a','A',100)])]),/Lagerposition/);
+ assert.throws(()=>prepareProcurement(null),/Einkaufsliste/);
+});
