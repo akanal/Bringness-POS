@@ -19,7 +19,7 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
    const snapshot=(await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
    // Always show every unresolved sale before historical synced receipts.
    const sales=(await db.query('SELECT receipt,synced_at,cloud_receipt,error FROM offline_sales ORDER BY (synced_at IS NULL) DESC,created_at DESC,id DESC LIMIT 100')).rows;
-   const counts=(await db.query('SELECT count(*) FILTER (WHERE synced_at IS NULL)::int AS pending,count(*) FILTER (WHERE synced_at IS NULL AND error IS NOT NULL)::int AS errors,count(*) FILTER (WHERE synced_at IS NOT NULL)::int AS synced FROM offline_sales')).rows[0];
+   const counts=(await db.query('SELECT count(*) FILTER (WHERE synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE synced_at IS NULL AND error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE synced_at IS NOT NULL)::bigint AS synced FROM offline_sales')).rows[0];
    return {snapshot,sales,counts};
   },
   async sale(request){return db.transaction(async tx=>{
