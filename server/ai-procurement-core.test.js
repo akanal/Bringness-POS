@@ -8,3 +8,13 @@ test('alternative supplier avoids an unmet minimum without adding unnecessary st
 test('missing offers and oversized plans do not masquerade as complete',()=>{assert(!prepareProcurement([item('s',[])]).complete);assert.equal(prepareProcurement(Array.from({length:51},(_,i)=>item(String(i),[offer(String(i),'A',10)]))).lines.length,0)});
 
 test('invalid supplier minimum order amounts are never auto-selected',()=>{for(const invalid of ['invalid',-1,Number.POSITIVE_INFINITY,null,undefined]){const r=prepareProcurement([item('s',[{...offer('a','A',100),minimum_order_cents:invalid}])]);assert.equal(r.lines.length,0);assert.equal(r.complete,false)}});
+
+test('supplier minimum cannot be weakened by the first line in a combined order',()=>{
+ const result=prepareProcurement([
+  item('s1',[offer('a','A',400,0)]),
+  item('s2',[offer('b','A',400,1000)])
+ ]);
+ assert.equal(result.complete,false);
+ assert.equal(result.lines.length,0);
+ assert.equal(result.unresolved.length,2);
+});
