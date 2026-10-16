@@ -250,7 +250,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.match(digital.html,/Online-Zahlung/);assert.doesNotMatch(digital.html,/mollie_center/);
  assert.match(digital.html,/&lt;script&gt;bad\(\)&lt;\/script&gt; Gericht/);assert.doesNotMatch(digital.html,/<script>/);
  assert.match(digital.html,/Nicht TSE-signiert/);assert.equal(digital.headers['referrer-policy'],'no-referrer');
- assert.equal(digital.headers['cache-control'],'private, no-store');
+ assert.match(digital.headers['cache-control'],/no-store/);assert.match(digital.headers['cache-control'],/max-age=0/);assert.equal(digital.headers['x-content-type-options'],'nosniff');
  // Later merchant changes cannot rewrite the receipt's historical seller snapshot.
  await db.query("UPDATE restaurants SET name='Changed after sale' WHERE id=$1",[restaurant]);
  const historical={...digital};await publicReceipt({url:statusRes.data.order.receipt_url,method:'GET'},historical);
