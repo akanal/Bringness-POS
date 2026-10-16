@@ -160,3 +160,12 @@ test('purchase lines use canonical stock identifiers',()=>{
  assert.equal(result.complete,true);
  assert.equal(result.lines[0].stockId,'stock-1');
 });
+
+test('unresolved purchase items use canonical stock IDs',()=>{
+ const missing=prepareProcurement([item(' missing ',[])]);
+ assert.equal(missing.unresolved[0].stockId,'missing');
+ const duplicate=prepareProcurement([item(' duplicate ',[offer('same','A',100),offer(' same ','B',100)])]);
+ assert.equal(duplicate.unresolved[0].stockId,'duplicate');
+ const overflow=prepareProcurement([item(' huge ',[offer('a','A',2147483647)]),item(' extra ',[offer('b','A',1)])]);
+ assert.deepEqual(overflow.unresolved.map(x=>x.stockId),['huge','extra']);
+});
