@@ -46,7 +46,7 @@ return async function handlePaymentCheckout(req, res) {
     send(res, 401, { error: "Nicht angemeldet" });
     return true;
   }
-  if (user.role === "waiter") {
+  if (!["owner", "admin", "manager"].includes(user.role)) {
     send(res, 403, { error: "Dieser Bereich ist nur für die Restaurantverwaltung freigegeben" });
     return true;
   }
@@ -63,6 +63,7 @@ return async function handlePaymentCheckout(req, res) {
   const items = Array.isArray(body.items) ? body.items : [];
   const payments = Array.isArray(body.payments) ? body.payments : [];
   const restaurantId = String(body.restaurantId || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(restaurantId)) { send(res, 400, { error: "Ungültige Betriebskennung" }); return true; }
   if (!restaurantId || !items.length) {
     send(res, 400, { error: "Betrieb und Warenkorb sind erforderlich" });
     return true;
@@ -83,7 +84,7 @@ return async function handlePaymentCheckout(req, res) {
 
   if (items.some(i => !i || typeof i !== "object")) { send(res, 400, { error: "Ungültiger Artikel im Warenkorb" }); return true; }
   const ids = [...new Set(items.map(i => String(i.productId || "")).filter(Boolean))];
-  if (!ids.length || ids.length !== items.length) {
+  if (!ids.length || ids.length !== items.length || ids.some(id => !/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(id))) {
     send(res, 400, { error: "Ungültiger Artikel im Warenkorb" });
     return true;
   }
