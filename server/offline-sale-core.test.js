@@ -39,7 +39,7 @@ test('offline license window never exceeds 24 hours',()=>{
 });
 
 test('offline sale rejects missing snapshot identifiers and duplicate products',()=>{
- const {snapshot,sale}=fixture();snapshot.id='';sale.snapshotId='';
+ const {snapshot,sale}=fixture();snapshot.id=' ';sale.snapshotId=' ';
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Kennung/);
  const valid=fixture();valid.sale.items.push({...valid.sale.items[0]});
  assert.throws(()=>quoteOfflineSale(valid.snapshot,valid.sale),/Offline-Artikel/);
