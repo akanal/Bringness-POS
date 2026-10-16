@@ -33,7 +33,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     const resultsById=new Map();
     const expectedIds=new Set(batch.map(sale=>sale.id));
     for(const result of response.results){
-     if(typeof result?.offlineId!=='string'||resultsById.has(result.offlineId))throw Error('Offline-Antwort enthält doppelte oder ungültige Verkaufskennungen');
+     if(typeof result?.offlineId!=='string'||!expectedIds.has(result.offlineId)||resultsById.has(result.offlineId))throw Error('Offline-Antwort enthält doppelte oder ungültige Verkaufskennungen');
      resultsById.set(result.offlineId,result);
     }
     if(batch.some(sale=>!resultsById.has(sale.id)))throw Error('Offline-Antwort enthält fremde oder fehlende Verkaufskennungen');
