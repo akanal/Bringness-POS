@@ -25,5 +25,9 @@ app.whenReady().then(async()=>{let runtime,rogue;try{
   assert.equal((await runtime.ledger.pending()).filter(s=>s.id===request.id).length,1);
  }
  rogue=new BrowserWindow({show:false,webPreferences:{preload:path.join(__dirname,'offline-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});await rogue.loadURL('data:text/html,<title>Unauthorized frame</title>');const denied=await rogue.webContents.executeJavaScript('offlinePOS.view().then(()=>false,()=>true)');assert.equal(denied,true);assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.sync().then(()=>false,()=>true)'),true);assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.export().then(()=>false,()=>true)'),true);
- console.log('Electron offline cash UI, pre/post-persistence payment recovery, PGlite persistence and unauthorized IPC rejection passed.');rogue.destroy();await runtime.close();app.exit(0);
+ // Closing the runtime must revoke IPC access and prevent window recreation.
+ await runtime.close();
+ assert.equal(await window.webContents.isDestroyed(),true);
+ assert.throws(()=>runtime.open(),/bereits geschlossen/);
+ console.log('Electron offline cash UI, pre/post-persistence payment recovery, PGlite persistence and unauthorized IPC rejection passed.');rogue.destroy();app.exit(0);
  }catch(e){console.error(e);rogue?.destroy();if(runtime)await runtime.close();app.exit(1)}});
