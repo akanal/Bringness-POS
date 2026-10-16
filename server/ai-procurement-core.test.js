@@ -72,3 +72,12 @@ test('duplicate offer identifiers beyond the five cheapest still block approval'
  assert.equal(r.lines.length,0);
  assert.match(r.unresolved[0].reason,/Angebotskennung/);
 });
+
+test('unrepresentable total is explicitly flagged for manual review',()=>{
+ const result=prepareProcurement([item('a',[offer('a','A',2147483647)]),item('b',[offer('b','A',1)])]);
+ assert.equal(result.complete,false);
+ assert.equal(result.netCents,0);
+ assert.equal(result.lines.length,0);
+ assert.deepEqual(result.unresolved.map(x=>x.stockId),['a','b']);
+ assert(result.unresolved.every(x=>/Gesamtbetrag/.test(x.reason)));
+});
