@@ -102,3 +102,35 @@ Completed validation for source tree `d9dcff8`:
 - GitHub [Center validation 38951511276](https://github.com/akanal/Bringness-POS/actions/runs/38951511276): Chromium and WebKit jobs both passed, including authorization, PostgreSQL 16 migration/lifecycle and all 21 browser scenarios in each engine.
 
 The public POS/waiter design and prices were not changed. External provider activation, hardware/device acceptance and production deployment remain separate steps.
+
+
+## Device licensing, recovery and authorization checkpoint — 2026-10-16
+
+Development only, branch `finish/pos-release-audit-20261016`; no production deployment or public installer replacement.
+
+| Commit | Completed change |
+| --- | --- |
+| `dd47f99` | Purchasing consent, captured supplier terms and audit commit together under the active restaurant account lock. Disabling is idempotent. Supplier IDs are canonicalized and duplicate/coerced IDs rejected. |
+| `4e995c4` | Transactional device activation with current owner/admin authority, active entitlement lock, one-device limit, immutable company ownership and atomic audit. Both activation endpoints share this code. Active staff may renew existing devices; disabled devices do not renew. Password-change gates apply. Release-catalog failures do not revoke an otherwise valid device. |
+| `afaae4e` | Desktop startup checks first; automatic activation requires an explicit server flag for an unbound device. Definitive denial invalidates cached permission, including an in-memory denial when state persistence fails. Known disabled devices cannot silently reactivate. Native update links require HTTPS without embedded credentials. |
+| `a561266` | Automatic purchasing reports the durable committed daily order after concurrent execution or a lost checkout acknowledgement, rather than a stale no-need/blocked result. |
+| `1ec2742` | Admin CSV audit dates use Berlin midnight and DST; password-gated accounts are refused. Leading-whitespace formula prefixes are escaped. Export limit and tenant scope remain enforced. |
+| `dc46971` | Desktop maintenance is single-flight, checks the actual trusted HTTPS origin, and safely handles empty/loading/closed windows. |
+| `2db8b03` | Full device flow also runs on PostgreSQL 16 with simultaneous activation attempts. Windows release branches build/test the actual installer, with publication restricted to signed builds from main. |
+| `203e128` | Platform-independent Node test discovery and explicit numeric handling of PostgreSQL aggregate results. |
+| `f8d4791` | Correct restaurant UUID validation restores interrupted cash payments. Tests exercise reload both before and after durable persistence without creating a second sale. Native license/heartbeat calls have a 15-second timeout and reject redirects; Windows CI uses Node 24 to match Electron engine requirements. |
+
+Local validation completed: 309 Node tests, no failures/skips; 31 desktop cases; full AI PostgreSQL/DOM integration; dedicated purchasing-policy, device-license and Berlin audit-export database flows; POS login/session regression. Provider and SMTP calls remain simulated in integration fixtures.
+
+Server and client should be released together for the new initial-activation flag. Legacy device activation remains available to the authenticated owner/admin through the shared transactional endpoint. A deliberate device denial clears local permission; it does not delete offline sales, catalogs, receipts or customer data. The existing periodic online check and limited offline lease are not an instant remote-revocation guarantee while the device cannot reach the server.
+
+
+Validation evidence for this checkpoint:
+
+- [POS release validation 38955968610](https://github.com/akanal/Bringness-POS/actions/runs/38955968610) completed successfully.
+- [Full POS/AI integration 38955968553](https://github.com/akanal/Bringness-POS/actions/runs/38955968553) completed successfully, including PostgreSQL 16 simultaneous device activation and browser/embedded-database cash recovery.
+- The PostgreSQL device race produced one successful activation, one 409 response, one active device and one activation audit entry.
+- [Windows validation 38955968568](https://github.com/akanal/Bringness-POS/actions/runs/38955968568) passed all 31 desktop tests, the actual Electron offline cash UI/restart/IPC checks and actual native remote-support consent/capture/input/stop checks.
+- [Related Center validation 38954058487](https://github.com/akanal/Bringness-POS/actions/runs/38954058487) passed Chromium and WebKit jobs. No Center UI change was made in this block.
+
+- Windows run `38955968568` also completed installer packaging, signature classification and artifact upload successfully. The stored artifact is `Bringness-POS-Windows-signed-false` (117,390,310 bytes): an **unsigned test installer**, not a signed production release. The public release-asset step was skipped on the development branch. No Authenticode signing or real customer-device acceptance is claimed.

@@ -14,3 +14,6 @@ Regression: Bestehende zeitgerechte Liefermengen, offene Ersatzvorschläge und �
 
 
 Verbrauchsbasis (Entwicklungsstand 16.10.2026): Die 28-Tage-Planung verwendet die gemeinsame Verbrauchshistorie von Verkaufsimport und Küchenzubereitung. Bekannte ursprüngliche Ereigniszeiten bestimmen den Zeitraum; der Importzeitpunkt bleibt im Audit erhalten. Bestätigte Zutatenrückbuchungen werden gegengerechnet. Zusätzliche Journalzeilen desselben Verkaufs, Inventurzählungen, Verluste und Wareneingänge zählen nicht nochmals als Rezeptverbrauch. Ältere Buchungen ohne Quellzeit behalten ihre bisherige Zeitbasis. Die aktuelle Bedarfsberechnung erfolgt weiterhin unmittelbar vor einer freigegebenen automatischen Bestellung.
+
+
+Beschaffungsfreigabe (Entwicklungsstand 16.10.2026): Freigabeänderung, Lieferantenkonditionen und Audit-Eintrag werden gemeinsam unter einer aktuellen Restaurantberechtigung gespeichert. Ein Fehler führt zum Rollback und wird gemeldet; eine fehlgeschlagene Änderung gilt nicht als gespeichert. Wiederholtes Ausschalten erhöht die Freigabeversion nicht erneut und erzeugt keinen zweiten Audit-Eintrag. Nach verlorener Bestellbestätigung oder parallelem Lauf hat ein bereits verbindlich gespeicherter Tagesauftrag Vorrang vor veralteten Meldungen wie „kein Bedarf“ oder „blockiert“. Die Bestellkennung bleibt unverändert.
