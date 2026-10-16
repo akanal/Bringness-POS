@@ -101,3 +101,22 @@ test('lost checkout confirmation reports the durable committed order and never o
  assert.deepEqual(await runAutomaticProcurement(user,options),{state:'ordered',replayed:true,netCents:900});
  assert.equal(checkouts,1);
 });
+
+
+test('automatic checkout refuses an empty supplier quote without creating an order',async()=>{
+ const policy={enabled:true,days:2,leadDays:1,maxDailyNetCents:10000,supplierIds:['supplier']};
+ const db={query:async sql=>{
+  if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+  if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'pending'}]};
+  if(sql.startsWith('SELECT state,net_cents'))return {rows:[{state:'blocked',net_cents:0}]};
+  return {rows:[]};
+ }};
+ let orders=0;
+ const result=await runAutomaticProcurement({id:'buyer',role:'restaurant'},{db,now:new Date('2026-10-16T12:00:00Z'),clock:()=>new Date('2026-10-16T12:00:00Z'),
+  draft:async()=>({complete:true,lines:[{stockId:'stock',productId:'product',packs:1}]}),
+  cart:async(_db,_user,_body,options)=>{
+   if(options.checkout===false)return {canOrder:true,quote:{netCents:100,groups:[]}};
+   await options.authorize(db,{netCents:100,groups:[]});orders++;
+  }});
+ assert.equal(result.state,'blocked');assert.match(result.error,/Lieferantenangebot/);assert.equal(orders,0);
+});
