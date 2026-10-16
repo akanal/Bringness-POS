@@ -42,7 +42,13 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   if(selected.canceled||!selected.filePath)return {saved:false};
   const destination=selected.filePath;
   const temporary=destination+'.'+require('node:crypto').randomUUID()+'.tmp';
-  try{await fs.writeFile(temporary,JSON.stringify(report,null,2),{encoding:'utf8',flag:'wx',mode:0o600});await fs.rename(temporary,destination);}catch(error){await fs.unlink(temporary).catch(()=>{});throw error;}
+  try{
+   await fs.writeFile(temporary,JSON.stringify(report,null,2),{encoding:'utf8',flag:'wx',mode:0o600});
+   await fs.link(temporary,destination);
+  }catch(error){
+   if(error.code==='EEXIST')throw Error('Exportdatei bereits vorhanden. Anderen Dateinamen wählen.');
+   throw error;
+  }finally{await fs.unlink(temporary).catch(()=>{});}
   return {saved:true,count:report.sales.length};
  },'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
  // Resume the durable queue promptly when the online POS becomes available again.
