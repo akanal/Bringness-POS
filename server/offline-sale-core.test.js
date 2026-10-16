@@ -117,3 +117,10 @@ test('null catalog products are ignored without crashing',()=>{
  snapshot.products.unshift(null);
  assert.equal(quoteOfflineSale(snapshot,sale).totalCents,500);
 });
+
+
+test('offline sale rejects unsafe quantity integers',()=>{
+ const {snapshot,sale}=fixture();
+ sale.items[0].quantity=Number.MAX_SAFE_INTEGER+1;
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Artikel/);
+});
