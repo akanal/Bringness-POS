@@ -48,3 +48,11 @@ test('procurement refuses totals beyond supported money range',()=>{
  assert.equal(result.complete,false);
  assert.equal(result.lines.length,0);
 });
+
+test('offers without valid pack quantities or supplier names are not selected',()=>{
+ for(const patch of [{pack_quantity:0},{pack_quantity:-1},{pack_quantity:'5'},{pack_quantity:null},{business_name:''},{name:''}]){
+  const result=prepareProcurement([item('stock',[{...offer('a','A',500),...patch}])]);
+  assert.equal(result.complete,false);
+  assert.equal(result.lines.length,0);
+ }
+});
