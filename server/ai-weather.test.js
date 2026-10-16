@@ -157,3 +157,12 @@ test('unready demand forecast requires explicit boolean enable flag',()=>{
  assert.equal(result.demand.enabled,false);
  assert.equal(result.demand.factor,1);
 });
+
+
+test('duplicate weather day records cannot change demand',()=>{
+ const day={date:'2026-10-16',partial:false,maxC:35};
+ const context={settings:{demandRules:{enabled:true,warmPercent:40}},weather:{available:true,days:[day,{...day}]}};
+ const effect=demandEffect('2026-10-16',context);
+ assert.equal(effect.factor,1);
+ assert.deepEqual(effect.adjustments,[]);
+});
