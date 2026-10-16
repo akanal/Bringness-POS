@@ -2,7 +2,7 @@ import {validateSandboxInvoiceDetails} from "./pos-license-recurring-invoice-com
 // Sandbox-only issuance: finalize an existing draft only after the associated
 // payment has been recorded as paid. No external payment or email is triggered.
 // This does not itself certify German tax/legal invoice compliance.
-export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issuer,servicePeriod}){
+export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issuer,servicePeriod,serviceDescription}){
  if(typeof paymentId!=="string"||!paymentId.trim()||typeof companyId!=="string"||!companyId.trim())
   return {issued:false,reason:"invalid_input"};
  const client=await pool.connect();
@@ -20,7 +20,7 @@ export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issue
   if(row.status==="issued"){await client.query("COMMIT");return {issued:true,alreadyIssued:true,invoiceNumber:row.invoice_number};}
   if(row.status!=="draft"){await client.query("ROLLBACK");return {issued:false,reason:"invalid_invoice_status"};}
   const completeness=validateSandboxInvoiceDetails({
-   issuer,customer:row.customer_billing,servicePeriod,
+   issuer,customer:row.customer_billing,servicePeriod,serviceDescription,vatRatePercent:19,
    invoiceDate:String(row.invoice_date),invoiceNumber:row.invoice_number,
    netCents:row.net_cents,vatCents:row.vat_cents,grossCents:row.gross_cents
   });
