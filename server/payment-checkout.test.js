@@ -9,7 +9,6 @@ const user={id:UUID,company_id:UUID,role:'owner'};
 function request(body,authorization='Bearer test-token'){
  const req=new EventEmitter();
  req.url='/api/v1/orders/checkout';req.method='POST';req.headers={authorization};
- queueMicrotask(()=>req.emit('end'));
  return req;
 }
 function response(){
@@ -20,7 +19,7 @@ async function run(body,{actor=user,queries=[]}={}){
  const pool={async query(sql){calls.push(sql);if(sql.includes('FROM sessions'))return {rows:actor?[actor]:[]};throw Error('Unexpected database query');},async connect(){throw Error('Checkout must not start a transaction for invalid input');}};
  const handler=createPaymentCheckout(pool),req=request(body),res=response();
  const done=handler(req,res);
- queueMicrotask(()=>req.emit('data',Buffer.from(JSON.stringify(body))));
+ queueMicrotask(()=>{req.emit('data',Buffer.from(JSON.stringify(body)));req.emit('end');});
  await done;
  return {res,calls};
 }
