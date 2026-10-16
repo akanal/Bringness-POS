@@ -27,7 +27,7 @@ test('offline sale rejects malformed merchant records',()=>{
   assert.throws(()=>quoteOfflineSale(snapshot,sale),/Verkäuferdaten/);
  }
 });
-test('offline sale refuses non-cash payment and client price changes',()=>{
+test('offline sale refuses non-cash payment',()=>{
  const {snapshot,sale}=fixture();sale.paymentMethod='card';
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Barzahlung/);
 });
@@ -35,4 +35,11 @@ test('offline license window never exceeds 24 hours',()=>{
  const issued=new Date('2026-10-16T12:00:00Z');
  assert.equal(offlineCatalogValidUntil('2026-10-20T12:00:00Z',issued),'2026-10-17T12:00:00.000Z');
  assert.throws(()=>offlineCatalogValidUntil('2026-10-15T12:00:00Z',issued),/abgelaufen/);
+});
+
+test('offline sale rejects missing snapshot identifiers and duplicate products',()=>{
+ const {snapshot,sale}=fixture();snapshot.id='';sale.snapshotId='';
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Kennung/);
+ const valid=fixture();valid.sale.items.push({...valid.sale.items[0]});
+ assert.throws(()=>quoteOfflineSale(valid.snapshot,valid.sale),/Offline-Artikel/);
 });
