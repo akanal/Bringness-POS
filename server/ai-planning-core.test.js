@@ -20,3 +20,7 @@ test('closure calendar tolerates invalid hours safely',()=>{
 test('invalid dates cannot become exceptional closure days',()=>{
  assert.equal(closedOn('2026-02-30',{closedDates:['2026-02-30']}),false);
 });
+
+test('date validation rejects non-string values',()=>{
+ for(const value of [null,undefined,0,false,{},[]])assert.equal(validDay(value),false);
+});
