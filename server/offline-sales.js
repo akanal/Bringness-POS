@@ -40,7 +40,7 @@ export async function importOfflineSale(db,user,deviceKey,request){
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
 export async function handleOfflineSales(req,res){
- const path=new URL(req.url,'http://local').pathname;if(!['/api/v1/offline/catalog','/api/v1/offline/sales','/api/v1/offline/status','/api/v1/offline/retry'].includes(path))return false;
+ const path=new URL(req.url,'http://local').pathname;if(!['/api/v1/offline/catalog','/api/v1/offline/sales','/api/v1/offline/status','/api/v1/offline/retry','/api/v1/offline/batch'].includes(path))return false;
  const send=(status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
  try{
   if(req.method!=='POST'&&!(path.endsWith('/status')&&req.method==='GET'))return send(405,{error:'Methode nicht erlaubt'});
@@ -48,7 +48,22 @@ export async function handleOfflineSales(req,res){
   const user=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
   if(!user)return send(401,{error:'Nicht angemeldet'});if(!['owner','admin'].includes(user.role))return send(403,{error:'Nur Betriebsverwaltung'});
   if(path.endsWith('/status'))return send(200,{sales:(await pool.query('SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id WHERE c.company_id=$1 ORDER BY s.created_at DESC LIMIT 100',[user.company_id])).rows});
-  let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>64000)fail('Anfrage zu groß',413)}let b;try{b=JSON.parse(raw)}catch{fail('Ungültige Anfrage')}
+  let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(path.endsWith('/batch')?262144:64000))fail('Anfrage zu groß',413)}let b;try{b=JSON.parse(raw)}catch{fail('Ungültige Anfrage')}
+  if(path.endsWith('/batch')){
+   if(!/^[a-f0-9]{64}$/.test(b?.deviceKey||''))fail('Ungültige Gerätekennung');
+   if(!Array.isArray(b.sales)||b.sales.length<1||b.sales.length>20)fail('1 bis 20 Offline-Verkäufe pro Synchronisierung erforderlich');
+   const results=[];
+   for(const sale of b.sales){
+    try{
+     const result=await importOfflineSale(pool,user,b.deviceKey,sale);
+     results.push({offlineId:sale?.id||null,ok:true,...result});
+    }catch(error){
+     results.push({offlineId:typeof sale?.id==='string'?sale.id:null,ok:false,
+      status:error.status||503,error:error.status?error.message:'Synchronisierung momentan nicht verfügbar'});
+    }
+   }
+   return send(200,{results,succeeded:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length});
+  }
   if(path.endsWith('/retry')){if(!offlineUuid.test(b.id||''))fail('Ungültige Verkaufskennung');const result=await pool.query("UPDATE pos_offline_sales s SET stock_state='pending',stock_error=NULL FROM pos_offline_catalogs c WHERE s.catalog_id=c.id AND c.company_id=$1 AND s.id=$2 AND s.stock_state='conflict'",[user.company_id,b.id]);if(!result.rowCount)fail('Kein zugänglicher Lagerkonflikt',404);return send(200,{ok:true})}
   if(!/^[a-f0-9]{64}$/.test(b.deviceKey||''))fail('Ungültige Gerätekennung');
   return send(200,path.endsWith('/catalog')?{snapshot:await issueOfflineCatalog(pool,user,b.deviceKey)}:await importOfflineSale(pool,user,b.deviceKey,b.sale));
