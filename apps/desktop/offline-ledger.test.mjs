@@ -66,3 +66,18 @@ test('durable acknowledgements reject reused receipts after reopening the databa
   assert.equal(await ledger.pendingCount(),1);
  }finally{await db?.close();await rm(directory,{recursive:true,force:true});}
 });
+
+test('offline sale rejects a mismatched device key without writing a receipt',async()=>{
+ const db=new PGlite();
+ try{
+  const ledger=await createOfflineLedger(db,(_snapshot,request)=>({id:request.id,items:[],totalCents:0}));
+  const restaurantId=randomUUID();
+  const snapshot={id:randomUUID(),companyId:randomUUID(),deviceKey:'a'.repeat(64),createdAt:new Date().toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),restaurants:[{id:restaurantId,name:'Test'}],products:[],merchant:{}};
+  await ledger.catalog(snapshot);
+  const request={id:randomUUID(),snapshotId:snapshot.id,restaurantId};
+  await assert.rejects(ledger.sale(request,'b'.repeat(64)),/gehört nicht zu diesem Gerät/);
+  assert.equal(await ledger.pendingCount(),0);
+  await ledger.sale(request,'a'.repeat(64));
+  assert.equal(await ledger.pendingCount(),1);
+ }finally{await db.close();}
+});
