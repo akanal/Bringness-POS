@@ -1,0 +1,20 @@
+name: Offline TSE import contract
+on:
+  pull_request:
+    paths:
+      - "tests/offline-tse-import-contract.test.js"
+      - "server/tse-integration.js"
+      - "server/tse-recovery.js"
+      - "server/offline-sales.js"
+      - ".github/workflows/offline-tse-contract.yml"
+permissions:
+  contents: read
+jobs:
+  offline-tse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - run: node --test tests/offline-tse-import-contract.test.js
