@@ -158,3 +158,21 @@ test('uppercase UUID in a valid QR link resolves to canonical receipt token',asy
  assert.equal(queries.length,1);
  assert.equal(queries[0].args[0],'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 });
+
+test('valid receipt URL with query parameters still resolves only its UUID',async()=>{
+ const queries=[];
+ const pool={query:async(sql,args)=>{
+  queries.push({sql,args});
+  if(sql.includes('FROM receipts rc'))return {rows:[]};
+  throw Error('unexpected query');
+ }};
+ let status=0;
+ const handled=await createPublicReceiptHandler(pool)(
+  {method:'GET',url:'/beleg/11111111-1111-4111-8111-111111111111?utm_source=qr&extra=ignored'},
+  {writeHead(code){status=code},end(){}}
+ );
+ assert.equal(handled,true);
+ assert.equal(status,404);
+ assert.equal(queries.length,1);
+ assert.deepEqual(queries[0].args,['11111111-1111-4111-8111-111111111111']);
+});
