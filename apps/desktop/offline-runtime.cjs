@@ -32,7 +32,14 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(typeof data?.error==='string'?data.error:'Synchronisierung nicht verfügbar');return data;};
  }});
  let closed=false;
- const sync=()=>closed?Promise.resolve(coordinator.status()):coordinator.sync();
+ let activeSync=null;
+ const sync=(force=false)=>{
+  if(closed)return Promise.resolve(coordinator.status());
+  const task=coordinator.sync(force);
+  activeSync=task;
+  task.finally(()=>{if(activeSync===task)activeSync=null;}).catch(()=>{});
+  return task;
+ };
  const {powerMonitor}=require('electron');
  const resumeAfterSuspend=()=>{if(!closed)sync().catch(()=>{});};
  powerMonitor.on('resume',resumeAfterSuspend);
@@ -41,7 +48,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // may be written shortly after load, so retry on the regular timer as well.
  let startupRecoveryTimer;
  const recoverOnStartup=()=>{if(closed)return;clearTimeout(startupRecoveryTimer);startupRecoveryTimer=setTimeout(()=>{if(!closed)sync().catch(()=>{});},2500);};
- for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:export':async()=>{
+ for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>sync(true),'offline:export':async()=>{
   const report=await ledger.reconciliation({limit:500});
   const selected=await dialog.showSaveDialog(offlineWindow,{title:'Offline-Verkäufe exportieren',defaultPath:'bringness-offline-abgleich-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'JSON',extensions:['json']}]});
   if(selected.canceled||!selected.filePath)return {saved:false};
@@ -86,6 +93,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   stopRecovery();
   offlineWindow?.destroy();
   for(const channel of ['offline:view','offline:sync','offline:export','offline:sale','offline:online'])ipcMain.removeHandler(channel);
+  if(activeSync)await activeSync.catch(()=>{});
   await db.close();
  }};
 };
