@@ -16,7 +16,7 @@ export function prepareProcurement(items){
  const groups=lines=>{const map=new Map();for(const l of lines){const g=map.get(l.supplierId)||{total:0,minimum:l.minimumCents};g.total+=l.netCents;g.minimum=Math.max(g.minimum,l.minimumCents);map.set(l.supplierId,g)}return map};
  if(!candidates.length){for(const {item} of eligible)unresolved.push({stockId:item.id,name:item.name,location:item.location_name,reason:'Kein sicher darstellbarer Gesamtbetrag. Einkaufsliste aufteilen.'});return {lines:[],unresolved,netCents:0,complete:false,searchLimit:256};}
  const valid=candidates.filter(c=>[...groups(c.lines).values()].every(g=>g.total>=g.minimum)).sort((a,b)=>a.cost-b.cost)[0];let lines=valid?.lines||[];
- if(!valid&&candidates.length){const cheapest=candidates[0],totals=groups(cheapest.lines);for(const l of cheapest.lines)unresolved.push({stockId:l.stockId,name:l.name,location:l.location,reason:'Mindestbestellwert der Lieferanten nicht vollständig erfüllt. Gesamten Einkaufsplan manuell prüfen.'});lines=[];}
+ if(!valid&&candidates.length){const cheapest=candidates[0];for(const l of cheapest.lines)unresolved.push({stockId:l.stockId,name:l.name,location:l.location,reason:'Mindestbestellwert der Lieferanten nicht vollständig erfüllt. Gesamten Einkaufsplan manuell prüfen.'});lines=[];}
  if(unresolved.length&&lines.length){for(const line of lines)unresolved.push({stockId:line.stockId,name:line.name,location:line.location,reason:'Einkaufsplan unvollständig. Gesamte Bestellung manuell prüfen.'});lines=[];}
  return {lines,unresolved,netCents:lines.reduce((s,l)=>s+l.netCents,0),complete:unresolved.length===0&&lines.length===items.length,searchLimit:256};
 }
