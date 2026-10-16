@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPublicReceiptHandler} from '../server/public-receipt-core.js';
 
-function mockReceipt(snapshot,status='signed'){
+function mockReceipt(snapshot,status='signed',found=true){
  const queries=[];
  const pool={query:async(sql)=>{
   queries.push(sql);
-  if(sql.includes('FROM receipts rc'))return {rows:[{
+  if(sql.includes('FROM receipts rc'))return {rows:found?[{
    public_token:'11111111-1111-4111-8111-111111111111',receipt_number:'BN-001',issued_at:'2026-10-16T08:00:00Z',
    fiscal_status:status,tse_snapshot:snapshot,order_id:'order-1',total_cents:1190,
    restaurant_name:'Testlokal',company_name:'Testfirma'
-  }]};
+  }]:[]};
   return {rows:[]};
  }};
  let body='',code=0,headers={};
@@ -114,4 +114,16 @@ test('public digital receipt prevents caching and MIME sniffing',async()=>{
  assert.equal(headers.pragma,'no-cache');
  assert.equal(headers['x-content-type-options'],'nosniff');
  assert.match(headers['content-security-policy'],/default-src 'none'/);
+});
+
+test('unknown digital receipt is private and never cached',async()=>{
+ const fixture=mockReceipt(null,'signed',false);
+ await fixture.handler(request,fixture.res);
+ const {code,headers,body}=fixture.read();
+ assert.equal(code,404);
+ assert.match(body,/Beleg nicht gefunden/);
+ assert.equal(headers['cache-control'],'no-store');
+ assert.equal(headers['x-content-type-options'],'nosniff');
+ assert.match(headers['x-robots-tag'],/noindex/);
+ assert.equal(headers['referrer-policy'],'no-referrer');
 });
