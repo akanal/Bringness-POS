@@ -13,6 +13,8 @@ done
 [[ "${STAGING_OUTBOUND_MESSAGES:-disabled}" == disabled ]] || { echo 'Outbound messages prohibited in staging' >&2; exit 1; }
 [[ "$STAGING_DATABASE_URL" == postgresql://* || "$STAGING_DATABASE_URL" == postgres://* ]] || { echo 'Staging requires a PostgreSQL URL' >&2; exit 1; }
 [[ "$STAGING_DATABASE_URL" != *bringness_prod* ]] || { echo 'Production database naming detected' >&2; exit 1; }
+[[ "$STAGING_DATABASE_URL" != *bringness_production* ]] || { echo 'Production database naming detected' >&2; exit 1; }
+[[ "$STAGING_DATABASE_URL" != *bringness_live* ]] || { echo 'Production database naming detected' >&2; exit 1; }
 [[ "$STAGING_DATABASE_URL" != *placeholder* ]] || { echo 'Placeholder database settings are for CI only' >&2; exit 1; }
 [[ "$STAGING_DATABASE_URL" != *localhost* ]] || { echo 'Local database settings are for CI only' >&2; exit 1; }
 [[ "$STAGING_DATABASE_URL" != *127.0.0.1* ]] || { echo 'Loopback database settings are for CI only' >&2; exit 1; }
