@@ -46,6 +46,26 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     }
     if(batch.some(sale=>!resultsById.has(sale.id)))throw Error('Offline-Antwort enthält fremde oder fehlende Verkaufskennungen');
     if(response.results.some(result=>typeof result.ok!=='boolean'||(result.ok===false&&(typeof result.error!=='string'||!result.error.trim()))))throw Error('Offline-Antwort enthält einen unklaren Verkaufsstatus');
+    // Conflicting receipt identities make every acknowledgement in this batch
+    // ambiguous. Keep all local sales pending instead of accepting the first.
+    const receiptOwners=new Map(),cloudOwners=new Map();
+    let conflicting=false;
+    for(const sale of batch){
+     const result=resultsById.get(sale.id);
+     if(result.ok!==true)continue;
+     const scope=JSON.stringify([sale.request.restaurantId,result.receiptNumber]);
+     if((typeof result.id==='string'&&cloudOwners.has(result.id)&&cloudOwners.get(result.id)!==sale.id)||
+        (typeof result.receiptNumber==='string'&&receiptOwners.has(scope)&&receiptOwners.get(scope)!==sale.id))conflicting=true;
+     cloudOwners.set(result.id,sale.id);
+     receiptOwners.set(scope,sale.id);
+    }
+    if(conflicting){
+     failed++;
+     for(const sale of batch)skipped.add(sale.id);
+     try{await ledger.error(batch[0].id,'Mehrdeutige Serverbelege; gesamte Übertragung bleibt zur Prüfung offen.');}catch{}
+     pending=await ledger.pending(Array.from(attempted));
+     continue;
+    }
     // Server replies must not claim a sale succeeded without a usable receipt.
     // Invalid entries remain queued while valid entries can still be acknowledged.
     for(let index=0;index<batch.length;index++){
