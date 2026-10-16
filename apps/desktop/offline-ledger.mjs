@@ -32,7 +32,7 @@ export async function createOfflineLedger(db,quote) {
     const current=(await tx.query('SELECT payload->>\'deviceKey\' AS device_key FROM offline_catalog WHERE current')).rows[0];
     if(current?.device_key!==expectedDeviceKey)throw Error('Offline-Katalog gehört nicht zu diesem Gerät.');
    }
-   const old=(await tx.query('SELECT s.receipt,s.request=$2::jsonb AS matches,c.payload->>'deviceKey' AS sale_device_key FROM offline_sales s JOIN offline_catalog c ON c.id=s.snapshot_id WHERE s.id=$1',[request.id,JSON.stringify(request)])).rows[0];
+   const old=(await tx.query("SELECT s.receipt,s.request=$2::jsonb AS matches,c.payload->>'deviceKey' AS sale_device_key FROM offline_sales s JOIN offline_catalog c ON c.id=s.snapshot_id WHERE s.id=$1",[request.id,JSON.stringify(request)])).rows[0];
    if(old){if(!old.matches)throw Error('Verkaufskennung bereits verwendet');if(expectedDeviceKey&&old.sale_device_key!==expectedDeviceKey)throw Error('Offline-Katalog gehört nicht zu diesem Gerät.');return old.receipt;}
    const snapshot=(await tx.query("SELECT c.payload FROM offline_catalog c WHERE c.id=$1 AND c.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current) AND c.payload->>'deviceKey'=(SELECT payload->>'deviceKey' FROM offline_catalog WHERE current)",[request.snapshotId])).rows[0]?.payload;
    if(!snapshot||typeof snapshot.validUntil!=='string'||!Number.isFinite(Date.parse(snapshot.validUntil))||Date.now()>Date.parse(snapshot.validUntil))throw Error('Offline-Freigabe abgelaufen. Bitte online anmelden.');
