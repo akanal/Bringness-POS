@@ -11,6 +11,7 @@ export async function cartTransaction(db,u,b,{checkout=true,trade=supplierMayTra
    if(checkout){id(b.requestKey);if(b.confirmed!==true)fail('Bestellung muss ausdrücklich bestätigt werden');}
    const fingerprint=hash(JSON.stringify({lines,deliveryDate:b.deliveryDate,quote:b.quote}));
    const c=await db.connect();try{await c.query('BEGIN');const buyer=(await c.query('SELECT * FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id])).rows[0];
+    if(!buyer||buyer.status!=='active'||buyer.role!=='restaurant')throw Object.assign(Error('Restaurantkonto nicht mehr zum Bestellen freigegeben'),{status:403});
     if(checkout){const old=(await c.query('SELECT * FROM ai_checkouts WHERE buyer_id=$1 AND request_key=$2',[u.id,b.requestKey])).rows[0];if(old){if(old.fingerprint!==fingerprint)fail('Bestellkennung bereits für einen anderen Warenkorb verwendet');await c.query('COMMIT');return {status:200,orders:old.orders,replayed:true}}}
     if(!(await c.query("SELECT value FROM ai_settings WHERE key='launch'")).rows[0].value.ordersEnabled)fail('Bestellungen sind noch nicht freigeschaltet');
     if(!buyer.address||!buyer.city)fail('Restaurant muss zuerst seine Geschäftsanschrift hinterlegen');

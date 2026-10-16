@@ -16,18 +16,18 @@ export async function migrateAutoProcurement(db=aiPool()){await db.query(`
 CREATE TABLE IF NOT EXISTS ai_auto_procurement(account_id uuid PRIMARY KEY REFERENCES ai_accounts(id),policy jsonb NOT NULL,version int NOT NULL DEFAULT 1,updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS ai_auto_procurement_runs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),day date NOT NULL,state text NOT NULL DEFAULT 'pending',net_cents int NOT NULL DEFAULT 0,error text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(account_id,day));
 `)}
-export async function runAutomaticProcurement(user,{db=aiPool(),draft=procurementDraft,cart=cartTransaction,now=new Date()}={}){
+export async function runAutomaticProcurement(user,{db=aiPool(),draft=procurementDraft,cart=cartTransaction,clock=()=>new Date(),now=clock()}={}){
  const today=berlinClock(now).date,policyRow=(await db.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1',[user.id])).rows[0];if(!policyRow?.policy.enabled)return {state:'disabled'};
  const policy=policyRow.policy;
  const run=(await db.query('INSERT INTO ai_auto_procurement_runs(account_id,day) VALUES($1,$2) ON CONFLICT(account_id,day) DO UPDATE SET day=EXCLUDED.day RETURNING *',[user.id,today])).rows[0];if(run.state==='ordered')return {state:'ordered',replayed:true,netCents:run.net_cents};
  try{
   const deliveryDate=new Date(Date.parse(today+'T12:00:00Z')+policy.leadDays*86400000).toISOString().slice(0,10);
-  const plan=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds});if(!plan.complete)fail('Nicht vollständig automatisch bestellfähig: '+plan.unresolved.map(x=>x.reason).join(' · '),409);if(!plan.lines.length){await db.query("UPDATE ai_auto_procurement_runs SET state='no_need',error=NULL,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id]);return {state:'no_need'}}
+  const plan=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds},{db});if(!plan.complete)fail('Nicht vollständig automatisch bestellfähig: '+plan.unresolved.map(x=>x.reason).join(' · '),409);if(!plan.lines.length){await db.query("UPDATE ai_auto_procurement_runs SET state='no_need',error=NULL,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id]);return {state:'no_need'}}
   const lines=plan.lines.map(({stockId,productId,packs})=>({stockId,productId,packs}));
   const preview=await cart(db,user,{lines,deliveryDate},{checkout:false});if(!preview.canOrder)fail(preview.warnings.join(' · '),409);
   const result=await cart(db,user,{lines,deliveryDate,quote:preview.quote,requestKey:run.id,confirmed:true},{
    authorize:async(c,quote)=>{
-    if(berlinClock().date!==today)fail('Kalendertag inzwischen gewechselt. Lauf erneut starten.',409);
+    if(berlinClock(clock()).date!==today)fail('Kalendertag inzwischen gewechselt. Lauf erneut starten.',409);
     const current=(await c.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1 FOR UPDATE',[user.id])).rows[0];
     if(!current?.policy.enabled||current.version!==policyRow.version)fail('Freigabe inzwischen geändert',409);
     if(quote.groups.some(g=>!policy.supplierIds.includes(g.supplierId)||JSON.stringify([g.deliveryArea,g.terms,g.minimumCents])!==JSON.stringify(policy.supplierTerms?.[g.supplierId])))fail('Lieferant nicht freigegeben',409);
@@ -45,7 +45,21 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
  }catch(e){await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,String(e.message).slice(0,1000)]);return {state:'blocked',error:e.message}}
 }
 let running=false;
-export async function automaticProcurementTick(){if(running)return;running=true;try{const accounts=(await aiPool().query("SELECT a.id,a.role FROM ai_auto_procurement p JOIN ai_accounts a ON a.id=p.account_id WHERE p.policy->>'enabled'='true' AND a.role='restaurant' AND a.status='active'")).rows;for(const u of accounts)await runAutomaticProcurement(u)}finally{running=false}}
+export async function automaticProcurementTick({db=aiPool(),run=runAutomaticProcurement,onError=()=>console.error('AI automatic procurement account unavailable')}={}){
+ if(running)return;
+ running=true;
+ try{
+  const accounts=(await db.query("SELECT a.id,a.role FROM ai_auto_procurement p JOIN ai_accounts a ON a.id=p.account_id WHERE p.policy->>'enabled'='true' AND a.role='restaurant' AND a.status='active' ORDER BY a.id")).rows;
+  for(const user of accounts){
+   try{await run(user,{db});}
+   catch{
+    // A failed account/database operation must not starve later restaurants.
+    // Log no account identifiers, supplier data, credentials or raw DB errors.
+    try{onError();}catch{}
+   }
+  }
+ }finally{running=false}
+}
 export async function automaticProcurementRoutes(path,method,b,user){
  if(user.role!=='restaurant')fail('Nur Restaurants können Beschaffung freigeben',403);const db=aiPool();
  if(path.endsWith('/run')&&method==='POST')return runAutomaticProcurement(user);
