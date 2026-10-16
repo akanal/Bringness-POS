@@ -119,3 +119,7 @@ test('supplier offer IDs with whitespace aliases require manual review',()=>{
  assert.equal(result.lines.length,0);
  assert.match(result.unresolved[0].reason,/Angebotskennung/);
 });
+
+test('non-text supplier delivery regions never match implicitly',()=>{
+ for(const region of [null,undefined,123,{},['Berlin']])assert.equal(deliveryMatches(region,'Berlin','10115'),false);
+});
