@@ -33,3 +33,18 @@ test('duplicate or invalid stock entries never create multiple purchase lines',(
  assert.throws(()=>prepareProcurement([item('',[offer('a','A',100)])]),/Lagerposition/);
  assert.throws(()=>prepareProcurement(null),/Einkaufsliste/);
 });
+
+test('empty procurement is never marked as approved',()=>{
+ const result=prepareProcurement([]);
+ assert.equal(result.complete,false);
+ assert.deepEqual(result.lines,[]);
+ assert.equal(result.netCents,0);
+});
+test('procurement refuses totals beyond supported money range',()=>{
+ const result=prepareProcurement([
+  item('s1',[offer('a','A',2147483647)]),
+  item('s2',[offer('b','A',1)])
+ ]);
+ assert.equal(result.complete,false);
+ assert.equal(result.lines.length,0);
+});
