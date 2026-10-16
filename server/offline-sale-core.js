@@ -10,7 +10,7 @@ export function offlineCatalogValidUntil(licenseValidUntil,issuedAt=new Date()) 
  return new Date(Math.min(licenseMs,issuedMs+24*60*60*1000)).toISOString();
 }
 export function quoteOfflineSale(snapshot,sale) {
- if(!snapshot||typeof snapshot!=='object'||typeof snapshot.id!=='string'||!snapshot.id.trim()||typeof snapshot.deviceKey!=='string'||!/^[a-zA-Z0-9_-]{12,128}$/.test(snapshot.deviceKey)||typeof sale?.id!=='string'||!offlineUuid.test(sale.id)||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
+ if(!snapshot||typeof snapshot!=='object'||Array.isArray(snapshot)||!sale||typeof sale!=='object'||Array.isArray(sale)||typeof snapshot.id!=='string'||!snapshot.id.trim()||typeof snapshot.deviceKey!=='string'||!/^[a-zA-Z0-9_-]{12,128}$/.test(snapshot.deviceKey)||typeof sale?.id!=='string'||!offlineUuid.test(sale.id)||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
  const time=typeof sale.createdAt==='string'?Date.parse(sale.createdAt):NaN,start=typeof snapshot.createdAt==='string'?Date.parse(snapshot.createdAt):NaN,end=typeof snapshot.validUntil==='string'?Date.parse(snapshot.validUntil):NaN;
  if(typeof snapshot.createdAt!=='string'||typeof snapshot.validUntil!=='string'||!Number.isFinite(start)||!Number.isFinite(end)||end<=start||end-start>24*60*60*1000||start>Date.now()+60000||!Number.isFinite(time)||time<start-60000||time>end||time>Date.now()+60000)fail('Verkauf außerhalb der freigegebenen Offline-Zeit');
  if(!Array.isArray(snapshot.restaurants)||!Array.isArray(snapshot.products))fail('Ungültiger Offline-Katalog');
