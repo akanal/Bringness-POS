@@ -76,3 +76,9 @@ test('offline sale rejects null and malformed line items as validation errors',(
   assert.throws(()=>quoteOfflineSale(snapshot,{...sale,items:[item]}),error=>error.status===400&&/Offline-Artikel/.test(error.message));
  }
 });
+
+test('offline sale tolerates damaged catalog rows but rejects unknown products',()=>{
+ const damaged={...snapshot,restaurants:[null,...snapshot.restaurants],products:[null,...snapshot.products]};
+ assert.equal(quoteOfflineSale(damaged,sale).totalCents,500);
+ assert.throws(()=>quoteOfflineSale({...damaged,products:[null]},sale),/Offline-Artikel/);
+});
