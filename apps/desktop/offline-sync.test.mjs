@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createOfflineSync} from './offline-sync.mjs';
 
 function fixture(ids,{reply,failAck}={}){
- const pending=new Map(ids.map(id=>[id,{id,request:{id,snapshotId:'catalog-id'}}]));
+ const pending=new Map(ids.map(id=>[id,{id,request:{id,snapshotId:'catalog-id',restaurantId:'restaurant-default'}}]));
  const calls=[],errors=[];
  const ledger={
   pendingCount:async()=>pending.size,
@@ -131,8 +131,8 @@ test('cloud receipt reused for another sale cannot acknowledge that sale',async(
 test('duplicate offline IDs in a single page are never transmitted',async()=>{
  const f=fixture(['a']);
  f.ledger.pending=async()=>[
-  {id:'a',request:{id:'a',snapshotId:'catalog-id'}},
-  {id:'a',request:{id:'a',snapshotId:'catalog-id'}}
+  {id:'a',request:{id:'a',snapshotId:'catalog-id',restaurantId:'restaurant-default'}},
+  {id:'a',request:{id:'a',snapshotId:'catalog-id',restaurantId:'restaurant-default'}}
  ];
  const status=await createOfflineSync(f).sync();
  assert.equal(status.state,'error');
