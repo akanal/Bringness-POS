@@ -70,3 +70,9 @@ test('offline sale rejects malformed identifier types',()=>{
   assert.throws(()=>quoteOfflineSale(snapshot,{...sale,id}),/Offline-Kennung/);
  }
 });
+
+test('offline sale rejects null and malformed line items as validation errors',()=>{
+ for(const item of [null,undefined,0,'product-1',{}]){
+  assert.throws(()=>quoteOfflineSale(snapshot,{...sale,items:[item]}),error=>error.status===400&&/Offline-Artikel/.test(error.message));
+ }
+});
