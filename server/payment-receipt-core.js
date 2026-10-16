@@ -76,7 +76,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   let qrBuffer;
   try {
     const qrPayload=receiptUrl(req,receipt.public_token);
-    qrBuffer=await QRCode.toBuffer(qrPayload,{width:120,margin:1});
+    qrBuffer=await QRCode.toBuffer(qrPayload,{width:224,margin:4,errorCorrectionLevel:'M'});
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
@@ -133,7 +133,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   }
 
   doc.moveDown();
-  const qrSize = 78;
+  const qrSize = 112;
   // Reserve the entire QR/footer block; PDFKit images with explicit coordinates do not advance y.
   if (doc.y + qrSize + 58 > doc.page.height - doc.page.margins.bottom) doc.addPage();
   const qrX = (doc.page.width - qrSize) / 2;
