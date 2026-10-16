@@ -156,7 +156,10 @@ export async function handleTseRoutes(req,res){
       COUNT(*) FILTER (WHERE state='prepared')::int prepared_transactions,
       COUNT(*) FILTER (WHERE state='started')::int started_transactions,
       COUNT(*) FILTER (WHERE state='signed')::int signed_transactions,
-      COUNT(*) FILTER (WHERE state='failed')::int failed_transactions
+      COUNT(*) FILTER (WHERE state='failed')::int failed_transactions,
+      COUNT(*) FILTER (WHERE state='needs_review')::int review_transactions,
+      COUNT(*) FILTER (WHERE state='starting')::int starting_transactions,
+      COUNT(*) FILTER (WHERE state='finishing')::int finishing_transactions
     FROM tse_transactions WHERE restaurant_id=$1
   `,[restaurantId]);
   const receipts=await pool.query(`
@@ -182,6 +185,10 @@ export async function handleTseRoutes(req,res){
     startedTransactions:t.started_transactions,
     signedTransactions:t.signed_transactions,
     failedTransactions:t.failed_transactions,
+    reviewTransactions:t.review_transactions,
+    startingTransactions:t.starting_transactions,
+    finishingTransactions:t.finishing_transactions,
+    requiresManualReview:t.review_transactions>0,
     message: status.provider==="swissbit"
       ? "Swissbit-Adapter ist eingebunden. Echte Signierung wird erst nach Konfiguration des offiziellen Swissbit SDK/Bridge und Hardwaretest aktiviert."
       : "TSE-Transaktionsdaten werden beim Beleg automatisch vorbereitet. Eine echte Signatur erfolgt erst nach Anschluss einer zertifizierten SD-/microSD-TSE."
