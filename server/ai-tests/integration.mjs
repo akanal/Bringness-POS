@@ -192,9 +192,13 @@ const dry=await call('v1/sales/validate',{eventId:'dry-1',items:[{productCode:'d
 assert.equal((await call('v1/sales',{eventId:'bad-type',items:[{productCode:'dish-1',quantity:true}]},key.token)).status,400);
 assert.equal((await call('v1/sales',{eventId:'x'.repeat(151),items:[{productCode:'dish-1',quantity:1}]},key.token)).status,400);
 assert.equal((await call('v1/products',null,tokens.other)).status,401);
-const sale={eventId:'sale-1',items:[{productCode:'dish-1',quantity:4}]};assert.equal((await call('import/sales',sale,key.token)).status,200);assert.equal((await call('import/sales',sale,key.token)).duplicate,true);
+const delayedSaleTime=new Date(Date.now()-10*86400000).toISOString();
+const sale={eventId:'sale-1',occurredAt:delayedSaleTime,items:[{productCode:'dish-1',quantity:4}]};assert.equal((await call('import/sales',sale,key.token)).status,200);assert.equal((await call('import/sales',sale,key.token)).duplicate,true);
 assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),4);
 assert.equal((await call('v1/sales',sale,key.token)).duplicate,true);
+assert.equal(new Date((await query("SELECT occurred_at FROM ai_sale_events WHERE external_id='sale-1'")).rows[0].occurred_at).toISOString(),delayedSaleTime);
+assert.equal((await call('v1/sales',{...sale,occurredAt:new Date(Date.parse(delayedSaleTime)+1000).toISOString()},key.token)).status,409);
+assert.equal((await call('v1/sales',{eventId:sale.eventId,items:sale.items},key.token)).duplicate,true);
 const duplicateDry=await call('v1/sales/validate',sale,key.token);assert.equal(duplicateDry.dryRun,true);assert.equal(duplicateDry.duplicate,true);
 assert.equal((await call('import/sales',{...sale,items:[{productCode:'dish-1',quantity:5}]},key.token)).status,409);
 assert.equal((await call('import/sales',{eventId:'missing',items:[{productCode:'unknown',quantity:1}]},key.token)).status,400);
@@ -205,6 +209,8 @@ assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),5
 assert.equal((await call('import/sales',{eventId:'reverse-2',type:'reversal',reversesEventId:'sale-1'},key.token)).status,409);
 assert.equal((await call('import/sales',{eventId:'sale-2',items:[{productCode:'dish-1',quantity:10}]},key.token)).status,200);
 assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-15);
+assert.equal((await call('import/sales',{eventId:'sale-2',occurredAt:delayedSaleTime,items:[{productCode:'dish-1',quantity:10}]},key.token)).duplicate,true);
+assert.equal((await query("SELECT occurred_at FROM ai_sale_events WHERE external_id='sale-2'")).rows[0].occurred_at,null);
 await call('connector-status',{id:link.id,active:false},tokens.buyer);assert.equal((await call('import/sales',{eventId:'blocked',items:[{productCode:'dish-1',quantity:1}]},key.token)).status,401);
 
 assert.equal((await call('connector-key',{id:link.id},tokens.other)).status,404);
