@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {quoteOfflineSale,offlineFingerprint,canonicalJson} from '../server/offline-sale-core.js';
+import {quoteOfflineSale,offlineFingerprint,canonicalJson,offlineCatalogValidUntil} from '../server/offline-sale-core.js';
 
 const restaurantId='restaurant-1';
 const snapshot={
@@ -43,4 +43,18 @@ test('offline quote rejects integer overflow and zero total',()=>{
 test('offline fingerprints are stable across object key ordering',()=>{
  assert.equal(canonicalJson({b:2,a:{z:3,x:1}}),canonicalJson({a:{x:1,z:3},b:2}));
  assert.equal(offlineFingerprint({b:2,a:1}),offlineFingerprint({a:1,b:2}));
+});
+
+test('offline catalog expiry never exceeds 24 hours',()=>{
+ const issued='2026-10-16T10:00:00.000Z';
+ assert.equal(offlineCatalogValidUntil('2027-10-16T10:00:00.000Z',issued),'2026-10-17T10:00:00.000Z');
+});
+test('offline catalog expiry honors earlier license expiration',()=>{
+ const issued='2026-10-16T10:00:00.000Z';
+ assert.equal(offlineCatalogValidUntil('2026-10-16T13:00:00.000Z',issued),'2026-10-16T13:00:00.000Z');
+});
+test('offline catalog rejects expired and invalid license dates',()=>{
+ const issued='2026-10-16T10:00:00.000Z';
+ assert.throws(()=>offlineCatalogValidUntil('2026-10-16T09:59:59.000Z',issued),/Offline-Lizenz abgelaufen/);
+ assert.throws(()=>offlineCatalogValidUntil('invalid',issued),/Offline-Lizenz abgelaufen/);
 });
