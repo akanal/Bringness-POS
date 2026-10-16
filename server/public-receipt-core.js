@@ -1,4 +1,3 @@
-import QRCode from 'qrcode';
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const euro = cents => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 
@@ -44,6 +43,7 @@ return async function handlePublicReceipt(req, res) {
     const origin = new URL(configuredOrigin);
     if (origin.protocol === 'https:' && !origin.username && !origin.password && receipt.public_token) {
       const receiptUrl = new URL('/beleg/' + receipt.public_token, origin.origin).toString();
+      const {default: QRCode} = await import('qrcode');
       const svg = await QRCode.toString(receiptUrl, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, width: 190 });
       receiptQrHtml = '<section class="section receipt-qr"><h2>Digitaler Beleg</h2>' + svg + '<small>Scannen und Beleg digital öffnen</small></section>';
     }
