@@ -47,6 +47,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     // Invalid entries remain queued while valid entries can still be acknowledged.
     for(let index=0;index<batch.length;index++){
      const sale=batch[index],result=resultsById.get(sale.id);
+     const receiptScope=String(sale.request.restaurantId||'')+'\u0000'+String(result.receiptNumber||'');
      if(result?.offlineId!==sale.id)throw Error('Offline-Antwort stimmt nicht mit der Verkaufskennung überein');
      if(result.ok===true&&typeof result.id==='string'&&result.id.trim()&&result.id.length<=128&&typeof result.receiptNumber==='string'&&result.receiptNumber.trim()&&result.receiptNumber.length<=128&&(!serverReceiptIds.has(result.id)||serverReceiptIds.get(result.id)===sale.id)&&(!serverReceiptNumbers.has(result.receiptNumber)||serverReceiptNumbers.get(result.receiptNumber)===sale.id)){
       serverReceiptNumbers.set(result.receiptNumber,sale.id);
