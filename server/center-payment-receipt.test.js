@@ -24,7 +24,7 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  const handler=createPaymentReceiptHandler(pool,PdfWriter||Pdf,QrWriter||{toBuffer:async(url,options)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);assert.deepEqual(options,{width:224,margin:4,errorCorrectionLevel:'M'});return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
  const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){if(Buffer.isBuffer(raw))this.pdf=raw;else this.body=JSON.parse(raw);}};
  assert.equal(await handler({url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
- return {res,documents,queries};
+ return {res,documents,queries,handler};
 }
 for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  test('PDF template respects stored fiscal status: '+fiscalStatus,async()=>{
@@ -44,6 +44,23 @@ for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  assert.equal(text.includes('Nicht TSE-signiert'),fiscalStatus!=='signed');assert.doesNotMatch(text,/Eine TSE ist nicht angeschlossen/);
  });
 }
+test('reprinting a receipt preserves its public QR destination and never creates another receipt',async()=>{
+ const {res,documents,queries,handler}=await run('signed');
+ const second={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){this.pdf=raw;}};
+ const request={url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}};
+ assert.equal(await handler(request,second),true);
+ assert.equal(res.status,200);
+ assert.equal(second.status,200);
+ assert.deepEqual(second.pdf,res.pdf);
+ assert.equal(documents.length,2,'each print generates a PDF, not a new receipt');
+ assert.equal(documents[0].images.length,1);
+ assert.equal(documents[1].images.length,1);
+ const receiptReads=queries.filter(q=>q.sql.includes('FROM receipts rc'));
+ assert.equal(receiptReads.length,2);
+ for(const q of receiptReads)assert.deepEqual(q.args,[receiptId,company]);
+ assert.ok(queries.every(q=>/^\\s*SELECT\\b/i.test(q.sql)),'printing must never insert, update or delete receipts or payments');
+});
+
 test('PDF download never exposes another company receipt',async()=>{
  const {res,documents,queries}=await run('signed',{found:false});
  assert.equal(res.status,404);
