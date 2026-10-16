@@ -19,7 +19,7 @@ async function run(body,{actor=user}={}){
  const pool={async query(sql){calls.push(sql);if(sql.includes('FROM sessions'))return {rows:actor?[actor]:[]};throw Error('Unexpected database query');},async connect(){throw Error('Checkout must not start a transaction for invalid input');}};
  const handler=createPaymentCheckout(pool),req=request(),res=response();
  const done=handler(req,res);
- queueMicrotask(()=>{req.emit('data',Buffer.from(JSON.stringify(body)));req.emit('end');});
+ setImmediate(()=>{req.emit('data',Buffer.from(JSON.stringify(body)));req.emit('end');});
  await done;
  return {res,calls};
 }
