@@ -46,7 +46,11 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
      }else{
       failed++;
       skipped.add(sale.id);
-      await ledger.error(sale.id,result?.ok===true?'Ungültige Serverbestätigung; Verkauf bleibt zur Prüfung offen.':result?.error||'Verkauf nicht bestätigt');
+      try{await ledger.error(sale.id,result?.ok===true?'Ungültige Serverbestätigung; Verkauf bleibt zur Prüfung offen.':result?.error||'Verkauf nicht bestätigt');}
+      catch(error){
+       // A failed local error annotation must not block other server results.
+       // The unacknowledged sale remains in the durable retry queue.
+      }
      }
     }
     // Do not resend rejected sales repeatedly during the same sync cycle.
