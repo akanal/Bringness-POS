@@ -11,7 +11,8 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
     if(previous&&previous.companyId!==snapshot.companyId&&(await tx.query('SELECT 1 FROM offline_sales WHERE synced_at IS NULL LIMIT 1')).rows.length)throw Error('Offene Verkäufe zuerst mit dem ursprünglichen Betrieb synchronisieren.');
     const existing=(await tx.query('SELECT payload FROM offline_catalog WHERE id=$1',[snapshot.id])).rows[0]?.payload;
     if(existing&&canonical(existing)!==canonical(snapshot))throw Error('Offline-Katalogkennung wurde bereits mit anderen Daten verwendet.');
-    await tx.query('UPDATE offline_catalog SET current=false');
+    if(previous&&previous.companyId!==snapshot.companyId)await tx.query('UPDATE offline_catalog SET current=false');
+    else await tx.query('UPDATE offline_catalog SET current=false WHERE id<>$1',[snapshot.id]);
     await tx.query('INSERT INTO offline_catalog VALUES($1,$2,true) ON CONFLICT(id) DO UPDATE SET current=true',[snapshot.id,JSON.stringify(snapshot)]);
    });
   },
