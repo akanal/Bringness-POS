@@ -196,3 +196,13 @@ test('rejected sale can be retried with same ID in a later sync run',async()=>{
  assert.equal(f.pending.size,0);
  assert.deepEqual(f.calls,[['a'],['a']]);
 });
+
+test('nonboolean replay flags never acknowledge a sale',async()=>{
+ const f=fixture(['a'],{reply:()=>({results:[{
+  offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a',replayed:'true'
+ }]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.equal(f.pending.size,1);
+ assert.equal(f.errors.length,1);
+});
