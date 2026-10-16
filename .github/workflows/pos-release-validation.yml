@@ -26,4 +26,4 @@ jobs:
           node --check server/offline-sales.js
           node --check server/center.js
       - name: Run TSE regression tests
-        run: node --test tests/tse-signing-worker.test.js tests/offline-sale-core.test.js tests/center-guest-push.test.js
+        run: node --test tests/tse-signing-worker.test.js tests/offline-sale-core.test.js tests/center-guest-push.test.js tests/tse-core.test.js
