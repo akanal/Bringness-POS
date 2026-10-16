@@ -21,7 +21,7 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:1190}]};
  throw Error('Unexpected query');
  }};
- const handler=createPaymentReceiptHandler(pool,PdfWriter||Pdf,QrWriter||{toBuffer:async(url)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
+ const handler=createPaymentReceiptHandler(pool,PdfWriter||Pdf,QrWriter||{toBuffer:async(url,options)=>{if(qrFails)throw Error('simulated QR outage');assert.equal(url,'https://pos.example.test/beleg/'+publicToken);assert.deepEqual(options,{width:224,margin:4,errorCorrectionLevel:'M'});return Buffer.from('simulated QR image');}},(_req,token)=>{if(urlFails)throw Error('invalid origin');return 'https://pos.example.test/beleg/'+token;});
  const res={writeHead(status,headers){this.status=status;this.headers=headers;},end(raw){if(Buffer.isBuffer(raw))this.pdf=raw;else this.body=JSON.parse(raw);}};
  assert.equal(await handler({url:'/api/v1/receipts/'+receiptId+'/pdf',method:'GET',headers:{authorization:'Bearer operator'}},res),true);
  return {res,documents,queries};
