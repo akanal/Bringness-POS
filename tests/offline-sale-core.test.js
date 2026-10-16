@@ -3,16 +3,17 @@ import assert from 'node:assert/strict';
 import {quoteOfflineSale,offlineFingerprint,canonicalJson,offlineCatalogValidUntil} from '../server/offline-sale-core.js';
 
 const restaurantId='restaurant-1';
+const now=Date.now();
 const snapshot={
  id:'snapshot-1',deviceKey:'a'.repeat(64),
- createdAt:'2026-10-15T00:00:00.000Z',validUntil:'2026-10-18T00:00:00.000Z',
+ createdAt:new Date(now-60000).toISOString(),validUntil:new Date(now+3600000).toISOString(),
  restaurants:[{id:restaurantId}],
  products:[{id:'product-1',restaurantId,name:'Kaffee',priceCents:250,taxRate:19}],
  merchant:{[restaurantId]:{businessName:'Testbetrieb'}}
 };
 const sale={
  id:'c87a3b13-8a46-48a0-8d70-82cf2e08c621',snapshotId:snapshot.id,
- restaurantId,createdAt:'2026-10-16T10:00:00Z',
+ restaurantId,createdAt:new Date(now).toISOString(),
  items:[{productId:'product-1',quantity:2}],paymentMethod:'cash'
 };
 test('offline quote uses catalog prices and produces a stable receipt',()=>{
