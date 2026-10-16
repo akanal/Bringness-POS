@@ -41,10 +41,23 @@ export async function createOfflineLedger(db,quote) {
   async pending(excludeIds=[]){if(!Array.isArray(excludeIds)||excludeIds.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))throw Error('Ungültige Ausschlussliste für Offline-Verkäufe');return (await db.query('SELECT id,request FROM offline_sales WHERE synced_at IS NULL AND NOT (id = ANY($1::uuid[])) ORDER BY created_at,id LIMIT 100',[excludeIds])).rows;},
   async acknowledge(id,receipt){
    if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw Error('Ungültige Offline-Verkaufskennung');
-   // Never mark a sale as synced without a durable, identifiable cloud receipt.
-   if(!receipt||typeof receipt.id!=='string'||!receipt.id.trim()||receipt.id.length>128||typeof receipt.receiptNumber!=='string'||!receipt.receiptNumber.trim()||receipt.receiptNumber.length>128)throw Error('Ungültige Serverbestätigung für Offline-Verkauf.');
-   const result=await db.query('UPDATE offline_sales SET synced_at=now(),cloud_receipt=$2,error=NULL WHERE id=$1 AND synced_at IS NULL RETURNING id',[id,JSON.stringify(receipt)]);
-   if(result.rows.length!==1)throw Error('Offline-Verkauf konnte nicht als synchronisiert bestätigt werden.');
+   // Receipt identity is immutable across retries and process restarts.
+   if(!receipt||typeof receipt.id!=='string'||!receipt.id.trim()||receipt.id.length>128||typeof receipt.receiptNumber!=='string'||!receipt.receiptNumber.trim()||receipt.receiptNumber.length>128||(receipt.replayed!==undefined&&typeof receipt.replayed!=='boolean'))throw Error('Ungültige Serverbestätigung für Offline-Verkauf.');
+   return db.transaction(async tx=>{
+    const sale=(await tx.query('SELECT s.*,c.payload FROM offline_sales s JOIN offline_catalog c ON c.id=s.snapshot_id WHERE s.id=$1 FOR UPDATE OF s',[id])).rows[0];
+    if(!sale)throw Error('Offline-Verkauf nicht gefunden.');
+    if(sale.synced_at){
+     if(sale.cloud_receipt?.id!==receipt.id||sale.cloud_receipt?.receiptNumber!==receipt.receiptNumber)throw Error('Abweichende Bestätigung für bereits synchronisierten Verkauf.');
+     return;
+    }
+    const duplicate=await tx.query(`SELECT s.id FROM offline_sales s JOIN offline_catalog c ON c.id=s.snapshot_id
+     WHERE s.id<>$1 AND s.synced_at IS NOT NULL AND c.payload->>'companyId'=$2
+     AND (s.cloud_receipt->>'id'=$3 OR (s.request->>'restaurantId'=$4 AND s.cloud_receipt->>'receiptNumber'=$5)) LIMIT 1`,
+     [id,sale.payload.companyId,receipt.id,sale.request.restaurantId,receipt.receiptNumber]);
+    if(duplicate.rows.length)throw Error('Serverbeleg wurde bereits einem anderen Offline-Verkauf zugeordnet.');
+    const result=await tx.query('UPDATE offline_sales SET synced_at=now(),cloud_receipt=$2,error=NULL WHERE id=$1 AND synced_at IS NULL RETURNING id',[id,JSON.stringify(receipt)]);
+    if(result.rows.length!==1)throw Error('Offline-Verkauf konnte nicht als synchronisiert bestätigt werden.');
+   });
   },
   async error(id,message){if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw Error('Ungültige Offline-Verkaufskennung');await db.query('UPDATE offline_sales SET error=$2 WHERE id=$1 AND synced_at IS NULL',[id,String(message||'Synchronisierung fehlgeschlagen').slice(0,300)]);}
  };
