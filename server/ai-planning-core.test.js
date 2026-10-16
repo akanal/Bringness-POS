@@ -16,3 +16,7 @@ test('closure calendar tolerates invalid hours safely',()=>{
  assert.equal(closedOn('2026-10-05',{hours:{}}),false);
  assert.equal(closedOn('not-a-day',{hours:Array(7).fill(null)}),false);
 });
+
+test('invalid dates cannot become exceptional closure days',()=>{
+ assert.equal(closedOn('2026-02-30',{closedDates:['2026-02-30']}),false);
+});
