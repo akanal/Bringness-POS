@@ -17,3 +17,7 @@ test('forecast tolerates omitted demand configuration',()=>{
  assert.equal(result.expectedOrders,100);
  assert.equal(result.demand.enabled,false);
 });
+
+test('false-like invalid demand settings are rejected',()=>{
+ assert.throws(()=>applyDemandContext(base,{settings:{demandRules:false}}),/Ungültige Prognoseregeln/);
+});
