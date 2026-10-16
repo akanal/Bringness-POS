@@ -6,7 +6,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  const {createOfflineLedger}=await import('./offline-ledger.mjs');
  const {quoteOfflineSale}=await import('./offline-sale-core.mjs');
  const db=new PGlite(path.join(app.getPath('userData'),'offline-postgres'));
- const ledger=await createOfflineLedger(db,quoteOfflineSale,canonicalJson);
+ const ledger=await createOfflineLedger(db,quoteOfflineSale);
  let offlineWindow;
  const {createOfflineSync}=await import('./offline-sync.mjs');
  const open=()=>{if(offlineWindow&&!offlineWindow.isDestroyed()){offlineWindow.focus();return offlineWindow}offlineWindow=new BrowserWindow({width:1280,height:820,show:showOffline,webPreferences:{preload:path.join(__dirname,'offline-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});offlineWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));offlineWindow.webContents.on('will-navigate',e=>e.preventDefault());offlineWindow.loadFile(path.join(__dirname,'offline.html'));return offlineWindow;};
