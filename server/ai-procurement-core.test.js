@@ -176,3 +176,10 @@ test('Unicode-equivalent supplier offer IDs cannot bypass duplicate checks',()=>
  assert.equal(result.lines.length,0);
  assert.match(result.unresolved[0].reason,/Angebotskennung/);
 });
+
+test('Unicode-equivalent stock IDs cannot produce duplicate purchase lines',()=>{
+ assert.throws(()=>prepareProcurement([
+  item('stock',[offer('a','A',100)]),
+  item('ｓｔｏｃｋ',[offer('b','A',100)])
+ ]),/Lagerposition/);
+});
