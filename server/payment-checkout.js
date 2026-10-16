@@ -17,7 +17,7 @@ function send(res, status, payload) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let raw = "";
-    req.on("data", chunk => raw += chunk);
+    req.on("data", chunk => { raw += chunk; if (raw.length > 65536) { reject(new Error("Request too large")); req.destroy(); } });
     req.on("end", () => {
       try { resolve(raw ? JSON.parse(raw) : {}); }
       catch (error) { reject(error); }
@@ -70,7 +70,7 @@ return async function handlePaymentCheckout(req, res) {
     send(res, 400, { error: "Mindestens eine Zahlungsart ist erforderlich" });
     return true;
   }
-  if (payments.some(p => !["cash", "card"].includes(String(p.method)) || !Number.isInteger(Number(p.amountCents)) || Number(p.amountCents) <= 0)) {
+  if (payments.some(p => !["cash", "card"].includes(String(p.method)) || !Number.isSafeInteger(p.amountCents) || p.amountCents <= 0)) {
     send(res, 400, { error: "Ungültige Zahlungsaufteilung" });
     return true;
   }
@@ -101,20 +101,20 @@ return async function handlePaymentCheckout(req, res) {
   for (const item of items) {
     const product = productMap.get(String(item.productId));
     const qty = Number(item.qty);
-    if (!product || !Number.isFinite(qty) || qty <= 0 || qty > 999) {
+    if (!product || !Number.isSafeInteger(item.qty) || qty <= 0 || qty > 999) {
       send(res, 400, { error: "Ungültige Menge" });
       return true;
     }
     totalCents += Math.round(Number(product.price_cents) * qty);
     cleanItems.push({ product, qty });
   }
-  if (totalCents <= 0) {
+  if (!Number.isSafeInteger(totalCents) || totalCents <= 0) {
     send(res, 400, { error: "Ungültiger Gesamtbetrag" });
     return true;
   }
 
   const paymentTotal = payments.reduce((sum, p) => sum + Number(p.amountCents), 0);
-  if (paymentTotal !== totalCents) {
+  if (!Number.isSafeInteger(paymentTotal) || paymentTotal !== totalCents) {
     send(res, 400, { error: "Zahlungsaufteilung stimmt nicht mit dem Gesamtbetrag überein" });
     return true;
   }
