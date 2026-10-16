@@ -13,9 +13,9 @@ done
 [[ "${STAGING_OUTBOUND_MESSAGES:-disabled}" == disabled ]] || { echo 'Outbound messages prohibited in staging' >&2; exit 1; }
 [[ "$STAGING_DATABASE_URL" == postgresql://* || "$STAGING_DATABASE_URL" == postgres://* ]] || { echo 'Staging requires a PostgreSQL URL' >&2; exit 1; }
 [[ "$STAGING_DATABASE_URL" != *bringness_prod* ]] || { echo 'Production database naming detected' >&2; exit 1; }
-[[ "$STAGING_DATABASE_URL" != *placeholder* || "${CI:-}" == true ]] || { echo 'Placeholder database settings are for CI only' >&2; exit 1; }
-[[ "$STAGING_DATABASE_URL" != *localhost* || "${CI:-}" == true ]] || { echo 'Local database settings are for CI only' >&2; exit 1; }
-[[ "$STAGING_DATABASE_URL" != *127.0.0.1* || "${CI:-}" == true ]] || { echo 'Loopback database settings are for CI only' >&2; exit 1; }
-[[ "$STAGING_SESSION_SECRET" != placeholder* || "${CI:-}" == true ]] || { echo 'Placeholder secret is for CI only' >&2; exit 1; }
-[[ "${STAGING_DB_ISOLATION_CONFIRMED:-}" == yes || "${CI:-}" == true ]] || { echo 'Database isolation has not been confirmed' >&2; exit 1; }
+[[ "$STAGING_DATABASE_URL" != *placeholder* ]] || { echo 'Placeholder database settings are for CI only' >&2; exit 1; }
+[[ "$STAGING_DATABASE_URL" != *localhost* ]] || { echo 'Local database settings are for CI only' >&2; exit 1; }
+[[ "$STAGING_DATABASE_URL" != *127.0.0.1* ]] || { echo 'Loopback database settings are for CI only' >&2; exit 1; }
+[[ "$STAGING_SESSION_SECRET" != placeholder* ]] || { echo 'Placeholder secret is for CI only' >&2; exit 1; }
+[[ "${STAGING_DB_ISOLATION_CONFIRMED:-}" == yes ]] || { echo 'Database isolation has not been confirmed' >&2; exit 1; }
 echo 'Staging configuration preflight passed (configuration only; isolation and server not verified).'
