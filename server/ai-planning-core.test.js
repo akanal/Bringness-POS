@@ -6,3 +6,8 @@ test('opening schedule and exceptional closure validate days and overnight hours
 const xml=`<dwd:IssueTime>2026-10-03T21:00:00Z</dwd:IssueTime><kml:description>BERLIN</kml:description><kml:coordinates>13.4,52.47,50</kml:coordinates><dwd:TimeStep>2026-10-04T00:00:00Z</dwd:TimeStep><dwd:TimeStep>2026-10-04T01:00:00Z</dwd:TimeStep><dwd:Forecast dwd:elementName="TTT"><dwd:value>283.15 -</dwd:value></dwd:Forecast><dwd:Forecast dwd:elementName="RR1c"><dwd:value>- 0.7</dwd:value></dwd:Forecast>`;
 test('DWD converts Kelvin and retains missing and partial values',()=>{const r=parseMosmix(xml,new Date('2026-10-04T00:00:00Z'));assert.equal(r.days[0].minC,10);assert.equal(r.days[0].rainMm,0.7);assert.equal(r.days[0].partial,true);assert.equal(r.station,'BERLIN');assert.equal(r.longitude,13.4)});
 test('DWD stale issues and malformed archives are rejected',()=>{assert.throws(()=>parseMosmix(xml,new Date('2026-10-06T00:00:00Z')));assert.throws(()=>unzipKml(Buffer.from('bad')))});
+
+test('closure calendar ignores invalid date collections',()=>{
+ assert.equal(closedOn('2026-10-05',{closedDates:42}),false);
+ assert.equal(closedOn('2026-10-05',{closedDates:['2026-10-05']}),true);
+});
