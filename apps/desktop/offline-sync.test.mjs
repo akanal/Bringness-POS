@@ -238,3 +238,18 @@ test('offline catalog is not replaced when a device-bound ledger rejects it',asy
  assert.equal(status.state,'warning');
  assert.match(status.message,/Katalogaktualisierung fehlgeschlagen/);
 });
+
+test('lost server response is retried after reconnect',async()=>{
+ let lost=true;
+ const f=fixture(['a'],{reply:sales=>{
+  if(lost)throw Error('network unavailable');
+  return {results:sales.map(s=>({offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id,replayed:true}))};
+ }});
+ const sync=createOfflineSync(f);
+ assert.equal((await sync.sync()).state,'error');
+ assert.equal(f.pending.size,1);
+ lost=false;
+ assert.equal((await sync.sync()).state,'success');
+ assert.equal(f.pending.size,0);
+ assert.deepEqual(f.calls,[['a'],['a']]);
+});
