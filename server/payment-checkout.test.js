@@ -56,3 +56,10 @@ test('mixed cash and card cannot bypass card verification',async()=>{
  assert.equal(result.res.status,409);
  assert.equal(result.calls.length,1);
 });
+
+test('repeated product IDs are rejected before payment creation',async()=>{
+ const body=valid();body.items.push({productId:PRODUCT,qty:1});
+ const result=await run(body);
+ assert.equal(result.res.status,400);
+ assert.equal(result.calls.length,1);
+});
