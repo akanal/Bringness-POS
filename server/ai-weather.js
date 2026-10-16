@@ -9,7 +9,7 @@ export function parseMosmix(xml,now=new Date()){
  const values=key=>{const m=xml.match(new RegExp('<dwd:Forecast dwd:elementName="'+key+'">\\s*<dwd:value>([^<]+)'));return m?m[1].trim().split(/\s+/).map(v=>v==='-'?null:Number(v)):[]};
  const t=values('TTT'),rain=values('RR1c');if(t.length!==times.length||rain.length!==times.length)throw Error('Forecast measurement count mismatch');const today=berlinClock(now).date;const days=new Map();
  times.forEach((time,i)=>{
-  const timestamp=Date.parse(time);if(!Number.isFinite(timestamp))return;
+  const timestamp=Date.parse(time);if(!Number.isFinite(timestamp))throw Error('Invalid forecast timestamp');
   const day=berlinClock(new Date(timestamp)).date;
   if(day<today||Date.parse(day+'T12:00:00Z')-Date.parse(today+'T12:00:00Z')>6*86400000)return;
   let d=days.get(day);
