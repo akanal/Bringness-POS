@@ -183,3 +183,7 @@ test('Unicode-equivalent stock IDs cannot produce duplicate purchase lines',()=>
   item('ｓｔｏｃｋ',[offer('b','A',100)])
  ]),/Lagerposition/);
 });
+
+test('Unicode-normalized whitespace-only stock identifiers are rejected',()=>{
+ assert.throws(()=>prepareProcurement([item('\u3000',[offer('a','A',100)])]),/Lagerposition/);
+});
