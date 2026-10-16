@@ -123,3 +123,10 @@ test('supplier offer IDs with whitespace aliases require manual review',()=>{
 test('non-text supplier delivery regions never match implicitly',()=>{
  for(const region of [null,undefined,123,{},['Berlin']])assert.equal(deliveryMatches(region,'Berlin','10115'),false);
 });
+
+test('delivery city and postal code must be text, not coerced numbers',()=>{
+ assert.equal(deliveryMatches('10115','',10115),false);
+ assert.equal(deliveryMatches('123','',123),false);
+ assert.equal(deliveryMatches('Berlin',{toString:()=> 'Berlin'},''),false);
+ assert.equal(deliveryMatches('10115','', '10115'),true);
+});
