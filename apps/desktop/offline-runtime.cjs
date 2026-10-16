@@ -33,6 +33,13 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  }});
  let closed=false;
  let activeSync=null;
+ const activeOperations=new Set();
+ const track=promise=>{
+  const operation=Promise.resolve(promise);
+  activeOperations.add(operation);
+  operation.finally(()=>activeOperations.delete(operation)).catch(()=>{});
+  return operation;
+ };
  const sync=(force=false)=>{
   if(closed)return Promise.resolve(coordinator.status());
   const task=coordinator.sync(force);
@@ -62,7 +69,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
    throw error;
   }finally{await fs.unlink(temporary).catch(()=>{});}
   return {saved:true,count:report.sales.length};
- },'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
+ },'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return track(run(event,...args))});
  // Resume the durable queue promptly when the online POS becomes available again.
  // The coordinator is single-flight, so reconnect signals cannot overlap uploads.
  const onlineContents=onlineWindow()?.webContents;
@@ -93,7 +100,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   stopRecovery();
   offlineWindow?.destroy();
   for(const channel of ['offline:view','offline:sync','offline:export','offline:sale','offline:online'])ipcMain.removeHandler(channel);
-  if(activeSync)await activeSync.catch(()=>{});
+  await Promise.allSettled([...activeOperations,...(activeSync?[activeSync]:[])]);
   await db.close();
  }};
 };
