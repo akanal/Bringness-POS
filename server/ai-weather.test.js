@@ -97,3 +97,10 @@ test('invalid progress produces a finite demand factor',()=>{
  const effect=demandEffect('2026-10-16',context,Number.NaN);
  assert.equal(effect.factor,1.3);
 });
+
+
+test('malformed weather day collection cannot influence demand',()=>{
+ const effect=demandEffect('2026-10-16',{settings:{demandRules:{enabled:true,warmPercent:40}},weather:{available:true,days:{date:'2026-10-16',maxC:35}}});
+ assert.equal(effect.factor,1);
+ assert.deepEqual(effect.adjustments,[]);
+});
