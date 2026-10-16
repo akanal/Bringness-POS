@@ -85,3 +85,11 @@ test('invalid payload syntax yields a client error',async()=>{
  const result=await run(valid(),{raw:'oops'});
  assert.equal(result.res.status,400);
 });
+
+test('request size is enforced across separate data chunks',async()=>{
+ const body=valid();
+ const chunks=[Buffer.from(JSON.stringify(body)),Buffer.alloc(65536,32)];
+ const result=await run(body,{chunks});
+ assert.equal(result.res.status,413);
+ assert.equal(result.calls.length,1);
+});
