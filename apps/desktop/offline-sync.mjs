@@ -6,7 +6,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
  const run=async(force)=>{
   publish({state:'syncing',message:'Verkäufe werden übertragen …'});
   try {
-   const request=await connect();
+   if(typeof connect!=='function')throw Error('Offline-Verbindung ist nicht konfiguriert');const request=await connect();
    if(request!=null&&typeof request!=='function')throw Error('Offline-Verbindung liefert keine gültige Schnittstelle');
    if(request==null){
     const outstanding=await ledger.pendingCount();
