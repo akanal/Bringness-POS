@@ -22,7 +22,7 @@ export function demandEffect(date,context,progress=0){
  const weather=context.weather?.available===true&&Array.isArray(context.weather.days)&&context.weather.days.find(d=>d&&typeof d==='object'&&!Array.isArray(d)&&d.date===date);
  if(weather&&weather.partial===false){if(Number.isFinite(weather.maxC)&&weather.maxC>=rules.warmC&&rules.warmPercent)adjustments.push({kind:'warm',percent:rules.warmPercent,source:context.weather.stationId,issuedAt:context.weather.issuedAt});if(Number.isFinite(weather.rainMm)&&weather.rainMm>=rules.rainMm&&rules.rainPercent)adjustments.push({kind:'rain',percent:rules.rainPercent,source:context.weather.stationId,issuedAt:context.weather.issuedAt})}
  const events=(Array.isArray(context.events)?context.events:[]).filter(e=>{if(e?.status!=='active'||typeof e.starts_at!=='string'||typeof e.ends_at!=='string'||typeof e.id!=='string'||!e.id.trim())return false;const start=Date.parse(e.starts_at),end=Date.parse(e.ends_at);return Number.isFinite(start)&&Number.isFinite(end)&&end>start&&berlinClock(new Date(start)).date<=date&&berlinClock(new Date(end-1)).date>=date;});
- if(events.length&&rules.eventPercent)adjustments.push({kind:'events',percent:rules.eventPercent,events:events.map(e=>({id:e.id,version:e.version}))});
+ if(events.length&&rules.eventPercent){const uniqueEvents=[...new Map(events.map(e=>[e.id,e])).values()];adjustments.push({kind:'events',percent:rules.eventPercent,events:uniqueEvents.map(e=>({id:e.id,version:e.version}))});}
  const rawFactor=Math.max(0.5,Math.min(1.5,1+adjustments.reduce((s,a)=>s+a.percent,0)/100));
  // Fade configured context as real sales become the stronger source of evidence.
  const safeProgress=Number.isFinite(progress)?Math.max(0,Math.min(1,progress)):0;
