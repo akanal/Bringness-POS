@@ -3,6 +3,12 @@ export const offlineUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-
 const fail=message=>{throw Object.assign(Error(message),{status:400})};
 // Shared by local PostgreSQL and the cloud importer. Prices always come from a
 // server-issued immutable catalog, never from fields in the sales request.
+export function offlineCatalogValidUntil(licenseValidUntil,issuedAt=new Date()) {
+ const issuedMs=new Date(issuedAt).getTime();
+ const licenseMs=new Date(licenseValidUntil).getTime();
+ if(!Number.isFinite(issuedMs)||!Number.isFinite(licenseMs)||licenseMs<=issuedMs)fail('Offline-Lizenz abgelaufen');
+ return new Date(Math.min(licenseMs,issuedMs+24*60*60*1000)).toISOString();
+}
 export function quoteOfflineSale(snapshot,sale) {
  if(!offlineUuid.test(sale?.id||'')||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
  const time=Date.parse(sale.createdAt),start=Date.parse(snapshot.createdAt),end=Date.parse(snapshot.validUntil);
