@@ -6,7 +6,7 @@ const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-42
 async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null,nearPageEnd=false}={}){
  const documents=[],queries=[];
  class Pdf extends EventEmitter {
- constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:226.77,margins:{left:options.margin}};this.y=nearPageEnd?600:100;this.addedPages=0;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
+ constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:options.size[0],height:options.size[1],margins:{left:options.margin,bottom:options.margin}};this.y=nearPageEnd?600:100;this.addedPages=0;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
  addPage(){this.addedPages++;this.y=18;return this;}fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(buffer,x,y,options){this.images.push({x,y,...options});return this;}
  text(value){if(writerFailure==='draw')throw Error('render failed');this.texts.push(value);this.textPositions.push({value,y:this.y});return this;}destroy(){this.destroyed=true;return this;}end(){this.ended=true;if(writerFailure==='stream')this.emit('error',Error('stream failed'));else this.emit('data',Buffer.from('%PDF-simulated'));this.emit('end');return this;}
  }
