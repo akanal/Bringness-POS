@@ -148,3 +148,9 @@ test('supplier IDs with surrounding whitespace share one minimum-order group',()
  assert.equal(result.netCents,1200);
  assert.deepEqual(result.lines.map(line=>line.supplierId),['A','A']);
 });
+
+test('proposed purchase line uses trimmed offer identifier',()=>{
+ const result=prepareProcurement([item('stock',[offer(' offer-1 ','A',100)])]);
+ assert.equal(result.complete,true);
+ assert.equal(result.lines[0].productId,'offer-1');
+});
