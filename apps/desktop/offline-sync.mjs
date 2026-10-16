@@ -10,13 +10,26 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    if(!request){publish({state:'login',message:'Online-Kasse öffnen und anmelden.'});return {...status};}
    // Drain all batches, including more than 100 pending sales, before refreshing.
    let pending=await ledger.pending();
+   let failed=0;
    while(pending.length){
-    for(const sale of pending){
-     try{const receipt=await request('sales',{sale:sale.request});await ledger.acknowledge(sale.id,receipt);}
-     catch(error){await ledger.error(sale.id,error.message);throw error;}
+    const batch=pending.slice(0,20);
+    const response=await request('batch',{sales:batch.map(s=>s.request)});
+    if(!Array.isArray(response?.results)||response.results.length!==batch.length)throw Error('Unvollständige Antwort der Offline-Synchronisierung');
+    for(let index=0;index<batch.length;index++){
+     const sale=batch[index],result=response.results[index];
+     if(result?.offlineId!==sale.id)throw Error('Offline-Antwort stimmt nicht mit der Verkaufskennung überein');
+     if(result.ok===true&&result.id&&result.receiptNumber){
+      await ledger.acknowledge(sale.id,{id:result.id,receiptNumber:result.receiptNumber,replayed:!!result.replayed});
+     }else{
+      failed++;
+      await ledger.error(sale.id,result?.error||'Verkauf nicht bestätigt');
+     }
     }
+    // Do not resend rejected sales repeatedly during the same sync cycle.
+    if(failed)break;
     pending=await ledger.pending();
    }
+   if(failed)throw Error(failed+' Offline-Verkäufe benötigen eine Prüfung. Bestätigte Verkäufe wurden übernommen.');
    if(force||!lastCatalog||now()-lastCatalog>6*3600000){
     const {snapshot}=await request('catalog',{});await ledger.catalog(snapshot);lastCatalog=now();
    }
