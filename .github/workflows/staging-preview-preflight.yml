@@ -5,6 +5,7 @@ on:
     branches: [staging/preview-20261016]
     paths:
       - "ops/staging-preflight.sh"
+      - "ops/staging-preflight.test.sh"
       - "ops/staging-bootstrap.sh"
       - "ops/staging-bootstrap.test.sh"
       - ".github/workflows/staging-preview-preflight.yml"
@@ -15,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify staging configuration regression cases
+        run: bash ops/staging-preflight.test.sh
       - name: Verify bootstrap refuses unverified hosts
         run: bash ops/staging-bootstrap.test.sh
       - name: Reject unsafe staging settings
