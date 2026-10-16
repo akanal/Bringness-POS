@@ -37,3 +37,9 @@ test('center push rejects unknown subscription-management actions before databas
  await assert.rejects(()=>manageGuestSubscription(pool,token,subscription,'enable'),/INVALID_PUSH_ACTION/);
  assert.equal(called,false);
 });
+
+test('center push returns consistent error for missing and malformed endpoints',()=>{
+ for(const endpoint of ['', 'not-a-url', 'https://[invalid']){
+  assert.throws(()=>validateGuestSubscription({...subscription,endpoint}),/INVALID_PUSH_ENDPOINT/);
+ }
+});
