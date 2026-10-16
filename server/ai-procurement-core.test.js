@@ -138,3 +138,13 @@ test('supplier address and city require nonempty text',()=>{
   assert.equal(result.lines.length,0);
  }
 });
+
+test('supplier IDs with surrounding whitespace share one minimum-order group',()=>{
+ const result=prepareProcurement([
+  item('first',[offer('a','A',600,1000)]),
+  item('second',[offer('b',' A ',600,1000)])
+ ]);
+ assert.equal(result.complete,true);
+ assert.equal(result.netCents,1200);
+ assert.deepEqual(result.lines.map(line=>line.supplierId),['A','A']);
+});
