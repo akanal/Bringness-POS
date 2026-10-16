@@ -25,7 +25,7 @@ export async function createOfflineLedger(db,quote) {
    return {snapshot,sales,counts:{pending:Number(counts.pending),errors:Number(counts.errors),synced:Number(counts.synced)}};
   },
   async sale(request){return db.transaction(async tx=>{
-   if(!request||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.snapshotId))throw Error('Ungültige Offline-Verkaufskennung.');
+   if(!request||typeof request!=='object'||Array.isArray(request)||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.snapshotId))throw Error('Ungültige Offline-Verkaufskennung.');
    const old=(await tx.query('SELECT receipt,request=$2::jsonb AS matches FROM offline_sales WHERE id=$1',[request.id,JSON.stringify(request)])).rows[0];
    if(old){if(!old.matches)throw Error('Verkaufskennung bereits verwendet');return old.receipt;}
    const snapshot=(await tx.query("SELECT c.payload FROM offline_catalog c WHERE c.id=$1 AND c.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current)",[request.snapshotId])).rows[0]?.payload;
