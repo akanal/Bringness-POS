@@ -63,3 +63,10 @@ test('repeated product IDs are rejected before payment creation',async()=>{
  assert.equal(result.res.status,400);
  assert.equal(result.calls.length,1);
 });
+
+test('oversized UTF-8 checkout body is rejected by byte size',async()=>{
+ const body=valid();body.note='ä'.repeat(40000);
+ const {res,calls}=await run(body);
+ assert.equal(res.status,413);
+ assert.equal(calls.length,1);
+});
