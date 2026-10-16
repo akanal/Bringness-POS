@@ -31,6 +31,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     // Match acknowledgements by immutable sale ID, not response ordering.
     // Duplicate or unknown IDs make the entire response ambiguous: retry safely.
     const resultsById=new Map();
+    const expectedIds=new Set(batch.map(sale=>sale.id));
     for(const result of response.results){
      if(typeof result?.offlineId!=='string'||resultsById.has(result.offlineId))throw Error('Offline-Antwort enthält doppelte oder ungültige Verkaufskennungen');
      resultsById.set(result.offlineId,result);
