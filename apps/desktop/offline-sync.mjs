@@ -7,7 +7,11 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
   publish({state:'syncing',message:'Verkäufe werden übertragen …'});
   try {
    const request=await connect();
-   if(!request){publish({state:'login',message:'Online-Kasse öffnen und anmelden.'});return {...status};}
+   if(!request){
+    const outstanding=(await ledger.pending()).length;
+    publish({state:'login',message:outstanding?outstanding+' Verkäufe warten auf die Online-Anmeldung.':'Online-Kasse öffnen und anmelden.'});
+    return {...status};
+   }
    // Drain all batches, including more than 100 pending sales, before refreshing.
    const skipped=new Set();
    let pending=await ledger.pending();
