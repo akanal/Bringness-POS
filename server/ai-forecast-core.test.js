@@ -29,3 +29,11 @@ test('invalid sales rows do not pollute the historical forecast',()=>{
  assert.equal(mixed.expectedRevenueCents,clean.expectedRevenueCents);
  assert.equal(approximateDay(null,clock).ready,false);
 });
+
+test('coerced text, null and boolean sales figures never count as historical transactions',()=>{
+ const valid=samples();
+ const bad=[{day:dateAgo(7),hour:'12',orders:500,revenue_cents:50000},{day:dateAgo(7),hour:12,orders:'500',revenue_cents:50000},{day:dateAgo(7),hour:12,orders:500,revenue_cents:'50000'},{day:dateAgo(7),hour:12,orders:null,revenue_cents:50000},{day:dateAgo(7),hour:12,orders:true,revenue_cents:50000}];
+ const clean=approximateDay(valid,clock),result=approximateDay([...valid,...bad],clock);
+ assert.equal(result.expectedOrders,clean.expectedOrders);
+ assert.equal(result.expectedRevenueCents,clean.expectedRevenueCents);
+});
