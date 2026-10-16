@@ -131,3 +131,7 @@ test('offline seller must have a nonempty display name',()=>{
  snapshot.merchant.restaurant.name=' ';
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Verkäuferdaten/);
 });
+
+test('offline authorization rejects a future issue time',()=>{
+ assert.throws(()=>offlineCatalogValidUntil('2100-01-03T00:00:00Z','2100-01-01T00:00:00Z'),/abgelaufen/);
+});
