@@ -103,3 +103,10 @@ test('offline sale rejects duplicate catalog restaurant identifiers',()=>{
  snapshot.restaurants.push({...snapshot.restaurants[0]});
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Katalog/);
 });
+
+
+test('offline sale requires structured inputs',()=>{
+ const {snapshot,sale}=fixture();
+ assert.throws(()=>quoteOfflineSale(snapshot,[]),/Offline-Kennung/);
+ assert.throws(()=>quoteOfflineSale([],sale),/Offline-Kennung/);
+});
