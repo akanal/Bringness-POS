@@ -73,3 +73,10 @@ test('offline catalog timestamps reject non-string input without coercion',()=>{
   assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Zeit/);
  }
 });
+
+
+test('offline catalog issue time rejects coerced primitive values',()=>{
+ for(const issued of [0,false,{},null]){
+  assert.throws(()=>offlineCatalogValidUntil('2026-10-20T12:00:00Z',issued),/abgelaufen/);
+ }
+});
