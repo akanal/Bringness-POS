@@ -116,3 +116,26 @@ test('catalog refresh failure never reports overall success',async()=>{
  assert.equal(status.state,'warning');
  assert.match(status.message,/Katalogaktualisierung fehlgeschlagen/);
 });
+
+test('cloud receipt reused for another sale cannot acknowledge that sale',async()=>{
+ const f=fixture(['a','b'],{reply:()=>({results:[
+  {offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a'},
+  {offlineId:'b',ok:true,id:'cloud-a',receiptNumber:'R-b'}
+ ]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['b']);
+ assert.equal(f.errors.length,1);
+});
+
+test('duplicate offline IDs in a single page are never transmitted',async()=>{
+ const f=fixture(['a']);
+ f.ledger.pending=async()=>[
+  {id:'a',request:{id:'a',snapshotId:'catalog-id'}},
+  {id:'a',request:{id:'a',snapshotId:'catalog-id'}}
+ ];
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.calls.length,0);
+ assert.equal(f.pending.size,1);
+});
