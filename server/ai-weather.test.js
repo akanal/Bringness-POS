@@ -42,3 +42,12 @@ test('autumn day with only 24 hours remains incomplete',()=>{
  assert.equal(weather.days[0].hours,24);
  assert.equal(weather.days[0].partial,true);
 });
+
+
+test('weather parser rejects measurement arrays that do not match timestamps',()=>{
+ const start='2026-10-15T22:00:00Z';
+ const xml='<dwd:IssueTime>'+start+'</dwd:IssueTime><dwd:TimeStep>'+start+'</dwd:TimeStep>'+
+ '<dwd:Forecast dwd:elementName="TTT"><dwd:value>303.15 304.15</dwd:value></dwd:Forecast>'+
+ '<dwd:Forecast dwd:elementName="RR1c"><dwd:value>1</dwd:value></dwd:Forecast>';
+ assert.throws(()=>parseMosmix(xml,new Date(start)),/measurement count mismatch/);
+});
