@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {signPreparedTse} from '../server/tse-signing-worker.js';
 
-function setup({claimed=true,commitFails=false,receiptFails=false}={}){
+function setup({claimed=true,commitFails=false,receiptFails=false,rollbackFails=false}={}){
  const events=[];
  let starts=0,finishes=0;
  const tx={id:'tx',restaurant_id:'r',receipt_id:'receipt',process_data:{totalsMatch:true}};
@@ -14,6 +14,7 @@ function setup({claimed=true,commitFails=false,receiptFails=false}={}){
   if(sql.includes("state='signed'")&&sql.includes('RETURNING *'))return {rows:[signed]};
   if(sql.startsWith("UPDATE receipts")&&receiptFails)throw Error('receipt write failed');
   if(sql==='COMMIT'&&commitFails)throw Error('commit outcome unknown');
+  if(sql==='ROLLBACK'&&rollbackFails)throw Error('rollback unavailable');
   return {rows:[]};
  }
  const pool={query,connect:async()=>({query,release(){events.push('RELEASE')}})};
@@ -45,4 +46,13 @@ test('uncertain commit never retries hardware signing',async()=>{
  assert.equal(f.starts,1);
  assert.equal(f.finishes,1);
  assert.ok(f.events.some(sql=>sql.includes("state='needs_review'")));
+});
+
+test('rollback failure still marks signing outcome for review',async()=>{
+ const f=setup({receiptFails:true,rollbackFails:true});
+ assert.deepEqual(await signPreparedTse(f.pool,'tx',f.adapter),{signed:false,reason:'outcome_unconfirmed'});
+ assert.ok(f.events.includes('ROLLBACK'));
+ assert.ok(f.events.some(sql=>sql.includes("state='needs_review'")));
+ assert.equal(f.starts,1);
+ assert.equal(f.finishes,1);
 });
