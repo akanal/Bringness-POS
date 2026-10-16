@@ -20,7 +20,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    let failed=0;
    while(pending.length){
     publish({state:'syncing',message:(await ledger.pendingCount())+' offene Verkäufe werden abgeglichen …'});
-    const batch=pending.slice(0,20);if(batch.some(sale=>!sale||typeof sale.id!=='string'))throw Error('Ungültige Offline-Verkaufskennung in der Warteschlange');if(batch.some(sale=>attempted.has(sale.id)))throw Error('Offline-Verkauf wurde innerhalb desselben Abgleichs erneut geladen');if(batch.some(sale=>!sale||typeof sale.id!=='string'||!sale.request||typeof sale.request!=='object'||Array.isArray(sale.request)||sale.request.id!==sale.id||typeof sale.request.snapshotId!=='string'))throw Error('Ungültiger Offline-Verkauf in der Warteschlange');
+    const batch=pending.slice(0,20);if(new Set(batch.map(sale=>sale?.id)).size!==batch.length)throw Error('Doppelte Verkaufskennung in der Offline-Warteschlange');if(batch.some(sale=>!sale||typeof sale.id!=='string'))throw Error('Ungültige Offline-Verkaufskennung in der Warteschlange');if(batch.some(sale=>attempted.has(sale.id)))throw Error('Offline-Verkauf wurde innerhalb desselben Abgleichs erneut geladen');if(batch.some(sale=>!sale||typeof sale.id!=='string'||!sale.request||typeof sale.request!=='object'||Array.isArray(sale.request)||sale.request.id!==sale.id||typeof sale.request.snapshotId!=='string'))throw Error('Ungültiger Offline-Verkauf in der Warteschlange');
     for(const sale of batch)attempted.add(sale.id);
     let response;
     try{response=await request('batch',{sales:batch.map(s=>s.request)});}
