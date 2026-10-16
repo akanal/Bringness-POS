@@ -69,3 +69,19 @@ test('no public receipt QR is printed for an insecure origin',async()=>{
   else process.env.PUBLIC_RECEIPT_ORIGIN=previous;
  }
 });
+
+test('unknown receipt token returns 404 without exposing another receipt',async()=>{
+ const pool={query:async()=>({rows:[]})};
+ let status,body;
+ const res={writeHead:(code)=>{status=code},end:(value)=>{body=value}};
+ const handled=await createPublicReceiptHandler(pool)(request,res);
+ assert.equal(handled,true);
+ assert.equal(status,404);
+ assert.equal(body,'Beleg nicht gefunden');
+});
+
+test('non-GET request cannot retrieve public receipt',async()=>{
+ const pool={query:async()=>{throw Error('must not query')}};
+ const handled=await createPublicReceiptHandler(pool)({...request,method:'POST'},{});
+ assert.equal(handled,false);
+});
