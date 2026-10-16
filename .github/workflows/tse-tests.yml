@@ -1,0 +1,20 @@
+name: TSE regression tests
+on:
+  push:
+    branches:
+      - feature/tse-integration-prep-20261016
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tse-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run all TSE tests
+        run: node --test tests/tse*.test.js
