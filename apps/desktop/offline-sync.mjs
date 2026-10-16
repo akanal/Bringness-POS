@@ -18,7 +18,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    let pending=await ledger.pending();
    let failed=0;
    while(pending.length){
-    publish({state:'syncing',message:pending.length+' offene Verkäufe werden abgeglichen …'});
+    publish({state:'syncing',message:(await ledger.pendingCount())+' offene Verkäufe werden abgeglichen …'});
     const batch=pending.slice(0,20);
     let response;
     try{response=await request('batch',{sales:batch.map(s=>s.request)});}
