@@ -32,6 +32,7 @@ export async function createOfflineLedger(db,quote) {
    await tx.query('INSERT INTO offline_sales(id,snapshot_id,request,receipt) VALUES($1,$2,$3,$4)',[request.id,request.snapshotId,JSON.stringify(request),JSON.stringify(receipt)]);
    return receipt;
   });},
+  // Count the entire queue, not only the first page.
   async pendingCount(){return Number((await db.query('SELECT count(*)::bigint AS total FROM offline_sales WHERE synced_at IS NULL')).rows[0]?.total||0);},
   async pending(excludeIds=[]){return (await db.query('SELECT id,request FROM offline_sales WHERE synced_at IS NULL AND NOT (id = ANY($1::uuid[])) ORDER BY created_at,id LIMIT 100',[excludeIds])).rows;},
   async acknowledge(id,receipt){
