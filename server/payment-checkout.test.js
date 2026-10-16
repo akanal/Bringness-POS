@@ -7,7 +7,7 @@ const UUID='11111111-1111-4111-8111-111111111111';
 const PRODUCT='22222222-2222-4222-8222-222222222222';
 const user={id:UUID,company_id:UUID,role:'owner'};
 function request(authorization='Bearer test-token'){
- const req=new EventEmitter();
+ const req=new EventEmitter();req.resume=()=>req;
  req.url='/api/v1/orders/checkout';req.method='POST';req.headers={authorization};
  return req;
 }
