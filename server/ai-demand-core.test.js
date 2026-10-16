@@ -11,3 +11,9 @@ test('future forecasts exclude incomplete current-day sales and preserve closed 
 test('event ending at Berlin midnight does not affect the next day',()=>{const c={...context,weather:{available:false},events:[{...context.events[0],starts_at:'2026-10-07T20:00:00Z',ends_at:'2026-10-07T22:00:00Z'}]};assert.equal(planningDemandDays(c,'2026-10-08',1)[0].factor,1)});
 
 test('incomplete weather records are marked skipped',()=>{const c={...context,weather:{available:true,days:[{date:base.date,maxC:30,partial:null}]}};const r=applyDemandContext(base,c);assert.equal(r.demand.weatherSkipped,true);assert.equal(r.demand.adjustments.some(a=>a.kind==='warm'),false)});
+
+test('forecast tolerates omitted demand configuration',()=>{
+ const result=applyDemandContext(base,{events:[]});
+ assert.equal(result.expectedOrders,100);
+ assert.equal(result.demand.enabled,false);
+});
