@@ -37,7 +37,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
      resultsById.set(result.offlineId,result);
     }
     if(batch.some(sale=>!resultsById.has(sale.id)))throw Error('Offline-Antwort enthält fremde oder fehlende Verkaufskennungen');
-    if(response.results.some(result=>typeof result.ok!=='boolean'))throw Error('Offline-Antwort enthält einen unklaren Verkaufsstatus');
+    if(response.results.some(result=>typeof result.ok!=='boolean'||(result.ok===false&&typeof result.error!=='string')))throw Error('Offline-Antwort enthält einen unklaren Verkaufsstatus');
     // Server replies must not claim a sale succeeded without a usable receipt.
     // Invalid entries remain queued while valid entries can still be acknowledged.
     for(let index=0;index<batch.length;index++){
