@@ -35,11 +35,17 @@ test('non-management role cannot settle sales',async()=>{
 test('card checkout requires explicit terminal confirmation before database writes',async()=>{
  const body=valid();body.payments=[{method:'card',amountCents:100}];
  const {res,calls}=await run(body);
- assert.equal(res.status,400);assert.match(res.body.error,/Kartenzahlung/);assert.equal(calls.length,1);
+ assert.equal(res.status,409);assert.match(res.body.error,/Kartenzahlung/);assert.equal(calls.length,1);
 });
 test('invalid split payments cannot reach checkout transaction',async()=>{
  for(const payments of [[],[{method:'cash',amountCents:0}],[{method:'cash',amountCents:-1}],[{method:'cash',amountCents:1.5}],[{method:'unknown',amountCents:100}],Array.from({length:3},()=>({method:'cash',amountCents:1}))]){
   const {res,calls}=await run({...valid(),payments});
   assert.equal(res.status,400);assert.equal(calls.length,1);
  }
+});
+
+test('client-reported card confirmation cannot create a paid order',async()=>{
+ const body=valid();body.payments=[{method:'card',amountCents:100}];body.externalCardConfirmed=true;
+ const {res,calls}=await run(body);
+ assert.equal(res.status,409);assert.equal(calls.length,1);
 });
