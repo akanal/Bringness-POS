@@ -69,7 +69,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    let catalogError=null;
    if(force||!lastCatalog||now()-lastCatalog>6*3600000){
     try{
-     const {snapshot}=await request('catalog',{});
+     const catalogResponse=await request('catalog',{});const snapshot=catalogResponse?.snapshot;
      if(!snapshot||typeof snapshot.id!=='string'||typeof snapshot.validUntil!=='string'||!Number.isFinite(Date.parse(snapshot.validUntil)))throw Error('Ungültiger Offline-Katalog');
      await ledger.catalog(snapshot);lastCatalog=now();
     }catch(error){catalogError=error;}
