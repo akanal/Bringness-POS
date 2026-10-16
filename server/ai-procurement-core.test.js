@@ -56,3 +56,10 @@ test('offers without valid pack quantities or supplier names are not selected',(
   assert.equal(result.lines.length,0);
  }
 });
+
+test('duplicate supplier offer identifiers require manual review',()=>{
+ const r=prepareProcurement([item('stock',[offer('same','A',200),offer('same','B',100)])]);
+ assert.equal(r.complete,false);
+ assert.equal(r.lines.length,0);
+ assert.match(r.unresolved[0].reason,/Angebotskennung/);
+});
