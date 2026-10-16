@@ -16,6 +16,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     const batch=pending.slice(0,20);
     const response=await request('batch',{sales:batch.map(s=>s.request)});
     if(!Array.isArray(response?.results)||response.results.length!==batch.length)throw Error('Unvollständige Antwort der Offline-Synchronisierung');
+    if(response.results.some((result,index)=>result?.offlineId!==batch[index].id))throw Error('Offline-Antwort enthält unerwartete Verkaufskennungen');
     for(let index=0;index<batch.length;index++){
      const sale=batch[index],result=response.results[index];
      if(result?.offlineId!==sale.id)throw Error('Offline-Antwort stimmt nicht mit der Verkaufskennung überein');
