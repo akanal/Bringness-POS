@@ -11,6 +11,7 @@ function fixture({startFails=false,finishFails=false,totalsMatch=true}={}){
   if(sql.includes("state='starting'"))return {rows:[transaction]};
   if(sql.includes('SELECT serial_number,certified,status FROM tse_devices'))return {rows:[{serial_number:'serial',certified:true,status:'connected'}]};
   if(sql.includes("state='signed'"))return {rows:[signed]};
+  if(sql.startsWith('UPDATE receipts'))return {rowCount:1,rows:[]};
   return {rows:[]};
  };
  const pool={query,connect:async()=>({query,release(){calls.push({sql:'RELEASE'})}})};
