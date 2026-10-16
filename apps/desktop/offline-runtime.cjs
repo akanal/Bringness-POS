@@ -41,6 +41,10 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // Single-flight synchronization prevents overlapping requests during slow recovery.
  recoverOnStartup();const timer=setInterval(sync,30000);timer.unref();
  const showOfflineOnFailure=(_,code)=>{if(code!==-3)open()};
+ // Electron can resume after sleep without a new page-load event. Promptly
+ // retry the durable queue when the application becomes active again.
+ const resumeOnFocus=()=>recoverOnStartup();
+ app.on('browser-window-focus',resumeOnFocus);
  onlineContents?.on('did-fail-load',showOfflineOnFailure);
  let closed=false;
  const stopRecovery=()=>{
@@ -48,6 +52,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   clearTimeout(startupRecoveryTimer);
   onlineContents?.removeListener('did-finish-load',resumeAfterLoad);
   onlineContents?.removeListener('did-fail-load',showOfflineOnFailure);
+  app.removeListener('browser-window-focus',resumeOnFocus);
  };
  app.on('before-quit',stopRecovery);
  return {ledger,open,close:async()=>{
