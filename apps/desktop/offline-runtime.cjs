@@ -32,7 +32,9 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  const onlineContents=onlineWindow()?.webContents;
  const resumeAfterLoad=()=>recoverOnStartup();
  onlineContents?.on('did-finish-load',resumeAfterLoad);
- recoverOnStartup();const timer=setInterval(sync,60000);timer.unref();
+ // Recheck connectivity every 30 seconds, including after long outages.
+ // Single-flight synchronization prevents overlapping requests during slow recovery.
+ recoverOnStartup();const timer=setInterval(sync,30000);timer.unref();
  app.on('before-quit',()=>{clearInterval(timer);clearTimeout(startupRecoveryTimer);onlineContents?.removeListener('did-finish-load',resumeAfterLoad);});
  onlineWindow()?.webContents.on('did-fail-load',(_,code)=>{if(code!==-3)open()});
  return {ledger,open,close:async()=>{clearInterval(timer);offlineWindow?.destroy();await db.close()}};
