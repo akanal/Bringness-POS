@@ -142,3 +142,19 @@ test('malformed public receipt URLs never reach the database',async()=>{
   assert.equal(await handler({method:'GET',url},{writeHead(){throw Error('unexpected response')},end(){throw Error('unexpected body')}}),false,url);
  }
 });
+
+test('uppercase UUID in a valid QR link resolves to canonical receipt token',async()=>{
+ const queries=[];
+ const pool={query:async(sql,args)=>{
+  queries.push({sql,args});
+  if(sql.includes('FROM receipts rc'))return {rows:[]};
+  throw Error('unexpected query');
+ }};
+ let status=0;
+ const handler=createPublicReceiptHandler(pool);
+ const handled=await handler({method:'GET',url:'/beleg/AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA'},{writeHead(code){status=code},end(){}});
+ assert.equal(handled,true);
+ assert.equal(status,404);
+ assert.equal(queries.length,1);
+ assert.equal(queries[0].args[0],'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+});
