@@ -51,3 +51,12 @@ test('weather parser rejects measurement arrays that do not match timestamps',()
  '<dwd:Forecast dwd:elementName="RR1c"><dwd:value>1</dwd:value></dwd:Forecast>';
  assert.throws(()=>parseMosmix(xml,new Date(start)),/measurement count mismatch/);
 });
+
+
+test('weather parser rejects malformed timestamps rather than silently omitting them',()=>{
+ const start='2026-10-15T22:00:00Z';
+ const xml='<dwd:IssueTime>'+start+'</dwd:IssueTime><dwd:TimeStep>not-a-date</dwd:TimeStep>'+
+ '<dwd:Forecast dwd:elementName="TTT"><dwd:value>303.15</dwd:value></dwd:Forecast>'+
+ '<dwd:Forecast dwd:elementName="RR1c"><dwd:value>1</dwd:value></dwd:Forecast>';
+ assert.throws(()=>parseMosmix(xml,new Date(start)),/Invalid forecast timestamp/);
+});
