@@ -80,3 +80,8 @@ test('split UTF-8 characters survive streamed JSON parsing',async()=>{
  assert.equal(result.res.status,409);
  assert.equal(result.calls.length,1);
 });
+
+test('invalid payload syntax yields a client error',async()=>{
+ const result=await run(valid(),{raw:'oops'});
+ assert.equal(result.res.status,400);
+});
