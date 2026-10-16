@@ -19,3 +19,13 @@ test('zero historical completed orders never produces an infinite pace ratio',()
  assert.equal(result.pace,1);
  assert(Number.isFinite(result.expectedOrders));
 });
+
+test('invalid sales rows do not pollute the historical forecast',()=>{
+ const valid=samples();
+ const corrupt=[null,{day:'2026-02-30',hour:12,orders:999,revenue_cents:999999},{day:dateAgo(7),hour:25,orders:999,revenue_cents:999999},{day:dateAgo(7),hour:12,orders:-1,revenue_cents:999999},{day:dateAgo(7),hour:12,orders:1,revenue_cents:Infinity}];
+ const clean=approximateDay(valid,clock);
+ const mixed=approximateDay([...valid,...corrupt],clock);
+ assert.equal(mixed.expectedOrders,clean.expectedOrders);
+ assert.equal(mixed.expectedRevenueCents,clean.expectedRevenueCents);
+ assert.equal(approximateDay(null,clock).ready,false);
+});
