@@ -37,3 +37,9 @@ test('regional distance rejects missing and invalid coordinates',()=>{
  const berlin={latitude:52.5,longitude:13.4};
  for(const bad of [null,{latitude:91,longitude:13},{latitude:52,longitude:181},{latitude:'52',longitude:13},{latitude:NaN,longitude:13}])assert.throws(()=>distanceKm(berlin,bad),/Koordinaten/);
 });
+
+test('opening hours reject unknown properties',()=>{
+ const hours=Array(7).fill(null);
+ hours[1]={open:'09:00',close:'18:00',unexpected:true};
+ assert.throws(()=>validateHours(hours));
+});
