@@ -141,3 +141,11 @@ test('events without identifiers cannot change demand',()=>{
  assert.equal(effect.factor,1);
  assert.deepEqual(effect.adjustments,[]);
 });
+
+
+test('duplicate event IDs appear once in demand provenance',()=>{
+ const event={id:'market',version:1,status:'active',starts_at:'2026-10-16T10:00:00Z',ends_at:'2026-10-17T10:00:00Z'};
+ const effect=demandEffect('2026-10-16',{settings:{demandRules:{enabled:true,eventPercent:30}},events:[event,{...event}]});
+ assert.equal(effect.factor,1.3);
+ assert.deepEqual(effect.adjustments[0].events,[{id:'market',version:1}]);
+});
