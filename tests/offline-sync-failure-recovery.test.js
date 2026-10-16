@@ -49,3 +49,43 @@ test('Concurrent sync calls are single-flight and do not duplicate acknowledgeme
  assert.equal(f.server.size,2);
  assert.deepEqual(f.acknowledged.map(x=>x.id),['first','second']);
 });
+
+test('Expired login during upload leaves unsent sales queued for reauthentication',async()=>{
+ const queue=[sale('first'),sale('second')],acknowledged=[],errors=[];
+ let authenticated=true,uploads=0;
+ const ledger={
+  pending:async()=>queue.filter(s=>!acknowledged.includes(s.id)),
+  acknowledge:async id=>acknowledged.push(id),
+  error:async(id,message)=>errors.push({id,message}),
+  catalog:async()=>{}
+ };
+ const coordinator=createOfflineSync({ledger,connect:async()=>async(endpoint,{sale:request}={})=>{
+  if(endpoint==='catalog')return {snapshot:{}};
+  uploads++;
+  if(!authenticated){const error=Error('Nicht angemeldet');error.status=401;throw error;}
+  if(uploads===2){authenticated=false;const error=Error('Nicht angemeldet');error.status=401;throw error;}
+  return {id:request.id};
+ }});
+ assert.equal((await coordinator.sync()).state,'error');
+ assert.deepEqual(acknowledged,['first']);
+ assert.equal(errors.length,1);
+ authenticated=true;
+ assert.equal((await coordinator.sync()).state,'success');
+ assert.deepEqual(acknowledged,['first','second']);
+});
+
+test('Expired offline catalog does not erase previously queued sales',async()=>{
+ const queued=[sale('unsubmitted')];
+ const ledger={
+  pending:async()=>queued,
+  acknowledge:async()=>{throw Error('Should not acknowledge')},
+  error:async()=>{},
+  catalog:async()=>{throw Error('Aktive Download-Lizenz und Gerätefreigabe erforderlich')}
+ };
+ const coordinator=createOfflineSync({ledger,connect:async()=>async endpoint=>{
+  if(endpoint==='catalog')return {snapshot:{validUntil:'2020-01-01T00:00:00Z'}};
+  throw Error('Should not send');
+ }});
+ assert.equal((await coordinator.sync()).state,'error');
+ assert.equal(queued.length,1);
+});
