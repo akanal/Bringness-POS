@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS sandbox_pos_monthly_invoice_drafts (
  vat_cents INTEGER NOT NULL CHECK(vat_cents>=0),
  gross_cents INTEGER NOT NULL CHECK(gross_cents=net_cents+vat_cents),
  customer_billing JSONB NOT NULL,
- status TEXT NOT NULL DEFAULT 'draft' CHECK(status='draft'),
+ status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','issued')),
+ issued_at TIMESTAMPTZ,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
