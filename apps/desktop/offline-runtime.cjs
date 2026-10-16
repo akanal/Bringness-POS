@@ -15,7 +15,11 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Kasse',submenu:[{label:'Offline-Kasse / Synchronisierung',click:open},{label:'Online-Kasse',click:()=>onlineWindow()?.show()},{role:'quit'}]}]));
  const trusted=event=>offlineWindow&&!offlineWindow.isDestroyed()&&event.sender===offlineWindow.webContents&&event.senderFrame===offlineWindow.webContents.mainFrame&&event.senderFrame.url===pathToFileURL(path.join(__dirname,'offline.html')).href;
  const notify=()=>{if(offlineWindow&&!offlineWindow.isDestroyed())offlineWindow.webContents.send('offline:updated');};
- const coordinator=createOfflineSync({ledger,notify,connect:async()=>{
+ const deviceBoundLedger={...ledger,catalog:async snapshot=>{
+  if(snapshot?.deviceKey!==deviceKey)throw Error('Offline-Katalog gehört nicht zu diesem Gerät.');
+  return ledger.catalog(snapshot);
+ }};
+ const coordinator=createOfflineSync({ledger:deviceBoundLedger,notify,connect:async()=>{
   const window=onlineWindow();if(!window||window.isDestroyed())return null;
   let url;try{url=new URL(window.webContents.getURL())}catch{return null}if(url.origin!=='https://bringness.de')return null;
   // The login token stays in memory. Native APIs are never exposed to the remote page.
