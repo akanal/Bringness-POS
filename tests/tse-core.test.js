@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {groupVat,buildFiscalTransaction,receiptTseSnapshot,createUnconfiguredTseAdapter} from '../server/tse-core.js';
+import {groupVat,buildFiscalTransaction,receiptTseSnapshot,createUnconfiguredTseAdapter,markTransactionSigned} from '../server/tse-core.js';
 
 test('TSE VAT grouping keeps gross, net and tax totals consistent',()=>{
  const rows=groupVat([
@@ -48,4 +48,13 @@ test('unconfigured TSE cannot start or finish fiscal transactions',async()=>{
  assert.equal((await adapter.status()).certified,false);
  await assert.rejects(()=>adapter.startTransaction({}),{code:'TSE_NOT_CONFIGURED'});
  await assert.rejects(()=>adapter.finishTransaction({}),{code:'TSE_NOT_CONFIGURED'});
+});
+
+test('TSE signature update is restricted to finishing transactions',async()=>{
+ let sql='',params;
+ const db={query:async(query,values)=>{sql=query;params=values;return {rows:[]}}};
+ const result=await markTransactionSigned(db,'tx-1',{transactionNumber:'42',serialNumber:'SERIAL-1',signature:'signed'});
+ assert.equal(result,null);
+ assert.match(sql,/WHERE id=\$1 AND state='finishing' RETURNING \*/);
+ assert.equal(params[0],'tx-1');
 });
