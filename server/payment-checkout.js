@@ -61,9 +61,10 @@ return async function handlePaymentCheckout(req, res) {
   if (!body || typeof body !== "object" || Array.isArray(body)) { send(res, 400, { error: "Ungültige Anfrage" }); return true; }
   let receiptEmail='';try{if(body.receiptEmail)receiptEmail=cleanMailAddress(body.receiptEmail);}catch{send(res,400,{error:'Gültige Beleg-E-Mail erforderlich'});return true;}
   const items = Array.isArray(body.items) ? body.items : [];
+  if (items.length > 100) { send(res, 400, { error: "Zu viele Warenkorbpositionen" }); return true; }
   const payments = Array.isArray(body.payments) ? body.payments : [];
   const restaurantId = String(body.restaurantId || "");
-  if (!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(restaurantId)) { send(res, 400, { error: "Ungültige Betriebskennung" }); return true; }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(restaurantId)) { send(res, 400, { error: "Ungültige Betriebskennung" }); return true; }
   if (!restaurantId || !items.length) {
     send(res, 400, { error: "Betrieb und Warenkorb sind erforderlich" });
     return true;
@@ -84,7 +85,7 @@ return async function handlePaymentCheckout(req, res) {
 
   if (items.some(i => !i || typeof i !== "object")) { send(res, 400, { error: "Ungültiger Artikel im Warenkorb" }); return true; }
   const ids = [...new Set(items.map(i => String(i.productId || "")).filter(Boolean))];
-  if (!ids.length || ids.length !== items.length || ids.some(id => !/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(id))) {
+  if (!ids.length || ids.length !== items.length || ids.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
     send(res, 400, { error: "Ungültiger Artikel im Warenkorb" });
     return true;
   }
@@ -108,10 +109,14 @@ return async function handlePaymentCheckout(req, res) {
       send(res, 400, { error: "Ungültige Menge" });
       return true;
     }
-    totalCents += Math.round(Number(product.price_cents) * qty);
+    const priceCents = Number(product.price_cents);
+    if (!Number.isSafeInteger(priceCents) || priceCents < 0 || priceCents > 2147483647) {
+      send(res, 400, { error: "Ungültiger Artikelpreis" }); return true;
+    }
+    totalCents += priceCents * qty;
     cleanItems.push({ product, qty });
   }
-  if (!Number.isSafeInteger(totalCents) || totalCents <= 0) {
+  if (!Number.isSafeInteger(totalCents) || totalCents <= 0 || totalCents > 2147483647) {
     send(res, 400, { error: "Ungültiger Gesamtbetrag" });
     return true;
   }
