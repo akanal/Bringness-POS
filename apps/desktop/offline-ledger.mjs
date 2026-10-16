@@ -2,7 +2,8 @@
 // durability, the transaction completes only after persistent storage flushes.
 export async function createOfflineLedger(db,quote) {
  await db.exec(`CREATE TABLE IF NOT EXISTS offline_catalog(id uuid PRIMARY KEY,payload jsonb NOT NULL,current boolean NOT NULL DEFAULT false);
- CREATE TABLE IF NOT EXISTS offline_sales(id uuid PRIMARY KEY,snapshot_id uuid NOT NULL REFERENCES offline_catalog(id),request jsonb NOT NULL,receipt jsonb NOT NULL,synced_at timestamptz,cloud_receipt jsonb,error text,created_at timestamptz NOT NULL DEFAULT now());`);
+ CREATE TABLE IF NOT EXISTS offline_sales(id uuid PRIMARY KEY,snapshot_id uuid NOT NULL REFERENCES offline_catalog(id),request jsonb NOT NULL,receipt jsonb NOT NULL,synced_at timestamptz,cloud_receipt jsonb,error text,created_at timestamptz NOT NULL DEFAULT now());
+ CREATE INDEX IF NOT EXISTS offline_sales_pending_idx ON offline_sales(created_at,id) WHERE synced_at IS NULL;`);
  return {
   async catalog(snapshot){
    return db.transaction(async tx=>{
