@@ -47,7 +47,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  const showOfflineOnFailure=(_,code)=>{if(code!==-3)open()};
  // Electron can resume after sleep without a new page-load event. Promptly
  // retry the durable queue when the application becomes active again.
- const resumeOnFocus=()=>recoverOnStartup();
+ const resumeOnFocus=()=>{if(!closed)recoverOnStartup();};
  app.on('browser-window-focus',resumeOnFocus);
  onlineContents?.on('did-fail-load',showOfflineOnFailure);
  let closed=false;
