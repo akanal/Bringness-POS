@@ -26,6 +26,9 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(data.error||'Synchronisierung nicht verfügbar');return data;};
  }});
  const sync=()=>coordinator.sync();
+ const {powerMonitor}=require('electron');
+ const resumeAfterSuspend=()=>sync();
+ powerMonitor.on('resume',resumeAfterSuspend);
  // A restarted desktop process reopens the same durable PGlite directory.
  // Trigger recovery once the authenticated online page has loaded; its token
  // may be written shortly after load, so retry on the regular timer as well.
@@ -53,6 +56,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   onlineContents?.removeListener('did-finish-load',resumeAfterLoad);
   onlineContents?.removeListener('did-fail-load',showOfflineOnFailure);
   app.removeListener('browser-window-focus',resumeOnFocus);
+  powerMonitor.removeListener('resume',resumeAfterSuspend);
  };
  app.on('before-quit',stopRecovery);
  return {ledger,open,close:async()=>{
