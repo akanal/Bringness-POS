@@ -17,12 +17,23 @@ function send(res, status, payload) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let raw = "";
-    req.on("data", chunk => { raw += chunk; if (raw.length > 65536) { reject(new Error("Request too large")); req.pause(); } });
+    let finished = false;
+    req.on("data", chunk => {
+      if (finished) return;
+      raw += chunk;
+      if (raw.length > 65536) {
+        finished = true;
+        reject(Object.assign(new Error("Request too large"), { status: 413 }));
+        req.resume();
+      }
+    });
     req.on("end", () => {
+      if (finished) return;
+      finished = true;
       try { resolve(raw ? JSON.parse(raw) : {}); }
       catch (error) { reject(error); }
     });
-    req.on("error", reject);
+    req.on("error", error => { if (!finished) { finished = true; reject(error); } });
   });
 }
 
@@ -53,8 +64,8 @@ return async function handlePaymentCheckout(req, res) {
 
   let body;
   try { body = await readBody(req); }
-  catch {
-    send(res, 400, { error: "Ungültige Anfrage" });
+  catch (error) {
+    send(res, error.status === 413 ? 413 : 400, { error: error.status === 413 ? "Anfrage zu groß" : "Ungültige Anfrage" });
     return true;
   }
 
