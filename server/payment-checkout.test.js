@@ -14,12 +14,12 @@ function request(authorization='Bearer test-token'){
 function response(){
  return {status:null,body:null,writeHead(status){this.status=status;},end(raw){this.body=JSON.parse(raw);}};
 }
-async function run(body,{actor=user}={}){
+async function run(body,{actor=user,raw=null}={}){
  const calls=[];
  const pool={async query(sql){calls.push(sql);if(sql.includes('FROM sessions'))return {rows:actor?[actor]:[]};throw Error('Unexpected database query');},async connect(){throw Error('Checkout must not start a transaction for invalid input');}};
  const handler=createPaymentCheckout(pool),req=request(),res=response();
  const done=handler(req,res);
- setImmediate(()=>{req.emit('data',Buffer.from(JSON.stringify(body)));req.emit('end');});
+ setImmediate(()=>{req.emit('data',Buffer.from(raw??JSON.stringify(body)));req.emit('end');});
  await done;
  return {res,calls};
 }
