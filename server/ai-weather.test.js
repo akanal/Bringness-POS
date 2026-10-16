@@ -1,0 +1,44 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseMosmix} from './ai-weather.js';
+import {demandEffect} from './ai-demand-core.js';
+
+function forecast(start,hours,{omit=[],duplicate=false,missingRain=false}={}){
+ const points=Array.from({length:hours},(_,i)=>new Date(Date.parse(start)+i*3600000).toISOString()).filter((_,i)=>!omit.includes(i));
+ if(duplicate)points.push(points[0]);
+ const xml=`<dwd:IssueTime>${start}</dwd:IssueTime>`+
+  points.map(t=>`<dwd:TimeStep>${t}</dwd:TimeStep>`).join('')+
+  `<dwd:Forecast dwd:elementName="TTT"><dwd:value>${points.map(()=>303.15).join(' ')}</dwd:value></dwd:Forecast>`+
+  `<dwd:Forecast dwd:elementName="RR1c"><dwd:value>${points.map((_,i)=>missingRain&&i===0?'-':1).join(' ')}</dwd:value></dwd:Forecast>`;
+ return parseMosmix(xml,new Date(start));
+}
+
+test('complete normal, spring and autumn Berlin days use 24, 23 and 25 distinct hours',()=>{
+ for(const [start,hours,date] of [
+  ['2026-10-15T22:00:00Z',24,'2026-10-16'],
+  ['2026-03-28T23:00:00Z',23,'2026-03-29'],
+  ['2026-10-24T22:00:00Z',25,'2026-10-25']
+ ]){
+  const [day]=forecast(start,hours).days;
+  assert.equal(day.date,date);
+  assert.equal(day.hours,hours);
+  assert.equal(day.partial,false);
+  assert.equal(day.rainMm,hours);
+ }
+});
+
+test('missing hours, duplicates and missing measurements cannot enable weather demand rules',()=>{
+ for(const options of [{omit:[12]},{omit:[12],duplicate:true},{duplicate:true},{missingRain:true}]){
+  const weather=forecast('2026-10-15T22:00:00Z',24,options);
+  assert.equal(weather.days[0].partial,true);
+  const effect=demandEffect('2026-10-16',{settings:{demandRules:{enabled:true,warmPercent:50,rainPercent:-20}},weather,events:[]});
+  assert.equal(effect.factor,1);
+  assert.deepEqual(effect.adjustments,[]);
+ }
+});
+
+test('autumn day with only 24 hours remains incomplete',()=>{
+ const weather=forecast('2026-10-24T22:00:00Z',25,{omit:[3]});
+ assert.equal(weather.days[0].hours,24);
+ assert.equal(weather.days[0].partial,true);
+});
