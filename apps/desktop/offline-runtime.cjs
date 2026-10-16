@@ -11,7 +11,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  const ledger=await createOfflineLedger(db,quoteOfflineSale);
  let offlineWindow;
  const {createOfflineSync}=await import('./offline-sync.mjs');
- const open=()=>{if(offlineWindow&&!offlineWindow.isDestroyed()){offlineWindow.show();offlineWindow.focus();return offlineWindow}offlineWindow=new BrowserWindow({width:1280,height:820,show:showOffline,webPreferences:{preload:path.join(__dirname,'offline-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});offlineWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));offlineWindow.webContents.on('will-navigate',e=>e.preventDefault());offlineWindow.loadFile(path.join(__dirname,'offline.html'));return offlineWindow;};
+ const open=()=>{if(closed)throw Error('Offline-Kasse wurde bereits geschlossen');if(offlineWindow&&!offlineWindow.isDestroyed()){offlineWindow.show();offlineWindow.focus();return offlineWindow}offlineWindow=new BrowserWindow({width:1280,height:820,show:showOffline,webPreferences:{preload:path.join(__dirname,'offline-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});offlineWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));offlineWindow.webContents.on('will-navigate',e=>e.preventDefault());offlineWindow.loadFile(path.join(__dirname,'offline.html'));return offlineWindow;};
  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Kasse',submenu:[{label:'Offline-Kasse / Synchronisierung',click:open},{label:'Online-Kasse',click:()=>onlineWindow()?.show()},{role:'quit'}]}]));
  const trusted=event=>!closed&&offlineWindow&&!offlineWindow.isDestroyed()&&event.sender===offlineWindow.webContents&&event.senderFrame===offlineWindow.webContents.mainFrame&&event.senderFrame.url===pathToFileURL(path.join(__dirname,'offline.html')).href;
  const notify=()=>{if(offlineWindow&&!offlineWindow.isDestroyed())offlineWindow.webContents.send('offline:updated');};
@@ -78,7 +78,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // Recheck connectivity every 30 seconds, including after long outages.
  // Single-flight synchronization prevents overlapping requests during slow recovery.
  recoverOnStartup();const timer=setInterval(sync,30000);timer.unref();
- const showOfflineOnFailure=(_,code)=>{if(code!==-3)open()};
+ const showOfflineOnFailure=(_,code)=>{if(!closed&&code!==-3)open()};
  // Electron can resume after sleep without a new page-load event. Promptly
  // retry the durable queue when the application becomes active again.
  const resumeOnFocus=()=>{if(!closed)recoverOnStartup();};
