@@ -19,6 +19,8 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     // A malformed result must not discard valid acknowledgements from the same batch.
     // Process valid sales individually; keep uncertain sales queued for safe retry.
     if(response.results.some((result,index)=>result?.offlineId!==batch[index].id))throw Error('Offline-Antwort enthält fremde Verkaufskennungen');
+    // Server replies must not claim a sale succeeded without a usable receipt.
+    // Invalid entries remain queued while valid entries can still be acknowledged.
     for(let index=0;index<batch.length;index++){
      const sale=batch[index],result=response.results[index];
      if(result?.offlineId!==sale.id)throw Error('Offline-Antwort stimmt nicht mit der Verkaufskennung überein');
