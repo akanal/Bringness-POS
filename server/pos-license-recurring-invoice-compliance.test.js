@@ -27,3 +27,16 @@ test("missing service description blocks issuance",()=>{
  const result=validateSandboxInvoiceDetails({...complete,serviceDescription:""});
  assert.ok(result.missing.includes("serviceDescription"));
 });
+
+test("impossible invoice date is rejected",()=>{
+ const result=validateSandboxInvoiceDetails({...complete,invoiceDate:"2026-02-30"});
+ assert.ok(result.missing.includes("invoiceDate"));
+});
+test("invalid service period date is rejected",()=>{
+ const result=validateSandboxInvoiceDetails({...complete,servicePeriod:{start:"2026-02-30",end:"2026-10-31"}});
+ assert.ok(result.missing.includes("servicePeriod"));
+});
+test("non ISO invoice date is rejected",()=>{
+ const result=validateSandboxInvoiceDetails({...complete,invoiceDate:"16.10.2026"});
+ assert.ok(result.missing.includes("invoiceDate"));
+});
