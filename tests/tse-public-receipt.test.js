@@ -13,9 +13,9 @@ function mockReceipt(snapshot,status='signed'){
   }]};
   return {rows:[]};
  }};
- let body='',code=0;
- const res={writeHead:(status)=>{code=status},end:(html)=>{body=html}};
- return {queries,res,read:()=>({body,code}),handler:createPublicReceiptHandler(pool)};
+ let body='',code=0,headers={};
+ const res={writeHead:(status,h)=>{code=status;headers=h||{}},end:(html)=>{body=html}};
+ return {queries,res,read:()=>({body,code,headers}),handler:createPublicReceiptHandler(pool)};
 }
 const request={method:'GET',url:'/beleg/11111111-1111-4111-8111-111111111111'};
 
@@ -102,4 +102,16 @@ test('invalid public receipt token does not generate printable QR',async()=>{
   if(old===undefined)delete process.env.PUBLIC_RECEIPT_ORIGIN;
   else process.env.PUBLIC_RECEIPT_ORIGIN=old;
  }
+});
+
+test('public digital receipt prevents caching and MIME sniffing',async()=>{
+ const fixture=mockReceipt(null);
+ await fixture.handler(request,fixture.res);
+ const {code,headers}=fixture.read();
+ assert.equal(code,200);
+ assert.match(headers['cache-control'],/no-store/);
+ assert.match(headers['cache-control'],/max-age=0/);
+ assert.equal(headers.pragma,'no-cache');
+ assert.equal(headers['x-content-type-options'],'nosniff');
+ assert.match(headers['content-security-policy'],/default-src 'none'/);
 });
