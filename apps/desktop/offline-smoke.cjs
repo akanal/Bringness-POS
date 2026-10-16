@@ -29,5 +29,7 @@ app.whenReady().then(async()=>{let runtime,rogue;try{
  await runtime.close();
  assert.equal(window.webContents.isDestroyed(),true);
  assert.throws(()=>runtime.open(),/bereits geschlossen/);
+ assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.view().then(()=>false,()=>true)'),true);
+ assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.export().then(()=>false,()=>true)'),true);
  console.log('Electron offline cash UI, pre/post-persistence payment recovery, PGlite persistence and unauthorized IPC rejection passed.');rogue.destroy();app.exit(0);
  }catch(e){console.error(e);rogue?.destroy();if(runtime)await runtime.close();app.exit(1)}});
