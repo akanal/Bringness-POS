@@ -50,7 +50,7 @@ export async function handleOfflineSales(req,res){
   if(path.endsWith('/status'))return send(200,{sales:(await pool.query('SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id WHERE c.company_id=$1 ORDER BY s.created_at DESC LIMIT 100',[user.company_id])).rows});
   let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(path.endsWith('/batch')?262144:64000))fail('Anfrage zu groß',413)}let b;try{b=JSON.parse(raw)}catch{fail('Ungültige Anfrage')}
   if(path.endsWith('/batch')){
-   if(!/^[a-f0-9]{64}$/.test(b?.deviceKey||''))fail('Ungültige Gerätekennung');
+   if(!b||typeof b!=='object'||!/^[a-f0-9]{64}$/.test(b.deviceKey||''))fail('Ungültige Gerätekennung');
    if(!Array.isArray(b.sales)||b.sales.length<1||b.sales.length>20)fail('1 bis 20 Offline-Verkäufe pro Synchronisierung erforderlich');
    const results=[];
    for(const sale of b.sales){
