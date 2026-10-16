@@ -79,5 +79,10 @@ test('offline sale rejects a mismatched device key without writing a receipt',as
   assert.equal(await ledger.pendingCount(),0);
   await ledger.sale(request,'a'.repeat(64));
   assert.equal(await ledger.pendingCount(),1);
+  await assert.rejects(ledger.sale(request,'b'.repeat(64)),/gehört nicht zu diesem Gerät/);
+  assert.equal(await ledger.pendingCount(),1);
+  const repeated=await ledger.sale(request,'a'.repeat(64));
+  assert.equal(repeated.id,request.id);
+  assert.equal(await ledger.pendingCount(),1);
  }finally{await db.close();}
 });
