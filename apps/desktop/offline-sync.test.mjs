@@ -285,7 +285,7 @@ test('concurrent sync calls share one upload and acknowledge once',async()=>{
 test('server confirmation with duplicate receipt identity leaves unresolved sale pending',async()=>{
  const f=fixture(['a','b'],{reply:sales=>({results:sales.map(s=>({offlineId:s.id,ok:true,id:'cloud-shared',receiptNumber:'R-shared'}))})});
  const status=await createOfflineSync(f).sync();
- assert.equal(status.state,'warning');
+ assert.equal(status.state,'error');
  assert.equal(f.pending.size,1);
  assert.equal(f.errors.length,1);
  assert.equal(f.calls.length,1);
