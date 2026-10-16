@@ -156,3 +156,19 @@ test('TSE accepts transaction number zero when device confirms it',async()=>{
  assert.deepEqual(result,{signed:true});
  assert.ok(calls.some(x=>x.sql.includes("state='finishing'")&&x.params.includes('0')));
 });
+
+test('lost TSE starting state never calls finish and requires review',async()=>{
+ const {pool,calls}=mockPool();
+ const originalQuery=pool.query.bind(pool);
+ pool.query=async(sql,params)=>{
+  if(sql.includes("SET state='finishing'")){calls.push({sql,params});return {rows:[],rowCount:0};}
+  return originalQuery(sql,params);
+ };
+ let finished=false;
+ const result=await signPreparedTse(pool,id,mockAdapter({
+  finishTransaction:async()=>{finished=true;throw Error('must not finish');}
+ }));
+ assert.deepEqual(result,{signed:false,reason:'outcome_unconfirmed'});
+ assert.equal(finished,false);
+ assert.ok(calls.some(x=>x.sql.includes("state='needs_review'")));
+});
