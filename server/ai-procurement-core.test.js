@@ -130,3 +130,11 @@ test('delivery city and postal code must be text, not coerced numbers',()=>{
  assert.equal(deliveryMatches('Berlin',{toString:()=> 'Berlin'},''),false);
  assert.equal(deliveryMatches('10115','', '10115'),true);
 });
+
+test('supplier address and city require nonempty text',()=>{
+ for(const patch of [{address:42},{address:'  '},{city:10115},{city:'  '}]){
+  const result=prepareProcurement([item('stock',[{...offer('a','A',100),...patch}])]);
+  assert.equal(result.complete,false);
+  assert.equal(result.lines.length,0);
+ }
+});
