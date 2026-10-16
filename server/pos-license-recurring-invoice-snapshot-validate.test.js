@@ -7,3 +7,6 @@ test("missing issuer blocks export",()=>assert.throws(()=>assertIssuedSandboxInv
 test("incorrect totals block export",()=>assert.throws(()=>assertIssuedSandboxInvoice({...details,grossCents:3000}),/amounts/));
 
 test("wrong currency blocks issued invoice export",()=>assert.throws(()=>assertIssuedSandboxInvoice({...details,currency:"USD"}),/invalid_issued_invoice_currency/));
+
+test("missing currency blocks issued invoice export",()=>assert.throws(()=>assertIssuedSandboxInvoice({...details,currency:undefined}),/invalid_issued_invoice_currency/));
+test("invalid invoice date blocks issued invoice export",()=>assert.throws(()=>assertIssuedSandboxInvoice({...details,invoiceDate:"2026-02-30"}),/invoiceDate/));
