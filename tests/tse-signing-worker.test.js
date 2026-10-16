@@ -111,3 +111,47 @@ test('missing signed transaction rolls back and requires manual review',async()=
  assert.ok(calls.some(x=>x.sql.includes("state='needs_review'")));
  assert.equal(calls.filter(x=>x.sql.includes("UPDATE receipts SET fiscal_status='signed'")).length,0);
 });
+
+test('missing receipt rolls back the fiscal signature transaction',async()=>{
+ const {pool,calls}=mockPool();
+ let released=false;
+ pool.connect=async()=>({
+  async query(sql,params=[]){
+   calls.push({sql,params});
+   if(sql.includes("state='signed'") && sql.includes('RETURNING *'))return {rows:[{
+    state:'signed',tse_transaction_number:'42',tse_serial_number:'SERIAL-1',
+    signature_counter:'1',signature_algorithm:'ecdsa',signature:'signed'
+   }],rowCount:1};
+   if(sql.includes('UPDATE receipts SET'))return {rows:[],rowCount:0};
+   return {rows:[],rowCount:1};
+  },
+  release(){released=true;}
+ });
+ const result=await signPreparedTse(pool,id,mockAdapter());
+ assert.deepEqual(result,{signed:false,reason:'outcome_unconfirmed'});
+ assert.equal(released,true);
+ assert.ok(calls.some(x=>x.sql==='ROLLBACK'));
+ assert.equal(calls.filter(x=>x.sql==='COMMIT').length,0);
+ assert.ok(calls.some(x=>x.sql.includes("state='needs_review'")));
+});
+
+test('TSE accepts transaction number zero when device confirms it',async()=>{
+ const {pool,calls}=mockPool();
+ pool.connect=async()=>({
+  async query(sql,params=[]){
+   calls.push({sql,params});
+   if(sql.includes("state='signed'") && sql.includes('RETURNING *'))return {rows:[{
+    state:'signed',tse_transaction_number:'0',tse_serial_number:'SERIAL-1',
+    signature_counter:'1',signature_algorithm:'ecdsa',signature:'signed'
+   }],rowCount:1};
+   return {rows:[],rowCount:1};
+  },
+  release(){}
+ });
+ const result=await signPreparedTse(pool,id,mockAdapter({
+  startTransaction:async()=>({transactionNumber:0,certified:true,serialNumber:'SERIAL-1',startedAt:'2026-10-16T10:00:00Z'}),
+  finishTransaction:async()=>({transactionNumber:0,certified:true,serialNumber:'SERIAL-1',signature:'signed',signatureCounter:'1',signatureAlgorithm:'ecdsa',finishedAt:'2026-10-16T10:00:01Z'})
+ }));
+ assert.deepEqual(result,{signed:true});
+ assert.ok(calls.some(x=>x.sql.includes("state='finishing'")&&x.params.includes('0')));
+});
