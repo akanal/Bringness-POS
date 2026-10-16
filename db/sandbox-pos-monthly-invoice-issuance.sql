@@ -6,3 +6,6 @@ ALTER TABLE sandbox_pos_monthly_invoice_drafts
  CHECK (status IN ('draft','issued'));
 ALTER TABLE sandbox_pos_monthly_invoice_drafts
  ADD COLUMN IF NOT EXISTS issued_at TIMESTAMPTZ;
+
+ALTER TABLE sandbox_pos_monthly_invoice_drafts
+ ADD COLUMN IF NOT EXISTS issued_details JSONB;
