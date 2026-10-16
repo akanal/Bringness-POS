@@ -46,7 +46,7 @@ return async function handlePaymentReceipt(req, res) {
   catch{send(res,503,{error:'Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen.'});return true;}
   res.writeHead(200,{
     "content-type":"application/pdf",
-    "content-disposition":"attachment; filename=Beleg-"+receipt.receipt_number+".pdf",
+    "content-disposition":"attachment; filename=Beleg-"+String(receipt.receipt_number || "unbekannt").replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,80)+".pdf",
     "cache-control":"private, no-store"
   });
   res.end(pdf);
