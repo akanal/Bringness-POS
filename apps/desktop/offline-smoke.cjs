@@ -7,8 +7,21 @@ app.whenReady().then(async()=>{let runtime,rogue;try{
  const wait=async test=>{for(let i=0;i<100;i++){if(await test())return;await new Promise(r=>setTimeout(r,50))}throw Error('Offline UI timed out')};
  await wait(()=>window.webContents.executeJavaScript('document.querySelectorAll("#products button").length===1'));
  await window.webContents.executeJavaScript('document.querySelector("#products button").click();document.querySelector("#products button").click();document.getElementById("pay").click()');await wait(async()=>(await runtime.ledger.pending()).length===1);await wait(()=>window.webContents.executeJavaScript('document.getElementById("receipt").textContent.includes("17,90")'));assert.equal((await runtime.ledger.pending()).length,1);assert.equal(await window.webContents.executeJavaScript('document.getElementById("receipt").textContent.includes("19 %") && document.getElementById("receipt").textContent.includes("MwSt: 2,86")'),true);
- await window.webContents.executeJavaScript('document.getElementById("sync").click()');await wait(()=>window.webContents.executeJavaScript('document.getElementById("sync-status").textContent.includes("anmelden")'));assert.equal((await runtime.ledger.pending()).length,1);
+ await window.webContents.executeJavaScript('document.getElementById("sync").click()');await wait(()=>window.webContents.executeJavaScript('offlinePOS.view().then(v=>v.sync.state==="login")'));assert.equal((await runtime.ledger.pending()).length,1);
  const reload=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await reload;await wait(()=>window.webContents.executeJavaScript('document.querySelectorAll("#sales button").length===1'));await window.webContents.executeJavaScript('document.querySelector("#sales button").click()');assert.equal(await window.webContents.executeJavaScript('document.getElementById("receipt").textContent.includes("OFF-")'),true);
+ // Restart both before persistence and after persistence but before UI acknowledgement.
+ for(const alreadySaved of [false,true]){
+  const before=await runtime.ledger.pendingCount();
+  const request={id:crypto.randomUUID(),snapshotId:snapshot.id,restaurantId:snapshot.restaurants[0].id,createdAt:new Date().toISOString(),paymentMethod:'cash',items:[{productId:snapshot.products[0].id,quantity:1}]};
+  if(alreadySaved)await runtime.ledger.sale(request);
+  await window.webContents.executeJavaScript(`localStorage.setItem('bringness.offline.pending-sale.v1',${JSON.stringify(JSON.stringify(request))})`);
+  const loaded=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await loaded;
+  await wait(()=>window.webContents.executeJavaScript('document.getElementById("pay").disabled===false && document.getElementById("items").children.length===1'));
+  await window.webContents.executeJavaScript('document.getElementById("pay").click()');
+  await wait(async()=>await runtime.ledger.pendingCount()===before+1);
+  await wait(()=>window.webContents.executeJavaScript(`document.getElementById('receipt').textContent.includes(${JSON.stringify(request.id)}) && localStorage.getItem('bringness.offline.pending-sale.v1')===null`));
+  assert.equal((await runtime.ledger.pending()).filter(s=>s.id===request.id).length,1);
+ }
  rogue=new BrowserWindow({show:false,webPreferences:{preload:path.join(__dirname,'offline-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});await rogue.loadURL('data:text/html,<title>Unauthorized frame</title>');const denied=await rogue.webContents.executeJavaScript('offlinePOS.view().then(()=>false,()=>true)');assert.equal(denied,true);assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.sync().then(()=>false,()=>true)'),true);
- console.log('Electron offline cash UI, PGlite persistence and unauthorized IPC rejection passed.');rogue.destroy();await runtime.close();app.exit(0);
+ console.log('Electron offline cash UI, pre/post-persistence payment recovery, PGlite persistence and unauthorized IPC rejection passed.');rogue.destroy();await runtime.close();app.exit(0);
  }catch(e){console.error(e);rogue?.destroy();if(runtime)await runtime.close();app.exit(1)}});

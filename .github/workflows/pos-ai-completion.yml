@@ -39,6 +39,7 @@ jobs:
         run: node server/ai-tests/device-license.mjs
         env:
           DEVICE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/offline-ui.mjs
       - run: node server/ai-tests/offline-accountant.mjs
       - run: node server/ai-tests/automatic-policy.mjs
       - run: node server/ai-tests/consumption-history.mjs
