@@ -2,7 +2,7 @@ const $=id=>document.getElementById(id),money=n=>(n/100).toLocaleString('de-DE',
 let snapshot,cart=new Map(),pendingRequest,busy=false;
 const recoveryKey='bringness.offline.pending-sale.v1';
 let recoveryFault=false;
-function savePending(request){localStorage.setItem(recoveryKey,JSON.stringify(request));}
+function savePending(request){localStorage.setItem(recoveryKey,JSON.stringify(request));if(localStorage.getItem(recoveryKey)!==JSON.stringify(request))throw Error('Zahlung konnte nicht sicher zwischengespeichert werden.');}
 function clearPending(){localStorage.removeItem(recoveryKey);}
 function recoverPending(){const raw=localStorage.getItem(recoveryKey);if(!raw)return null;let r;try{r=JSON.parse(raw)}catch{throw Error('Gespeicherter Bezahlvorgang ist beschädigt. Bitte Support kontaktieren.')}if(!r||typeof r!=='object'||typeof r.id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(r.id)||typeof r.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(r.snapshotId)||typeof r.restaurantId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(r.restaurantId)||r.paymentMethod!=='cash'||typeof r.createdAt!=='string'||!Number.isFinite(Date.parse(r.createdAt))||Date.parse(r.createdAt)>Date.now()+60000||!Array.isArray(r.items)||!r.items.length||r.items.length>100||new Set(r.items.map(i=>i?.productId)).size!==r.items.length||r.items.some(i=>!i||typeof i.productId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(i.productId)||!Number.isSafeInteger(i.quantity)||i.quantity<1||i.quantity>999))throw Error('Gespeicherter Bezahlvorgang ist ungültig. Bitte Support kontaktieren.');return r;}
 
