@@ -101,4 +101,11 @@ test('printed QR PNG decodes to the exact public receipt URL at thermal-print re
  const scanned=decode(pixels,png.width,png.height);
  assert.ok(scanned,'QR must be readable by a scanner');
  assert.equal(scanned.data,url);
+ const otherToken='44444444-4444-4444-8444-444444444444';
+ const otherUrl='https://pos.example.test/beleg/'+otherToken;
+ const otherPng=PNG.sync.read(await QrWriter.toBuffer(otherUrl,{width:224,margin:4,errorCorrectionLevel:'M'}));
+ const otherScan=decode(new Uint8ClampedArray(otherPng.data),otherPng.width,otherPng.height);
+ assert.ok(otherScan,'second receipt QR must also be scannable');
+ assert.equal(otherScan.data,otherUrl);
+ assert.notEqual(otherScan.data,scanned.data,'different receipts must never share the same QR destination');
 });
