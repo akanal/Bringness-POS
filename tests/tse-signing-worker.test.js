@@ -17,6 +17,7 @@ function mockPool({device=readyDevice,tx=transaction}={}){
       calls.push({sql,params});
       if(sql.includes("state='starting'") && sql.includes('RETURNING *'))return {rows:tx?[tx]:[]};
       if(sql.includes('SELECT serial_number,certified,status'))return {rows:device?[device]:[]};
+      if(sql.includes("SET state='finishing'"))return {rows:[{id}],rowCount:1};
       return {rows:[]};
     }
   };
