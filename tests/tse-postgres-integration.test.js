@@ -29,6 +29,25 @@ test('PostgreSQL enforces guarded TSE state transitions',{skip:!process.env.TSE_
   const signed=await markTransactionSigned(client,tx.id,result);
   assert.equal(signed.state,'signed');
   assert.equal(signed.signature,'signature');
+  const receiptSnapshot={
+   transactionNumber:signed.tse_transaction_number,
+   serialNumber:signed.tse_serial_number,
+   signatureCounter:signed.signature_counter,
+   signature:signed.signature
+  };
+  const updated=await client.query(
+   "UPDATE receipts SET fiscal_status='signed',tse_snapshot=$2::jsonb,tse_transaction_id=$3 WHERE id=$1 RETURNING *",
+   [receipt,JSON.stringify(receiptSnapshot),tx.id]
+  );
+  assert.equal(updated.rowCount,1);
+  const linked=(await client.query(
+   'SELECT r.fiscal_status,r.tse_snapshot,r.tse_transaction_id,t.state,t.signature FROM receipts r JOIN tse_transactions t ON t.id=r.tse_transaction_id WHERE r.id=$1',
+   [receipt]
+  )).rows[0];
+  assert.equal(linked.fiscal_status,'signed');
+  assert.equal(linked.state,'signed');
+  assert.equal(linked.tse_transaction_id,tx.id);
+  assert.equal(linked.tse_snapshot.signature,linked.signature);
   assert.equal(await markTransactionSigned(client,tx.id,result),null);
   await assert.rejects(
    client.query("INSERT INTO tse_transactions(restaurant_id,receipt_id,client_transaction_id,process_data,state) VALUES($1,$2,'test-tx','{}','prepared')",[restaurant,receipt]),
