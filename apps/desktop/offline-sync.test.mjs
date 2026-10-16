@@ -253,3 +253,28 @@ test('lost server response is retried after reconnect',async()=>{
  assert.equal(f.pending.size,0);
  assert.deepEqual(f.calls,[['a'],['a']]);
 });
+
+test('concurrent sync calls share one upload and acknowledge once',async()=>{
+ const f=fixture(['a']);
+ let release;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const original=f.connect;
+ let requests=0;
+ f.connect=async()=>{
+  const request=await original();
+  return async(type,payload)=>{
+   if(type==='sales'){requests++;await gate;}
+   return request(type,payload);
+  };
+ };
+ const coordinator=createOfflineSync(f);
+ const first=coordinator.sync();
+ const second=coordinator.sync(true);
+ assert.equal(first,second);
+ release();
+ const [a,b]=await Promise.all([first,second]);
+ assert.equal(a.state,'success');
+ assert.equal(b.state,'success');
+ assert.equal(requests,1);
+ assert.equal(f.pending.size,0);
+});
