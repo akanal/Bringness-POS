@@ -19,7 +19,8 @@ export function quoteOfflineSale(snapshot,sale) {
  if(!Array.isArray(sale.items)||!sale.items.length||sale.items.length>100)fail('1 bis 100 Positionen erforderlich');
  const seen=new Set();let totalCents=0;
  const items=sale.items.map(i=>{
-  const product=snapshot.products.find(p=>p?.id===i?.productId&&p.restaurantId===restaurant.id);
+  const matches=snapshot.products.filter(p=>p?.id===i?.productId&&p.restaurantId===restaurant.id);
+  const product=matches.length===1?matches[0]:null;
   if(!product||typeof product.id!=='string'||!product.id.trim()||seen.has(i?.productId)||!Number.isInteger(i?.quantity)||i.quantity<1||i.quantity>999)fail('Ungültiger Offline-Artikel oder Menge');
   seen.add(i.productId);if(typeof product.name!=='string'||!product.name.trim())fail('Ungültiger Artikelname');if(!Number.isSafeInteger(product.priceCents)||product.priceCents<0||!Number.isFinite(product.taxRate)||product.taxRate<0||product.taxRate>100)fail('Ungültiger Katalogpreis');
   const lineCents=product.priceCents*i.quantity;if(!Number.isSafeInteger(lineCents)||lineCents>2147483647)fail('Ungültiger Positionsbetrag');totalCents+=lineCents;
