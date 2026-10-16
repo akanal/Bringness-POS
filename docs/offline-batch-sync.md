@@ -4,7 +4,7 @@ Die Download-Kasse kann nach Wiederherstellung der Internetverbindung gespeicher
 
 ## Katalog beziehen
 `POST /api/v1/offline/catalog` mit Bearer-Session und JSON `{"deviceKey":"<64 hex Zeichen>"}`.
-Nur aktive, freigeschaltete Download-Geräte eines berechtigten Unternehmens erhalten einen Katalog. Der Katalog ist maximal 24 Stunden gültig, bei früherem Lizenzende entsprechend kürzer.
+Nur aktive, freigeschaltete Download-Geräte eines berechtigten Unternehmens erhalten einen Katalog. Die aktuelle Inhaber-/Adminrolle, Betriebszugehörigkeit und Passwortfreigabe werden innerhalb der Transaktion erneut geprüft; diese Prüfung gilt auch für jeden importierten Verkauf und dessen Wiederholung. Die Ausgabe eines neuen Katalogs sperrt die beteiligte Geräte-/Lizenzfreigabe während der Transaktion gegen gleichzeitige Änderungen. Der Katalog ist maximal 24 Stunden gültig, bei früherem Lizenzende entsprechend kürzer.
 
 ## Verkäufe gesammelt übertragen
 `POST /api/v1/offline/batch` mit Bearer-Session und JSON:
@@ -36,4 +36,4 @@ Maximal 20 Verkäufe je Anfrage. Der Server antwortet mit `results` in derselben
 6. Eine abgelaufene Katalogberechtigung erfordert einen neuen Katalog für **neue** Offline-Verkäufe; alte Verkäufe und Belege dürfen nicht rückdatiert oder verändert werden.
 
 ## Abgrenzung
-Der Batch-Endpunkt ist serverseitig implementiert. Eine fertige lokale Windows-Warteschlange, Geräte-End-to-End-Prüfung und die zertifizierte TSE-Anbindung sind damit **noch nicht** nachgewiesen. Offline importierte Belege behalten den steuerlichen Status `pending`, bis der separate Signaturprozess sie rechtskonform verarbeitet.
+Batch-Endpunkt und dauerhafte lokale Windows-Warteschlange sind implementiert. Tests mit dateibasierter PostgreSQL/PGlite-Datenbank prüfen Neustart, verlorene Bestätigungen, Wiederholungen und Mandantentrennung. Dies ersetzt keine Abnahme des gebauten Windows-Clients auf einem Kundengerät und keinen Nachweis einer zertifizierten Offline-TSE-Anbindung. Offline importierte Belege behalten den steuerlichen Status `pending`, bis der separate Signaturprozess sie rechtskonform verarbeitet.

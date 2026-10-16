@@ -76,3 +76,29 @@ GitHub alternatives completed successfully for `09bbcb9`:
 - [Full POS/AI integration run 38948843238](https://github.com/akanal/Bringness-POS/actions/runs/38948843238): completed successfully, including mail, display, billing, remote-support, offline/accountant, POS/AI stock and full AI integration validation.
 
 External fiscal/provider activation, Windows signing/release and real handset checks remain separate acceptance steps. No live activation, supplier order or payment was performed by this development session.
+
+
+## Further verified development — 2026-10-16
+
+Development branch remains `finish/pos-release-audit-20261016`; production has not been deployed.
+
+| Commit | Completed change |
+| --- | --- |
+| `32dffd9` | Optional validated source timestamp for sales/reversals, separate from ingestion audit time; known timestamps cannot change on replay. Existing events are not silently backfilled. OpenAPI and PostgreSQL integration updated. |
+| `e7c460e` | Online POS adapter and offline sales reconciliation carry the original payment timestamp. Stable event IDs survive a lost acknowledgement. |
+| `14656dc` | Shared tenant-scoped consumption history feeds purchasing and stock monitoring. Kitchen consumption/returns are included; duplicate legacy sale moves, inventory counts and incoming goods are excluded. Future events do not enter completed consumption windows. |
+| `e54874f` | Offline catalog issuance and sale/replay recheck current owner/admin authority within their transaction. New catalogs lock device/license permissions; malformed identifiers are rejected before acquiring a connection. Historical paid sales remain preserved. |
+| `fe75f17` | Accountant grant/revocation and their audit record commit together. Current owner authority is locked and rechecked. Repeated revocation does not produce duplicate audit entries. Malformed cursor bodies return 400. |
+| `d9dcff8` | Kitchen and offline lifecycle actions preserve source time in stock movements and request replay metadata. Shared validation and consumption view cover both sales and lifecycle connectors. Legacy unknown timestamps remain unchanged. |
+
+Completed validation for source tree `d9dcff8`:
+
+- 298 Node test cases passed locally, with zero failures and zero skips. Includes real receipt PDF/QR generation and embedded PostgreSQL database tests. Center browser cases were run separately on GitHub.
+- Complete AI PostgreSQL/DOM integration passed, including the new source-time replay checks. Payment/SMTP providers in this suite are simulated; no live order or debit was initiated.
+- 36 kitchen/lifecycle/inventory scenarios passed. 37 POS/AI bridge scenarios passed with separate PostgreSQL engines, including delayed offline source time and lost acknowledgement recovery.
+- Consumption-history database tests passed: delayed sales, old kitchen consumption, legacy fallback, confirmed returns, future exclusion, tenant isolation and no double-counting of legacy journal rows.
+- Offline/accountant integration passed current-role/password revocation checks, transaction rollback on audit failure, stale owner rejection, idempotent revocation and frozen 251-receipt pagination.
+- GitHub [POS release validation 38951511220](https://github.com/akanal/Bringness-POS/actions/runs/38951511220) and [full POS/AI validation 38951511397](https://github.com/akanal/Bringness-POS/actions/runs/38951511397) completed successfully.
+- GitHub [Center validation 38951511276](https://github.com/akanal/Bringness-POS/actions/runs/38951511276): Chromium and WebKit jobs both passed, including authorization, PostgreSQL 16 migration/lifecycle and all 21 browser scenarios in each engine.
+
+The public POS/waiter design and prices were not changed. External provider activation, hardware/device acceptance and production deployment remain separate steps.
