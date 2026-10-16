@@ -65,3 +65,11 @@ test('offline seller details must belong to the restaurant map itself',()=>{
  snapshot.merchant=Object.create({restaurant:{name:'Inherited Cafe'}});
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Verkäuferdaten/);
 });
+
+
+test('offline catalog timestamps reject non-string input without coercion',()=>{
+ for(const field of ['createdAt','validUntil']){
+  const {snapshot,sale}=fixture();snapshot[field]={toString(){throw Error('unexpected coercion')}};
+  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Zeit/);
+ }
+});
