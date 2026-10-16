@@ -27,7 +27,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
      // Keep every uncertain sale pending; the server deduplicates by sale ID.
      throw Error('Verbindung während der Übertragung unterbrochen. Offene Verkäufe bleiben gespeichert und werden erneut abgeglichen.',{cause:error});
     }
-    if(!Array.isArray(response?.results)||response.results.length!==batch.length)throw Error('Unvollständige Antwort der Offline-Synchronisierung');
+    if(!response||typeof response!=='object'||!Array.isArray(response.results)||response.results.length!==batch.length)throw Error('Unvollständige Antwort der Offline-Synchronisierung');
     // Match acknowledgements by immutable sale ID, not response ordering.
     // Duplicate or unknown IDs make the entire response ambiguous: retry safely.
     const resultsById=new Map();
