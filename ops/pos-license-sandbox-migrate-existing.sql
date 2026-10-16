@@ -50,4 +50,9 @@ CREATE TABLE IF NOT EXISTS sandbox_pos_monthly_invoice_drafts (
  status TEXT NOT NULL DEFAULT 'draft' CHECK(status='draft'),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE sandbox_pos_monthly_invoice_drafts
+ DROP CONSTRAINT IF EXISTS sandbox_pos_monthly_invoice_drafts_status_check;
+ALTER TABLE sandbox_pos_monthly_invoice_drafts
+ ADD CONSTRAINT sandbox_pos_monthly_invoice_drafts_status_check CHECK(status IN ('draft','issued'));
+ALTER TABLE sandbox_pos_monthly_invoice_drafts ADD COLUMN IF NOT EXISTS issued_at TIMESTAMPTZ;
 COMMIT;
