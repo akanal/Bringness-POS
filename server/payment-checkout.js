@@ -16,23 +16,24 @@ function send(res, status, payload) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = "";
+    const chunks = [];
     let bytes = 0;
     let finished = false;
     req.on("data", chunk => {
       if (finished) return;
-      raw += chunk.toString();
       bytes += Buffer.byteLength(chunk);
       if (bytes > 65536) {
         finished = true;
         reject(Object.assign(new Error("Request too large"), { status: 413 }));
         req.resume();
+        return;
       }
+      chunks.push(Buffer.from(chunk));
     });
     req.on("end", () => {
       if (finished) return;
       finished = true;
-      try { resolve(raw ? JSON.parse(raw) : {}); }
+      try { const raw = Buffer.concat(chunks).toString("utf8"); resolve(raw ? JSON.parse(raw) : {}); }
       catch (error) { reject(error); }
     });
     req.on("error", error => { if (!finished) { finished = true; reject(error); } });
