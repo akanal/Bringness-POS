@@ -1,5 +1,5 @@
 const norm=x=>String(x||'').normalize('NFKC').trim().toLocaleLowerCase('de-DE');
-export function deliveryMatches(area,city,postal){const regions=String(area||'').split(/[,;\n]/).map(norm);return regions.some(r=>['deutschland','bundesweit','deutschlandweit'].includes(r)||(norm(city)&&r===norm(city))||(norm(postal)&&r===norm(postal)))}
+export function deliveryMatches(area,city,postal){const regions=typeof area==='string'?area.split(/[,;\n]/).map(norm):[];return regions.some(r=>['deutschland','bundesweit','deutschlandweit'].includes(r)||(norm(city)&&r===norm(city))||(norm(postal)&&r===norm(postal)))}
 export function prepareProcurement(items){
  if(!Array.isArray(items))throw Error('Ungültige Einkaufsliste');
  if(items.length===0)return {lines:[],unresolved:[],netCents:0,complete:false,searchLimit:256};
