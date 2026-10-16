@@ -118,3 +118,10 @@ test('weather availability must be explicitly true',()=>{
  assert.equal(effect.factor,1);
  assert.deepEqual(effect.adjustments,[]);
 });
+
+
+test('non-string event timestamps do not adjust demand',()=>{
+ const effect=demandEffect('2026-10-16',{settings:{demandRules:{enabled:true,eventPercent:30}},events:[{id:'bad',status:'active',starts_at:0,ends_at:'2026-10-17T10:00:00Z'}]});
+ assert.equal(effect.factor,1);
+ assert.deepEqual(effect.adjustments,[]);
+});
