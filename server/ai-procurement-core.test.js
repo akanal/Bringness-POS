@@ -100,3 +100,11 @@ test('one unavailable stock item blocks the entire purchase proposal',()=>{
  assert.equal(result.netCents,0);
  assert.deepEqual(new Set(result.unresolved.map(x=>x.stockId)),new Set(['available','unavailable']));
 });
+
+test('large procurement requests are rejected even without offers',()=>{
+ const rows=Array.from({length:51},(_,i)=>item(String(i),[]));
+ const result=prepareProcurement(rows);
+ assert.equal(result.complete,false);
+ assert.equal(result.lines.length,0);
+ assert.equal(result.unresolved.length,51);
+});
