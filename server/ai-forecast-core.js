@@ -1,4 +1,5 @@
 // Deliberately approximate, explainable forecasts; no external service or auto-order.
+// Forecast outputs are advisory and must never authorize automatic purchases.
 export function berlinClock(now=new Date()) {
  const parts=Object.fromEntries(new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
  return {date:`${parts.year}-${parts.month}-${parts.day}`,hour:Number(parts.hour)};
