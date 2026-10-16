@@ -2,6 +2,7 @@ const {ipcMain,Menu}=require('electron');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOffline=true})=>{
+ if(typeof deviceKey!=='string'||!/^[a-f0-9]{64}$/.test(deviceKey))throw Error('Ungültige Offline-Gerätekennung');
  const {PGlite}=await import('@electric-sql/pglite');
  const {createOfflineLedger}=await import('./offline-ledger.mjs');
  const {quoteOfflineSale}=await import('./offline-sale-core.mjs');
