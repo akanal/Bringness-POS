@@ -26,7 +26,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text DEFAULT 'Company'); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
  CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);
  CREATE SEQUENCE receipt_number_seq;
- CREATE TABLE receipts(issued_at timestamptz DEFAULT now(),public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
+ CREATE TABLE receipts(issued_at timestamptz DEFAULT now(),public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,tse_snapshot jsonb,merchant_snapshot jsonb);
  CREATE TABLE payments(order_id uuid,method text,amount_cents integer);
  CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,total_cents integer,status text,source text,created_at timestamptz DEFAULT now());
  CREATE TABLE pos_stock_links(restaurant_id uuid,active boolean);
