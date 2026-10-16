@@ -74,18 +74,19 @@ test('Expired login during upload leaves unsent sales queued for reauthenticatio
  assert.deepEqual(acknowledged,['first','second']);
 });
 
-test('Expired offline catalog does not erase previously queued sales',async()=>{
- const queued=[sale('unsubmitted')];
+test('Catalog renewal rejected by license policy reports error without deleting saved sales',async()=>{
+ const stored=[sale('previously-synced')],acknowledged=[];
  const ledger={
-  pending:async()=>queued,
-  acknowledge:async()=>{throw Error('Should not acknowledge')},
+  pending:async()=>[],
+  acknowledge:async id=>acknowledged.push(id),
   error:async()=>{},
   catalog:async()=>{throw Error('Aktive Download-Lizenz und Gerätefreigabe erforderlich')}
  };
  const coordinator=createOfflineSync({ledger,connect:async()=>async endpoint=>{
   if(endpoint==='catalog')return {snapshot:{validUntil:'2020-01-01T00:00:00Z'}};
-  throw Error('Should not send');
+  throw Error('Unexpected sale upload');
  }});
  assert.equal((await coordinator.sync()).state,'error');
- assert.equal(queued.length,1);
+ assert.equal(stored.length,1);
+ assert.equal(acknowledged.length,0);
 });
