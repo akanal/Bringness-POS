@@ -7,12 +7,11 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
   async catalog(snapshot){
    return db.transaction(async tx=>{
     if(!snapshot||typeof snapshot.id!=='string'||typeof snapshot.companyId!=='string'||!Array.isArray(snapshot.restaurants)||!Array.isArray(snapshot.products)||!Number.isFinite(Date.parse(snapshot.validUntil))||Date.parse(snapshot.validUntil)<=Date.now())throw Error('Offline-Katalog ist ungültig oder abgelaufen.');
-   const previous=(await tx.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
+    const previous=(await tx.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
     if(previous&&previous.companyId!==snapshot.companyId&&(await tx.query('SELECT 1 FROM offline_sales WHERE synced_at IS NULL LIMIT 1')).rows.length)throw Error('Offene Verkäufe zuerst mit dem ursprünglichen Betrieb synchronisieren.');
     const existing=(await tx.query('SELECT payload FROM offline_catalog WHERE id=$1',[snapshot.id])).rows[0]?.payload;
     if(existing&&canonical(existing)!==canonical(snapshot))throw Error('Offline-Katalogkennung wurde bereits mit anderen Daten verwendet.');
-    if(previous&&previous.companyId!==snapshot.companyId)await tx.query('UPDATE offline_catalog SET current=false');
-    else await tx.query('UPDATE offline_catalog SET current=false WHERE id<>$1',[snapshot.id]);
+    await tx.query('UPDATE offline_catalog SET current=false WHERE id<>$1',[snapshot.id]);
     await tx.query('INSERT INTO offline_catalog VALUES($1,$2,true) ON CONFLICT(id) DO UPDATE SET current=true',[snapshot.id,JSON.stringify(snapshot)]);
    });
   },
