@@ -32,7 +32,7 @@ export async function saveSandboxMonthlyInvoiceDraft(pool,{
    return {saved:true,alreadyExists:true,invoiceNumber:existing.rows[0].invoice_number};
   }
   const seq=await client.query("SELECT nextval('sandbox_pos_invoice_number_seq') AS n");
-  const n=seq.rows[0]?.n;
+  const n=seq.rows?.[0]?.n;
   if(seq.rowCount!==1||!/^[0-9]+$/.test(String(n??""))||BigInt(n)<=0n){await client.query("ROLLBACK");return {saved:false,reason:"invoice_sequence_unavailable"};}
   const invoiceNumber="TEST-"+String(date.getUTCFullYear())+"-"+String(n).padStart(7,"0");
   const d=candidate.draft;
