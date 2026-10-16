@@ -15,7 +15,7 @@ export function quoteOfflineSale(snapshot,sale) {
  if(typeof snapshot.createdAt!=='string'||typeof snapshot.validUntil!=='string'||!Number.isFinite(start)||!Number.isFinite(end)||end<=start||end-start>24*60*60*1000||!Number.isFinite(time)||time<start-60000||time>end||time>Date.now()+60000)fail('Verkauf außerhalb der freigegebenen Offline-Zeit');
  if(!Array.isArray(snapshot.restaurants)||!Array.isArray(snapshot.products))fail('Ungültiger Offline-Katalog');
  const restaurant=snapshot.restaurants.find(r=>r?.id===sale.restaurantId);if(!restaurant||typeof restaurant.id!=='string'||!restaurant.id.trim())fail('Betrieb nicht im Offline-Katalog');if(!snapshot.merchant||typeof snapshot.merchant!=='object'||Array.isArray(snapshot.merchant))fail('Fehlende Verkäuferdaten');
- if(!snapshot.merchant[restaurant.id]||typeof snapshot.merchant[restaurant.id]!=='object'||Array.isArray(snapshot.merchant[restaurant.id]))fail('Verkäuferdaten für Betrieb fehlen');
+ if(!Object.hasOwn(snapshot.merchant,restaurant.id)||!snapshot.merchant[restaurant.id]||typeof snapshot.merchant[restaurant.id]!=='object'||Array.isArray(snapshot.merchant[restaurant.id]))fail('Verkäuferdaten für Betrieb fehlen');
  if(!Array.isArray(sale.items)||!sale.items.length||sale.items.length>100)fail('1 bis 100 Positionen erforderlich');
  const seen=new Set();let totalCents=0;
  const items=sale.items.map(i=>{
