@@ -40,6 +40,6 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
    const result=await db.query('UPDATE offline_sales SET synced_at=now(),cloud_receipt=$2,error=NULL WHERE id=$1 AND synced_at IS NULL RETURNING id',[id,JSON.stringify(receipt)]);
    if(result.rows.length!==1)throw Error('Offline-Verkauf konnte nicht als synchronisiert bestätigt werden.');
   },
-  async error(id,message){await db.query('UPDATE offline_sales SET error=$2 WHERE id=$1 AND synced_at IS NULL',[id,String(message).slice(0,300)]);}
+  async error(id,message){await db.query('UPDATE offline_sales SET error=$2 WHERE id=$1 AND synced_at IS NULL',[id,String(message||'Synchronisierung fehlgeschlagen').slice(0,300)]);}
  };
 }
