@@ -1,3 +1,4 @@
+import {activateLicensedDevice,renewLicensedDevice,deviceKeyValue} from './device-license-core.js';
 import crypto from "node:crypto";
 import pg from "pg";
 
@@ -12,23 +13,18 @@ function sendJson(res,status,payload){
 }
 function bearer(req){return String(req.headers.authorization||"").replace(/^Bearer\s+/i,"")}
 async function body(req){
-  return new Promise((resolve,reject)=>{
-    let data="";
-    req.on("data",c=>data+=c);
-    req.on("end",()=>{
-      try{resolve(data?JSON.parse(data):{})}
-      catch(err){reject(err)}
-    });
-  });
+ let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>8192)throw Object.assign(Error('Anfrage zu groß'),{status:413})}
+ let result;try{result=raw?JSON.parse(raw):{}}catch{throw Object.assign(Error('Ungültige Anfrage'),{status:400})}
+ if(!result||typeof result!=='object'||Array.isArray(result))throw Object.assign(Error('Ungültige Anfrage'),{status:400});return result;
 }
-async function currentUser(req){
+async function currentUser(db,req){
   const token=bearer(req); if(!token)return null;
   const tokenHash=crypto.createHash("sha256").update(token).digest("hex");
-  const q=await pool.query(`SELECT u.id,u.company_id,u.email,u.display_name,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`,[tokenHash]);
+  const q=await db.query(`SELECT u.id,u.company_id,u.email,u.display_name,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)`,[tokenHash]);
   return q.rows[0]||null;
 }
-async function activeDownloadEntitlement(companyId){
-  const q=await pool.query(`SELECT ce.id,ce.purchased_at FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='download_license' AND ce.status='active' ORDER BY ce.purchased_at DESC NULLS LAST,ce.created_at DESC LIMIT 1`,[companyId]);
+async function activeDownloadEntitlement(db,companyId){
+  const q=await db.query(`SELECT ce.id,ce.purchased_at FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='download_license' AND ce.status='active' ORDER BY ce.purchased_at DESC NULLS LAST,ce.created_at DESC LIMIT 1`,[companyId]);
   return q.rows[0]||null;
 }
 function versionParts(version){return String(version||"").split(/[^0-9]+/).filter(Boolean).slice(0,4).map(Number)}
@@ -37,13 +33,13 @@ function isNewer(candidate,current){
   for(let i=0;i<n;i++){const av=a[i]||0,bv=b[i]||0;if(av>bv)return true;if(av<bv)return false}
   return false;
 }
-async function updateForDevice(companyId,currentVersion){
-  const q=await pool.query(`SELECT id,version,paid_upgrade,upgrade_plan_code,purchase_url,release_notes FROM software_releases WHERE active=true AND platform='windows' AND channel='stable' ORDER BY created_at DESC LIMIT 1`);
+async function updateForDevice(db,companyId,currentVersion){
+  const q=await db.query(`SELECT id,version,paid_upgrade,upgrade_plan_code,purchase_url,release_notes FROM software_releases WHERE active=true AND platform='windows' AND channel='stable' ORDER BY created_at DESC LIMIT 1`);
   if(!q.rowCount||!isNewer(q.rows[0].version,currentVersion))return null;
   const release=q.rows[0];
   let upgradeOwned=false;
   if(release.paid_upgrade&&release.upgrade_plan_code){
-    const owned=await pool.query(`SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code=$2 AND ce.status='active' LIMIT 1`,[companyId,release.upgrade_plan_code]);
+    const owned=await db.query(`SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code=$2 AND ce.status='active' LIMIT 1`,[companyId,release.upgrade_plan_code]);
     upgradeOwned=Boolean(owned.rowCount);
   }
   const purchaseRequired=Boolean(release.paid_upgrade&&!upgradeOwned);
@@ -61,8 +57,8 @@ function leaseUntil(){
   const days=Math.max(1,Math.min(30,Number(process.env.DOWNLOAD_LICENSE_OFFLINE_DAYS||7)||7));
   return new Date(Date.now()+days*86400000);
 }
-export async function migrateDeviceLicense(){
-  await pool.query(`
+export async function migrateDeviceLicense(db=pool){
+  await db.query(`
     ALTER TABLE devices ADD COLUMN IF NOT EXISTS activation_status text NOT NULL DEFAULT 'unbound';
     ALTER TABLE devices ADD COLUMN IF NOT EXISTS activated_at timestamptz;
     ALTER TABLE devices ADD COLUMN IF NOT EXISTS deactivated_at timestamptz;
@@ -77,56 +73,33 @@ export async function migrateDeviceLicense(){
       WHERE entitlement_id IS NOT NULL AND activation_status='active' AND status='active';
   `);
 }
-async function checkedDevice(user,entitlement,deviceKey,appVersion){
-  const q=await pool.query(`SELECT id,name,platform,app_version,activation_status,activated_at,last_seen_at,license_valid_until FROM devices WHERE company_id=$1 AND device_key=$2 AND entitlement_id=$3 LIMIT 1`,[user.company_id,deviceKey,entitlement.id]);
-  const device=q.rows[0]||null;
-  if(!device||device.activation_status!=="active")return {active:false,device:null,error:"Dieses Gerät ist für die Download-Lizenz nicht aktiviert."};
-  const validUntil=leaseUntil();
-  await pool.query(`UPDATE devices SET app_version=$2,last_seen_at=now(),last_license_check_at=now(),license_valid_until=$3 WHERE id=$1`,[device.id,String(appVersion||"").slice(0,40),validUntil]);
-  const update=await updateForDevice(user.company_id,appVersion);
-  return {active:true,device:{...device,app_version:appVersion,license_valid_until:validUntil},validUntil:validUntil.toISOString(),checkIntervalMinutes:360,update};
-}
-export async function handleDeviceLicense(req,res){
-  const url=new URL(req.url,"http://localhost");
-  if(!["/api/v1/license/device/activate","/api/v1/license/device/status","/api/v1/license/device/check"].includes(url.pathname))return false;
-  const user=await currentUser(req);
-  if(!user){sendJson(res,401,{error:"Nicht angemeldet"});return true}
-  const entitlement=await activeDownloadEntitlement(user.company_id);
-  if(!entitlement){sendJson(res,402,{active:false,error:"Keine aktive Download-Lizenz vorhanden.",purchaseRequired:true});return true}
-
-  if(url.pathname==="/api/v1/license/device/status"&&req.method==="GET"){
-    const deviceKey=String(url.searchParams.get("deviceKey")||"").trim();
-    if(!deviceKey){sendJson(res,400,{error:"deviceKey fehlt"});return true}
-    const q=await pool.query(`SELECT id,name,platform,app_version,activation_status,activated_at,last_seen_at,last_license_check_at,license_valid_until FROM devices WHERE company_id=$1 AND device_key=$2 AND entitlement_id=$3 LIMIT 1`,[user.company_id,deviceKey,entitlement.id]);
-    const d=q.rows[0]||null;
-    sendJson(res,200,{active:Boolean(d&&d.activation_status==='active'),device:d,entitlementId:entitlement.id});return true;
+export function createDeviceLicenseHandler(db=pool){return async(req,res)=>{
+ const url=new URL(req.url,'http://localhost');
+ if(!['/api/v1/license/device/activate','/api/v1/license/device/status','/api/v1/license/device/check','/api/v1/devices/activate'].includes(url.pathname))return false;
+ try{
+  const statusRequest=url.pathname.endsWith('/status');
+  if(req.method!==(statusRequest?'GET':'POST')){sendJson(res,405,{error:'Methode nicht erlaubt'});return true}
+  const user=await currentUser(db,req);
+  if(!user){sendJson(res,401,{error:'Nicht angemeldet'});return true}
+  if(url.pathname.endsWith('/activate')&&!['owner','admin'].includes(user.role)){sendJson(res,403,{error:'Nur die Betriebsverwaltung darf Geräte aktivieren'});return true}
+  const entitlement=await activeDownloadEntitlement(db,user.company_id);
+  if(!entitlement){sendJson(res,402,{active:false,error:'Keine aktive Download-Lizenz vorhanden.',purchaseRequired:true});return true}
+  if(statusRequest){
+   const deviceKey=deviceKeyValue(url.searchParams.get('deviceKey')||'');
+   const device=(await db.query(`SELECT id,name,platform,app_version,status,activation_status,activated_at,last_seen_at,last_license_check_at,license_valid_until FROM devices WHERE company_id=$1 AND device_key=$2 AND entitlement_id=$3 LIMIT 1`,[user.company_id,deviceKey,entitlement.id])).rows[0]||null;
+   sendJson(res,200,{active:!!device&&device.status==='active'&&device.activation_status==='active',device,entitlementId:entitlement.id});return true;
   }
-
-  if(url.pathname==="/api/v1/license/device/check"&&req.method==="POST"){
-    const b=await body(req),deviceKey=String(b.deviceKey||"").trim(),appVersion=String(b.appVersion||"").trim();
-    if(deviceKey.length<16){sendJson(res,400,{active:false,error:"Ungültige Geräte-ID"});return true}
-    const result=await checkedDevice(user,entitlement,deviceKey,appVersion);
-    if(!result.active){sendJson(res,409,result);return true}
-    sendJson(res,200,{...result,entitlementId:entitlement.id,deviceLimit:1});return true;
-  }
-
-  if(url.pathname==="/api/v1/license/device/activate"&&req.method==="POST"){
-    const b=await body(req),deviceKey=String(b.deviceKey||"").trim();
-    if(deviceKey.length<16){sendJson(res,400,{error:"Ungültige Geräte-ID"});return true}
-    const existing=await pool.query(`SELECT id,device_key,name FROM devices WHERE entitlement_id=$1 AND activation_status='active' AND status='active' LIMIT 1`,[entitlement.id]);
-    if(existing.rowCount&&existing.rows[0].device_key!==deviceKey){
-      sendJson(res,409,{active:false,deviceLimitReached:true,error:"Diese Download-Lizenz ist bereits auf einem anderen Gerät aktiviert.",activeDevice:{id:existing.rows[0].id,name:existing.rows[0].name}});return true;
-    }
-    const name=String(b.name||"Windows POS").slice(0,120),platform=String(b.platform||"windows").slice(0,40),appVersion=String(b.appVersion||"").slice(0,40),validUntil=leaseUntil();
-    const q=await pool.query(`INSERT INTO devices(company_id,device_key,name,platform,app_version,status,last_seen_at,entitlement_id,activation_status,activated_at,deactivated_at,last_license_check_at,license_valid_until)
-      VALUES($1,$2,$3,$4,$5,'active',now(),$6,'active',now(),NULL,now(),$7)
-      ON CONFLICT(device_key) DO UPDATE SET
-        company_id=EXCLUDED.company_id,name=EXCLUDED.name,platform=EXCLUDED.platform,app_version=EXCLUDED.app_version,status='active',last_seen_at=now(),entitlement_id=EXCLUDED.entitlement_id,activation_status='active',activated_at=COALESCE(devices.activated_at,now()),deactivated_at=NULL,last_license_check_at=now(),license_valid_until=EXCLUDED.license_valid_until
-      RETURNING id,name,platform,app_version,activation_status,activated_at,license_valid_until`,[user.company_id,deviceKey,name,platform,appVersion,entitlement.id,validUntil]);
-    await pool.query(`INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload) VALUES($1,$2,'download_device_activated','device',$3,$4)`,[user.company_id,user.id,q.rows[0].id,JSON.stringify({entitlementId:entitlement.id,deviceKeyHash:crypto.createHash('sha256').update(deviceKey).digest('hex')})]);
-    const update=await updateForDevice(user.company_id,appVersion);
-    sendJson(res,200,{active:true,device:q.rows[0],entitlementId:entitlement.id,deviceLimit:1,validUntil:validUntil.toISOString(),checkIntervalMinutes:360,update});return true;
-  }
-
-  sendJson(res,405,{error:"Methode nicht erlaubt"});return true;
-}
+  const b=await body(req),deviceKey=deviceKeyValue(typeof b.deviceKey==='string'?b.deviceKey.trim():b.deviceKey),appVersion=typeof b.appVersion==='string'?b.appVersion.trim().slice(0,40):'';
+  const validUntil=leaseUntil();let result;
+  if(url.pathname.endsWith('/activate')){
+   const device=await activateLicensedDevice(db,user,entitlement.id,{deviceKey,name:typeof b.name==='string'?b.name.slice(0,120):'Windows POS',platform:typeof b.platform==='string'?b.platform.slice(0,40):'windows',appVersion},validUntil);
+   result={active:true,device};
+  }else result=await renewLicensedDevice(db,user,entitlement.id,deviceKey,appVersion,validUntil);
+  if(!result.active){sendJson(res,409,result);return true}
+  // Update discovery is independent from permission to keep using an already
+  // licensed device. A release-catalog failure must not revoke that permission.
+  let update=null;try{update=await updateForDevice(db,user.company_id,appVersion)}catch{}
+  sendJson(res,200,{...result,...(url.pathname==='/api/v1/devices/activate'?{licensed:true}:{}),validUntil:validUntil.toISOString(),checkIntervalMinutes:360,update,entitlementId:entitlement.id,deviceLimit:1});return true;
+ }catch(error){sendJson(res,error.status||503,{active:false,error:error.status?error.message:'Gerätefreigabe momentan nicht verfügbar',...(error.deviceLimitReached?{deviceLimitReached:true}:{}),...(error.activeDevice?{activeDevice:error.activeDevice}:{}),...(error.status===402?{purchaseRequired:true}:{})});return true}
+}}
+export const handleDeviceLicense=createDeviceLicenseHandler(pool);
