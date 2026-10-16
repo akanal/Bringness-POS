@@ -21,22 +21,36 @@ jobs:
         env:
           STAGING_HOST: demo.bringness-pos.de
           STAGING_APP_DIR: /opt/bringness/staging/preview
-          STAGING_DATABASE_URL: postgresql://preview:placeholder@localhost/bringness_staging
-          STAGING_SESSION_SECRET: placeholder-only-for-preflight
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_staging
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
           STAGING_PAYMENT_MODE: sandbox
           STAGING_TSE_MODE: disabled
           STAGING_OUTBOUND_MESSAGES: disabled
+          STAGING_DB_ISOLATION_CONFIRMED: yes
         run: bash ops/staging-preflight.sh
       - name: Verify unsafe payment mode is rejected
         env:
           STAGING_HOST: demo.bringness-pos.de
           STAGING_APP_DIR: /opt/bringness/staging/preview
-          STAGING_DATABASE_URL: postgresql://preview:placeholder@localhost/bringness_staging
-          STAGING_SESSION_SECRET: placeholder-only-for-preflight
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_staging
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
           STAGING_PAYMENT_MODE: live
           STAGING_TSE_MODE: disabled
         run: |
           if bash ops/staging-preflight.sh; then
             echo 'Unsafe payment mode unexpectedly passed' >&2
+            exit 1
+          fi
+      - name: Verify missing database isolation is rejected
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_staging
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
+          STAGING_PAYMENT_MODE: sandbox
+          STAGING_TSE_MODE: disabled
+        run: |
+          if bash ops/staging-preflight.sh; then
+            echo 'Missing isolation confirmation unexpectedly passed' >&2
             exit 1
           fi
