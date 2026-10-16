@@ -48,6 +48,16 @@ test('PostgreSQL enforces guarded TSE state transitions',{skip:!process.env.TSE_
   assert.equal(linked.state,'signed');
   assert.equal(linked.tse_transaction_id,tx.id);
   assert.equal(linked.tse_snapshot.signature,linked.signature);
+  const otherTx=(await client.query(
+   "INSERT INTO tse_transactions(restaurant_id,receipt_id,client_transaction_id,process_data,state) VALUES($1,$2,'other-tx','{}','signed') RETURNING id",
+   [restaurant,receipt]
+  )).rows[0];
+  const reassignment=await client.query(
+   "UPDATE receipts SET tse_transaction_id=$2 WHERE id=$1 AND (tse_transaction_id IS NULL OR tse_transaction_id=$2)",
+   [receipt,otherTx.id]
+  );
+  assert.equal(reassignment.rowCount,0);
+  assert.equal((await client.query('SELECT tse_transaction_id FROM receipts WHERE id=$1',[receipt])).rows[0].tse_transaction_id,tx.id);
   assert.equal(await markTransactionSigned(client,tx.id,result),null);
   await assert.rejects(
    client.query("INSERT INTO tse_transactions(restaurant_id,receipt_id,client_transaction_id,process_data,state) VALUES($1,$2,'test-tx','{}','prepared')",[restaurant,receipt]),
