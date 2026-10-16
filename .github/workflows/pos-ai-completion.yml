@@ -3,7 +3,7 @@ on:
   pull_request:
     paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
   push:
-    branches: [main]
+    branches: [main, 'finish/**']
     paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
 permissions:
   contents: read
