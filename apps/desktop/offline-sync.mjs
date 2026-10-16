@@ -64,7 +64,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     }
     // Do not resend rejected sales repeatedly during the same sync cycle.
     notify();
-    pending=await ledger.pending(Array.from(skipped));
+    pending=await ledger.pending(Array.from(attempted));
     if(pending.length===0&&skipped.size)publish({state:'syncing',message:skipped.size+' Verkäufe benötigen eine Prüfung; übrige Übertragungen sind abgeschlossen.'});
    }
    let catalogError=null;
