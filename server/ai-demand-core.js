@@ -28,7 +28,7 @@ export function demandEffect(date,context,progress=0){
  // Fade configured context as real sales become the stronger source of evidence.
  const safeProgress=Number.isFinite(progress)?Math.max(0,Math.min(1,progress)):0;
  const factor=1+(rawFactor-1)*(1-safeProgress);
- return {enabled:true,factor,rawFactor,adjustments,rules,weatherSkipped:!weather||weather.partial,method:'Betrieblich konfigurierte Szenarioregeln, keine gelernte Wetterwirkung'};
+ return {enabled:true,factor,rawFactor,adjustments,rules,weatherSkipped:!weather||weather.partial!==false,method:'Betrieblich konfigurierte Szenarioregeln, keine gelernte Wetterwirkung'};
 }
 export function planningDemandDays(context,today,days){return Array.from({length:days},(_,i)=>{const date=new Date(Date.parse(today+'T12:00:00Z')+i*86400000).toISOString().slice(0,10),closed=closedOn(date,context.settings),effect=demandEffect(date,context);return {date,closed,factor:closed?0:effect.factor,adjustments:closed?[]:effect.adjustments}})}
 export function nextDemandForecasts(rows,context,today,days=6){const history=rows.filter(r=>r.day<today);return Array.from({length:days},(_,i)=>{const date=new Date(Date.parse(today+'T12:00:00Z')+(i+1)*86400000).toISOString().slice(0,10),closed=closedOn(date,context.settings),forecast=applyDemandContext(approximateDay(history,{date,hour:0}),{...context,closedToday:closed});delete forecast.history;if(closed){forecast.ready=false;forecast.expectedOrders=null;forecast.expectedRevenueCents=null;forecast.ordersBand=null;forecast.revenueBand=null;forecast.outlook='Ruhetag'}return {...forecast,closed}})}
