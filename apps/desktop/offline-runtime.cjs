@@ -21,14 +21,19 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(data.error||'Synchronisierung nicht verfügbar');return data;};
  }});
  const sync=()=>coordinator.sync();
+ // A restarted desktop process reopens the same durable PGlite directory.
+ // Trigger recovery once the authenticated online page has loaded; its token
+ // may be written shortly after load, so retry on the regular timer as well.
+ let startupRecoveryTimer;
+ const recoverOnStartup=()=>{clearTimeout(startupRecoveryTimer);startupRecoveryTimer=setTimeout(sync,2500);};
  for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{onlineWindow()?.show();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
  // Resume the durable queue promptly when the online POS becomes available again.
  // The coordinator is single-flight, so reconnect signals cannot overlap uploads.
  const onlineContents=onlineWindow()?.webContents;
- const resumeAfterLoad=()=>setTimeout(sync,1500);
+ const resumeAfterLoad=()=>recoverOnStartup();
  onlineContents?.on('did-finish-load',resumeAfterLoad);
- setTimeout(sync,12000);const timer=setInterval(sync,60000);timer.unref();
- app.on('before-quit',()=>{clearInterval(timer);onlineContents?.removeListener('did-finish-load',resumeAfterLoad);});
+ recoverOnStartup();const timer=setInterval(sync,60000);timer.unref();
+ app.on('before-quit',()=>{clearInterval(timer);clearTimeout(startupRecoveryTimer);onlineContents?.removeListener('did-finish-load',resumeAfterLoad);});
  onlineWindow()?.webContents.on('did-fail-load',(_,code)=>{if(code!==-3)open()});
  return {ledger,open,close:async()=>{clearInterval(timer);offlineWindow?.destroy();await db.close()}};
 };
