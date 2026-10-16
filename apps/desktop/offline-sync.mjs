@@ -8,7 +8,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
   try {
    const request=await connect();
    if(request!=null&&typeof request!=='function')throw Error('Offline-Verbindung liefert keine gültige Schnittstelle');
-   if(!request){
+   if(request==null){
     const outstanding=await ledger.pendingCount();
     publish({state:'login',message:outstanding?outstanding+' Verkäufe warten auf die Online-Anmeldung.':'Online-Kasse öffnen und anmelden.'});
     return {...status};
