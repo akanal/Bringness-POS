@@ -22,6 +22,7 @@ jobs:
       - run: node server/ai-tests/displays.mjs
       - run: node server/ai-tests/billing-eligibility.mjs
       - run: node server/ai-tests/remote-support.mjs
+      - run: node server/ai-tests/admin-audit.mjs
       - run: node server/ai-tests/device-license.mjs
       - run: node server/ai-tests/offline-accountant.mjs
       - run: node server/ai-tests/automatic-policy.mjs
