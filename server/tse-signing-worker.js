@@ -1,4 +1,5 @@
 import {markTransactionSigned,receiptTseSnapshot} from './tse-core.js';
+import {classifyTseRecovery} from './tse-recovery.js';
 export async function signPreparedTse(pool,id,adapter){
  const deviceStatus=await adapter.status();
  if(deviceStatus.certified!==true||!deviceStatus.serialNumber)return {signed:false,reason:'device_not_ready'};
@@ -38,4 +39,20 @@ export async function processPreparedTse(pool,adapterForRestaurant){
   }
  }
  return outcomes;
+}
+
+/**
+ * Read-only inspection of potentially stranded TSE transactions.
+ * This function does not change database state or contact the TSE device.
+ */
+export async function inspectTseRecovery(pool,{limit=100,staleAfterMs=300000,now=new Date()}={}){
+ const safeLimit=Math.min(500,Math.max(1,Math.trunc(Number(limit)||100)));
+ const rows=(await pool.query(
+  "SELECT id,restaurant_id,receipt_id,state,updated_at FROM tse_transactions WHERE state IN ('starting','started','finishing','needs_review','failed') ORDER BY updated_at,id LIMIT $1",
+  [safeLimit]
+ )).rows;
+ return rows.map(row=>({
+  id:row.id,restaurantId:row.restaurant_id,receiptId:row.receipt_id,state:row.state,
+  ...classifyTseRecovery(row,now,staleAfterMs)
+ }));
 }
