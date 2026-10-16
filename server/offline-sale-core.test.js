@@ -80,3 +80,12 @@ test('offline catalog issue time rejects coerced primitive values',()=>{
   assert.throws(()=>offlineCatalogValidUntil('2026-10-20T12:00:00Z',issued),/abgelaufen/);
  }
 });
+
+
+test('offline catalog rejects future authorization start',()=>{
+ const {snapshot,sale}=fixture();
+ snapshot.createdAt=new Date(Date.now()+5*60000).toISOString();
+ snapshot.validUntil=new Date(Date.now()+60*60000).toISOString();
+ sale.createdAt=new Date(Date.now()+5*60000).toISOString();
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Zeit/);
+});
