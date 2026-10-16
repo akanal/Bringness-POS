@@ -71,10 +71,12 @@ export async function handleOfflineSales(req,res){
    const limitText=params.get('limit')||'100';
    if(!/^[1-9][0-9]{0,2}$/.test(limitText)||Number(limitText)>100)fail('Limit muss zwischen 1 und 100 liegen');
    const limit=Number(limitText);
+   const restaurantId=params.get('restaurantId');
+   if(restaurantId!==null&&!offlineUuid.test(restaurantId))fail('Ungültige Betriebskennung');
    const sales=(await pool.query(
-    'SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id WHERE c.company_id=$1 AND ($2::text IS NULL OR s.stock_state=$2) ORDER BY s.created_at DESC,s.id DESC LIMIT $3',
-    [user.company_id,state,limit])).rows;
-   return send(200,{sales,filters:{state,limit}});
+    'SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::text IS NULL OR s.stock_state=$2) AND ($4::uuid IS NULL OR o.restaurant_id=$4) ORDER BY s.created_at DESC,s.id DESC LIMIT $3',
+    [user.company_id,state,limit,restaurantId])).rows;
+   return send(200,{sales,filters:{state,limit,restaurantId}});
   }
   let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(path.endsWith('/batch')?262144:64000))fail('Anfrage zu groß',413)}let b;try{b=JSON.parse(raw)}catch{fail('Ungültige Anfrage')}
   if(path.endsWith('/batch')){
