@@ -1,6 +1,6 @@
 import pg from 'pg';
 import crypto from 'node:crypto';
-import {quoteOfflineSale,offlineUuid,offlineFingerprint} from './offline-sale-core.js';
+import {quoteOfflineSale,offlineUuid,offlineFingerprint,offlineCatalogValidUntil} from './offline-sale-core.js';
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==='production'?{rejectUnauthorized:false}:false});
 export async function migrateOfflineSales(db=pool){await db.query(`
  CREATE TABLE IF NOT EXISTS pos_offline_catalogs(id uuid PRIMARY KEY,company_id uuid NOT NULL REFERENCES companies(id),device_id uuid NOT NULL REFERENCES devices(id),actor_id uuid NOT NULL REFERENCES users(id),payload jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
@@ -14,7 +14,7 @@ export async function issueOfflineCatalog(db,user,deviceKey){
  const products=(await db.query('SELECT p.id,p.restaurant_id "restaurantId",p.name,p.price_cents "priceCents",p.tax_rate::float "taxRate" FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE r.company_id=$1 AND p.active AND p.ai_stock_available ORDER BY p.id',[user.company_id])).rows;
  const sellers=(await db.query(`SELECT r.id,jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),c.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) seller FROM restaurants r JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE r.company_id=$1`,[user.company_id])).rows;
  const issuedAt=new Date();
- const snapshot={id:crypto.randomUUID(),companyId:user.company_id,deviceKey,createdAt:issuedAt.toISOString(),validUntil:new Date(Math.min(new Date(device.license_valid_until).getTime(),issuedAt.getTime()+24*60*60*1000)).toISOString(),restaurants,products,merchant:Object.fromEntries(sellers.map(s=>[s.id,s.seller]))};
+ const snapshot={id:crypto.randomUUID(),companyId:user.company_id,deviceKey,createdAt:issuedAt.toISOString(),validUntil:offlineCatalogValidUntil(device.license_valid_until,issuedAt),restaurants,products,merchant:Object.fromEntries(sellers.map(s=>[s.id,s.seller]))};
  await db.query('INSERT INTO pos_offline_catalogs(id,company_id,device_id,actor_id,payload) VALUES($1,$2,$3,$4,$5)',[snapshot.id,user.company_id,device.id,user.id,JSON.stringify(snapshot)]);return snapshot;
 }
 export async function importOfflineSale(db,user,deviceKey,request){
