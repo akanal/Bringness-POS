@@ -2,6 +2,7 @@ import {validateSandboxInvoiceDetails} from "./pos-license-recurring-invoice-com
 // Sandbox-only issuance: finalize an existing draft only after the associated
 // payment has been recorded as paid. No external payment or email is triggered.
 // This does not itself certify German tax/legal invoice compliance.
+const invoiceIsoDate=value=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
 export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issuer,servicePeriod,serviceDescription}){
  if(typeof paymentId!=="string"||!paymentId.trim()||typeof companyId!=="string"||!companyId.trim())
   return {issued:false,reason:"invalid_input"};
@@ -21,7 +22,7 @@ export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issue
   if(row.status!=="draft"){await client.query("ROLLBACK");return {issued:false,reason:"invalid_invoice_status"};}
   const completeness=validateSandboxInvoiceDetails({
    issuer,customer:row.customer_billing,servicePeriod,serviceDescription,vatRatePercent:19,
-   invoiceDate:String(row.invoice_date),invoiceNumber:row.invoice_number,
+   invoiceDate:invoiceIsoDate(row.invoice_date),invoiceNumber:row.invoice_number,
    netCents:row.net_cents,vatCents:row.vat_cents,grossCents:row.gross_cents
   });
   if(!completeness.ready){
@@ -30,7 +31,7 @@ export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issue
   }
   await client.query(
    "UPDATE sandbox_pos_monthly_invoice_drafts SET status='issued',issued_at=now(),issued_details=$2::jsonb WHERE id=$1 AND status='draft'",
-   [row.id,JSON.stringify({issuer,customer:row.customer_billing,servicePeriod,serviceDescription,invoiceNumber:row.invoice_number,invoiceDate:row.invoice_date,currency:'EUR',netCents:row.net_cents,vatCents:row.vat_cents,grossCents:row.gross_cents,vatRatePercent:19})]);
+   [row.id,JSON.stringify({issuer,customer:row.customer_billing,servicePeriod,serviceDescription,invoiceNumber:row.invoice_number,invoiceDate:invoiceIsoDate(row.invoice_date),currency:'EUR',netCents:row.net_cents,vatCents:row.vat_cents,grossCents:row.gross_cents,vatRatePercent:19})]);
   await client.query("COMMIT");
   return {issued:true,invoiceNumber:row.invoice_number,status:"issued"};
  }catch(error){await client.query("ROLLBACK");throw error;}
