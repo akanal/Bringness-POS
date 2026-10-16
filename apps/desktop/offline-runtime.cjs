@@ -5,7 +5,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  if(typeof deviceKey!=='string'||!/^[a-f0-9]{64}$/.test(deviceKey))throw Error('Ungültige Offline-Gerätekennung');
  const {PGlite}=await import('@electric-sql/pglite');
  const {createOfflineLedger}=await import('./offline-ledger.mjs');
- const {quoteOfflineSale}=await import('./offline-sale-core.mjs');
+ const {quoteOfflineSale}=await import('../../server/offline-sale-core.js');
  const db=new PGlite(path.join(app.getPath('userData'),'offline-postgres'));
  const ledger=await createOfflineLedger(db,quoteOfflineSale);
  let offlineWindow;
