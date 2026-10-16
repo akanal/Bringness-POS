@@ -98,3 +98,21 @@ test('unknown server acknowledgement ID leaves the entire batch pending',async()
  assert.equal(status.state,'error');
  assert.equal(f.pending.size,1);
 });
+
+test('rejected early sale does not block later pages of the queue',async()=>{
+ const ids=Array.from({length:140},(_,i)=>'sale-'+i);
+ const f=fixture(ids,{reply:sales=>({results:sales.map(s=>s.id==='sale-0'?{offlineId:s.id,ok:false,error:'review'}:{offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id})})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['sale-0']);
+ assert.equal(f.calls.flat().length,140);
+ assert.equal(new Set(f.calls.flat()).size,140);
+});
+
+test('catalog refresh failure never reports overall success',async()=>{
+ const f=fixture([]);
+ f.ledger.catalog=async()=>{throw Error('catalog storage failure')};
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.match(status.message,/Katalogaktualisierung fehlgeschlagen/);
+});
