@@ -18,7 +18,11 @@ export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issue
    [paymentId,companyId]);
   if(invoice.rowCount!==1){await client.query("ROLLBACK");return {issued:false,reason:"invoice_draft_missing"};}
   const row=invoice.rows[0];
-  if(row.status==="issued"){await client.query("COMMIT");return {issued:true,alreadyIssued:true,invoiceNumber:row.invoice_number};}
+  if(row.status==="issued"){
+   const snapshot=await client.query("SELECT issued_details FROM sandbox_pos_monthly_invoice_drafts WHERE id=$1",[row.id]);
+   if(!snapshot.rows[0]?.issued_details){await client.query("ROLLBACK");return {issued:false,reason:"issued_invoice_snapshot_missing"};}
+   await client.query("COMMIT");return {issued:true,alreadyIssued:true,invoiceNumber:row.invoice_number};
+  }
   if(row.status!=="draft"){await client.query("ROLLBACK");return {issued:false,reason:"invalid_invoice_status"};}
   const completeness=validateSandboxInvoiceDetails({
    issuer,customer:row.customer_billing,servicePeriod,serviceDescription,vatRatePercent:19,
