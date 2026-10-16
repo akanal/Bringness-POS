@@ -71,3 +71,12 @@ test('invalid DWD station coordinates are not exposed as plausible locations',()
  const result=parseMosmix(xml,new Date(start));
  assert.equal(result.latitude,null);assert.equal(result.longitude,null);
 });
+
+
+test('weather parser rejects invalid evaluation clocks',()=>{
+ const start='2026-10-15T22:00:00Z';
+ const xml='<dwd:IssueTime>'+start+'</dwd:IssueTime><dwd:TimeStep>'+start+'</dwd:TimeStep>'+
+ '<dwd:Forecast dwd:elementName="TTT"><dwd:value>303.15</dwd:value></dwd:Forecast>'+
+ '<dwd:Forecast dwd:elementName="RR1c"><dwd:value>1</dwd:value></dwd:Forecast>';
+ for(const invalid of [new Date(NaN),null])assert.throws(()=>parseMosmix(xml,invalid),/Forecast stale/);
+});
