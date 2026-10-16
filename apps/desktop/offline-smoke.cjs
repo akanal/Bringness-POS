@@ -26,7 +26,9 @@ app.whenReady().then(async()=>{let runtime,rogue;try{
  }
  rogue=new BrowserWindow({show:false,webPreferences:{preload:path.join(__dirname,'offline-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});await rogue.loadURL('data:text/html,<title>Unauthorized frame</title>');const denied=await rogue.webContents.executeJavaScript('offlinePOS.view().then(()=>false,()=>true)');assert.equal(denied,true);assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.sync().then(()=>false,()=>true)'),true);assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.export().then(()=>false,()=>true)'),true);
  // Closing the runtime must revoke IPC access and prevent window recreation.
- await runtime.close();
+ const shutdown=runtime.close();
+ assert.equal(runtime.close(),shutdown);
+ await shutdown;
  assert.equal(window.webContents.isDestroyed(),true);
  assert.throws(()=>runtime.open(),/bereits geschlossen/);
  assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.view().then(()=>false,()=>true)'),true);
