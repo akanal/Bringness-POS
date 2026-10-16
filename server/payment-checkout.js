@@ -21,6 +21,7 @@ function readBody(req) {
     let finished = false;
     req.on("data", chunk => {
       if (finished) return;
+      raw += chunk.toString();
       bytes += Buffer.byteLength(chunk);
       if (bytes > 65536) {
         finished = true;
