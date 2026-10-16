@@ -56,7 +56,18 @@ export async function handleOfflineSales(req,res){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   const user=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
   if(!user)return send(401,{error:'Nicht angemeldet'});if(!['owner','admin'].includes(user.role))return send(403,{error:'Nur Betriebsverwaltung'});
-  if(path.endsWith('/status'))return send(200,{sales:(await pool.query('SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id WHERE c.company_id=$1 ORDER BY s.created_at DESC LIMIT 100',[user.company_id])).rows});
+  if(path.endsWith('/status')){
+   const params=new URL(req.url,'http://local').searchParams;
+   const state=params.get('state');
+   if(state!==null&&!['pending','applied','conflict'].includes(state))fail('Ungültiger Lagerstatus');
+   const limitText=params.get('limit')||'100';
+   if(!/^[1-9][0-9]{0,2}$/.test(limitText)||Number(limitText)>100)fail('Limit muss zwischen 1 und 100 liegen');
+   const limit=Number(limitText);
+   const sales=(await pool.query(
+    'SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id WHERE c.company_id=$1 AND ($2::text IS NULL OR s.stock_state=$2) ORDER BY s.created_at DESC,s.id DESC LIMIT $3',
+    [user.company_id,state,limit])).rows;
+   return send(200,{sales,filters:{state,limit}});
+  }
   let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(path.endsWith('/batch')?262144:64000))fail('Anfrage zu groß',413)}let b;try{b=JSON.parse(raw)}catch{fail('Ungültige Anfrage')}
   if(path.endsWith('/batch')){
    if(!b||typeof b!=='object'||!/^[a-f0-9]{64}$/.test(b.deviceKey||''))fail('Ungültige Gerätekennung');
