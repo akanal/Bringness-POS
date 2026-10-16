@@ -17,7 +17,7 @@ function send(res, status, payload) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let raw = "";
-    req.on("data", chunk => { raw += chunk; if (raw.length > 65536) { reject(new Error("Request too large")); req.destroy(); } });
+    req.on("data", chunk => { raw += chunk; if (raw.length > 65536) { reject(new Error("Request too large")); req.pause(); } });
     req.on("end", () => {
       try { resolve(raw ? JSON.parse(raw) : {}); }
       catch (error) { reject(error); }
@@ -31,7 +31,7 @@ async function currentUser(req) {
   if (!token) return null;
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const q = await pool.query(
-    "SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",
+    "SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",
     [tokenHash]
   );
   return q.rows[0] || null;
