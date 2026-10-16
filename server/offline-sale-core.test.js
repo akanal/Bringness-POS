@@ -128,7 +128,7 @@ test('offline sale rejects unsafe quantity integers',()=>{
 
 test('offline seller must have a nonempty display name',()=>{
  const {snapshot,sale}=fixture();
- snapshot.merchant.restaurant.name=' ';
+ snapshot.merchant.restaurant.businessName=' ';
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Verkäuferdaten/);
 });
 
