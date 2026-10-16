@@ -43,7 +43,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     for(let index=0;index<batch.length;index++){
      const sale=batch[index],result=resultsById.get(sale.id);
      if(result?.offlineId!==sale.id)throw Error('Offline-Antwort stimmt nicht mit der Verkaufskennung überein');
-     if(result.ok===true&&typeof result.id==='string'&&result.id.trim()&&typeof result.receiptNumber==='string'&&result.receiptNumber.trim()){
+     if(result.ok===true&&typeof result.id==='string'&&result.id.trim()&&result.id.length<=128&&typeof result.receiptNumber==='string'&&result.receiptNumber.trim()){
       try{await ledger.acknowledge(sale.id,{id:result.id,receiptNumber:result.receiptNumber,replayed:!!result.replayed});}
       catch(error){
        // A local storage failure must not discard confirmations for later sales.
