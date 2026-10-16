@@ -40,10 +40,12 @@ export async function createOfflineLedger(db,quote) {
   // Read-only reconciliation export. Never exposes catalog/device credentials.
   async reconciliation({limit=100,onlyPending=false}={}){
    if(!Number.isSafeInteger(limit)||limit<1||limit>500||typeof onlyPending!=='boolean')throw Error('Ungültige Exportauswahl');
+   const total=Number((await db.query('SELECT count(*)::bigint AS total FROM offline_sales WHERE ($1::boolean=false OR synced_at IS NULL)',[onlyPending])).rows[0].total);
+   if(total>limit)throw Error('Der Abgleich enthält '+total+' Verkäufe. Der Export ist auf '+limit+' begrenzt; kein unvollständiger Export wird gespeichert.');
    const rows=(await db.query(`SELECT s.id,s.created_at,s.synced_at,s.error,s.receipt,s.cloud_receipt
     FROM offline_sales s WHERE ($1::boolean=false OR s.synced_at IS NULL)
     ORDER BY s.created_at DESC,s.id DESC LIMIT $2`,[onlyPending,limit])).rows;
-   return {exportedAt:new Date().toISOString(),onlyPending,sales:rows.map(row=>({
+   return {exportedAt:new Date().toISOString(),onlyPending,total,sales:rows.map(row=>({
     offlineId:row.id,createdAt:row.created_at,syncedAt:row.synced_at,
     state:row.synced_at?'synced':row.error?'needs_review':'pending',
     error:row.error,receipt:row.receipt,cloudReceipt:row.cloud_receipt
