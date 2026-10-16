@@ -112,3 +112,10 @@ test('large procurement requests are rejected even without offers',()=>{
 test('whitespace variants of stock identifiers cannot duplicate a purchase',()=>{
  assert.throws(()=>prepareProcurement([item('stock',[offer('a','A',100)]),item(' stock ',[offer('b','A',100)])]),/Lagerposition/);
 });
+
+test('supplier offer IDs with whitespace aliases require manual review',()=>{
+ const result=prepareProcurement([item('stock',[offer('same','A',200),offer(' same ','B',100)])]);
+ assert.equal(result.complete,false);
+ assert.equal(result.lines.length,0);
+ assert.match(result.unresolved[0].reason,/Angebotskennung/);
+});
