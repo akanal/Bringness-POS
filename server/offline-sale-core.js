@@ -6,7 +6,7 @@ const fail=message=>{throw Object.assign(Error(message),{status:400})};
 export function offlineCatalogValidUntil(licenseValidUntil,issuedAt=new Date()) {
  const issuedMs=typeof issuedAt==='string'||issuedAt instanceof Date?new Date(issuedAt).getTime():NaN;
  const licenseMs=typeof licenseValidUntil==='string'||licenseValidUntil instanceof Date?new Date(licenseValidUntil).getTime():NaN;
- if(licenseValidUntil==null||!Number.isFinite(issuedMs)||!Number.isFinite(licenseMs)||licenseMs<=issuedMs)fail('Offline-Lizenz abgelaufen');
+ if(licenseValidUntil==null||!Number.isFinite(issuedMs)||!Number.isFinite(licenseMs)||licenseMs<=issuedMs||issuedMs>Date.now()+60000)fail('Offline-Lizenz abgelaufen');
  return new Date(Math.min(licenseMs,issuedMs+24*60*60*1000)).toISOString();
 }
 export function quoteOfflineSale(snapshot,sale) {
