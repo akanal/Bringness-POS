@@ -44,3 +44,9 @@ test('offline sale rejects missing snapshot identifiers and duplicate products',
  const valid=fixture();valid.sale.items.push({...valid.sale.items[0]});
  assert.throws(()=>quoteOfflineSale(valid.snapshot,valid.sale),/Offline-Artikel/);
 });
+
+
+test('offline sale rejects catalog authorization windows exceeding 24 hours',()=>{
+ const {snapshot,sale}=fixture();snapshot.validUntil=new Date(Date.parse(snapshot.createdAt)+25*3600000).toISOString();
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Zeit/);
+});
