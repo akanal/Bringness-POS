@@ -37,3 +37,11 @@ test('coerced text, null and boolean sales figures never count as historical tra
  assert.equal(result.expectedOrders,clean.expectedOrders);
  assert.equal(result.expectedRevenueCents,clean.expectedRevenueCents);
 });
+
+test('timestamp-shaped dates cannot silently be interpreted as historical business days',()=>{
+ const valid=samples();
+ const withTimestamp=[...valid,{day:dateAgo(7)+'T23:30:00Z',hour:12,orders:100000,revenue_cents:10000000}];
+ const clean=approximateDay(valid,clock),result=approximateDay(withTimestamp,clock);
+ assert.equal(result.expectedOrders,clean.expectedOrders);
+ assert.equal(result.expectedRevenueCents,clean.expectedRevenueCents);
+});
