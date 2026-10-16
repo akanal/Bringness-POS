@@ -96,3 +96,10 @@ test('offline sale rejects duplicate catalog product records',()=>{
  snapshot.products.push({...snapshot.products[0],priceCents:1});
  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Artikel/);
 });
+
+
+test('offline sale rejects duplicate catalog restaurant identifiers',()=>{
+ const {snapshot,sale}=fixture();
+ snapshot.restaurants.push({...snapshot.restaurants[0]});
+ assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Katalog/);
+});
