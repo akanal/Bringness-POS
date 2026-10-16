@@ -8,7 +8,7 @@ const weekday=date=>new Date(date+'T12:00:00Z').getUTCDay();
 const median=values=>{const a=[...values].sort((x,y)=>x-y);return a.length?(a[Math.floor((a.length-1)/2)]+a[Math.ceil((a.length-1)/2)])/2:0};
 export function approximateDay(rows,clock=berlinClock()) {
  const daily=new Map();
- for(const row of rows){const date=String(row.day).slice(0,10);if(date>clock.date)continue;let d=daily.get(date);if(!d){d={date,orders:0,revenueCents:0,hours:[]};daily.set(date,d)}const hour=Number(row.hour),orders=Number(row.orders),revenue=Number(row.revenue_cents);d.orders+=orders;d.revenueCents+=revenue;d.hours.push({hour,orders,revenueCents:revenue});}
+ for(const row of Array.isArray(rows)?rows:[]){if(!row||typeof row.day!=='string')continue;const date=row.day.slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T12:00:00Z'))||new Date(date+'T12:00:00Z').toISOString().slice(0,10)!==date||date>clock.date)continue;const h=Number(row.hour),o=Number(row.orders),v=Number(row.revenue_cents);if(!Number.isInteger(h)||h<0||h>23||!Number.isSafeInteger(o)||o<0||!Number.isSafeInteger(v)||v<0)continue;let d=daily.get(date);if(!d){d={date,orders:0,revenueCents:0,hours:[]};daily.set(date,d)}const hour=Number(row.hour),orders=Number(row.orders),revenue=Number(row.revenue_cents);d.orders+=orders;d.revenueCents+=revenue;d.hours.push({hour,orders,revenueCents:revenue});}
  const past=[...daily.values()].filter(d=>d.date<clock.date).sort((a,b)=>b.date.localeCompare(a.date));
  const same=past.filter(d=>weekday(d.date)===weekday(clock.date));
  const recent=same.filter(d=>dayNumber(clock.date)-dayNumber(d.date)<=56).slice(0,8);
