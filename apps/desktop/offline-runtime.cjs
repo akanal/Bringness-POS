@@ -4,7 +4,7 @@ const {pathToFileURL}=require('node:url');
 exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOffline=true})=>{
  const {PGlite}=await import('@electric-sql/pglite');
  const {createOfflineLedger}=await import('./offline-ledger.mjs');
- const {quoteOfflineSale,canonicalJson}=await import('./offline-sale-core.mjs');
+ const {quoteOfflineSale}=await import('./offline-sale-core.mjs');
  const db=new PGlite(path.join(app.getPath('userData'),'offline-postgres'));
  const ledger=await createOfflineLedger(db,quoteOfflineSale,canonicalJson);
  let offlineWindow;
