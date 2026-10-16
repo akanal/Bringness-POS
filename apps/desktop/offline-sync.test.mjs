@@ -173,3 +173,26 @@ test('different restaurants may legitimately use the same receipt number',async(
  assert.equal(status.state,'success');
  assert.equal(f.pending.size,0);
 });
+
+test('missing restaurant identity stops transmission before network call',async()=>{
+ const f=fixture(['a']);
+ delete f.pending.get('a').request.restaurantId;
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.calls.length,0);
+ assert.equal(f.pending.size,1);
+});
+
+test('rejected sale can be retried with same ID in a later sync run',async()=>{
+ let reject=true;
+ const f=fixture(['a'],{reply:sales=>({results:sales.map(s=>reject
+  ?{offlineId:s.id,ok:false,error:'temporary'}
+  :{offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id})})});
+ const sync=createOfflineSync(f);
+ assert.equal((await sync.sync()).state,'warning');
+ assert.equal(f.pending.size,1);
+ reject=false;
+ assert.equal((await sync.sync()).state,'success');
+ assert.equal(f.pending.size,0);
+ assert.deepEqual(f.calls,[['a'],['a']]);
+});
