@@ -8,6 +8,7 @@ export async function saveSandboxMonthlyInvoiceDraft(pool,{
   companyId,planCode,paymentId,customerBilling,paymentStatus:"paid"
  });
  if(!candidate.ready) return {saved:false,reason:candidate.reason};
+ if(typeof paymentId!=="string"||!paymentId.trim()||typeof companyId!=="string"||!companyId.trim()||typeof planCode!=="string"||!planCode.trim())return {saved:false,reason:"invalid_input"};
  const date=new Date(invoiceDate);
  if(!Number.isFinite(date.getTime())) return {saved:false,reason:"invalid_invoice_date"};
  const client=await pool.connect();
