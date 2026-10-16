@@ -127,3 +127,18 @@ test('unknown digital receipt is private and never cached',async()=>{
  assert.match(headers['x-robots-tag'],/noindex/);
  assert.equal(headers['referrer-policy'],'no-referrer');
 });
+
+test('malformed public receipt URLs never reach the database',async()=>{
+ const pool={query:async()=>{throw Error('invalid link must not query database')}};
+ const handler=createPublicReceiptHandler(pool);
+ const malformed=[
+  '/beleg/not-a-uuid',
+  '/beleg/11111111-1111-4111-8111-11111111111Z',
+  '/beleg/11111111-1111-4111-8111-111111111111/extra',
+  '/beleg/%2e%2e%2fadmin',
+  '/beleg/11111111-1111-4111-8111-111111111111%0a'
+ ];
+ for(const url of malformed){
+  assert.equal(await handler({method:'GET',url},{writeHead(){throw Error('unexpected response')},end(){throw Error('unexpected body')}}),false,url);
+ }
+});
