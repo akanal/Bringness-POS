@@ -135,3 +135,10 @@ test('offline seller must have a nonempty display name',()=>{
 test('offline authorization rejects a future issue time',()=>{
  assert.throws(()=>offlineCatalogValidUntil('2100-01-03T00:00:00Z','2100-01-01T00:00:00Z'),/abgelaufen/);
 });
+
+test('offline sale requires an explicit product ID even with malformed catalog entries',()=>{
+ for(const productId of [undefined,null,42,'']){
+  const {snapshot,sale}=fixture();snapshot.products.unshift(null);sale.items[0].productId=productId;
+  assert.throws(()=>quoteOfflineSale(snapshot,sale),/Offline-Artikel/);
+ }
+});
