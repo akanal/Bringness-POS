@@ -1,6 +1,7 @@
 const $=id=>document.getElementById(id),money=n=>(n/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
 let snapshot,cart=new Map(),pendingRequest,busy=false;
 const recoveryKey='bringness.offline.pending-sale.v1';
+let recoveryFault=false;
 function savePending(request){localStorage.setItem(recoveryKey,JSON.stringify(request));}
 function clearPending(){localStorage.removeItem(recoveryKey);}
 function recoverPending(){const raw=localStorage.getItem(recoveryKey);if(!raw)return null;let r;try{r=JSON.parse(raw)}catch{throw Error('Gespeicherter Bezahlvorgang ist beschädigt. Bitte Support kontaktieren.')}if(!r||typeof r!=='object'||typeof r.id!=='string'||typeof r.snapshotId!=='string'||typeof r.restaurantId!=='string'||r.paymentMethod!=='cash'||!Array.isArray(r.items)||!r.items.length||r.items.some(i=>!i||typeof i.productId!=='string'||!Number.isSafeInteger(i.quantity)||i.quantity<1||i.quantity>999))throw Error('Gespeicherter Bezahlvorgang ist ungültig. Bitte Support kontaktieren.');return r;}
