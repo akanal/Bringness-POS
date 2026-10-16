@@ -86,3 +86,19 @@ test('QR and footer move together to a fresh PDF page when remaining space is in
  assert.equal(doc.images[0].y,18);
  assert.ok(doc.textPositions.find(t=>t.value==='QR: Digitalen Beleg öffnen').y>=doc.images[0].y+112+8);
 });
+
+test('printed QR PNG decodes to the exact public receipt URL at thermal-print resolution',{skip:!process.env.CENTER_TEST_QRCODE||!process.env.CENTER_TEST_PNGJS||!process.env.CENTER_TEST_JSQR},async()=>{
+ const [{default:QrWriter},pngModule,jsqrModule]=await Promise.all([
+  import(process.env.CENTER_TEST_QRCODE),
+  import(process.env.CENTER_TEST_PNGJS),
+  import(process.env.CENTER_TEST_JSQR)
+ ]);
+ const PNG=pngModule.PNG||pngModule.default?.PNG;
+ const decode=jsqrModule.default||jsqrModule;
+ const url='https://pos.example.test/beleg/'+publicToken;
+ const png=PNG.sync.read(await QrWriter.toBuffer(url,{width:224,margin:4,errorCorrectionLevel:'M'}));
+ const pixels=new Uint8ClampedArray(png.data);
+ const scanned=decode(pixels,png.width,png.height);
+ assert.ok(scanned,'QR must be readable by a scanner');
+ assert.equal(scanned.data,url);
+});
