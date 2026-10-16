@@ -4,7 +4,8 @@ export function centerPushConfiguration(env=process.env){
  ?{publicKey:env.VAPID_PUBLIC_KEY}:null;
 }
 export function validateGuestSubscription(subscription){
- const u=new URL(subscription?.endpoint||'');
+ let u;
+ try{u=new URL(subscription?.endpoint||'');}catch{throw Error('INVALID_PUSH_ENDPOINT');}
  const allowed=u.hostname==='fcm.googleapis.com'||u.hostname==='updates.push.services.mozilla.com'||u.hostname.endsWith('.push.apple.com');
  if(u.protocol!=='https:'||u.port||u.username||u.password||!allowed||u.href.length>2048)throw Error('INVALID_PUSH_ENDPOINT');
  for(const [name,length] of [['p256dh',65],['auth',16]]){
