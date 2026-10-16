@@ -21,7 +21,8 @@ async function durableRunResult(db,runId,fallback){
  return current?.state==='ordered'?{state:'ordered',replayed:true,netCents:Number(current.net_cents)}:fallback;
 }
 export async function runAutomaticProcurement(user,{db=aiPool(),draft=procurementDraft,cart=cartTransaction,clock=()=>new Date(),now=clock()}={}){
- const today=berlinClock(now).date,policyRow=(await db.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1',[user.id])).rows[0];if(!policyRow?.policy.enabled)return {state:'disabled'};
+ if(!(now instanceof Date)||!Number.isFinite(now.getTime()))fail('Ungültiger Ausführungszeitpunkt');
+ const today=berlinClock(now).date,policyRow=(await db.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1',[user.id])).rows[0];if(!policyRow?.policy?.enabled)return {state:'disabled'};
  const policy=policyRow.policy;
  const run=(await db.query('INSERT INTO ai_auto_procurement_runs(account_id,day) VALUES($1,$2) ON CONFLICT(account_id,day) DO UPDATE SET day=EXCLUDED.day RETURNING *',[user.id,today])).rows[0];if(run.state==='ordered')return {state:'ordered',replayed:true,netCents:run.net_cents};
  try{
@@ -35,7 +36,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
     const current=(await c.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1 FOR UPDATE',[user.id])).rows[0];
     if(!current?.policy.enabled||current.version!==policyRow.version)fail('Freigabe inzwischen geändert',409);
     if(quote.groups.some(g=>!policy.supplierIds.includes(g.supplierId)||JSON.stringify([g.deliveryArea,g.terms,g.minimumCents])!==JSON.stringify(policy.supplierTerms?.[g.supplierId])))fail('Lieferant nicht freigegeben',409);
-    if(quote.netCents>policy.maxDailyNetCents)fail('Netto-Warenwertgrenze überschritten',409);
+    if(!Number.isSafeInteger(quote.netCents)||quote.netCents<0||quote.netCents>policy.maxDailyNetCents)fail('Netto-Warenwertgrenze überschritten',409);
     const fresh=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds},{db:c});
     const normalized=x=>JSON.stringify(x.map(({stockId,productId,packs})=>[stockId,productId,packs]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
     if(!fresh.complete||normalized(fresh.lines)!==normalized(lines))fail('Lagerbedarf oder offene Bestellungen inzwischen geändert',409);
