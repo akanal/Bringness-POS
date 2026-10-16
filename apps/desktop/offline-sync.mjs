@@ -16,6 +16,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    // Drain all batches, including more than 100 pending sales, before refreshing.
    const skipped=new Set();
    const attempted=new Set();
+   const serverReceiptIds=new Map();
    let acknowledged=0;
    let pending=await ledger.pending();
    let failed=0;
