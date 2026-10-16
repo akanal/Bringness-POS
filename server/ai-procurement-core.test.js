@@ -18,3 +18,10 @@ test('supplier minimum cannot be weakened by the first line in a combined order'
  assert.equal(result.lines.length,0);
  assert.equal(result.unresolved.length,2);
 });
+
+test('malformed offers and missing supplier identities cannot be selected',()=>{
+ const malformed=[null,undefined,{}, {...offer('a','A',100),supplier_id:''}, {...offer('b','B',100),id:null}];
+ const r=prepareProcurement([item('s',malformed)]);
+ assert.equal(r.complete,false);assert.equal(r.lines.length,0);assert.equal(r.unresolved.length,1);
+ assert.equal(prepareProcurement([item('s',null)]).complete,false);
+});
