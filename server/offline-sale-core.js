@@ -10,7 +10,7 @@ export function offlineCatalogValidUntil(licenseValidUntil,issuedAt=new Date()) 
  return new Date(Math.min(licenseMs,issuedMs+24*60*60*1000)).toISOString();
 }
 export function quoteOfflineSale(snapshot,sale) {
- if(!offlineUuid.test(sale?.id||'')||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
+ if(typeof sale?.id!=='string'||!offlineUuid.test(sale.id)||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
  const time=typeof sale.createdAt==='string'?Date.parse(sale.createdAt):NaN,start=Date.parse(snapshot.createdAt),end=Date.parse(snapshot.validUntil);
  if(!Number.isFinite(time)||time<start-60000||time>end||time>Date.now()+60000)fail('Verkauf außerhalb der freigegebenen Offline-Zeit');
  const restaurant=snapshot.restaurants.find(r=>r.id===sale.restaurantId);if(!restaurant)fail('Betrieb nicht im Offline-Katalog');
