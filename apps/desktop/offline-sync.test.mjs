@@ -139,3 +139,26 @@ test('duplicate offline IDs in a single page are never transmitted',async()=>{
  assert.equal(f.calls.length,0);
  assert.equal(f.pending.size,1);
 });
+
+test('same cloud receipt number for distinct sales is rejected',async()=>{
+ const f=fixture(['a','b'],{reply:()=>({results:[
+  {offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-shared'},
+  {offlineId:'b',ok:true,id:'cloud-b',receiptNumber:'R-shared'}
+ ]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['b']);
+ assert.equal(f.errors.length,1);
+});
+
+test('duplicate cloud receipt number in later batch remains pending',async()=>{
+ const ids=Array.from({length:21},(_,i)=>'sale-'+i);
+ const f=fixture(ids,{reply:sales=>({results:sales.map(s=>({
+  offlineId:s.id,ok:true,id:'cloud-'+s.id,
+  receiptNumber:s.id==='sale-20'?'R-sale-0':'R-'+s.id
+ }))})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['sale-20']);
+ assert.equal(f.calls.length,2);
+});
