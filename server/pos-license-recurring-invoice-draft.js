@@ -5,7 +5,7 @@ const NET_CENTS={online_pos:2999,restaurant_module:6999,qr_module:2999};
 export function buildSandboxMonthlyInvoiceDraft({
  companyId,planCode,paymentId,currency="EUR",paymentStatus,customerBilling
 }){
- const net=NET_CENTS[planCode];
+ const net=Object.hasOwn(NET_CENTS,planCode)?NET_CENTS[planCode]:undefined;
  if(!companyId || !/^tr_[A-Za-z0-9]+$/.test(String(paymentId||"")) ||
     !net || currency!=="EUR" || paymentStatus!=="paid")
   return {ready:false,reason:"verified_paid_payment_required"};
