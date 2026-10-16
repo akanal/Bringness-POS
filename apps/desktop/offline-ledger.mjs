@@ -46,6 +46,6 @@ export async function createOfflineLedger(db,quote) {
    const result=await db.query('UPDATE offline_sales SET synced_at=now(),cloud_receipt=$2,error=NULL WHERE id=$1 AND synced_at IS NULL RETURNING id',[id,JSON.stringify(receipt)]);
    if(result.rows.length!==1)throw Error('Offline-Verkauf konnte nicht als synchronisiert bestätigt werden.');
   },
-  async error(id,message){if(typeof id!=='string'||!id.trim())throw Error('Ungültige Offline-Verkaufskennung');await db.query('UPDATE offline_sales SET error=$2 WHERE id=$1 AND synced_at IS NULL',[id,String(message||'Synchronisierung fehlgeschlagen').slice(0,300)]);}
+  async error(id,message){if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw Error('Ungültige Offline-Verkaufskennung');await db.query('UPDATE offline_sales SET error=$2 WHERE id=$1 AND synced_at IS NULL',[id,String(message||'Synchronisierung fehlgeschlagen').slice(0,300)]);}
  };
 }
