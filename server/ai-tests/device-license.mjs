@@ -57,7 +57,7 @@ try{
  await query("UPDATE company_entitlements SET status='cancelled' WHERE id=$1",[entitlement]);
  assert.equal((await http('check','staff')).status,402);
  assert.equal((await http('activate','other',{deviceKey:[otherKey]})).status,400);
- assert.equal((await query("SELECT count(*) n FROM audit_log WHERE event_type='download_device_activated'")).rows[0].n,2);
+ assert.equal(Number((await query("SELECT count(*) n FROM audit_log WHERE event_type='download_device_activated'")).rows[0].n),2);
  if(postgres){
   const concurrentOwner=id(),concurrentCompany=id(),concurrentEntitlement=id();
   await query("INSERT INTO users(id,company_id,email,display_name,role,status) VALUES($1,$2,'parallel@example.test','Parallel','owner','active')",[concurrentOwner,concurrentCompany]);
