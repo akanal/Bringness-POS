@@ -18,7 +18,7 @@ export async function createOfflineLedger(db,quote,canonical=JSON.stringify) {
    const old=(await tx.query('SELECT request,receipt FROM offline_sales WHERE id=$1',[request.id])).rows[0];
    if(old){if(canonical(old.request)!==canonical(request))throw Error('Verkaufskennung bereits verwendet');return old.receipt;}
    const snapshot=(await tx.query("SELECT c.payload FROM offline_catalog c WHERE c.id=$1 AND c.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current)",[request.snapshotId])).rows[0]?.payload;
-   if(!snapshot||Date.now()>Date.parse(snapshot.validUntil))throw Error('Offline-Freigabe abgelaufen. Bitte online anmelden.');
+   if(!snapshot||!Number.isFinite(Date.parse(snapshot.validUntil))||Date.now()>Date.parse(snapshot.validUntil))throw Error('Offline-Freigabe abgelaufen. Bitte online anmelden.');
    const receipt=quote(snapshot,request);
    await tx.query('INSERT INTO offline_sales(id,snapshot_id,request,receipt) VALUES($1,$2,$3,$4)',[request.id,request.snapshotId,JSON.stringify(request),JSON.stringify(receipt)]);
    return receipt;
