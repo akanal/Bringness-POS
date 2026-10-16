@@ -1,5 +1,6 @@
-const {ipcMain,Menu}=require('electron');
+const {ipcMain,Menu,dialog}=require('electron');
 const path=require('node:path');
+const fs=require('node:fs/promises');
 const {pathToFileURL}=require('node:url');
 exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOffline=true})=>{
  if(typeof deviceKey!=='string'||!/^[a-f0-9]{64}$/.test(deviceKey))throw Error('Ungültige Offline-Gerätekennung');
@@ -35,7 +36,15 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // may be written shortly after load, so retry on the regular timer as well.
  let startupRecoveryTimer;
  const recoverOnStartup=()=>{clearTimeout(startupRecoveryTimer);startupRecoveryTimer=setTimeout(sync,2500);};
- for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
+ for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>coordinator.sync(true),'offline:export':async()=>{
+  const report=await ledger.reconciliation({limit:500});
+  const selected=await dialog.showSaveDialog(offlineWindow,{title:'Offline-Verkäufe exportieren',defaultPath:'bringness-offline-abgleich-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'JSON',extensions:['json']}]});
+  if(selected.canceled||!selected.filePath)return {saved:false};
+  const destination=selected.filePath;
+  const temporary=destination+'.'+require('node:crypto').randomUUID()+'.tmp';
+  try{await fs.writeFile(temporary,JSON.stringify(report,null,2),{encoding:'utf8',flag:'wx',mode:0o600});await fs.rename(temporary,destination);}catch(error){await fs.unlink(temporary).catch(()=>{});throw error;}
+  return {saved:true,count:report.sales.length};
+ },'offline:sale':async(_,sale)=>{const receipt=await ledger.sale(sale);notify();return receipt;},'offline:online':()=>{const window=onlineWindow();if(!window||window.isDestroyed())throw Error('Online-Kasse ist nicht verfügbar');window.show();window.focus();return true}}))ipcMain.handle(channel,(event,...args)=>{if(!trusted(event))throw Error('Nicht freigegeben');return run(event,...args)});
  // Resume the durable queue promptly when the online POS becomes available again.
  // The coordinator is single-flight, so reconnect signals cannot overlap uploads.
  const onlineContents=onlineWindow()?.webContents;
