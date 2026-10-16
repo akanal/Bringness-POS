@@ -85,3 +85,21 @@ test('non-GET request cannot retrieve public receipt',async()=>{
  const handled=await createPublicReceiptHandler(pool)({...request,method:'POST'},{});
  assert.equal(handled,false);
 });
+
+test('invalid public receipt token does not generate printable QR',async()=>{
+ const old=process.env.PUBLIC_RECEIPT_ORIGIN;
+ process.env.PUBLIC_RECEIPT_ORIGIN='https://pos.example.test';
+ try{
+  const pool={query:async(sql)=>sql.includes('FROM receipts rc')?{rows:[{
+   public_token:'../another-receipt',receipt_number:'BN-002',
+   issued_at:'2026-10-16T08:00:00Z',fiscal_status:'needs_review',
+   order_id:'order-2',total_cents:100,restaurant_name:'Test',company_name:'Test'
+  }]}:{rows:[]}};
+  let html='';
+  await createPublicReceiptHandler(pool)(request,{writeHead(){},end(value){html=value}});
+  assert.doesNotMatch(html,/class="section receipt-qr"/);
+ }finally{
+  if(old===undefined)delete process.env.PUBLIC_RECEIPT_ORIGIN;
+  else process.env.PUBLIC_RECEIPT_ORIGIN=old;
+ }
+});
