@@ -169,3 +169,10 @@ test('unresolved purchase items use canonical stock IDs',()=>{
  const overflow=prepareProcurement([item(' huge ',[offer('a','A',2147483647)]),item(' extra ',[offer('b','A',1)])]);
  assert.deepEqual(overflow.unresolved.map(x=>x.stockId),['huge','extra']);
 });
+
+test('Unicode-equivalent supplier offer IDs cannot bypass duplicate checks',()=>{
+ const result=prepareProcurement([item('stock',[offer('offer-1','A',200),offer('ｏｆｆｅｒ-1','B',100)])]);
+ assert.equal(result.complete,false);
+ assert.equal(result.lines.length,0);
+ assert.match(result.unresolved[0].reason,/Angebotskennung/);
+});
