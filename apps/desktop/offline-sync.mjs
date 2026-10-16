@@ -72,6 +72,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     }catch(error){catalogError=error;}
    }
    const remaining=(await ledger.pending()).length;
+   notify();
    const message=remaining?remaining+' Offline-Verkäufe sind weiterhin offen.'+(failed?' '+failed+' davon benötigen eine Prüfung.':''):'Alle gespeicherten Verkäufe übertragen.';
    publish({state:failed||remaining||catalogError?'warning':'success',message:catalogError?message+' Katalogaktualisierung fehlgeschlagen: '+(catalogError.message||'nicht verfügbar'):message,...(!failed&&!catalogError?{lastSuccess:new Date(now()).toISOString()}:{})});
   }catch(error){publish({state:'error',message:error.message||'Synchronisierung nicht verfügbar. Erneut versuchen.'});}
