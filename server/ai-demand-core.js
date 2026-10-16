@@ -19,7 +19,7 @@ export function applyDemandContext(forecast,context){
 export function demandEffect(date,context,progress=0){
  const rules=demandRules(context.settings.demandRules||{}),adjustments=[];
  if(!rules.enabled)return {enabled:false,factor:1,rawFactor:1,adjustments,rules};
- const weather=context.weather?.available===true&&Array.isArray(context.weather.days)&&context.weather.days.find(d=>d?.date===date);
+ const weather=context.weather?.available===true&&Array.isArray(context.weather.days)&&context.weather.days.find(d=>d&&typeof d==='object'&&!Array.isArray(d)&&d.date===date);
  if(weather&&weather.partial===false){if(Number.isFinite(weather.maxC)&&weather.maxC>=rules.warmC&&rules.warmPercent)adjustments.push({kind:'warm',percent:rules.warmPercent,source:context.weather.stationId,issuedAt:context.weather.issuedAt});if(Number.isFinite(weather.rainMm)&&weather.rainMm>=rules.rainMm&&rules.rainPercent)adjustments.push({kind:'rain',percent:rules.rainPercent,source:context.weather.stationId,issuedAt:context.weather.issuedAt})}
  const events=(Array.isArray(context.events)?context.events:[]).filter(e=>{if(e?.status!=='active'||typeof e.starts_at!=='string'||typeof e.ends_at!=='string')return false;const start=Date.parse(e.starts_at),end=Date.parse(e.ends_at);return Number.isFinite(start)&&Number.isFinite(end)&&end>start&&berlinClock(new Date(start)).date<=date&&berlinClock(new Date(end-1)).date>=date;});
  if(events.length&&rules.eventPercent)adjustments.push({kind:'events',percent:rules.eventPercent,events:events.map(e=>({id:e.id,version:e.version}))});
