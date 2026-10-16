@@ -71,3 +71,43 @@ test('only one worker claims an already-claimed transaction',async()=>{
   const result=await signPreparedTse(pool,id,mockAdapter());
   assert.deepEqual(result,{signed:false,reason:'already_claimed'});
 });
+
+test('successful TSE signing commits signed receipt and releases database connection',async()=>{
+ const {pool,calls}=mockPool();
+ let released=false;
+ pool.connect=async()=>({
+  async query(sql,params=[]){
+   calls.push({sql,params});
+   if(sql.includes("state='signed'") && sql.includes('RETURNING *'))return {rows:[{
+    state:'signed',tse_transaction_number:'42',tse_serial_number:'SERIAL-1',
+    signature_counter:'1',signature_algorithm:'ecdsa',signature:'signed'
+   }]};
+   return {rows:[],rowCount:1};
+  },
+  release(){released=true;}
+ });
+ const result=await signPreparedTse(pool,id,mockAdapter());
+ assert.deepEqual(result,{signed:true});
+ assert.equal(released,true);
+ assert.ok(calls.some(x=>x.sql==='COMMIT'));
+ assert.ok(calls.some(x=>x.sql.includes("UPDATE receipts SET fiscal_status='signed'")));
+ assert.equal(calls.filter(x=>x.sql==='ROLLBACK').length,0);
+});
+
+test('missing signed transaction rolls back and requires manual review',async()=>{
+ const {pool,calls}=mockPool();
+ let released=false;
+ pool.connect=async()=>({
+  async query(sql,params=[]){
+   calls.push({sql,params});
+   return {rows:[],rowCount:0};
+  },
+  release(){released=true;}
+ });
+ const result=await signPreparedTse(pool,id,mockAdapter());
+ assert.deepEqual(result,{signed:false,reason:'outcome_unconfirmed'});
+ assert.equal(released,true);
+ assert.ok(calls.some(x=>x.sql==='ROLLBACK'));
+ assert.ok(calls.some(x=>x.sql.includes("state='needs_review'")));
+ assert.equal(calls.filter(x=>x.sql.includes("UPDATE receipts SET fiscal_status='signed'")).length,0);
+});
