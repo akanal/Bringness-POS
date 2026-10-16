@@ -20,7 +20,7 @@ export async function createOfflineLedger(db,quote) {
    // Always show every unresolved sale before historical synced receipts.
    const sales=(await db.query('SELECT receipt,synced_at,cloud_receipt,error FROM offline_sales ORDER BY (synced_at IS NULL) DESC,created_at DESC,id DESC LIMIT 100')).rows;
    const counts=(await db.query('SELECT count(*) FILTER (WHERE synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE synced_at IS NULL AND error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE synced_at IS NOT NULL)::bigint AS synced FROM offline_sales')).rows[0];
-   return {snapshot,sales,counts};
+   return {snapshot,sales,counts:{pending:Number(counts.pending),errors:Number(counts.errors),synced:Number(counts.synced)}};
   },
   async sale(request){return db.transaction(async tx=>{
    if(!request||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.snapshotId))throw Error('Ungültige Offline-Verkaufskennung.');
