@@ -63,3 +63,12 @@ test('duplicate supplier offer identifiers require manual review',()=>{
  assert.equal(r.lines.length,0);
  assert.match(r.unresolved[0].reason,/Angebotskennung/);
 });
+
+test('duplicate offer identifiers beyond the five cheapest still block approval',()=>{
+ const offers=Array.from({length:6},(_,i)=>offer('offer-'+i,'A',100+i));
+ offers.push(offer('offer-0','B',10000));
+ const r=prepareProcurement([item('stock',offers)]);
+ assert.equal(r.complete,false);
+ assert.equal(r.lines.length,0);
+ assert.match(r.unresolved[0].reason,/Angebotskennung/);
+});
