@@ -60,3 +60,14 @@ test('weather parser rejects malformed timestamps rather than silently omitting 
  '<dwd:Forecast dwd:elementName="RR1c"><dwd:value>1</dwd:value></dwd:Forecast>';
  assert.throws(()=>parseMosmix(xml,new Date(start)),/Invalid forecast timestamp/);
 });
+
+
+test('invalid DWD station coordinates are not exposed as plausible locations',()=>{
+ const start='2026-10-15T22:00:00Z';
+ const xml='<dwd:IssueTime>'+start+'</dwd:IssueTime><dwd:TimeStep>'+start+'</dwd:TimeStep>'+
+ '<dwd:Forecast dwd:elementName="TTT"><dwd:value>303.15</dwd:value></dwd:Forecast>'+
+ '<dwd:Forecast dwd:elementName="RR1c"><dwd:value>1</dwd:value></dwd:Forecast>'+
+ '<kml:coordinates>999,999</kml:coordinates>';
+ const result=parseMosmix(xml,new Date(start));
+ assert.equal(result.latitude,null);assert.equal(result.longitude,null);
+});
