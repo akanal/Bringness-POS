@@ -35,7 +35,7 @@ test('offline license window never exceeds 24 hours',()=>{
  const issued=new Date('2026-10-16T12:00:00Z');
  assert.equal(offlineCatalogValidUntil('2026-10-20T12:00:00Z',issued),'2026-10-17T12:00:00.000Z');
  assert.throws(()=>offlineCatalogValidUntil('2026-10-15T12:00:00Z',issued),/abgelaufen/);
- for(const missing of [null,undefined])assert.throws(()=>offlineCatalogValidUntil(missing,issued),/abgelaufen/);
+ for(const missing of [null,undefined,0,false,1])assert.throws(()=>offlineCatalogValidUntil(missing,issued),/abgelaufen/);
 });
 
 test('offline sale rejects missing snapshot identifiers and duplicate products',()=>{
