@@ -9,6 +9,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    const request=await connect();
    if(!request){publish({state:'login',message:'Online-Kasse öffnen und anmelden.'});return {...status};}
    // Drain all batches, including more than 100 pending sales, before refreshing.
+   const skipped=new Set();
    let pending=await ledger.pending();
    let failed=0;
    while(pending.length){
@@ -22,12 +23,12 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
       await ledger.acknowledge(sale.id,{id:result.id,receiptNumber:result.receiptNumber,replayed:!!result.replayed});
      }else{
       failed++;
+      skipped.add(sale.id);
       await ledger.error(sale.id,result?.error||'Verkauf nicht bestätigt');
      }
     }
     // Do not resend rejected sales repeatedly during the same sync cycle.
-    if(failed)break;
-    pending=await ledger.pending();
+    pending=await ledger.pending(Array.from(skipped));
    }
    if(failed)throw Error(failed+' Offline-Verkäufe benötigen eine Prüfung. Bestätigte Verkäufe wurden übernommen.');
    if(force||!lastCatalog||now()-lastCatalog>6*3600000){
