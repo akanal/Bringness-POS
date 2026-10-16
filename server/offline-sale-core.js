@@ -5,8 +5,8 @@ const fail=message=>{throw Object.assign(Error(message),{status:400})};
 // server-issued immutable catalog, never from fields in the sales request.
 export function offlineCatalogValidUntil(licenseValidUntil,issuedAt=new Date()) {
  const issuedMs=new Date(issuedAt).getTime();
- const licenseMs=new Date(licenseValidUntil).getTime();
- if(!Number.isFinite(issuedMs)||!Number.isFinite(licenseMs)||licenseMs<=issuedMs)fail('Offline-Lizenz abgelaufen');
+ const licenseMs=licenseValidUntil==null?NaN:new Date(licenseValidUntil).getTime();
+ if(licenseValidUntil==null||!Number.isFinite(issuedMs)||!Number.isFinite(licenseMs)||licenseMs<=issuedMs)fail('Offline-Lizenz abgelaufen');
  return new Date(Math.min(licenseMs,issuedMs+24*60*60*1000)).toISOString();
 }
 export function quoteOfflineSale(snapshot,sale) {
