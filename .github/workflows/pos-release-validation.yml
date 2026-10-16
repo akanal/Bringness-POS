@@ -10,6 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -19,11 +20,17 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Install desktop test dependencies
+        run: npm ci --prefix apps/desktop --ignore-scripts --no-audit --no-fund
       - name: Check critical server syntax
         run: |
           node --check server/tse-integration.js
           node --check server/tse-signing-worker.js
           node --check server/offline-sales.js
           node --check server/center.js
+      - name: Run desktop persistence and synchronization tests
+        run: npm test --prefix apps/desktop
+      - name: Run AI weather and purchasing regression tests
+        run: node --test server/ai-weather.test.js server/ai-auto-procurement.test.js server/ai-demand-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
       - name: Run TSE regression tests
-        run: node --test tests/tse-signing-worker.test.js tests/offline-sale-core.test.js tests/center-guest-push.test.js tests/tse-core.test.js
+        run: node --test tests/tse-signing-worker.test.js tests/offline-sale-core.test.js tests/center-guest-push.test.js tests/tse-core.test.js server/tse-signing-worker.test.js

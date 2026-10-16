@@ -37,8 +37,10 @@ test('offline import rejects noncash payment and out-of-window sales',()=>{
  assert.throws(()=>quoteOfflineSale(snapshot,{...sale,createdAt:'2026-10-19T10:00:00Z'}),/Offline-Zeit/);
 });
 test('offline quote rejects integer overflow and zero total',()=>{
- assert.throws(()=>quoteOfflineSale({...snapshot,products:[{...snapshot.products[0],priceCents:2147483647}]},{...sale,items:[{productId:'product-1',quantity:2}]}),/Gesamtbetrag/);
+ assert.throws(()=>quoteOfflineSale({...snapshot,products:[{...snapshot.products[0],priceCents:2147483647}]},{...sale,items:[{productId:'product-1',quantity:2}]}),/Positionsbetrag/);
  assert.throws(()=>quoteOfflineSale({...snapshot,products:[{...snapshot.products[0],priceCents:0}]},sale),/Gesamtbetrag/);
+ const products=['product-1','product-2'].map(id=>({...snapshot.products[0],id,priceCents:1100000000}));
+ assert.throws(()=>quoteOfflineSale({...snapshot,products},{...sale,items:products.map(p=>({productId:p.id,quantity:1}))}),/Gesamtbetrag/);
 });
 test('offline fingerprints are stable across object key ordering',()=>{
  assert.equal(canonicalJson({b:2,a:{z:3,x:1}}),canonicalJson({a:{x:1,z:3},b:2}));
