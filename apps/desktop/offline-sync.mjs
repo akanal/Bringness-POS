@@ -21,6 +21,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    while(pending.length){
     publish({state:'syncing',message:(await ledger.pendingCount())+' offene Verkäufe werden abgeglichen …'});
     const batch=pending.slice(0,20);if(batch.some(sale=>attempted.has(sale.id)))throw Error('Offline-Verkauf wurde innerhalb desselben Abgleichs erneut geladen');if(batch.some(sale=>!sale||typeof sale.id!=='string'||!sale.request||typeof sale.request!=='object'||Array.isArray(sale.request)||sale.request.id!==sale.id||typeof sale.request.snapshotId!=='string'))throw Error('Ungültiger Offline-Verkauf in der Warteschlange');
+    for(const sale of batch)attempted.add(sale.id);
     let response;
     try{response=await request('batch',{sales:batch.map(s=>s.request)});}
     catch(error){
