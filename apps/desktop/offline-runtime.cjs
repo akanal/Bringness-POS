@@ -28,7 +28,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  }});
  const sync=()=>coordinator.sync();
  const {powerMonitor}=require('electron');
- const resumeAfterSuspend=()=>sync();
+ const resumeAfterSuspend=()=>{sync().catch(()=>{});};
  powerMonitor.on('resume',resumeAfterSuspend);
  // A restarted desktop process reopens the same durable PGlite directory.
  // Trigger recovery once the authenticated online page has loaded; its token
