@@ -1,3 +1,4 @@
+import {assertIssuedSandboxInvoice} from "./pos-license-recurring-invoice-snapshot-validate.js";
 import {validateSandboxInvoiceDetails} from "./pos-license-recurring-invoice-compliance.js";
 // Sandbox-only issuance: finalize an existing draft only after the associated
 // payment has been recorded as paid. No external payment or email is triggered.
@@ -21,6 +22,7 @@ export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issue
   if(row.status==="issued"){
    const snapshot=await client.query("SELECT issued_details FROM sandbox_pos_monthly_invoice_drafts WHERE id=$1",[row.id]);
    if(!snapshot.rows[0]?.issued_details){await client.query("ROLLBACK");return {issued:false,reason:"issued_invoice_snapshot_missing"};}
+   try{assertIssuedSandboxInvoice(snapshot.rows[0].issued_details);}catch{await client.query("ROLLBACK");return {issued:false,reason:"issued_invoice_snapshot_invalid"};}
    await client.query("COMMIT");return {issued:true,alreadyIssued:true,invoiceNumber:row.invoice_number};
   }
   if(row.status!=="draft"){await client.query("ROLLBACK");return {issued:false,reason:"invalid_invoice_status"};}
