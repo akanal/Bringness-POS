@@ -27,3 +27,9 @@ test('demand effect handles missing context with neutral rules',()=>{
  assert.equal(result.expectedOrders,100);
  assert.equal(result.demand.enabled,false);
 });
+
+test('demand forecast accepts absent context as neutral',()=>{
+ const result=applyDemandContext(base,undefined);
+ assert.equal(result.expectedOrders,100);
+ assert.equal(result.demand.enabled,false);
+});
