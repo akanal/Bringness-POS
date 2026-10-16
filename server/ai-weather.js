@@ -5,9 +5,9 @@ export function unzipKml(b){if(!Buffer.isBuffer(b)||b.length>2000000)throw Error
 const decode=s=>s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'");
 export function parseMosmix(xml,now=new Date()){
  const times=[...xml.matchAll(/<dwd:TimeStep>([^<]+)<\/dwd:TimeStep>/g)].map(x=>x[1]);const issue=xml.match(/<dwd:IssueTime>([^<]+)<\/dwd:IssueTime>/)?.[1];
- if(!times.length||!issue||!Number.isFinite(Date.parse(issue))||Date.parse(issue)>now.getTime()+3600000||now.getTime()-Date.parse(issue)>36*3600000)throw Error('Forecast stale');
+ if(!times.length||times.length>1000||!issue||!Number.isFinite(Date.parse(issue))||Date.parse(issue)>now.getTime()+3600000||now.getTime()-Date.parse(issue)>36*3600000)throw Error('Forecast stale');
  const values=key=>{const m=xml.match(new RegExp('<dwd:Forecast dwd:elementName="'+key+'">\\s*<dwd:value>([^<]+)'));return m?m[1].trim().split(/\s+/).map(v=>v==='-'?null:Number(v)):[]};
- const t=values('TTT'),rain=values('RR1c'),today=berlinClock(now).date;const days=new Map();
+ const t=values('TTT'),rain=values('RR1c');if(t.length!==times.length||rain.length!==times.length)throw Error('Forecast measurement count mismatch');const today=berlinClock(now).date;const days=new Map();
  times.forEach((time,i)=>{
   const timestamp=Date.parse(time);if(!Number.isFinite(timestamp))return;
   const day=berlinClock(new Date(timestamp)).date;
