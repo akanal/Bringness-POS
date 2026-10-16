@@ -8,8 +8,8 @@ export async function processOfflineStock(pos,ai,kitchenAction,ingestSale){
   if(!(await c.query("SELECT 1 FROM users WHERE id=$1 AND company_id=$2 AND status='active' AND role IN ('owner','admin') AND NOT coalesce(must_change_password,false)",[link.pos_user_id,row.company_id])).rowCount)throw Error('Inhaberfreigabe der Kasse prüfen');
   const items=(await c.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 ORDER BY product_id',[row.order_id])).rows.map(i=>({productCode:String(i.product_id),quantity:Number(i.quantity)}));
   if(link.consumption_mode==='lifecycle'){
-   await kitchenAction(ai,{id:link.account_id,role:'restaurant'},{requestKey:key(row.id,'accept'),orderId:'pos:'+row.order_id,action:'accept',items,reason:''},link);
-   await kitchenAction(ai,{id:link.account_id,role:'restaurant'},{requestKey:key(row.id,'start'),orderId:'pos:'+row.order_id,action:'start',reason:''},link);
+   await kitchenAction(ai,{id:link.account_id,role:'restaurant'},{requestKey:key(row.id,'accept'),orderId:'pos:'+row.order_id,action:'accept',occurredAt:new Date(row.paid_time).toISOString(),items,reason:''},link);
+   await kitchenAction(ai,{id:link.account_id,role:'restaurant'},{requestKey:key(row.id,'start'),orderId:'pos:'+row.order_id,action:'start',occurredAt:new Date(row.paid_time).toISOString(),reason:''},link);
   }else await ingestSale(link,{eventId:'pos:'+row.order_id,type:'sale',occurredAt:new Date(row.paid_time).toISOString(),items});
   await c.query("UPDATE pos_offline_sales SET stock_state='applied',stock_error=NULL WHERE id=$1",[row.id]);await c.query('COMMIT');
  }catch(e){await c.query('ROLLBACK');await pos.query("UPDATE pos_offline_sales SET stock_state=$2,stock_error=$3 WHERE id=$1",[row.id,e.status>=400&&e.status<500?'conflict':'pending',String(e.message).slice(0,500)])}finally{c.release()}}

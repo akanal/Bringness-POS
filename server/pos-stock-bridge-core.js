@@ -76,7 +76,7 @@ export async function processPosStockCommands(posPool,stockPool,kitchenAction,{l
  const link=(await stockPool.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.id=$1 AND c.account_id=$2 AND c.pos_restaurant_id=$3 AND c.kind='pos' AND c.consumption_mode='lifecycle' AND c.active AND a.status='active'",[cmd.connector_id,cmd.account_id,o.restaurant_id])).rows[0];
  if(!link)fail('Lageranbindung nicht aktiv',503);
  if(!(await c.query("SELECT 1 FROM users u WHERE u.id=$1 AND u.company_id=$2 AND u.status='active' AND u.role IN ('owner','admin') AND NOT coalesce(u.must_change_password,false)",[link.pos_user_id,link.pos_company_id])).rowCount)fail('Inhaberfreigabe der Kasse nicht mehr gültig',503);
- try{await kitchenAction(stockPool,{id:link.account_id,role:'restaurant'},{requestKey:cmd.id,orderId:'pos:'+o.id,action:cmd.action,...(cmd.action==='accept'?{items:cmd.items}:{}),reason:cmd.reason},link)}catch(e){
+ try{await kitchenAction(stockPool,{id:link.account_id,role:'restaurant'},{requestKey:cmd.id,orderId:'pos:'+o.id,action:cmd.action,occurredAt:new Date(cmd.created_at).toISOString(),...(cmd.action==='accept'?{items:cmd.items}:{}),reason:cmd.reason},link)}catch(e){
   if(e.status>=400&&e.status<500){await c.query("UPDATE pos_stock_commands SET state='rejected',error=$2,attempts=attempts+1 WHERE id=$1",[cmd.id,String(e.message).slice(0,500)]);await c.query('COMMIT');continue}throw e;
  }
  await c.query("UPDATE pos_stock_commands SET state='applied',error=NULL,attempts=attempts+1,applied_at=now() WHERE id=$1",[cmd.id]);

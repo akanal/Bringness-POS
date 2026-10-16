@@ -11,7 +11,7 @@ export async function migrateConsumptionHistory(db){
   UNION ALL
   SELECT s.account_id,m.stock_id,
    CASE WHEN m.kind='recipe_consumption' THEN 'sale' ELSE 'reversal' END,
-   m.delta,m.created_at,m.created_at,'kitchen'::text,m.id::text
+   m.delta,COALESCE(m.occurred_at,m.created_at),m.created_at,'kitchen'::text,m.id::text
   FROM ai_stock_moves m JOIN ai_stock s ON s.id=m.stock_id
   WHERE m.kind IN ('recipe_consumption','recipe_return')`);
 }

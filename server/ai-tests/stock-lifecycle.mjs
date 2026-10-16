@@ -43,7 +43,13 @@ await act('cancel','A',{reason:'Gast storniert'});s=await getStock();assert.equa
 await assert.rejects(act('start','A'),/Bestellstatus/);checks++;
 await assert.rejects(act('return','A',{confirmed:true,reason:'Test',lines:[{stockId:stock,quantity:0.1}]}),/Keine verbrauchten/);checks++;
 await act('accept','C',{items:[{productCode:'burger',quantity:6}]});assert.equal((await recipeAvailability(pool,account))[0].available,false);checks++;
-await act('start','C');s=await getStock();assert.equal(Number(s.quantity),0.1);assert.equal(Number(s.reserved_quantity),0);checks++;
+const kitchenSourceTime=new Date(Date.now()-5*86400000).toISOString();
+const startC={action:'start',orderId:'C',locationId:location,requestKey:crypto.randomUUID(),occurredAt:kitchenSourceTime};
+await kitchenAction(pool,user,startC);
+assert.equal((await kitchenAction(pool,user,startC)).replayed,true);
+await assert.rejects(kitchenAction(pool,user,{...startC,occurredAt:new Date(Date.parse(kitchenSourceTime)+1000).toISOString()}),e=>e.status===409);
+assert.equal(new Date((await query("SELECT occurred_at FROM ai_stock_moves WHERE kind='recipe_consumption'")).rows[0].occurred_at).toISOString(),kitchenSourceTime);checks++;
+s=await getStock();assert.equal(Number(s.quantity),0.1);assert.equal(Number(s.reserved_quantity),0);checks++;
 await query('UPDATE ai_recipe_items SET quantity=0.5 WHERE recipe_id=$1',[recipe]);
 await act('cancel','C',{reason:'Nach Zubereitung storniert'});assert.equal(Number((await getStock()).quantity),0.1);checks++;
 await assert.rejects(act('return','C',{confirmed:false,reason:'Test',lines:[{stockId:stock,quantity:0.1}]}),/ausdrücklich/);checks++;

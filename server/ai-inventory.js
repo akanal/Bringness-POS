@@ -22,6 +22,7 @@ async function pendingConfirmations(c,accountId=null){return (await c.query(`
  ORDER BY min(greatest(o.created_at,o.updated_at)),coalesce(o.supplier_order_id,o.id)
  `,[accountId])).rows}
 export async function migrateAiInventory(){await pool.query(`
+ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS occurred_at timestamptz;
 ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'legacy';
 ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS quantity_before numeric(15,3);
 ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS quantity_after numeric(15,3);

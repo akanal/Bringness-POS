@@ -1,3 +1,4 @@
+import {occurrenceTimestamp} from './ai-sales-contract.js';
 import crypto from 'node:crypto';
 import {stockUnits,aggregateIngredients,lifecycleTransition} from './ai-stock-lifecycle-core.js';
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status})};
@@ -5,6 +6,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const id=x=>{if(!uuid.test(String(x)))fail('Ungültige ID');return String(x).toLowerCase()};
 const label=x=>{if(typeof x!=='string'||!x.trim()||x.trim().length>150)fail('Bestellkennung erforderlich');return x.trim()};
 export async function migrateStockLifecycle(pool){await pool.query(`
+ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS occurred_at timestamptz;
 ALTER TABLE ai_stock ADD COLUMN IF NOT EXISTS reserved_quantity numeric(15,3) NOT NULL DEFAULT 0 CHECK(reserved_quantity>=0);
 ALTER TABLE ai_stock ADD COLUMN IF NOT EXISTS target_quantity numeric(15,3);
 UPDATE ai_stock SET target_quantity=minimum WHERE target_quantity IS NULL;
@@ -15,6 +17,7 @@ ALTER TABLE ai_recipes ADD COLUMN IF NOT EXISTS stock_blocked boolean NOT NULL D
 CREATE TABLE IF NOT EXISTS ai_kitchen_orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),location_id uuid NOT NULL REFERENCES ai_locations(id),connector_id uuid REFERENCES ai_connectors(id),external_id text NOT NULL,state text NOT NULL CHECK(state IN ('accepted','preparing','cancelled')),items jsonb NOT NULL,ingredients jsonb NOT NULL,returned jsonb NOT NULL DEFAULT '{}',started_at timestamptz,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
 CREATE UNIQUE INDEX IF NOT EXISTS ai_kitchen_source ON ai_kitchen_orders(account_id,location_id,coalesce(connector_id,'00000000-0000-0000-0000-000000000000'::uuid),external_id);
 CREATE TABLE IF NOT EXISTS ai_kitchen_requests(account_id uuid NOT NULL REFERENCES ai_accounts(id),request_key uuid NOT NULL,fingerprint text NOT NULL,response jsonb NOT NULL,PRIMARY KEY(account_id,request_key));
+ALTER TABLE ai_kitchen_requests ADD COLUMN IF NOT EXISTS occurred_at timestamptz;
 CREATE INDEX IF NOT EXISTS ai_kitchen_account ON ai_kitchen_orders(account_id,created_at DESC);
 `)}
 // Called within the same transaction as stock writes. Once blocked, only an
@@ -23,6 +26,7 @@ export async function blockUnavailableRecipes(c,accountId){await c.query(`UPDATE
 export async function recipeAvailability(pool,accountId,locationId=null){return (await pool.query(`SELECT r.id,r.location_id,r.external_code,r.name,r.active,r.stock_blocked, (r.active AND NOT r.stock_blocked AND EXISTS(SELECT 1 FROM ai_recipe_items WHERE recipe_id=r.id) AND NOT EXISTS(SELECT 1 FROM ai_recipe_items i JOIN ai_stock s ON s.id=i.stock_id WHERE i.recipe_id=r.id AND s.quantity-s.reserved_quantity<i.quantity)) available FROM ai_recipes r WHERE r.account_id=$1 AND ($2::uuid IS NULL OR r.location_id=$2) ORDER BY r.name,r.id`,[accountId,locationId])).rows}
 export async function kitchenAction(pool,u,b,connector=null){
  if(u.role!=='restaurant')fail('Nur Restaurantinhaber dürfen Lageraufträge buchen',403);
+ const occurredAt=occurrenceTimestamp(b.occurredAt);
  const requestKey=id(b.requestKey),action=b.action;if(!['accept','start','cancel','return'].includes(action))fail('Ungültige Lageraktion');
  const locationId=connector?connector.location_id:id(b.locationId),externalId=label(b.orderId);
  const why=String(b.reason||'').trim();if(why.length>500||(['cancel','return'].includes(action)&&!why))fail('Begründung erforderlich');
@@ -33,7 +37,7 @@ export async function kitchenAction(pool,u,b,connector=null){
  try{
   await c.query('BEGIN');const account=(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active' FOR UPDATE",[u.id])).rows[0];if(!account)fail('Restaurantkonto nicht aktiv',403);
   if(connector&&!(await c.query("SELECT 1 FROM ai_connectors WHERE id=$1 AND account_id=$2 AND location_id=$3 AND active AND consumption_mode='lifecycle'",[connector.id,u.id,locationId])).rowCount)fail('Anbindung nicht aktiv',403);
-  const previous=(await c.query('SELECT * FROM ai_kitchen_requests WHERE account_id=$1 AND request_key=$2',[u.id,requestKey])).rows[0];if(previous){if(previous.fingerprint!==fingerprint)fail('Buchungskennung bereits anders verwendet',409);await c.query('COMMIT');return {...previous.response,replayed:true}}
+  const previous=(await c.query('SELECT * FROM ai_kitchen_requests WHERE account_id=$1 AND request_key=$2',[u.id,requestKey])).rows[0];if(previous){if(previous.fingerprint!==fingerprint||(occurredAt&&previous.occurred_at&&new Date(previous.occurred_at).toISOString()!==occurredAt))fail('Buchungskennung bereits anders verwendet',409);await c.query('COMMIT');return {...previous.response,replayed:true}}
   if(!(await c.query('SELECT 1 FROM ai_locations WHERE id=$1 AND account_id=$2',[locationId,u.id])).rowCount)fail('Standort nicht gefunden',404);
   let order=(await c.query('SELECT * FROM ai_kitchen_orders WHERE account_id=$1 AND location_id=$2 AND connector_id IS NOT DISTINCT FROM $3::uuid AND external_id=$4 FOR UPDATE',[u.id,locationId,connector?.id||null,externalId])).rows[0];
   if(action==='accept'){
@@ -51,14 +55,14 @@ export async function kitchenAction(pool,u,b,connector=null){
   }else{
    if(!order)fail('Lagerauftrag nicht gefunden',404);const next=lifecycleTransition(order.state,action);
    const stocks=(await c.query('SELECT * FROM ai_stock WHERE account_id=$1 AND location_id=$2 AND id=ANY($3::uuid[]) ORDER BY id FOR UPDATE',[u.id,locationId,order.ingredients.map(i=>i.stockId)])).rows;
-   for(const i of order.ingredients){const s=stocks.find(s=>s.id===i.stockId);if(!s)fail('Zutat nicht gefunden',409);if(['start','cancel'].includes(action)&&order.state==='accepted'){if(Number(s.reserved_quantity)<i.quantity-0.0000001)fail('Reservierung inkonsistent',409);await c.query('UPDATE ai_stock SET reserved_quantity=reserved_quantity-$2 WHERE id=$1',[i.stockId,i.quantity]);if(action==='start'){if(Number(s.quantity)<i.quantity-0.0000001)fail('Tatsächlicher Bestand reicht nicht: '+s.name,409);await c.query('UPDATE ai_stock SET quantity=quantity-$2 WHERE id=$1',[i.stockId,i.quantity]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after) VALUES($1,$2,$3,$4,'recipe_consumption',$5,$6)",[i.stockId,u.id,-i.quantity,'Zubereitung: '+externalId,s.quantity,Number(s.quantity)-i.quantity])}}}
+   for(const i of order.ingredients){const s=stocks.find(s=>s.id===i.stockId);if(!s)fail('Zutat nicht gefunden',409);if(['start','cancel'].includes(action)&&order.state==='accepted'){if(Number(s.reserved_quantity)<i.quantity-0.0000001)fail('Reservierung inkonsistent',409);await c.query('UPDATE ai_stock SET reserved_quantity=reserved_quantity-$2 WHERE id=$1',[i.stockId,i.quantity]);if(action==='start'){if(Number(s.quantity)<i.quantity-0.0000001)fail('Tatsächlicher Bestand reicht nicht: '+s.name,409);await c.query('UPDATE ai_stock SET quantity=quantity-$2 WHERE id=$1',[i.stockId,i.quantity]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after,occurred_at) VALUES($1,$2,$3,$4,'recipe_consumption',$5,$6,$7)",[i.stockId,u.id,-i.quantity,'Zubereitung: '+externalId,s.quantity,Number(s.quantity)-i.quantity,occurredAt||null])}}}
    if(action==='return'){
     if(!order.started_at)fail('Keine verbrauchten Zutaten zum Zurückbuchen',409);if(!Array.isArray(b.lines)||!b.lines.length||b.lines.length>100)fail('Rückbuchungspositionen erforderlich');const seen=new Set();
-    for(const l of b.lines){const stockId=id(l.stockId),amount=stockUnits(l.quantity)/1000,i=order.ingredients.find(i=>i.stockId===stockId),s=stocks.find(s=>s.id===stockId);if(seen.has(stockId)||!i||amount<=0||amount>i.quantity-Number(order.returned[stockId]||0)+0.0000001)fail('Rückbuchung übersteigt den verbleibenden Verbrauch',409);seen.add(stockId);await c.query('UPDATE ai_stock SET quantity=quantity+$2 WHERE id=$1',[stockId,amount]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after) VALUES($1,$2,$3,$4,'recipe_return',$5,$6)",[stockId,u.id,amount,why,s.quantity,Number(s.quantity)+amount]);order.returned[stockId]=Number(order.returned[stockId]||0)+amount}
+    for(const l of b.lines){const stockId=id(l.stockId),amount=stockUnits(l.quantity)/1000,i=order.ingredients.find(i=>i.stockId===stockId),s=stocks.find(s=>s.id===stockId);if(seen.has(stockId)||!i||amount<=0||amount>i.quantity-Number(order.returned[stockId]||0)+0.0000001)fail('Rückbuchung übersteigt den verbleibenden Verbrauch',409);seen.add(stockId);await c.query('UPDATE ai_stock SET quantity=quantity+$2 WHERE id=$1',[stockId,amount]);await c.query("INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after,occurred_at) VALUES($1,$2,$3,$4,'recipe_return',$5,$6,$7)",[stockId,u.id,amount,why,s.quantity,Number(s.quantity)+amount,occurredAt||null]);order.returned[stockId]=Number(order.returned[stockId]||0)+amount}
    }
    order=(await c.query("UPDATE ai_kitchen_orders SET state=$2,returned=$3::jsonb,started_at=CASE WHEN $4='start' THEN now() ELSE started_at END,updated_at=now() WHERE id=$1 RETURNING *",[order.id,next,JSON.stringify(order.returned),action])).rows[0];
   }
-  await blockUnavailableRecipes(c,u.id);const response={order};await c.query('INSERT INTO ai_kitchen_requests VALUES($1,$2,$3,$4::jsonb)',[u.id,requestKey,fingerprint,JSON.stringify(response)]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$2,$3,$4::jsonb)',[u.id,order.id,'kitchen_'+action,JSON.stringify({externalId,reason:why,requestKey})]);await c.query('COMMIT');return response;
+  await blockUnavailableRecipes(c,u.id);const response={order};await c.query('INSERT INTO ai_kitchen_requests(account_id,request_key,fingerprint,response,occurred_at) VALUES($1,$2,$3,$4::jsonb,$5)',[u.id,requestKey,fingerprint,JSON.stringify(response),occurredAt||null]);await c.query('INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$2,$3,$4::jsonb)',[u.id,order.id,'kitchen_'+action,JSON.stringify({externalId,reason:why,requestKey})]);await c.query('COMMIT');return response;
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
 export async function kitchenRoutes(pool,path,method,b,u,url){

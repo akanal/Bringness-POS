@@ -1253,6 +1253,11 @@
                 }
               }
             }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optionaler ursprünglicher Zeitpunkt dieser Lageraktion mit Zeitzone. Bei Start/Rückbuchung als Quellzeit der Lagerbewegung gespeichert; keine Änderung bereits gebuchter Ereignisse durch Wiederholung."
           }
         }
       }
