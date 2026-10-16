@@ -64,3 +64,40 @@ test('cart rechecks active restaurant permission inside the transaction before r
   assert.equal(calls.some(sql=>sql.includes('INSERT INTO ai_orders')),false);
  }
 });
+
+test('a competing committed daily order wins over stale no-need and blocked results',async()=>{
+ for(const complete of [true,false]){
+  let ordered=false,carts=0;
+  const policy={enabled:true,days:2,leadDays:1,supplierIds:['supplier']};
+  const db={query:async sql=>{
+   if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+   if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'pending'}]};
+   if(sql.startsWith('SELECT state,net_cents'))return {rows:[{state:ordered?'ordered':'pending',net_cents:12500}]};
+   return {rows:[],rowCount:0};
+  }};
+  const result=await runAutomaticProcurement({id:'buyer',role:'restaurant'},{db,
+   draft:async()=>{ordered=true;return {complete,lines:[],unresolved:[{reason:'another worker already sent the order'}]};},
+   cart:async()=>{carts++;assert.fail('stale plan must not order');}
+  });
+  assert.deepEqual(result,{state:'ordered',replayed:true,netCents:12500});assert.equal(carts,0);
+ }
+});
+
+test('lost checkout confirmation reports the durable committed order and never orders twice',async()=>{
+ let ordered=false,checkouts=0;
+ const policy={enabled:true,days:2,leadDays:1,supplierIds:['supplier']};
+ const db={query:async sql=>{
+  if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+  if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:ordered?'ordered':'pending',net_cents:900}]};
+  if(sql.startsWith('SELECT state,net_cents'))return {rows:[{state:ordered?'ordered':'pending',net_cents:900}]};
+  return {rows:[],rowCount:0};
+ }};
+ const options={db,draft:async()=>({complete:true,lines:[{stockId:'stock',productId:'product',packs:1}]}),cart:async(_db,_user,_body,config)=>{
+  if(config.checkout===false)return {canOrder:true,quote:{netCents:900}};
+  checkouts++;ordered=true;throw Error('commit acknowledgement lost');
+ }};
+ const user={id:'buyer',role:'restaurant'};
+ assert.deepEqual(await runAutomaticProcurement(user,options),{state:'ordered',replayed:true,netCents:900});
+ assert.deepEqual(await runAutomaticProcurement(user,options),{state:'ordered',replayed:true,netCents:900});
+ assert.equal(checkouts,1);
+});

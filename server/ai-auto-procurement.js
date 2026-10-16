@@ -16,13 +16,17 @@ export async function migrateAutoProcurement(db=aiPool()){await db.query(`
 CREATE TABLE IF NOT EXISTS ai_auto_procurement(account_id uuid PRIMARY KEY REFERENCES ai_accounts(id),policy jsonb NOT NULL,version int NOT NULL DEFAULT 1,updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS ai_auto_procurement_runs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),day date NOT NULL,state text NOT NULL DEFAULT 'pending',net_cents int NOT NULL DEFAULT 0,error text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(account_id,day));
 `)}
+async function durableRunResult(db,runId,fallback){
+ const current=(await db.query('SELECT state,net_cents FROM ai_auto_procurement_runs WHERE id=$1',[runId])).rows[0];
+ return current?.state==='ordered'?{state:'ordered',replayed:true,netCents:Number(current.net_cents)}:fallback;
+}
 export async function runAutomaticProcurement(user,{db=aiPool(),draft=procurementDraft,cart=cartTransaction,clock=()=>new Date(),now=clock()}={}){
  const today=berlinClock(now).date,policyRow=(await db.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1',[user.id])).rows[0];if(!policyRow?.policy.enabled)return {state:'disabled'};
  const policy=policyRow.policy;
  const run=(await db.query('INSERT INTO ai_auto_procurement_runs(account_id,day) VALUES($1,$2) ON CONFLICT(account_id,day) DO UPDATE SET day=EXCLUDED.day RETURNING *',[user.id,today])).rows[0];if(run.state==='ordered')return {state:'ordered',replayed:true,netCents:run.net_cents};
  try{
   const deliveryDate=new Date(Date.parse(today+'T12:00:00Z')+policy.leadDays*86400000).toISOString().slice(0,10);
-  const plan=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds},{db});if(!plan.complete)fail('Nicht vollständig automatisch bestellfähig: '+plan.unresolved.map(x=>x.reason).join(' · '),409);if(!plan.lines.length){await db.query("UPDATE ai_auto_procurement_runs SET state='no_need',error=NULL,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id]);return {state:'no_need'}}
+  const plan=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds},{db});if(!plan.complete)fail('Nicht vollständig automatisch bestellfähig: '+plan.unresolved.map(x=>x.reason).join(' · '),409);if(!plan.lines.length){await db.query("UPDATE ai_auto_procurement_runs SET state='no_need',error=NULL,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id]);return durableRunResult(db,run.id,{state:'no_need'})}
   const lines=plan.lines.map(({stockId,productId,packs})=>({stockId,productId,packs}));
   const preview=await cart(db,user,{lines,deliveryDate},{checkout:false});if(!preview.canOrder)fail(preview.warnings.join(' · '),409);
   const result=await cart(db,user,{lines,deliveryDate,quote:preview.quote,requestKey:run.id,confirmed:true},{
@@ -42,7 +46,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
     await c.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'automatic_procurement_ordered',$2::jsonb)",[user.id,JSON.stringify({runId:run.id,policyVersion:policyRow.version,netCents:quote.netCents,orders:orders.map(o=>o.id)})]);
    }
   });return {state:'ordered',orders:result.orders,netCents:preview.quote.netCents};
- }catch(e){await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,String(e.message).slice(0,1000)]);return {state:'blocked',error:e.message}}
+ }catch(e){await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,String(e.message).slice(0,1000)]);return durableRunResult(db,run.id,{state:'blocked',error:e.message})}
 }
 let running=false;
 export async function automaticProcurementTick({db=aiPool(),run=runAutomaticProcurement,onError=()=>console.error('AI automatic procurement account unavailable')}={}){
