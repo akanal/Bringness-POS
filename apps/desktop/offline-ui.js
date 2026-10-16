@@ -15,3 +15,5 @@ $('pay').onclick=async()=>{if(busy||recoveryFault||!cart.size||!snapshot||$('pay
 $('online').onclick=()=>Promise.resolve().then(()=>offlinePOS.online()).catch(e=>message(e?.message||'Online-Kasse nicht verfügbar'));$('print').onclick=()=>{if(!$('print').disabled)window.print()};try{pendingRequest=recoverPending();if(pendingRequest)message('Unterbrochener Barverkauf wiederhergestellt. Bitte denselben Verkauf erneut bestätigen.')}catch(e){recoveryFault=true;message(e.message)}offlinePOS.updated(()=>refresh().catch(e=>message(e.message)));refresh().catch(e=>message(e.message));
 
 $('sync').onclick=async()=>{if($('sync').disabled)return;$('sync').disabled=true;try{await offlinePOS.sync();await refresh()}catch(e){message(e.message)}finally{$('sync').disabled=false}};
+
+$('export').onclick=async()=>{if($('export').disabled)return;$('export').disabled=true;try{const result=await offlinePOS.export();if(result?.saved)message(result.count+' Offline-Verkäufe als Abgleich gespeichert.');}catch(error){message('Export fehlgeschlagen: '+(error?.message||'Unbekannter Fehler'));}finally{$('export').disabled=false;}};
