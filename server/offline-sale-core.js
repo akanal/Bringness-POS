@@ -22,7 +22,7 @@ export function quoteOfflineSale(snapshot,sale) {
   const product=snapshot.products.find(p=>p?.id===i?.productId&&p.restaurantId===restaurant.id);
   if(!product||seen.has(i?.productId)||!Number.isInteger(i?.quantity)||i.quantity<1||i.quantity>999)fail('Ungültiger Offline-Artikel oder Menge');
   seen.add(i.productId);if(typeof product.name!=='string'||!product.name.trim())fail('Ungültiger Artikelname');if(!Number.isSafeInteger(product.priceCents)||product.priceCents<0||!Number.isFinite(product.taxRate)||product.taxRate<0||product.taxRate>100)fail('Ungültiger Katalogpreis');
-  const lineCents=product.priceCents*i.quantity;if(!Number.isSafeInteger(lineCents))fail('Ungültiger Positionsbetrag');totalCents+=lineCents;
+  const lineCents=product.priceCents*i.quantity;if(!Number.isSafeInteger(lineCents)||lineCents>2147483647)fail('Ungültiger Positionsbetrag');totalCents+=lineCents;
   return {productId:product.id,name:product.name,unitPriceCents:product.priceCents,taxRate:product.taxRate,quantity:i.quantity,lineCents};
  });
  if(!Number.isSafeInteger(totalCents)||totalCents<=0||totalCents>2147483647)fail('Ungültiger Gesamtbetrag');
