@@ -14,7 +14,13 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    let failed=0;
    while(pending.length){
     const batch=pending.slice(0,20);
-    const response=await request('batch',{sales:batch.map(s=>s.request)});
+    let response;
+    try{response=await request('batch',{sales:batch.map(s=>s.request)});}
+    catch(error){
+     // A lost response does not mean the server failed to commit the sales.
+     // Keep every uncertain sale pending; the server deduplicates by sale ID.
+     throw Error('Verbindung während der Übertragung unterbrochen. Offene Verkäufe bleiben gespeichert und werden erneut abgeglichen.',{cause:error});
+    }
     if(!Array.isArray(response?.results)||response.results.length!==batch.length)throw Error('Unvollständige Antwort der Offline-Synchronisierung');
     // Match acknowledgements by immutable sale ID, not response ordering.
     // Duplicate or unknown IDs make the entire response ambiguous: retry safely.
