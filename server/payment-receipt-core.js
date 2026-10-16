@@ -80,7 +80,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
-  const height = Math.max(560, 390 + items.length * 34 + payments.length * 20);
+  const height = Math.max(640, 470 + items.length * 34 + payments.length * 20);
   let pdf;
   try {
     pdf=await new Promise((resolve,reject)=>{
