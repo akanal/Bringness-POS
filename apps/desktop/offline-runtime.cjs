@@ -35,7 +35,21 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // Recheck connectivity every 30 seconds, including after long outages.
  // Single-flight synchronization prevents overlapping requests during slow recovery.
  recoverOnStartup();const timer=setInterval(sync,30000);timer.unref();
- app.on('before-quit',()=>{clearInterval(timer);clearTimeout(startupRecoveryTimer);onlineContents?.removeListener('did-finish-load',resumeAfterLoad);});
- onlineWindow()?.webContents.on('did-fail-load',(_,code)=>{if(code!==-3)open()});
- return {ledger,open,close:async()=>{clearInterval(timer);offlineWindow?.destroy();await db.close()}};
+ const showOfflineOnFailure=(_,code)=>{if(code!==-3)open()};
+ onlineContents?.on('did-fail-load',showOfflineOnFailure);
+ let closed=false;
+ const stopRecovery=()=>{
+  clearInterval(timer);
+  clearTimeout(startupRecoveryTimer);
+  onlineContents?.removeListener('did-finish-load',resumeAfterLoad);
+  onlineContents?.removeListener('did-fail-load',showOfflineOnFailure);
+ };
+ app.on('before-quit',stopRecovery);
+ return {ledger,open,close:async()=>{
+  if(closed)return;
+  closed=true;
+  stopRecovery();
+  offlineWindow?.destroy();
+  await db.close();
+ }};
 };
