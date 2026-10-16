@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {groupVat,buildFiscalTransaction,receiptTseSnapshot,createUnconfiguredTseAdapter,markTransactionSigned} from '../server/tse-core.js';
+import {groupVat,buildFiscalTransaction,receiptTseSnapshot,createUnconfiguredTseAdapter,markTransactionSigned,markTransactionStarted,markTransactionFailed} from '../server/tse-core.js';
 
 test('TSE VAT grouping keeps gross, net and tax totals consistent',()=>{
  const rows=groupVat([
@@ -57,4 +57,17 @@ test('TSE signature update is restricted to finishing transactions',async()=>{
  assert.equal(result,null);
  assert.match(sql,/WHERE id=\$1 AND state='finishing' RETURNING \*/);
  assert.equal(params[0],'tx-1');
+});
+
+test('TSE start helper only advances starting transactions',async()=>{
+ let sql='';
+ const db={query:async(query)=>{sql=query;return {rows:[]}}};
+ assert.equal(await markTransactionStarted(db,'tx-1',{tseTransactionNumber:'42'}),null);
+ assert.match(sql,/WHERE id=\$1 AND state='starting' RETURNING \*/);
+});
+test('TSE failure helper cannot overwrite signed or review-required transactions',async()=>{
+ let sql='';
+ const db={query:async(query)=>{sql=query;return {rows:[]}}};
+ assert.equal(await markTransactionFailed(db,'tx-1',{code:'TEST'}),null);
+ assert.match(sql,/state NOT IN \('signed','needs_review'\)/);
 });
