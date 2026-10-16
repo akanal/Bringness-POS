@@ -56,3 +56,9 @@ test('cumulative integer overflow excludes the entire affected sales day',()=>{
  assert.equal(result.expectedOrders,20);
  assert.equal(result.expectedRevenueCents,20000);
 });
+
+test('missing forecast clock and invalid hours are rejected',()=>{
+ for(const value of [null,{}, {date:clock.date,hour:-1},{date:clock.date,hour:24},{date:clock.date,hour:1.5}]){
+  assert.throws(()=>approximateDay([],value),/forecast clock/);
+ }
+});
