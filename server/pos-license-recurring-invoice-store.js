@@ -31,9 +31,10 @@ export async function saveSandboxMonthlyInvoiceDraft(pool,{
   const seq=await client.query("SELECT nextval('sandbox_pos_invoice_number_seq') AS n");
   const invoiceNumber="TEST-"+String(date.getUTCFullYear())+"-"+String(seq.rows[0].n).padStart(7,"0");
   const d=candidate.draft;
-  await client.query(
+  const inserted=await client.query(
    "INSERT INTO sandbox_pos_monthly_invoice_drafts(mollie_payment_id,company_id,plan_code,invoice_number,invoice_date,net_cents,vat_cents,gross_cents,customer_billing) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
    [paymentId,companyId,planCode,invoiceNumber,date.toISOString().slice(0,10),d.netCents,d.vatCents,d.grossCents,JSON.stringify(d.customerBilling)]);
+  if(inserted.rowCount!==1){await client.query("ROLLBACK");return {saved:false,reason:"invoice_insert_failed"};}
   await client.query("COMMIT");
   return {saved:true,invoiceNumber,status:"draft"};
  }catch(e){await client.query("ROLLBACK");throw e;}
