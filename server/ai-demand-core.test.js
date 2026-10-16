@@ -43,3 +43,12 @@ test('AI planning rejects invalid dates and unbounded horizons',()=>{
  assert.throws(()=>nextDemandForecasts([],context,'invalid',3),/Prognosezeitraum/);
  assert.deepEqual(planningDemandDays(context,base.date,0),[]);
 });
+
+test('future forecast ignores malformed historical sales instead of crashing or inflating totals',()=>{
+ const valid=['2026-09-16','2026-09-23','2026-09-30'].map(day=>({day,hour:12,orders:10,revenue_cents:1000}));
+ const corrupt=[null,{day:'2026-09-30',hour:12,orders:999999,revenue_cents:-1},{day:'2026-09-30',hour:99,orders:999999,revenue_cents:999999},{day:'2026-02-30',hour:12,orders:999999,revenue_cents:999999}];
+ const clean=nextDemandForecasts(valid,{},'2026-10-07',1);
+ const filtered=nextDemandForecasts([...valid,...corrupt],{},'2026-10-07',1);
+ assert.equal(filtered[0].expectedOrders,clean[0].expectedOrders);
+ assert.deepEqual(nextDemandForecasts(null,{},'2026-10-07',1)[0].expectedOrders,null);
+});
