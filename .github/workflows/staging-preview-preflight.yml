@@ -1,0 +1,38 @@
+name: Staging preview preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [staging/preview-20261016]
+    paths:
+      - "ops/staging-preflight.sh"
+      - ".github/workflows/staging-preview-preflight.yml"
+permissions:
+  contents: read
+jobs:
+  configuration-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Reject unsafe staging settings
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:placeholder@localhost/bringness_staging
+          STAGING_SESSION_SECRET: placeholder-only-for-preflight
+          STAGING_PAYMENT_MODE: sandbox
+          STAGING_TSE_MODE: disabled
+          STAGING_OUTBOUND_MESSAGES: disabled
+        run: bash ops/staging-preflight.sh
+      - name: Verify unsafe payment mode is rejected
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:placeholder@localhost/bringness_staging
+          STAGING_SESSION_SECRET: placeholder-only-for-preflight
+          STAGING_PAYMENT_MODE: live
+          STAGING_TSE_MODE: disabled
+        run: |
+          if bash ops/staging-preflight.sh; then
+            echo 'Unsafe payment mode unexpectedly passed' >&2
+            exit 1
+          fi
