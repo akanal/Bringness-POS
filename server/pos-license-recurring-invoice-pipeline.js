@@ -9,6 +9,8 @@ export async function reconcileAndDraftSandboxMonthlyPayment({
  pool,apiKey,paymentId,paidThrough,customerBilling,fetcher=fetch,
  issueInvoice=false,invoiceComplianceApproved=false,issuer,servicePeriod,serviceDescription
 }) {
+ if(issueInvoice===true && invoiceComplianceApproved!==true)
+  return {payment:{renewed:false,reason:"invoice_compliance_approval_required"},invoice:{saved:false,issued:false,reason:"invoice_compliance_approval_required"}};
  const payment=await reconcileSandboxMonthlyPayment({
   pool,apiKey,paymentId,paidThrough,fetcher
  });
