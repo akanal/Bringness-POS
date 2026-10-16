@@ -25,7 +25,8 @@ export function demandEffect(date,context,progress=0){
  if(events.length&&rules.eventPercent)adjustments.push({kind:'events',percent:rules.eventPercent,events:events.map(e=>({id:e.id,version:e.version}))});
  const rawFactor=Math.max(0.5,Math.min(1.5,1+adjustments.reduce((s,a)=>s+a.percent,0)/100));
  // Fade configured context as real sales become the stronger source of evidence.
- const factor=1+(rawFactor-1)*(1-Math.max(0,Math.min(1,progress)));
+ const safeProgress=Number.isFinite(progress)?Math.max(0,Math.min(1,progress)):0;
+ const factor=1+(rawFactor-1)*(1-safeProgress);
  return {enabled:true,factor,rawFactor,adjustments,rules,weatherSkipped:!weather||weather.partial,method:'Betrieblich konfigurierte Szenarioregeln, keine gelernte Wetterwirkung'};
 }
 export function planningDemandDays(context,today,days){return Array.from({length:days},(_,i)=>{const date=new Date(Date.parse(today+'T12:00:00Z')+i*86400000).toISOString().slice(0,10),closed=closedOn(date,context.settings),effect=demandEffect(date,context);return {date,closed,factor:closed?0:effect.factor,adjustments:closed?[]:effect.adjustments}})}
