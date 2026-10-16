@@ -29,8 +29,8 @@ export async function issueSandboxMonthlyInvoice(pool,{paymentId,companyId,issue
    return {issued:false,reason:"invoice_details_incomplete",missing:completeness.missing};
   }
   await client.query(
-   "UPDATE sandbox_pos_monthly_invoice_drafts SET status='issued',issued_at=now() WHERE id=$1 AND status='draft'",
-   [row.id]);
+   "UPDATE sandbox_pos_monthly_invoice_drafts SET status='issued',issued_at=now(),issued_details=$2::jsonb WHERE id=$1 AND status='draft'",
+   [row.id,JSON.stringify({issuer,customer:row.customer_billing,servicePeriod,serviceDescription,invoiceNumber:row.invoice_number,invoiceDate:row.invoice_date,currency:'EUR',netCents:row.net_cents,vatCents:row.vat_cents,grossCents:row.gross_cents,vatRatePercent:19})]);
   await client.query("COMMIT");
   return {issued:true,invoiceNumber:row.invoice_number,status:"issued"};
  }catch(error){await client.query("ROLLBACK");throw error;}
