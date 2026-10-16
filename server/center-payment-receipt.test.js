@@ -3,11 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 const receiptId='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',publicToken='33333333-3333-4333-8333-333333333333';
-async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null}={}){
+async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,urlFails=false,writerFailure=null,PdfWriter=null,QrWriter=null,nearPageEnd=false}={}){
  const documents=[],queries=[];
  class Pdf extends EventEmitter {
- constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:226.77,margins:{left:options.margin}};this.y=100;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
- fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(buffer,x,y,options){this.images.push({x,y,...options});return this;}
+ constructor(options){super();if(writerFailure==='constructor')throw Error('writer unavailable');this.options=options;this.page={width:226.77,margins:{left:options.margin}};this.y=nearPageEnd?600:100;this.addedPages=0;this.texts=[];this.textPositions=[];this.images=[];documents.push(this);}
+ addPage(){this.addedPages++;this.y=18;return this;}fontSize(){return this;}font(){return this;}moveDown(){return this;}fillColor(){return this;}image(buffer,x,y,options){this.images.push({x,y,...options});return this;}
  text(value){if(writerFailure==='draw')throw Error('render failed');this.texts.push(value);this.textPositions.push({value,y:this.y});return this;}destroy(){this.destroyed=true;return this;}end(){this.ended=true;if(writerFailure==='stream')this.emit('error',Error('stream failed'));else this.emit('data',Buffer.from('%PDF-simulated'));this.emit('end');return this;}
  }
  const pool={query:async(sql,args)=>{
@@ -75,4 +75,14 @@ test('real PDFKit and QR encoder produce a complete buffered receipt',{skip:!pro
  assert.equal(res.status,200);assert.equal(res.headers['content-type'],'application/pdf');
  assert.ok(res.pdf.length>1000);assert.equal(res.pdf.subarray(0,5).toString(),'%PDF-');
  assert.match(res.pdf.subarray(-100).toString(),/%%EOF/);
+});
+
+test('QR and footer move together to a fresh PDF page when remaining space is insufficient',async()=>{
+ const {res,documents}=await run('signed',{nearPageEnd:true});
+ assert.equal(res.status,200);
+ const doc=documents[0];
+ assert.equal(doc.addedPages,1);
+ assert.equal(doc.images.length,1);
+ assert.equal(doc.images[0].y,18);
+ assert.ok(doc.textPositions.find(t=>t.value==='QR: Digitalen Beleg öffnen').y>=doc.images[0].y+112+8);
 });
