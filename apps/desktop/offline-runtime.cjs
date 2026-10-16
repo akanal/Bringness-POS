@@ -94,13 +94,18 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   powerMonitor.removeListener('resume',resumeAfterSuspend);
  };
  app.on('before-quit',stopRecovery);
- return {ledger,open,close:async()=>{
-  if(closed)return;
+ let closing=null;
+ const close=()=>{
+  if(closing)return closing;
   closed=true;
+  closing=(async()=>{
   stopRecovery();
   offlineWindow?.destroy();
   for(const channel of ['offline:view','offline:sync','offline:export','offline:sale','offline:online'])ipcMain.removeHandler(channel);
   await Promise.allSettled([...activeOperations,...(activeSync?[activeSync]:[])]);
   await db.close();
- }};
+  })();
+  return closing;
+ };
+ return {ledger,open,close};
 };
