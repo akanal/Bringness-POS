@@ -64,7 +64,7 @@ export async function handleOfflineSales(req,res){
    }
    return send(200,{results,succeeded:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length});
   }
-  if(path.endsWith('/retry')){if(!offlineUuid.test(b.id||''))fail('Ungültige Verkaufskennung');const result=await pool.query("UPDATE pos_offline_sales s SET stock_state='pending',stock_error=NULL FROM pos_offline_catalogs c WHERE s.catalog_id=c.id AND c.company_id=$1 AND s.id=$2 AND s.stock_state='conflict'",[user.company_id,b.id]);if(!result.rowCount)fail('Kein zugänglicher Lagerkonflikt',404);return send(200,{ok:true})}
+  if(path.endsWith('/retry')){if(!b||typeof b!=='object'||!offlineUuid.test(b.id||''))fail('Ungültige Verkaufskennung');const result=await pool.query("UPDATE pos_offline_sales s SET stock_state='pending',stock_error=NULL FROM pos_offline_catalogs c WHERE s.catalog_id=c.id AND c.company_id=$1 AND s.id=$2 AND s.stock_state='conflict'",[user.company_id,b.id]);if(!result.rowCount)fail('Kein zugänglicher Lagerkonflikt',404);return send(200,{ok:true})}
   if(!b||typeof b!=='object'||!/^[a-f0-9]{64}$/.test(b.deviceKey||''))fail('Ungültige Gerätekennung');
   return send(200,path.endsWith('/catalog')?{snapshot:await issueOfflineCatalog(pool,user,b.deviceKey)}:await importOfflineSale(pool,user,b.deviceKey,b.sale));
  }catch(e){return send(e.status||503,{error:e.status?e.message:'Offline-Synchronisierung momentan nicht verfügbar'});}
