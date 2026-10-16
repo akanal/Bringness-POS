@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import {ensureTseSchema,markTransactionSigned} from '../server/tse-core.js';
 
-test('PostgreSQL enforces guarded TSE state transitions',async()=>{
+test('PostgreSQL enforces guarded TSE state transitions',{skip:!process.env.TSE_TEST_DATABASE_URL},async()=>{
  const connectionString=process.env.TSE_TEST_DATABASE_URL;
  assert.ok(connectionString,'TSE_TEST_DATABASE_URL is required');
  const pool=new pg.Pool({connectionString});
