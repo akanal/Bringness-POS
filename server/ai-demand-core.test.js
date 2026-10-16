@@ -21,3 +21,9 @@ test('forecast tolerates omitted demand configuration',()=>{
 test('false-like invalid demand settings are rejected',()=>{
  assert.throws(()=>applyDemandContext(base,{settings:{demandRules:false}}),/Ungültige Prognoseregeln/);
 });
+
+test('demand effect handles missing context with neutral rules',()=>{
+ const result=applyDemandContext(base,{settings:null});
+ assert.equal(result.expectedOrders,100);
+ assert.equal(result.demand.enabled,false);
+});
