@@ -24,7 +24,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   try{token=await window.webContents.executeJavaScript('localStorage.getItem("bringness-pos-token")');}
   catch{return null;}
   if(typeof token!=='string'||!token.trim())return null;
-  return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(data.error||'Synchronisierung nicht verfügbar');return data;};
+  return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(typeof data?.error==='string'?data.error:'Synchronisierung nicht verfügbar');return data;};
  }});
  const sync=()=>coordinator.sync();
  const {powerMonitor}=require('electron');
