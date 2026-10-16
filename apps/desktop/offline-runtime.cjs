@@ -17,7 +17,12 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   const window=onlineWindow();if(!window||window.isDestroyed())return null;
   let url;try{url=new URL(window.webContents.getURL())}catch{return null}if(url.origin!=='https://bringness.de')return null;
   // The login token stays in memory. Native APIs are never exposed to the remote page.
-  const token=await window.webContents.executeJavaScript('localStorage.getItem("bringness-pos-token")');if(!token)return null;
+  // Login may not have completed after page load, or navigation may be in progress.
+  // Treat either case as temporarily unauthenticated; the recovery timer retries.
+  let token;
+  try{token=await window.webContents.executeJavaScript('localStorage.getItem("bringness-pos-token")');}
+  catch{return null;}
+  if(typeof token!=='string'||!token.trim())return null;
   return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(data.error||'Synchronisierung nicht verfügbar');return data;};
  }});
  const sync=()=>coordinator.sync();
