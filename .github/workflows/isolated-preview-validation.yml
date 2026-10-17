@@ -18,7 +18,7 @@ jobs:
         with: {node-version: 24}
       - name: Verify container boundaries and create disposable credentials
         run: |
-          node --test ops/preview-bundle.test.mjs
+          node --test ops/preview-bundle.test.mjs ops/preview-backup-crypto.test.mjs
           node ops/create-preview-env.mjs .env.preview.local
       - name: Build the actual application in a separate image
         run: docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json build
@@ -44,6 +44,14 @@ jobs:
             socket.once("connect",()=>{socket.destroy();process.exitCode=1;});
             socket.once("error",()=>{process.exitCode=0;});
             socket.setTimeout(3000,()=>{socket.destroy();process.exitCode=0;});'
+      - name: Verify encrypted backup and restoration in an independent empty cluster
+        run: |
+          docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json stop preview-app
+          node ops/preview-backup.mjs create-key "$RUNNER_TEMP/recovery.preview-backup-key"
+          node ops/preview-backup.mjs backup .env.preview.local "$RUNNER_TEMP/recovery.preview-backup" "$RUNNER_TEMP/recovery.preview-backup-key"
+          node ops/preview-backup.mjs verify "$RUNNER_TEMP/recovery.preview-backup" "$RUNNER_TEMP/recovery.preview-backup-key"
+          docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json up -d --wait --wait-timeout 180
+          node ops/preview-smoke.mjs .env.preview.local
       - name: Sanitized diagnostics on failure
         if: failure()
         run: node ops/preview-diagnostics.mjs .env.preview.local
