@@ -41,7 +41,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
     if(!current?.policy.enabled||current.version!==policyRow.version)fail('Freigabe inzwischen geändert',409);
     if(!quote||!Array.isArray(quote.groups)||!quote.groups.length)fail('Ungültiges Lieferantenangebot',409);
     if(quote.groups.some(g=>!policy.supplierIds.includes(g.supplierId)||JSON.stringify([g.deliveryArea,g.terms,g.minimumCents])!==JSON.stringify(policy.supplierTerms?.[g.supplierId])))fail('Lieferant nicht freigegeben',409);
-    if(!Number.isSafeInteger(quote.netCents)||quote.netCents<0||quote.netCents>policy.maxDailyNetCents)fail('Netto-Warenwertgrenze überschritten',409);
+    if(!Number.isSafeInteger(quote.netCents)||quote.netCents<=0||quote.netCents>policy.maxDailyNetCents)fail('Netto-Warenwertgrenze überschritten',409);
     const fresh=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds},{db:c});
     const normalized=x=>JSON.stringify(x.map(({stockId,productId,packs})=>[stockId,productId,packs]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
     if(!fresh.complete||normalized(fresh.lines)!==normalized(lines))fail('Lagerbedarf oder offene Bestellungen inzwischen geändert',409);
