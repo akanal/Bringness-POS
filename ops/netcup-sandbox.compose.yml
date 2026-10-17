@@ -1,0 +1,61 @@
+# Isolated Netcup billing test stack. Never run with production env files.
+# Required: a dedicated Compose-managed Docker network, test-only credentials, and
+# separate sandbox database volume. This file does not create public routes.
+services:
+  sandbox-db:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: bringness_billing_sandbox
+      POSTGRES_USER: sandbox_app
+      POSTGRES_PASSWORD_FILE: /run/secrets/sandbox_db_password
+    secrets:
+      - sandbox_db_password
+    volumes:
+      - sandbox_pgdata:/var/lib/postgresql/data
+      - ./pos-license-sandbox-init.sql:/docker-entrypoint-initdb.d/01-pos-license-sandbox.sql:ro
+    networks:
+      - sandbox_private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sandbox_app -d bringness_billing_sandbox"]
+      interval: 5s
+      retries: 10
+  sandbox-mailpit:
+    image: axllent/mailpit:v1.24
+    restart: "no"
+    networks:
+      - sandbox_private
+    # Mail is captured inside the private network, never delivered externally.
+  sandbox-app:
+    build:
+      context: ../
+      dockerfile: ops/netcup-sandbox.Dockerfile
+    restart: "no"
+    depends_on:
+      sandbox-db:
+        condition: service_healthy
+    env_file:
+      - ./sandbox.test.env
+    secrets:
+      - sandbox_db_password
+    environment:
+      APP_MODE: pos
+      PORT: "3000"
+      PGHOST: sandbox-db
+      PGDATABASE: bringness_billing_sandbox
+      PGUSER: sandbox_app
+      NODE_ENV: test
+    ports:
+      - "127.0.0.1:3015:3000"
+    networks:
+      - sandbox_private
+    # No production network, production database, or production bind mount.
+networks:
+  sandbox_private:
+    # Dedicated network; the sandbox app can reach Mollie TEST over HTTPS.
+    # Never attach this network to production services.
+volumes:
+  sandbox_pgdata:
+secrets:
+  sandbox_db_password:
+    file: ./sandbox-db-password.txt

@@ -1,0 +1,56 @@
+name: Netcup sandbox safety tests
+on:
+  push:
+    branches: [netcup-isolated-mollie-sandbox-20261015]
+    paths:
+      - 'server/pos-license-*'
+      - 'ops/select-operation.js'
+      - 'ops/select-operation.test.js'
+      - 'ops/netcup-command.sh'
+      - 'ops/netcup-sandbox-command.test.py'
+      - 'ops/netcup-sandbox-preflight.sh'
+      - 'ops/netcup-sandbox-preflight.test.py'
+      - 'ops/netcup-sandbox-dispatcher.sh'
+      - 'ops/netcup-sandbox-dispatcher.test.py'
+      - 'ops/netcup-sandbox.compose.yml'
+      - 'ops/netcup-sandbox.Dockerfile'
+      - 'ops/netcup-sandbox-compose.test.py'
+      - 'ops/validate-netcup-sandbox.py'
+      - 'ops/validate-netcup-sandbox.test.py'
+      - '.github/workflows/netcup-sandbox-safety-tests.yml'
+  pull_request:
+    paths:
+      - 'ops/select-operation.js'
+      - 'ops/select-operation.test.js'
+      - 'ops/netcup-command.sh'
+      - 'ops/netcup-sandbox*'
+      - 'ops/validate-netcup-sandbox*'
+      - '.github/workflows/netcup-sandbox-safety-tests.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: node --test ops/select-operation.test.js server/pos-license-*.test.js
+      - run: bash -n ops/netcup-sandbox-preflight.sh
+      - run: python3 ops/netcup-sandbox-preflight.test.py
+      - run: python3 ops/netcup-sandbox-command.test.py
+      - run: bash -n ops/netcup-sandbox-dispatcher.sh
+      - run: python3 ops/netcup-sandbox-dispatcher.test.py
+      - run: python3 ops/netcup-sandbox-compose.test.py
+      - run: python3 -m py_compile ops/validate-netcup-sandbox.py
+      - run: python3 ops/validate-netcup-sandbox.test.py
+      - name: Validate sandbox Compose without real credentials
+        run: |
+          set -euo pipefail
+          trap 'rm -f ops/sandbox.test.env ops/sandbox-db-password.txt' EXIT
+          printf 'DATABASE_URL=postgresql://sandbox_app:synthetic_test_password_123456789@sandbox-db:5432/bringness_billing_sandbox\nMOLLIE_API_KEY=test_abcdefghijklmnopqrstuvwxyz\nSANDBOX_CHECKOUT_TOKEN=synthetic_sandbox_token_abcdefghijklmnopqrstuvwxyz\nSANDBOX_PUBLIC_BASE_URL=https://sandbox.example.invalid\n' > ops/sandbox.test.env
+          printf 'synthetic_test_password_123456789\n' > ops/sandbox-db-password.txt
+          python3 ops/validate-netcup-sandbox.py
+          docker compose -f ops/netcup-sandbox.compose.yml config --quiet
