@@ -7,3 +7,8 @@ test('ingredient aggregation bounds cumulative demand and rejects malformed line
  for(const lines of [null,[null],[{stockId:'a',quantity:true,portions:1}],[{stockId:'a',quantity:1000000000,portions:1},{stockId:'a',quantity:1,portions:1}]])assert.throws(()=>aggregateIngredients(lines));
  assert.deepEqual(aggregateIngredients([{stockId:'a',quantity:.1,portions:2},{stockId:'a',quantity:.2,portions:1}]),[{stockId:'a',quantity:.4}]);
 });
+
+test('replenishment refuses corrupt stock and incoming demand rather than generating NaN purchases',()=>{
+ const stock={quantity:2,minimum:3,target_quantity:5};assert.equal(replenishment(stock).shortage,3);
+ for(const value of [NaN,Infinity,null,true,-1])assert.throws(()=>replenishment({...stock,quantity:value}));assert.throws(()=>replenishment(stock,{incoming:-1}));
+});
