@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fail=(status,message,code)=>{throw Object.assign(Error(message),{status,code});};
@@ -15,8 +16,7 @@ export function createTableSettlement(pool){return async(req,res)=>{
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   if(!token)return send(401,{error:'Nicht angemeldet'});
   const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
-  const chunks=[];let bytes=0;for await(const chunk of req){const buffer=Buffer.from(chunk);bytes+=buffer.length;if(bytes>65536)fail(413,'Anfrage zu groß');chunks.push(buffer);}
-  let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{fail(400,'Ungültige Anfrage');}
+  const body=await readJsonObject(req,{maxBytes:65536});
   if(!body||typeof body!=='object'||Array.isArray(body)||typeof body.requestKey!=='string'||typeof body.tableId!=='string'||!uuid.test(body.requestKey)||!uuid.test(body.tableId))fail(400,'Tisch und eindeutige Zahlungskennung erforderlich');
   if(body.paymentMethod!=='cash')fail(409,'Kartenzahlung erst nach serverseitig verifizierter Terminalanbindung verfügbar');
   if(!Array.isArray(body.orderIds)||body.orderIds.length<1||body.orderIds.length>500||body.orderIds.some(id=>typeof id!=='string'||!uuid.test(id))||!Number.isSafeInteger(body.expectedTotalCents)||body.expectedTotalCents<=0||body.expectedTotalCents>2147483647)fail(400,'Bestellungen und bestätigter Gesamtbetrag erforderlich');
