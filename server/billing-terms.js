@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from "node:crypto";
 import pg from "pg";
 
@@ -5,7 +6,7 @@ const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.en
 const codes={pos_base_monthly:"pos_base",restaurant_monthly:"restaurant",table_qr_monthly:"table_qr"};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const send=(res,status,value)=>{res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(value))};
-async function body(req){let raw="";for await(const chunk of req){raw+=chunk;if(raw.length>8192)throw Error("Anfrage zu groß")}return raw?JSON.parse(raw):{}}
+const body=req=>readJsonObject(req,{maxBytes:8192});
 
 export async function migrateBillingTerms(){
   await pool.query(`CREATE TABLE IF NOT EXISTS company_billing_terms(
