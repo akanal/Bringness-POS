@@ -1,10 +1,11 @@
+import {readJsonObject} from './http-body.js';
 import {validPassword,passwordMessage} from './password-policy.js';
 import crypto from 'node:crypto';
 import {pinHash} from './personnel.js';
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const pass=x=>crypto.scryptSync(x,process.env.PASSWORD_PEPPER||'bringness-pos',64).toString('hex');
 const reply=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
-async function input(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192)throw Object.assign(Error('Anfrage zu groß'),{status:413})}try{return raw?JSON.parse(raw):{}}catch{throw Object.assign(Error('Ungültige Anfrage'),{status:400})}}
+const input=req=>readJsonObject(req,{maxBytes:8192});
 export function createStaffLifecycle(pool){return async function(req,res){
  const path=new URL(req.url,'http://local').pathname,action=/^\/api\/v1\/waiters\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(disable|delete)$/i.exec(path);
  if(!(path==='/api/v1/staff/confirm'&&req.method==='POST')&&!(action&&req.method==='POST'))return false;
