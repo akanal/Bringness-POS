@@ -9,3 +9,6 @@ dist
 build
 coverage
 *.log
+
+*.preview-backup
+*.preview-backup-key
