@@ -56,7 +56,7 @@ export async function handleBillingStatus(req,res){
 
   const download=entitlements.rows.some(row=>row.code==='download_license'&&row.status==='active');
   const baseEntitlement=entitlements.rows.some(row=>row.code==='pos_base_monthly'&&row.status==='active'&&(!row.current_period_end||new Date(row.current_period_end)>new Date()));
-  const policy=billingPolicy({baseAccess:activeFeature('pos_base'),base:baseEntitlement||(featureMap.get('pos_base')?.payment_status==='trial'&&activeFeature('pos_base')),restaurant:activeFeature('restaurant'),tableQr:activeFeature('table_qr'),tableManagement:activeFeature('table_management'),counterQr:activeFeature('counter_qr'),center:activeFeature('center'),personnel:activeFeature('personnel'),kitchen:activeFeature('kitchen'),legacyTableQr:activeFeature('table_qr')&&entitlements.rows.some(r=>r.code==='table_qr_monthly'&&r.purchased_at&&new Date(r.purchased_at)<new Date('2026-10-17T08:19:00Z')),download});
+  const policy=billingPolicy({baseAccess:activeFeature('pos_base'),base:baseEntitlement||(featureMap.get('pos_base')?.payment_status==='trial'&&activeFeature('pos_base')),restaurant:activeFeature('restaurant'),tableQr:activeFeature('table_qr'),tableManagement:activeFeature('table_management'),counterQr:activeFeature('counter_qr'),center:activeFeature('center'),personnel:activeFeature('personnel'),kitchen:activeFeature('kitchen'),eanScanner:activeFeature('ean_scanner'),legacyTableQr:activeFeature('table_qr')&&entitlements.rows.some(r=>r.code==='table_qr_monthly'&&r.purchased_at&&new Date(r.purchased_at)<new Date('2026-10-17T08:19:00Z')),download});
   const state={...policy.features,pos_base:policy.features.pos_base||activeFeature("pos_base")},dependencyState=policy.plans;
 
   const latestEntitlement=new Map();

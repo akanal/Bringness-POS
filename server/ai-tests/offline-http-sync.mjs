@@ -22,7 +22,7 @@ const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.e
 const pool={query,connect:async()=>postgresUrl?db.connect():({query,release(){}})};
 await db.exec((await fs.readFile(new URL('../../db/schema.sql',import.meta.url),'utf8')).replace('CREATE EXTENSION IF NOT EXISTS pgcrypto;',''));
 await db.exec(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner';ALTER TABLE users ADD COLUMN must_change_password boolean DEFAULT false;
-CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);
+CREATE TABLE company_features(company_id uuid,feature_code text,status text,ends_at timestamptz,grace_until timestamptz);CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);
 ALTER TABLE receipts ADD COLUMN merchant_snapshot jsonb;
 CREATE TABLE devices(id uuid PRIMARY KEY,company_id uuid,device_key text,status text,activation_status text,license_valid_until timestamptz,entitlement_id uuid);
 CREATE TABLE billing_plans(id uuid PRIMARY KEY,code text);CREATE TABLE company_entitlements(id uuid PRIMARY KEY,company_id uuid,plan_id uuid,status text);

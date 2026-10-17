@@ -1,3 +1,4 @@
+import {createPosEan,migratePosEan} from './pos-ean.js';
 import {clientInputError} from './http-body.js';
 import {isolatedPreview,assertPreviewEntrypoint} from './preview-policy.js';
 import {createTableSettlement,migrateTableSettlement} from './table-settlement.js';
@@ -61,6 +62,7 @@ const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
+const handlePosEan=createPosEan(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
 const handleTableSettlement=createTableSettlement(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
@@ -83,6 +85,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
       if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
+      if (appMode!=='ai' && await handlePosEan(req,res)) return;
       if (appMode!=='ai' && await handleDutyPlanning(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
@@ -155,6 +158,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
         if (!html.includes('/personnel-report.js')) html = html.replace("</body>", '<script src="/personnel-report.js?v=20261012"></script></body>');
+        if (!html.includes('/pos/ean-scanner.js')) html = html.replace('</body>', '<script src="/pos/ean-scanner.js?v=ean-20261017"></script></body>');
         if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=dismiss-notice-20261017"></script></body>');
         if (!html.includes('/pos/personnel.js')) html = html.replace("</body>", '<script src="/pos/personnel.js"></script></body>');
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
@@ -189,6 +193,7 @@ async function migrateWithRetry(){
   for(let attempt=1;attempt<=12;attempt++){
     try{
       await migrateRestaurantOwnerFeatures();
+      await migratePosEan(platformGatewayPool);
       await migrateDutyPlanning(platformGatewayPool);
       await migrateWaiterDelivery(platformGatewayPool);
       await migratePersonnel(platformGatewayPool);

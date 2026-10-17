@@ -130,3 +130,8 @@ Continue authorized development autonomously and preserve established behavior a
 - personnel_monthly and kitchen_monthly: each 9.99 EUR net/month, independently optional; neither belongs in the ordinary base POS. A retail/newsagent base has no kitchen.
 - Booking starts in protected owner settings with administrative PIN, time-limited single-use owner-email confirmation and verified provider payment. No automatic migration or repricing of existing subscriptions.
 - Owner explicitly authorized publication of these exact prices and modules in this session; no further routine confirmation is needed.
+
+## EAN-Scanner owner approval 2026-10-17
+- Separate optional ean_scanner_monthly module, 9.99 EUR net/month; feature ean_scanner. Online and download bases, no table requirement. Hardware separately procured, keyboard-wedge scanner with Enter supported. Public compact price card and POS licensing card required.
+- Code assignment is restaurant-scoped, validated EAN/GTIN 8/12/13/14 including check digit and leading zeros. Existing product assignment or explicitly entered new name/price/tax; no automatic product/price database. Owner/admin plus existing PIN required to assign. Paid module plus base enforced server-side.
+- Known scan adds to ordinary cart; repeated scans increase quantity. Unknown/unavailable code never automatically sells. Offline sales use immutable synchronized barcode/catalog entries and bounded module validity; offline unknown codes require online assignment/sync. No checkout/receipt logic replacement.
