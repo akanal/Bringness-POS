@@ -23,3 +23,7 @@ test('table details reject unassigned waiters before returning guest/order data'
   orderRead=true;throw Error('Unexpected private order read');
  }});assert.equal(r.status,403);assert.equal(orderRead,false);
 });
+
+test('legacy handset presence cannot bypass personal POS stamping',async()=>{
+ for(const action of ['start','end']){const r=await call('/api/v1/waiter/presence/'+action,{method:'POST',actor:{id:rid,company_id:rid,role:'waiter'}});assert.equal(r.status,410);assert.equal(r.calls.length,1);}
+});

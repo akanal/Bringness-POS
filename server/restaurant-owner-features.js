@@ -180,24 +180,9 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     }catch(error){await c.query("ROLLBACK");if(error.code==="22P02")return json(res,400,{error:"Ungültiger Artikel oder Beilage"});throw error}finally{c.release()}
   }
 
-  if(p==="/api/v1/waiter/presence/start" && req.method==="POST"){
-    const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
-    if(u.role!=="waiter")return json(res,403,{error:"Kein Kellnerkonto"});
-    const e=(await pool.query("SELECT e.id FROM employees e JOIN restaurants r ON r.id=e.restaurant_id WHERE e.user_id=$1 AND e.active=true AND e.role='waiter' AND r.company_id=$2",[u.id,u.company_id])).rows[0];
-    if(!e)return json(res,404,{error:"Kellner nicht gefunden"});
-    const open=(await pool.query("SELECT id,started_at FROM waiter_presence WHERE employee_id=$1 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",[e.id])).rows[0];
-    if(open)return json(res,200,{presence:open,alreadyOpen:true});
-    const q=await pool.query("INSERT INTO waiter_presence(employee_id,user_id) VALUES($1,$2) RETURNING id,started_at",[e.id,u.id]);
-    json(res,201,{presence:q.rows[0]}); return true;
-  }
-
-  if(p==="/api/v1/waiter/presence/end" && req.method==="POST"){
-    const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
-    if(u.role!=="waiter")return json(res,403,{error:"Kein Kellnerkonto"});
-    const q=await pool.query(`UPDATE waiter_presence wp SET ended_at=now()
-      FROM employees e WHERE wp.employee_id=e.id AND e.user_id=$1 AND wp.ended_at IS NULL
-      RETURNING wp.id,wp.started_at,wp.ended_at`,[u.id]);
-    json(res,200,{ended:q.rows}); return true;
+  if(['/api/v1/waiter/presence/start','/api/v1/waiter/presence/end'].includes(p)&&req.method==='POST'){
+    const u=await user(req,db);if(!u)return json(res,401,{error:'Nicht angemeldet'});
+    json(res,410,{error:'Dienstzeiten ausschließlich an der Kasse mit persönlicher Stempel-PIN buchen.'});return true;
   }
 
   const tableDetails=p.match(/^\/api\/v1\/tables\/([0-9a-f-]{36})\/details$/i);
