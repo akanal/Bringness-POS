@@ -6,7 +6,7 @@ import {hash,uuid,supplierRoles,units} from './ai-policy.js';
 
 const fail=(message,status=400)=>{const error=new Error(message);error.status=status;throw error};
 const text=(value,label,max=150)=>{if(typeof value!=='string'||!value.trim()||value.trim().length>max)fail(label+' erforderlich (maximal '+max+' Zeichen)');return value.trim()};
-const checkId=value=>{if(!uuid.test(String(value)))fail('Ungültige ID');return value};
+const checkId=value=>{if(typeof value!=='string'||!uuid.test(value))fail('Ungültige ID');return value};
 export function supplierProducts(payload){
   if(!payload||typeof payload!=='object')fail('Produktimport erforderlich');
   checkId(payload.requestId);
@@ -40,21 +40,25 @@ export async function supplierAccountRoutes(p,method,b,u){
   if(!supplierRoles.includes(u.role))fail('Nur Lieferanten können diese Anbindungen verwalten',403);
   const pool=aiPool();
   if(p==='/api/ai/supplier-connectors'&&method==='GET')return {connectors:(await pool.query('SELECT id,name,active,last_sync,created_at FROM ai_supplier_connectors WHERE supplier_id=$1 ORDER BY created_at DESC',[u.id])).rows};
-  if(p==='/api/ai/supplier-connectors'&&method==='POST'){
-    const name=text(b.name,'Name'),token=crypto.randomBytes(32).toString('hex');
-    const r=await pool.query('INSERT INTO ai_supplier_connectors(supplier_id,name,token_hash) VALUES($1,$2,$3) RETURNING id',[u.id,name,hash(token)]);
-    return {connectorId:r.rows[0].id,token,message:'Schlüssel nur jetzt sichtbar. Sicher speichern und die Verbindung anschließend aktivieren.'};
-  }
   if(method==='POST'){
-    checkId(b.id);
-    if(p==='/api/ai/supplier-connector-key'){
-      const token=crypto.randomBytes(32).toString('hex');
-      if(!(await pool.query('UPDATE ai_supplier_connectors SET token_hash=$3 WHERE id=$1 AND supplier_id=$2 RETURNING id',[b.id,u.id,hash(token)])).rowCount)fail('Anbindung nicht gefunden',404);
-      return {token,message:'Der bisherige Schlüssel ist sofort ungültig. Den neuen Schlüssel sicher speichern.'};
-    }
-    if(typeof b.active!=='boolean')fail('Status erforderlich');
-    if(!(await pool.query('UPDATE ai_supplier_connectors SET active=$3 WHERE id=$1 AND supplier_id=$2 RETURNING id',[b.id,u.id,b.active])).rowCount)fail('Anbindung nicht gefunden',404);
-    return {ok:true};
+    if(p!=='/api/ai/supplier-connectors')checkId(b.id);
+    if(p==='/api/ai/supplier-connector-status'&&typeof b.active!=='boolean')fail('Status erforderlich');
+    const name=p==='/api/ai/supplier-connectors'?text(b.name,'Name'):null,c=await pool.connect();
+    try{
+      await c.query('BEGIN');
+      if(!(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND status='active' AND role IN ('dealer','wholesaler','manufacturer') FOR UPDATE",[u.id])).rows.length)fail('Lieferantenkonto nicht mehr freigegeben',403);
+      let result;
+      if(p==='/api/ai/supplier-connectors'){
+        const token=crypto.randomBytes(32).toString('hex'),r=await c.query('INSERT INTO ai_supplier_connectors(supplier_id,name,token_hash) VALUES($1,$2,$3) RETURNING id',[u.id,name,hash(token)]);
+        result={connectorId:r.rows[0].id,token,message:'Schlüssel nur jetzt sichtbar. Sicher speichern und die Verbindung anschließend aktivieren.'};
+      }else if(p==='/api/ai/supplier-connector-key'){
+        const token=crypto.randomBytes(32).toString('hex');if(!(await c.query('UPDATE ai_supplier_connectors SET token_hash=$3 WHERE id=$1 AND supplier_id=$2 RETURNING id',[b.id,u.id,hash(token)])).rowCount)fail('Anbindung nicht gefunden',404);
+        result={token,message:'Der bisherige Schlüssel ist sofort ungültig. Den neuen Schlüssel sicher speichern.'};
+      }else{
+        if(!(await c.query('UPDATE ai_supplier_connectors SET active=$3 WHERE id=$1 AND supplier_id=$2 RETURNING id',[b.id,u.id,b.active])).rowCount)fail('Anbindung nicht gefunden',404);result={ok:true};
+      }
+      await c.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'supplier_connector_change',$2::jsonb)",[u.id,JSON.stringify({action:p.split('/').at(-1),connectorId:result.connectorId||b.id})]);await c.query('COMMIT');return result;
+    }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
   }
   fail('Methode nicht erlaubt',405);
 }
