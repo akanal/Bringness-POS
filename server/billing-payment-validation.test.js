@@ -5,3 +5,8 @@ test('billing only releases the exact provider payment, amount, currency and con
 });
 
 test('first-payment replay remains valid after subscription provisioning',()=>{assert(billingPaymentMatches(tx,{...p,subscriptionId:undefined,sequenceType:'first'}));});
+
+test('a stale unpaid provider read cannot downgrade a transaction already booked paid',()=>{
+ for(const status of ['open','pending','failed','canceled','expired'])assert.equal(billingPaymentMatches({...tx,paid_at:'2026-10-17T08:00:00Z'},{...p,status}),false);
+ assert(billingPaymentMatches({...tx,paid_at:'2026-10-17T08:00:00Z'},p));
+});
