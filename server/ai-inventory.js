@@ -42,8 +42,8 @@ async function inventoryWrite(path,b,u){
   await blockUnavailableRecipes(c,u.id);const response={ok:true,positions:lines.length};await c.query('INSERT INTO ai_inventory_requests VALUES($1,$2,$3,$4::jsonb)',[u.id,b.requestKey,fingerprint,JSON.stringify(response)]);await c.query('INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,$2,$3::jsonb)',[u.id,count?'inventory_count':'inventory_'+b.kind,JSON.stringify({requestKey:b.requestKey,positions:lines.length,reason:why})]);await c.query('COMMIT');return response;
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
-export async function refreshMonitor(accountId){
- const c=await pool.connect();try{await c.query('BEGIN');await c.query('INSERT INTO ai_monitor_state(account_id) VALUES($1) ON CONFLICT DO NOTHING',[accountId]);await c.query('SELECT account_id FROM ai_monitor_state WHERE account_id=$1 FOR UPDATE',[accountId]);const account=(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active'",[accountId])).rows[0];if(!account){await c.query('ROLLBACK');return}
+export async function refreshMonitor(accountId,{db=pool,client}={}){
+ const c=client||await db.connect();try{await c.query('BEGIN');await c.query('INSERT INTO ai_monitor_state(account_id) VALUES($1) ON CONFLICT DO NOTHING',[accountId]);await c.query('SELECT account_id FROM ai_monitor_state WHERE account_id=$1 FOR UPDATE',[accountId]);const account=(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active'",[accountId])).rows[0];if(!account){await c.query('ROLLBACK');return}
  const stock=(await c.query(`SELECT s.*,l.name location_name,
  COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted' AND NOT o.unavailable AND COALESCE(o.confirmed_delivery_date,o.delivery_date)>=(now() AT TIME ZONE 'Europe/Berlin')::date AND NOT EXISTS(SELECT 1 FROM ai_order_replacements r WHERE r.order_id=o.id AND r.status='pending') AND COALESCE(o.confirmed_delivery_date,o.delivery_date)<=((now() AT TIME ZONE 'Europe/Berlin')::date+6)),0) incoming
  FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY s.id`,[accountId])).rows;
@@ -74,9 +74,24 @@ export async function refreshMonitor(accountId){
  for(const r of repeated)if(Number(r.problem_orders)>=3)add('delivery_repeat',r.supplier_id,'review','Wiederholte Lieferprobleme',r.business_name+': In mindestens drei deiner Aufträge der letzten 90 Tage wurde Nichtlieferbarkeit oder eine Mindermenge gemeldet. Lieferbedingungen gemeinsam prüfen.',{supplierId:r.supplier_id,supplier:r.business_name,problemOrders:Number(r.problem_orders),totalOrders:Number(r.total_orders),action:'orders'});
  for(const f of findings)await c.query(`INSERT INTO ai_monitor_findings(account_id,finding_key,kind,severity,title,message,detail) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT(account_id,finding_key) DO UPDATE SET kind=EXCLUDED.kind,severity=EXCLUDED.severity,title=EXCLUDED.title,message=EXCLUDED.message,detail=EXCLUDED.detail,last_seen=now(),resolved_at=NULL,acknowledged_at=CASE WHEN ai_monitor_findings.detail IS DISTINCT FROM EXCLUDED.detail OR ai_monitor_findings.resolved_at IS NOT NULL THEN NULL ELSE ai_monitor_findings.acknowledged_at END`,[accountId,f.key,f.kind,f.severity,f.title,f.message,JSON.stringify(f.detail)]);
  await c.query('UPDATE ai_monitor_findings SET resolved_at=now() WHERE account_id=$1 AND resolved_at IS NULL AND NOT(finding_key=ANY($2::text[]))',[accountId,findings.map(f=>f.key)]);await c.query("UPDATE ai_monitor_state SET last_checked=now(),last_error='' WHERE account_id=$1",[accountId]);await c.query('COMMIT');return {monitoredStocks:stock.length,historyQualifiedStocks:sales.filter(s=>Number(s.days)>=7).length};
- }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }catch(e){await c.query('ROLLBACK');throw e}finally{if(!client)c.release()}
 }
-export async function monitorTick(){const c=await pool.connect();let locked=false;try{locked=(await c.query('SELECT pg_try_advisory_lock(771093) locked')).rows[0].locked;if(!locked)return;const accounts=(await c.query("SELECT a.id FROM ai_accounts a LEFT JOIN ai_monitor_state m ON m.account_id=a.id WHERE a.role='restaurant' AND a.status='active' AND (m.last_checked IS NULL OR m.last_checked<now()-interval '5 minutes') ORDER BY m.last_checked NULLS FIRST,a.id LIMIT 20")).rows;for(const a of accounts){try{await refreshMonitor(a.id)}catch{await c.query("INSERT INTO ai_monitor_state(account_id,last_checked,last_error) VALUES($1,now(),'Prüfung fehlgeschlagen') ON CONFLICT(account_id) DO UPDATE SET last_checked=now(),last_error=EXCLUDED.last_error",[a.id])}}}finally{try{if(locked)await c.query('SELECT pg_advisory_unlock(771093)')}finally{c.release()}}}
+export async function monitorTick({db=pool,refresh=refreshMonitor}={}){
+ const c=await db.connect();let locked=false;
+ try{
+  locked=(await c.query('SELECT pg_try_advisory_lock(771093) locked')).rows[0].locked;if(!locked)return;
+  const accounts=(await c.query("SELECT a.id FROM ai_accounts a LEFT JOIN ai_monitor_state m ON m.account_id=a.id WHERE a.role='restaurant' AND a.status='active' AND (m.last_checked IS NULL OR m.last_checked<now()-interval '5 minutes') ORDER BY m.last_checked NULLS FIRST,a.id LIMIT 20")).rows;
+  for(const a of accounts){
+   try{await refresh(a.id,{client:c});}
+   catch{await c.query("INSERT INTO ai_monitor_state(account_id,last_checked,last_error) VALUES($1,now(),'Prüfung fehlgeschlagen') ON CONFLICT(account_id) DO UPDATE SET last_checked=now(),last_error=EXCLUDED.last_error",[a.id]);}
+  }
+ }finally{
+  let releaseError;
+  try{if(locked&&(await c.query('SELECT pg_advisory_unlock(771093) AS unlocked')).rows?.[0]?.unlocked!==true)releaseError=Error('Monitor lock not released');}
+  catch(error){releaseError=error;}
+  c.release(releaseError);
+ }
+}
 export async function inventoryRoutes(path,method,b,u,url,admin=false){
  if(admin){if(path!=='/api/ai/admin/monitor'||method!=='GET')fail('Funktion nicht gefunden',404);return {pendingConfirmations:await pendingConfirmations(pool),openDeliveryIssues:Number((await pool.query('SELECT count(*) FROM ai_fulfilment_alerts WHERE resolved_at IS NULL')).rows[0].count),suppliers:(await pool.query("SELECT s.id,s.business_name,count(*) open_issues,count(DISTINCT o.buyer_id) restaurants FROM ai_fulfilment_alerts a JOIN ai_orders o ON o.id=a.order_id JOIN ai_accounts s ON s.id=o.supplier_id WHERE a.resolved_at IS NULL GROUP BY s.id,s.business_name ORDER BY count(*) DESC,s.business_name")).rows,monitoredRestaurants:Number((await pool.query("SELECT count(*) FROM ai_monitor_state m JOIN ai_accounts a ON a.id=m.account_id WHERE a.role='restaurant' AND a.status='active' AND m.last_checked>now()-interval '1 day' AND m.last_error='' ")).rows[0].count)}}
  if(u.role!=='restaurant')fail('Nur Restaurantkonten haben Zugriff auf ihre Warenwirtschaft',403);
