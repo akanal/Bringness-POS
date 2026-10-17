@@ -1,3 +1,4 @@
+import {providerEuroCents} from './provider-money.js';
 import PDFDocument from 'pdfkit';
 import {enqueueMail} from './transactional-mail.js';
 import {billingMail} from './mail-templates.js';
@@ -14,8 +15,9 @@ export function createBillingMail(pool,{env=process.env,fetchPayment=fetch}={}){
   if(z.kind==='invoice')return z.status==='paid'&&z.paid_at&&z.invoice_number?z:null;
   if(z.status!=='failed'||z.paid_at||!z.mollie_subscription_id||!env.MOLLIE_API_KEY)return null;
   const settled=(await pool.query("SELECT 1 FROM billing_transactions WHERE mollie_subscription_id=$1 AND status='paid' AND paid_at>=$2",[z.mollie_subscription_id,z.event_at])).rows[0];if(settled)return null;
-  const response=await fetchPayment('https://api.mollie.com/v2/payments/'+encodeURIComponent(z.provider_payment_id),{headers:{Authorization:'Bearer '+env.MOLLIE_API_KEY},signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('PAYMENT_CHECK_UNAVAILABLE');const p=await response.json();
-  if(p.id!==z.provider_payment_id||p.status!=='failed'||p.subscriptionId!==z.mollie_subscription_id||p.amount?.currency!==z.currency||Math.round(Number(p.amount?.value)*100)!==z.amount_cents)return null;
+  const response=await fetchPayment('https://api.mollie.com/v2/payments/'+encodeURIComponent(z.provider_payment_id),{redirect:'error',headers:{Authorization:'Bearer '+env.MOLLIE_API_KEY},signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('PAYMENT_CHECK_UNAVAILABLE');const p=await response.json();
+  let checkedCents;try{checkedCents=providerEuroCents(p.amount);}catch{return null;}
+  if(p.id!==z.provider_payment_id||p.status!=='failed'||p.subscriptionId!==z.mollie_subscription_id||p.amount?.currency!==z.currency||checkedCents!==z.amount_cents)return null;
   return z;
  }
  async function tick(){if(running)return;running=true;try{const rows=(await pool.query(rowSql+` WHERE e.due_at<=now() AND ((e.kind='invoice' AND bt.status='paid') OR (e.kind='reminder' AND bt.status='failed')) AND NOT EXISTS(SELECT 1 FROM transactional_mail m WHERE m.dedupe_key='billing:'||e.kind||':'||bt.id::text) ORDER BY e.due_at LIMIT 20`)).rows;for(const z of rows){try{const good=await current(z.id,z.email);if(good)await enqueueMail(pool,'billing:'+z.kind+':'+z.id,z.email,{kind:'billing',transactionId:z.id,billingKind:z.kind});}catch{console.error('Billing mail event unavailable');}}}finally{running=false}}
