@@ -28,6 +28,8 @@ jobs:
           node --check server/tse-integration.js
           node --check server/tse-signing-worker.js
           node --check server/offline-sales.js
+          node --check server/payment-checkout.js
+          node --check server/table-settlement.js
           node --check server/center.js
           node --check server/offline-sale-core.js
           node --check server/ai-auto-procurement.js
