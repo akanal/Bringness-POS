@@ -79,3 +79,10 @@ test('duplicate database rows cannot inflate commission collection',async()=>{
  const db={query:async()=>({rows:[{id,commission_cents:200,paid:null},{id,commission_cents:200,paid:null}]})};
  await assert.rejects(validateBillingJob(db,job),/Fremde Abrechnungsposition/);
 });
+
+test('unsafe aggregate commission amounts are rejected',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222';
+ const db={query:async()=>({rows:[{id:a,commission_cents:Number.MAX_SAFE_INTEGER,paid:null},{id:b,commission_cents:1,paid:null}]})};
+ await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[a,b],supplier_id:a,month:'2026-09',net_cents:200}),/Ungültige Provisionsbeträge|Abrechnungsbetrag verändert/);
+});
