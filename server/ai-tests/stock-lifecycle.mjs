@@ -75,7 +75,7 @@ await assert.rejects(act('start','API-A'),/nicht gefunden/);checks++;
 globalThis.stockTestPool=pool;
 let inventorySource=fs.readFileSync(new URL('../ai-inventory.js',import.meta.url),'utf8');
 inventorySource=inventorySource.replace("import {aiPool} from './ai-database.js';","const aiPool=()=>globalThis.stockTestPool;");
-for(const path of ['ai-stock-lifecycle.js','ai-policy.js','ai-consumption.js'])inventorySource=inventorySource.replace("'./"+path+"'",JSON.stringify(new URL('../'+path,import.meta.url).href));
+for(const path of ['ai-stock-lifecycle.js','ai-policy.js','ai-consumption.js','ai-write-authorization.js'])inventorySource=inventorySource.replace("'./"+path+"'",JSON.stringify(new URL('../'+path,import.meta.url).href));
 const inventory=await import('data:text/javascript;base64,'+Buffer.from(inventorySource).toString('base64'));await inventory.migrateAiInventory();
 await query('UPDATE ai_stock SET quantity=3 WHERE id=$1',[stock]);
 for(const kind of ['spillage','own_use','spoilage','waste']){
