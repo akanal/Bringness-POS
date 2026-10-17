@@ -17,3 +17,12 @@ test('collection validation enforces the Berlin accounting month before charging
  assert.match(validation,/to_char\(o\.received_at AT TIME ZONE 'Europe\/Berlin','YYYY-MM'\)=\$3/);
  assert.match(validation,/\[j\.order_ids,j\.supplier_id,j\.month\]/);
 });
+
+test('duplicate and empty commission order references are rejected before querying',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const id='11111111-1111-4111-8111-111111111111';
+ const base={kind:'commission',order_ids:[id],supplier_id:id,month:'2026-09',net_cents:200};
+ const db={query:()=>{throw Error('Database must not be called for invalid order references')}};
+ await assert.rejects(validateBillingJob(db,{...base,order_ids:[]}),/fehlen oder sind doppelt/);
+ await assert.rejects(validateBillingJob(db,{...base,order_ids:[id,id]}),/fehlen oder sind doppelt/);
+});
