@@ -9,7 +9,7 @@ test('isolated preview accepts only its separate runtime and database identity',
  for(const patch of [{BRINGNESS_PREVIEW_MODE:''},{NODE_ENV:'production'},{APP_MODE:'ai'},{PORT:'80'},{PREVIEW_HOST:'bringness.de'},{PUBLIC_URL:'https://bringness.de'},{AI_DATABASE_NAME:'bringness_ai'},{DATABASE_URL:env.DATABASE_URL.replace('preview-db','production-db')},{DATABASE_URL:env.DATABASE_URL+'?sslmode=require'},{DATABASE_URL:env.DATABASE_URL.replace('bringness_preview','bringness_prod')},{PREVIEW_ACCESS_PASSWORD:'short'},{PASSWORD_PEPPER:env.PREVIEW_SESSION_SECRET}])assert.throws(()=>validatePreviewEnvironment({...env,...patch}),/Unsafe/);
 });
 test('live and test provider credentials are both rejected without printing values',()=>{
- for(const key of ['MOLLIE_API_KEY','FISKALY_API_SECRET','SMTP_PASSWORD','VAPID_PRIVATE_KEY','NETCUP_SSH_KEY','AWS_SECRET_ACCESS_KEY','WINDOWS_CSC_LINK']){
+ for(const key of ['MOLLIE_API_KEY','AI_MOLLIE_API_KEY','FISKALY_API_SECRET','SMTP_PASSWORD','VAPID_PRIVATE_KEY','NETCUP_SSH_KEY','AWS_SECRET_ACCESS_KEY','WINDOWS_CSC_LINK']){
   assert.throws(()=>validatePreviewEnvironment({...configuration(),[key]:'sensitive-fixture-value'}),error=>error.message.includes(key)&&!error.message.includes('sensitive-fixture-value'));
  }
 });

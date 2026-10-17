@@ -10,7 +10,7 @@ export const isolatedPreview=(env=process.env)=>env.BRINGNESS_PREVIEW_MODE==='is
 export function validatePreviewEnvironment(env=process.env){
  if(!isolatedPreview(env))reject('BRINGNESS_PREVIEW_MODE');
  for(const [key,value] of Object.entries({NODE_ENV:'development',APP_MODE:'combined',PORT:'3000',PREVIEW_HOST:host,PUBLIC_BASE_URL:'https://'+host,PUBLIC_URL:'https://'+host,AI_DATABASE_NAME:'bringness_ai_preview',PREVIEW_ACCESS_USER:'bringness-preview'}))if(env[key]!==value)reject(key);
- for(const [key,value] of Object.entries(env))if(/^(MOLLIE_|FISKALY_|SMTP_|VAPID_|NETCUP_|RAILWAY_|AWS_|S3_|IDRIVE_|WINDOWS_CSC_)/.test(key)&&value)reject(key);
+ for(const [key,value] of Object.entries(env))if(/^((?:AI_)?MOLLIE_|FISKALY_|SMTP_|VAPID_|NETCUP_|RAILWAY_|AWS_|S3_|IDRIVE_|WINDOWS_CSC_)/.test(key)&&value)reject(key);
  const secrets=['PREVIEW_ACCESS_PASSWORD','PREVIEW_SESSION_SECRET','PASSWORD_PEPPER','AI_DB_PASSWORD'];
  for(const key of secrets)if(typeof env[key]!=='string'||!/^[A-Za-z0-9_-]{32,}$/.test(env[key]))reject(key);
  if(new Set(secrets.map(key=>env[key])).size!==secrets.length)reject('distinct secrets');
