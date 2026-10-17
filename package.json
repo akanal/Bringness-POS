@@ -10,7 +10,8 @@
     "test:unit": "node --test server/ai-forecast-core.test.js server/offline-sale-core.test.js server/payment-checkout.test.js",
     "test:center": "node --test server/center-browser.test.js server/center-database.test.js",
     "test:demo": "node --test ops/demo-smoke.test.mjs",
-    "test:ci-workflows": "node --test ops/windows-workflow.test.mjs"
+    "test:ci-workflows": "node --test ops/windows-workflow.test.mjs",
+    "test:preview-source": "node --test ops/preview-source.test.mjs"
   },
   "engines": {
     "node": ">=20"
