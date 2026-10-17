@@ -160,3 +160,11 @@ test('paid reconciliation locks and compares the charged amount and mandate iden
  assert.match(source,/SELECT state,payment_id,kind,net_cents,gross_cents,customer_id,mandate_id,invoice_reference,order_ids,supplier_id,month,source_id,period_start,period_end FROM ai_collection_jobs WHERE id=\$1 FOR UPDATE/);
  for(const field of ['gross_cents','customer_id','mandate_id','invoice_reference'])assert.ok(source.includes('locked.'+field+'!==j.'+field),'must compare locked '+field);
 });
+
+test('provider refund and chargeback amounts require canonical EUR values',()=>{
+ const refund=source.match(/if\(\(p\.amountChargedBack[\s\S]*?fail\('Ungültige Mollie-Erstattungsdaten',409\)/)?.[0];
+ assert.ok(refund,'refund validation must run before paid settlement');
+ assert.ok(refund.includes("p.amountChargedBack.currency!=='EUR'"));
+ assert.ok(refund.includes("p.amountRefunded.currency!=='EUR'"));
+ assert.ok(refund.includes(String.raw`/^\d+\.\d{2}$/`));
+});
