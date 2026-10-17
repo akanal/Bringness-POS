@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {accessMail} from './mail-templates.js';
 import {clearLoginAttempts} from './auth-attempts.js';
 import crypto from 'node:crypto';
@@ -15,7 +16,7 @@ export function createWaiterWorkflow(pool){return async(req,res)=>{
  if(!['/api/v1/staff/invitation','/api/v1/staff/invitation/resend','/api/v1/staff/recovery','/api/v1/staff/reset','/api/v1/waiter/setup-pin','/api/v1/waiter/extras','/api/v1/waiter/qr-orders','/api/v1/waiter/order-v2'].includes(p))return false;
  let c;
  try{
- let b={};if(req.method==='POST'){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>20000)fail('Anfrage zu groß',413)}try{b=JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
+ let b={};if(req.method==='POST'){b=await readJsonObject(req,{maxBytes:20000});}
  if((p==='/api/v1/staff/invitation'||p==='/api/v1/staff/invitation/resend')&&req.method==='POST'){
   if(!/^[a-f0-9]{64}$/.test(String(b.token||'')))fail('Einladungslink ungültig');
   c=await pool.connect();await c.query('BEGIN');const invitation=(await c.query("SELECT i.user_id,i.used_at,i.expires_at,u.status,u.email,u.company_id FROM staff_invitations i JOIN users u ON u.id=i.user_id WHERE i.token_hash=$1 AND u.role='waiter' AND EXISTS(SELECT 1 FROM employees e WHERE e.user_id=u.id AND e.active=true) FOR UPDATE OF i,u",[digest(b.token)])).rows[0];
