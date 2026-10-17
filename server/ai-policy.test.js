@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {passwordHash,passwordMatches,validPassword,quantity,orderAmounts,mayActOnOrder} from './ai-policy.js';
+import {passwordHash,passwordMatches,validPassword,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
 const saved=passwordHash('sicheres-test-passwort');
 assert(passwordMatches('sicheres-test-passwort',saved));
 assert(!passwordMatches('anderes-passwort',saved));
@@ -21,3 +21,5 @@ order.status='accepted';assert(mayActOnOrder({id:'buyer'},order,'receive'));
 order.status='received';assert(!mayActOnOrder({id:'buyer'},order,'receive'));assert(!mayActOnOrder({id:'supplier'},order,'cancel'));
 console.log('AI policy checks passed: password hashing, quantities, commission and order access.');
 
+
+for(const value of [null,true,false,[],[1],{},'', ' ', '0x10','1e2']){assert.throws(()=>quantity(value));assert.throws(()=>money(value));}assert.equal(money('1250'),1250);
