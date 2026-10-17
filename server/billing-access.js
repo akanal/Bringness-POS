@@ -1,5 +1,5 @@
+import {installerUrl,streamInstaller} from './installer-stream.js';
 import crypto from "node:crypto";
-import { Readable } from "node:stream";
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -130,7 +130,7 @@ export async function handleBillingAccess(req,res){
   if(url.pathname==="/api/v1/downloads/windows/file"){
     let upstream;
     try{
-      upstream=await fetch(ctx.release.file_url,{redirect:"follow"});
+      upstream=await fetch(installerUrl(ctx.release.file_url),{redirect:"follow",signal:AbortSignal.timeout(300000)});
     }catch(error){
       sendJson(res,502,{error:"Windows-Installer konnte nicht geladen werden."});
       return true;
@@ -149,7 +149,7 @@ export async function handleBillingAccess(req,res){
     const length=upstream.headers.get("content-length");
     if(length) headers["content-length"]=length;
     res.writeHead(200,headers);
-    Readable.fromWeb(upstream.body).pipe(res);
+    await streamInstaller(upstream.body,res);
     return true;
   }
 
