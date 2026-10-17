@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
   push:
-    branches: [main, 'finish/**']
+    branches: [main, 'finish/**', 'staging/preview-20261016']
     paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
 permissions:
   contents: write
