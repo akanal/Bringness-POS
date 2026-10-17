@@ -2,7 +2,7 @@ const {app,BrowserWindow,shell}=require('electron'),fs=require('node:fs'),os=req
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'bringness-electron-test-'));app.setPath('userData',directory);
 app.whenReady().then(async()=>{let runtime,rogue;try{
  runtime=await require('./offline-runtime.cjs').install({app,BrowserWindow,shell,onlineWindow:()=>null,deviceKey:'a'.repeat(64),showOffline:false});
- const snapshot={id:crypto.randomUUID(),companyId:crypto.randomUUID(),deviceKey:'a'.repeat(64),createdAt:new Date().toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),restaurants:[{id:crypto.randomUUID(),name:'Testkasse'}],products:[],merchant:{}};snapshot.products=[{id:crypto.randomUUID(),restaurantId:snapshot.restaurants[0].id,name:'Burger',priceCents:895,taxRate:19}];snapshot.merchant[snapshot.restaurants[0].id]={businessName:'Testbetrieb'};await runtime.ledger.catalog(snapshot);
+ const snapshot={id:crypto.randomUUID(),companyId:crypto.randomUUID(),deviceKey:'a'.repeat(64),createdAt:new Date(Date.now()-60000).toISOString(),validUntil:new Date(Date.now()+23*3600000).toISOString(),restaurants:[{id:crypto.randomUUID(),name:'Testkasse'}],products:[],merchant:{}};snapshot.products=[{id:crypto.randomUUID(),restaurantId:snapshot.restaurants[0].id,name:'Burger',priceCents:895,taxRate:19}];snapshot.merchant[snapshot.restaurants[0].id]={businessName:'Testbetrieb'};await runtime.ledger.catalog(snapshot);
  const window=runtime.open();await new Promise(resolve=>window.webContents.once('did-finish-load',resolve));
  const wait=async test=>{for(let i=0;i<100;i++){if(await test())return;await new Promise(r=>setTimeout(r,50))}throw Error('Offline UI timed out')};
  await wait(()=>window.webContents.executeJavaScript('document.querySelectorAll("#products button").length===1'));
@@ -14,7 +14,7 @@ app.whenReady().then(async()=>{let runtime,rogue;try{
  // Restart both before persistence and after persistence but before UI acknowledgement.
  for(const alreadySaved of [false,true]){
   const before=await runtime.ledger.pendingCount();
-  const request={id:crypto.randomUUID(),snapshotId:snapshot.id,restaurantId:snapshot.restaurants[0].id,createdAt:new Date().toISOString(),paymentMethod:'cash',items:[{productId:snapshot.products[0].id,quantity:1}]};
+  const request={id:crypto.randomUUID(),createdAt:new Date().toISOString(),snapshotId:snapshot.id,restaurantId:snapshot.restaurants[0].id,createdAt:new Date().toISOString(),paymentMethod:'cash',items:[{productId:snapshot.products[0].id,quantity:1}]};
   if(alreadySaved)await runtime.ledger.sale(request);
   await window.webContents.executeJavaScript(`localStorage.setItem('bringness.offline.pending-sale.v1',${JSON.stringify(JSON.stringify(request))})`);
   const loaded=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await loaded;
