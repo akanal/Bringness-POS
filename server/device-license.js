@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {activateLicensedDevice,renewLicensedDevice,deviceKeyValue} from './device-license-core.js';
 import crypto from "node:crypto";
 import pg from "pg";
@@ -12,11 +13,7 @@ function sendJson(res,status,payload){
   res.end(JSON.stringify(payload));
 }
 function bearer(req){return String(req.headers.authorization||"").replace(/^Bearer\s+/i,"")}
-async function body(req){
- let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>8192)throw Object.assign(Error('Anfrage zu groß'),{status:413})}
- let result;try{result=raw?JSON.parse(raw):{}}catch{throw Object.assign(Error('Ungültige Anfrage'),{status:400})}
- if(!result||typeof result!=='object'||Array.isArray(result))throw Object.assign(Error('Ungültige Anfrage'),{status:400});return result;
-}
+const body=req=>readJsonObject(req,{maxBytes:8192});
 async function currentUser(db,req){
   const token=bearer(req); if(!token)return null;
   const tokenHash=crypto.createHash("sha256").update(token).digest("hex");
