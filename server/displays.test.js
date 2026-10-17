@@ -12,3 +12,9 @@ test('category selection is retained, deduplicated and validated',()=>{const bas
 test('categories from another restaurant cannot be assigned',async()=>{const pool={query:async sql=>sql.includes('FROM sessions')?{rows:[{id,role:'owner',company_id:id,token_hash:'a'}],rowCount:1}:sql.includes('personnel_unlocks')||sql.includes('FROM restaurants')?{rows:[{id:rid}],rowCount:1}:{rows:[],rowCount:0}};pool.connect=async()=>({query:pool.query,release(){}});const r=await request(pool,'/api/v1/displays?restaurantId='+rid,{method:'POST',headers:{authorization:'Bearer abc','x-personnel-unlock':'unlock'},body:JSON.stringify({name:'Theke',orientation:'portrait',fit:'contain',playlist:[{type:'menu',seconds:12,categoryIds:[id]}]})});assert.equal(r.status,400);assert.match(r.body.error,/Kategorie/)});
 
 test('permanent media must be a single item and survives validation',()=>{const base={name:'Bild',orientation:'landscape',fit:'contain',playlist:[{type:'image',seconds:0,mediaId:id}]};assert.equal(validateDisplay(base).playlist[0].seconds,0);assert.throws(()=>validateDisplay({...base,playlist:[...base.playlist,{type:'menu',seconds:12}]}));assert.throws(()=>validateDisplay({...base,playlist:[{type:'menu',seconds:0}]}));});
+
+test('display configuration rejects null playlist items and malformed identifiers as client errors',()=>{
+ const base={name:'Küche',orientation:'landscape',fit:'contain',playlist:[]};
+ for(const value of [null,[],{...base,name:{}},{...base,playlist:[null]},{...base,playlist:[[]]},{...base,playlist:[{type:'image',seconds:0,mediaId:'-'.repeat(36)}]}])assert.throws(()=>validateDisplay(value),e=>e.status===400);
+ const result=validateDisplay({...base,playlist:[{type:'menu',seconds:10,categoryIds:[id.toUpperCase(),id]}]});assert.deepEqual(result.playlist[0].categoryIds,[id]);
+});
