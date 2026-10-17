@@ -12,7 +12,9 @@
     "test:demo": "node --test ops/demo-smoke.test.mjs",
     "test:ci-workflows": "node --test ops/windows-workflow.test.mjs",
     "test:preview-source": "node --test ops/preview-source.test.mjs",
-    "test:ai-commission": "node --test server/ai-collection.test.mjs"
+    "test:ai-commission": "node --test server/ai-collection.test.mjs",
+    "start:preview": "node server/preview-start.js",
+    "preview:seed": "node server/preview-seed.mjs"
   },
   "engines": {
     "node": ">=20"
