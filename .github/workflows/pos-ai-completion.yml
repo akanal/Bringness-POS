@@ -56,6 +56,7 @@ jobs:
       - run: node server/ai-tests/displays.mjs
       - run: node server/ai-tests/billing-eligibility.mjs
       - run: node server/ai-tests/module-approval.mjs
+      - run: node server/ai-tests/module-approval-ui.mjs
       - run: node server/ai-tests/billing-checkout-guard.mjs
         env:
           BILLING_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test

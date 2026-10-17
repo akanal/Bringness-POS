@@ -9,3 +9,13 @@ Only a verified terminal provider notification resolves a linked reservation, in
 Display editor, player and assigned media require active display rights plus a base licence; legacy restaurant rights remain valid. Expiry stops public player refresh/media access; a received 403 clears already displayed content. Network outages preserve the existing last-content behavior. Previously cached/downloaded images cannot be remotely erased.
 
 Validation uses synthetic data only: PostgreSQL-backed reservation constraints, atomic approval rollback, legacy pending payment, cancellation/grace, tenant isolation, eight simultaneous requests and the actual checkout route with a stub provider (one payment), public/POS card rendering, display editor/player/media expiry, online/download/legacy access and existing unit/integration suites. No real customer payment is used for validation.
+
+## Owner address verification repair — 17 October 2026
+
+The licensing screen now shows the actual owner-email confirmation status and an explicit request button. The module selection button says that an approval email is being requested; it never claims Mollie is opening at that stage. A missing/unverified address fails closed in both the UI and the server.
+
+`owner_email_verifications` stores normalized owner-email binding, a hashed 30-minute verification token and an explicit verification time. Only the authenticated owner with the existing administrative unlock may request the email. An email GET never verifies the address: the owner must explicitly confirm through POST. Address changes invalidate the verification and all old purchase approvals. Existing users are not silently marked verified. Each individual module purchase still requires its own product/price-bound one-use approval, followed by verified provider payment. Ordinary POS sales and base-product checkouts retain their existing behavior.
+
+The transactional mail worker rechecks current ownership, current email binding, expiry, verification state and token validity immediately before submitting these emails. Stale/used/changed-address mail is suppressed; SMTP acceptance is not claimed as inbox delivery.
+
+Validation: module-approval database suite covers initial refusal, explicit address verification, single-use tokens, owner/PIN, queued encrypted mail, fake SMTP acceptance, old-address suppression, product/price binding and approval consumption. The actual licensing/confirmation clients are tested with JSDOM to verify zero checkout requests before approval and no POST merely on opening a verification link. Full local unit suite: 507 passed. No real module purchase or customer payment was used in validation.
