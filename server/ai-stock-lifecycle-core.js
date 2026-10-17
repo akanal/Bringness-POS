@@ -7,7 +7,7 @@ export function stockUnits(value){
 }
 export function replenishment(stock,{incoming=0,pending=0}={}){
   const values=[stock?.quantity,stock?.reserved_quantity??0,stock?.minimum,stock?.target_quantity??stock?.minimum,incoming,pending];
-  if(values.some(v=>(typeof v!=='number'&&typeof v!=='string')||String(v).trim()===''||!Number.isFinite(Number(v))||Number(v)<0||!Number.isSafeInteger(Math.round(Number(v)*1000))))fail('Ungültige Bestandsgrundlage');
+  if(values.some((v,i)=>(typeof v!=='number'&&typeof v!=='string')||String(v).trim()===''||!Number.isFinite(Number(v))||(i!==0&&Number(v)<0)||!Number.isSafeInteger(Math.round(Number(v)*1000))))fail('Ungültige Bestandsgrundlage');
   const physical=Number(stock.quantity),reserved=Number(stock.reserved_quantity||0),available=Math.max(0,physical-reserved);
   const minimum=Number(stock.minimum),target=Number(stock.target_quantity??minimum);
   return {available,low:available<=minimum,target,shortage:Math.ceil(Math.max(0,target-available-Number(incoming)-Number(pending))*1000)/1000};

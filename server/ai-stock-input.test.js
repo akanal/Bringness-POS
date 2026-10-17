@@ -10,5 +10,5 @@ test('ingredient aggregation bounds cumulative demand and rejects malformed line
 
 test('replenishment refuses corrupt stock and incoming demand rather than generating NaN purchases',()=>{
  const stock={quantity:2,minimum:3,target_quantity:5};assert.equal(replenishment(stock).shortage,3);
- for(const value of [NaN,Infinity,null,true,-1])assert.throws(()=>replenishment({...stock,quantity:value}));assert.throws(()=>replenishment(stock,{incoming:-1}));
+ for(const value of [NaN,Infinity,null,true])assert.throws(()=>replenishment({...stock,quantity:value}));assert.throws(()=>replenishment(stock,{incoming:-1}));assert.equal(replenishment({...stock,quantity:-1}).available,0);assert.throws(()=>replenishment({...stock,minimum:-1}));
 });
