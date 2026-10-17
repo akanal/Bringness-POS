@@ -16,3 +16,9 @@ test('managed assets reuse AI interface and reject unknown files',async()=>{
  const html=await call(handlePlatformAiAssets,'/admin/ai-workspace.html?admin=1');assert.equal(html.status,200);assert.match(html.data,/\/admin\/ai-assets\/ai-workspace.js/);assert.doesNotMatch(html.data,/src="\/ai-/);assert.match(html.data,/href="\/admin\/"/);
  assert.equal((await call(handlePlatformAiAssets,'/admin/ai-assets/ai-csv-parser.js')).status,200);assert.equal((await call(handlePlatformAiAssets,'/admin/ai-assets/not-allowed.js')).status,404);
 });
+
+test('gateway rejects invalid JSON and split invalid UTF8 without forwarding mutations',async()=>{
+ let forwarded=0;const h=createPlatformAiGateway({query:async()=>({rows:[{id:'owner'}]})},{fetcher:async()=>{forwarded++;throw Error('Unexpected upstream');}});
+ for(const body of ['null','[]','{','42',Buffer.from([0xc3,0x28])])assert.equal((await call(h,'/api/v1/platform/ai/launch','admin','POST',body)).status,400);
+ assert.equal(forwarded,0);
+});
