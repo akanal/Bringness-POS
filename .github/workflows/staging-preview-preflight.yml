@@ -9,6 +9,9 @@ on:
       - "ops/staging-bootstrap.sh"
       - "ops/staging-bootstrap.test.sh"
       - ".github/workflows/staging-preview-preflight.yml"
+      - "apps/web/public/pos/**"
+      - "apps/web/public/ai-workspace.html"
+      - "ops/preview-source.test.mjs"
 permissions:
   contents: read
 jobs:
@@ -16,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify original POS and independent AI source boundaries
+        run: npm run test:preview-source
       - name: Verify staging configuration regression cases
         run: bash ops/staging-preflight.test.sh
       - name: Verify bootstrap refuses unverified hosts
