@@ -19,7 +19,7 @@ if(postgresUrl){
  db.exec=sql=>db.query(sql);db.close=()=>db.end();
 }else{db=new PGlite();await db.waitReady;}
 const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}};
-const pool={query,connect:async()=>({query,release(){}})};
+const pool={query,connect:async()=>postgresUrl?db.connect():({query,release(){}})};
 await db.exec((await fs.readFile(new URL('../../db/schema.sql',import.meta.url),'utf8')).replace('CREATE EXTENSION IF NOT EXISTS pgcrypto;',''));
 await db.exec(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner';ALTER TABLE users ADD COLUMN must_change_password boolean DEFAULT false;
 CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);
