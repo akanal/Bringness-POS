@@ -1,3 +1,4 @@
+import {issueLoginSession} from './login-session.js';
 import {saltedSecretHash as passwordHash,secretMatches} from './secret-derivation.js';
 import {readJsonObject} from './http-body.js';
 import {isolatedPreview} from './preview-policy.js';
@@ -119,7 +120,7 @@ export async function handleAiPlatform(req,res){
    const u=(await pool.query('SELECT * FROM ai_accounts WHERE email=$1',[emailAddress])).rows[0];
    const stored=u?.password_hash||'00000000000000000000000000000000:'+ '0'.repeat(128);
    if(!await secretMatches(b.password,stored,{allowLegacy:false})||u?.status!=='active')return send(res,401,{error:'Anmeldung nicht möglich. Prüfe deine Zugangsdaten und E-Mail-Bestätigung.'});
-   const token=crypto.randomBytes(32).toString('hex');await pool.query("INSERT INTO ai_sessions VALUES($1,$2,now()+interval '12 hours')",[hash(token),u.id]);await pool.query('DELETE FROM ai_auth_attempts WHERE key=$1',[hash('login:'+emailAddress)]);return send(res,200,{token});
+   const token=await issueLoginSession(pool,{kind:'ai',userId:u.id,passwordHash:stored,role:u.role});if(!token)return send(res,401,{error:'Anmeldung inzwischen geändert. Bitte erneut anmelden.'});await pool.query('DELETE FROM ai_auth_attempts WHERE key=$1',[hash('login:'+emailAddress)]);return send(res,200,{token});
   }
   if(p==='/api/ai/forgot'&&req.method==='POST'){
    const b=await body(req),emailAddress=text(b.email,254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress))fail('Gültige E-Mail-Adresse erforderlich');if(!await rate('reset:'+emailAddress,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
