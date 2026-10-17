@@ -6,7 +6,18 @@ import {migrateOfflineSales,issueOfflineCatalog,handleOfflineSales} from '../off
 import {migratePosStockBridge} from '../pos-stock-bridge-core.js';
 import {migrateAccountantAccess,accountantHandler} from '../accountant-access.js';
 const uuid=()=>crypto.randomUUID(),company=uuid(),restaurant=uuid(),owner=uuid(),device=uuid(),product=uuid(),plan=uuid(),entitlement=uuid(),deviceKey='a'.repeat(64),user={id:owner,company_id:company,role:'owner'};
-const db=new PGlite();await db.waitReady;
+// Optional PostgreSQL 16 validation is restricted to the disposable local CI service.
+import pg from 'pg';
+const postgresUrl=process.env.OFFLINE_TEST_DATABASE_URL;
+let adminDb=null,schema=null,db;
+if(postgresUrl){
+ const url=new URL(postgresUrl);
+ assert(['127.0.0.1','localhost'].includes(url.hostname)&&url.pathname==='/bringness_device_test','Only the local disposable CI database is allowed');
+ schema='offline_http_'+crypto.randomBytes(8).toString('hex');
+ adminDb=new pg.Pool({connectionString:postgresUrl});await adminDb.query('CREATE SCHEMA '+schema);
+ db=new pg.Pool({connectionString:postgresUrl,options:'-c search_path='+schema});
+ db.exec=sql=>db.query(sql);db.close=()=>db.end();
+}else{db=new PGlite();await db.waitReady;}
 const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}};
 const pool={query,connect:async()=>({query,release(){}})};
 await db.exec((await fs.readFile(new URL('../../db/schema.sql',import.meta.url),'utf8')).replace('CREATE EXTENSION IF NOT EXISTS pgcrypto;',''));
@@ -69,5 +80,7 @@ try{
  console.log('Offline HTTP integration passed: actual authenticated route, socket loss before/after commit, filesystem restart, 401/403 recovery, two sales and exactly two receipts. Electron UI, real cloud and fiscal hardware acceptance remain separate.');
 }finally{
  server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
- await local.close();await db.close();await fs.rm(directory,{recursive:true,force:true});
+ await local.close();await db.close();
+ if(adminDb){await adminDb.query('DROP SCHEMA '+schema+' CASCADE');await adminDb.end();}
+ await fs.rm(directory,{recursive:true,force:true});
 }
