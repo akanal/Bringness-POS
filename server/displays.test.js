@@ -18,3 +18,8 @@ test('display configuration rejects null playlist items and malformed identifier
  for(const value of [null,[],{...base,name:{}},{...base,playlist:[null]},{...base,playlist:[[]]},{...base,playlist:[{type:'image',seconds:0,mediaId:'-'.repeat(36)}]}])assert.throws(()=>validateDisplay(value),e=>e.status===400);
  const result=validateDisplay({...base,playlist:[{type:'menu',seconds:10,categoryIds:[id.toUpperCase(),id]}]});assert.deepEqual(result.playlist[0].categoryIds,[id]);
 });
+
+test('malformed screen IDs cannot reach deletion UUID casts',async()=>{
+ const pool={query:async sql=>{if(sql.includes('FROM sessions'))return {rows:[{id,role:'owner',company_id:rid,token_hash:'hash'}],rowCount:1};if(sql.includes('personnel_unlocks')||sql.includes('FROM restaurants'))return {rows:[{id:rid}],rowCount:1};throw Error('Unexpected screen mutation');}};
+ const r=await request(pool,'/api/v1/displays/'+ '-'.repeat(36)+'?restaurantId='+rid,{method:'DELETE',headers:{authorization:'Bearer fixture','x-personnel-unlock':'fixture'}});assert.equal(r.status,404);
+});
