@@ -1,6 +1,8 @@
+import {isolatedPreview} from './preview-policy.js';
 import {formatMail} from './mail-templates.js';
 // Retry only the SMTP handshake. A message is submitted once, never retried after DATA.
 export async function connectSmtp({env=process.env,createTransport}={}){
+ if(isolatedPreview()||isolatedPreview(env))throw Object.assign(Error('Outbound mail disabled in isolated preview'),{code:'PREVIEW_EGRESS_BLOCKED'});
  const port=Number(env.SMTP_PORT||587);
  if(!['SMTP_HOST','SMTP_USER','SMTP_PASSWORD','SMTP_FROM'].every(key=>env[key])||!Number.isInteger(port)||port<1||port>65535)throw Object.assign(Error('SMTP-Konfiguration unvollständig'),{code:'ECONFIG'});
  const factory=createTransport||(await import('nodemailer')).default.createTransport;
