@@ -1,0 +1,18 @@
+#moduleBody .license-overview{display:grid;gap:26px;margin-bottom:24px}
+#moduleBody .license-group>h3{margin:0 0 8px;font-size:19px}
+#moduleBody .license-group>p{margin:0 0 14px;font-size:13px;line-height:1.5}
+#moduleBody .license-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#moduleBody .license-group-base .license-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+#moduleBody .license-base{padding:25px;min-height:245px;border:1px solid #f4b07f;border-radius:16px;background:#fffaf5;display:flex;flex-direction:column;gap:8px}
+#moduleBody .license-base>b{font-size:21px}
+#moduleBody .license-price{font-size:31px;font-weight:900;line-height:1.3}
+#moduleBody .license-price small{display:block;font-size:11px;font-weight:500;line-height:1.5}
+#moduleBody .license-addon{padding:15px;min-height:0;border:1px solid #dfe5eb;border-radius:11px;background:#f8fafc;font-size:12px;box-shadow:none}
+#moduleBody .license-addon>b{font-size:15px}
+#moduleBody .license-addon .license-price{font-size:23px}
+#moduleBody .license-addon p{font-size:12px;line-height:1.45;margin:9px 0}
+#moduleBody .license-addon button{font-size:12px;min-height:36px;padding:8px 11px}
+#moduleBody .license-addon .pay{background:#e6edf3;color:#173148;box-shadow:none}
+#moduleBody .license-group-legacy .license-row{grid-template-columns:minmax(0,1fr)}
+@media(max-width:900px){#moduleBody .license-addon{padding:12px}#moduleBody .license-row{gap:9px}}
+@media(max-width:650px){#moduleBody .license-row,#moduleBody .license-group-base .license-row{grid-template-columns:1fr}#moduleBody .license-base{min-height:0;padding:20px}#moduleBody .license-overview{gap:22px}}
