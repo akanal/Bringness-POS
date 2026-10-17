@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from "node:crypto";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -6,11 +7,7 @@ export function queueOrder(orders) {
   return [...orders].sort((a,b) => new Date(a.created_at)-new Date(b.created_at) || String(a.id).localeCompare(String(b.id)));
 }
 const send=(res,status,data)=>{res.writeHead(status,{"content-type":"application/json; charset=utf-8","cache-control":"no-store"});res.end(JSON.stringify(data));return true};
-async function body(req) {
-  let text="";
-  for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>4096)throw new Error("BODY_LIMIT")}
-  return text?JSON.parse(text):{};
-}
+const body=req=>readJsonObject(req,{maxBytes:4096});
 export function createQrService(pool) {
   async function actor(req) {
     const raw=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
