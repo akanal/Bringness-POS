@@ -32,6 +32,7 @@ jobs:
       - run: npm run test:ci-workflows
       - run: npm run test:preview-source
       - run: npm run test:ai-commission
+      - run: npm ci --ignore-scripts
       - run: node --test server/ai-auto-procurement.test.js
       - name: Package tested offline demo for private review
         uses: actions/upload-artifact@v4
