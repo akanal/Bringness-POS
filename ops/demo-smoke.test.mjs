@@ -21,3 +21,21 @@ test('demo inline JavaScript parses',()=>{
   assert.ok(match);
   new Script(match[1],{filename:'demo-inline.js'});
 });
+
+test('demo includes accessible navigation and essential action controls',()=>{
+  for(const id of ['tabs','products','cart','total','submit','clear','table-grid','orders','stock','restock']){
+    assert.match(html,new RegExp('id="'+id+'"'));
+  }
+  assert.match(html,/role="status"/);
+  assert.match(html,/aria-selected="true"/);
+});
+test('demo avoids real payment and fiscal operations',()=>{
+  assert.doesNotMatch(html,/https?:\/\//);
+  assert.doesNotMatch(html,/mollie\.com|stripe\.com|tse-sign|payment\/checkout/i);
+  assert.match(html,/keine TSE-Signatur/);
+});
+test('demo uses only temporary in-memory orders',()=>{
+  assert.match(html,/const cart=new Map\(\),orders=\[\]/);
+  assert.match(html,/orders\.push\(/);
+  assert.match(html,/nextOrder\+\+/);
+});
