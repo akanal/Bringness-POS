@@ -1,6 +1,12 @@
 # Staging preview provisioning checklist (Netcup)
 
-The CI configuration guard passed on commit ca13064758f99b7047ab2cc2e8d984586d0e6f22. This verifies **only** static preflight, not infrastructure readiness.
+Staging configuration CI passed on commit 4383bd07359f517f52a9351a58ebe9a62d75a59d; interactive demo smoke tests passed on commit 46bab14e8e5d3934313078384ac0558f380c1843. These verify **only** repository-level checks, not infrastructure readiness. The demo HTML is a standalone simulation, not the connected Bringness POS application.
+
+## Prepared static demo
+- Source: `apps/web/public/demo/index.html` on `staging/preview-20261016`.
+- Checks: `npm run test:demo` and GitHub workflow `Demo smoke tests`.
+- Behavior: cart, table selection, kitchen tickets, sample stock, all in browser memory; no backend, real payments or TSE.
+- This is not yet publicly deployed, authenticated, or connected to real POS modules.
 
 ## Infrastructure work still required
 - Confirm a separately managed Netcup staging runtime and access mechanism. Existing `netcup-operations` invokes the production handler; never dispatch it for staging.
