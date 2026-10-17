@@ -23,3 +23,10 @@ jobs:
           node-version: '22'
       - run: npm run test:demo
       - run: npm run test:ci-workflows
+      - name: Package tested offline demo for private review
+        uses: actions/upload-artifact@v4
+        with:
+          name: bringness-static-demo-review
+          path: apps/web/public/demo/index.html
+          retention-days: 3
+          if-no-files-found: error
