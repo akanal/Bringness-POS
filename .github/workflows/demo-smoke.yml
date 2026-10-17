@@ -7,6 +7,8 @@ on:
       - apps/web/public/demo/index.html
       - ops/demo-smoke.test.mjs
       - package.json
+      - ops/windows-workflow.test.mjs
+      - .github/workflows/windows-desktop.yml
       - .github/workflows/demo-smoke.yml
   workflow_dispatch:
 permissions:
@@ -20,3 +22,4 @@ jobs:
         with:
           node-version: '22'
       - run: npm run test:demo
+      - run: npm run test:ci-workflows
