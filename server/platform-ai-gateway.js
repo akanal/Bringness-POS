@@ -1,3 +1,4 @@
+import {readRequestBytes,clientInputError} from './http-body.js';
 import crypto from 'node:crypto';
 const prefix='/api/v1/platform/ai';
 export function createPlatformAiGateway(pool,{fetcher=fetch,origin='https://bringness-ai.com'}={}) {
@@ -14,7 +15,8 @@ export function createPlatformAiGateway(pool,{fetcher=fetch,origin='https://brin
   const suffix=url.pathname.slice(prefix.length);
   if(!/^\/(?:[a-z0-9-]+\/?)*$/.test(suffix)||suffix.includes('//')||url.search.length>2048)return send(400,{error:'Ungültige Admin-Adresse.'});
   if(!['GET','POST'].includes(req.method))return send(405,{error:'Methode nicht erlaubt.'});
-  let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>16000)return send(413,{error:'Anfrage zu groß.'})}
+  let body='';try{const bytes=await readRequestBytes(req,{maxBytes:16000});body=new TextDecoder('utf-8',{fatal:true}).decode(bytes);if(req.method==='POST'&&body){const parsed=JSON.parse(body);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error();}}
+  catch(error){const input=clientInputError(error);return send(input?.status||400,{error:input?.error||'Ungültige Anfrage.'});}
   if(req.method==='GET'&&body)return send(400,{error:'GET ohne Nutzdaten verwenden.'});
   try{
    const response=await fetcher(new URL('/api/ai/admin'+(suffix==='/'?'':suffix)+url.search,base),{method:req.method,redirect:'error',signal:AbortSignal.timeout(15000),headers:{authorization:'Bearer '+token,'content-type':'application/json'},...(req.method==='POST'?{body:body||'{}'}:{})});

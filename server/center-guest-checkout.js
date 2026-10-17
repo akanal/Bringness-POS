@@ -1,3 +1,4 @@
+import {orderingModuleAccess} from './module-catalog.js';
 import {visibleCenterProducts} from './center-availability.js';
 import {applyCenterStock} from './center-stock-bridge.js';
 import crypto from 'node:crypto';
@@ -22,10 +23,11 @@ export async function guestCenterCheckout(pool,b,env=process.env,fetcher=fetch){
  const client=await pool.connect();let attempt;
  try{
  await client.query('BEGIN');
- const table=(await client.query(`SELECT t.id,t.center_id FROM center_tables t JOIN centers c ON c.id=t.center_id WHERE t.qr_token=$1 AND t.active=true AND c.active=true FOR UPDATE OF t`,[b.code])).rows[0];if(!table)throw Error('TABLE_UNAVAILABLE');
+ const table=(await client.query(`SELECT t.id,t.center_id,c.company_id,c.module_license_required FROM center_tables t JOIN centers c ON c.id=t.center_id WHERE t.qr_token=$1 AND t.active=true AND c.active=true FOR UPDATE OF t`,[b.code])).rows[0];if(!table)throw Error('TABLE_UNAVAILABLE');
  attempt=(await client.query('SELECT * FROM center_checkout_attempts WHERE table_id=$1 AND request_id=$2',[table.id,b.requestId])).rows[0];
  if(attempt){if(attempt.cart_hash!==cartHash||attempt.restaurant_id!==b.restaurantId||(attempt.payment_method||'online')!==paymentMethod)throw Error('REQUEST_REUSED_WITH_DIFFERENT_CART');}
  else{
+ if(table.module_license_required&&!await orderingModuleAccess(client,table.company_id,'center'))throw Error('CENTER_LICENSE_INACTIVE');
  const restaurant=(await client.query(`SELECT r.id FROM center_restaurants cr JOIN restaurants r ON r.id=cr.restaurant_id
  LEFT JOIN center_mollie_credentials mc ON mc.restaurant_id=r.id WHERE cr.center_id=$1 AND r.id=$2 AND cr.active=true
  AND cr.contract_status='signed' AND cr.payment_mode IN ($3,'choice')
@@ -50,6 +52,7 @@ export async function guestCenterCheckout(pool,b,env=process.env,fetcher=fetch){
 
 export function guestCheckoutError(error) {
  const messages={
+  CENTER_LICENSE_INACTIVE:'Center-System und Tischsystem sind nicht aktiv.',
   INVALID_PAYMENT_METHOD:'Bitte eine gültige Zahlungsart auswählen.',
   REQUEST_REUSED_WITH_DIFFERENT_CART:'Dieser Vorgang gehört zu einer anderen Bestellung oder Zahlungsart.',
   PRODUCT_UNAVAILABLE:'Ein Gericht ist inzwischen nicht mehr verfügbar. Bitte den Warenkorb anpassen.',

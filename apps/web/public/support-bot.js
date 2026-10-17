@@ -22,7 +22,7 @@
     "role": "owner",
     "title": "Tisch und QR-Code",
     "terms": "tisch tische qr code nfc tag bestellen zuweisen",
-    "answer": "Öffne „Tische“, lege einen Tisch an und öffne seine Tisch-QR-Ansicht. Den Link kannst du auch auf einen NFC-Tag schreiben. Für Tischbestellungen müssen die passenden Restaurant- und QR-Funktionen aktiviert sein.",
+    "answer": "Öffne „Tische“, lege einen Tisch an und öffne seine Tisch-QR-Ansicht. Den Link kannst du auch auf einen NFC-Tag schreiben. Für Tischbestellungen müssen Tischsystem und das passende QR-Bestellsystem aktiviert sein.",
     "view": "tische",
     "id": "topic-3"
   },
@@ -54,7 +54,7 @@
     "role": "owner",
     "title": "Lizenz und Abo",
     "terms": "abo lizenz preis rechnung kündigung zahlung modul",
-    "answer": "Die Übersicht „Lizenz & Abo“ zeigt die verfügbaren Module, ihren Status und Rechnungen. Prüfe dort, ob das Restaurant-Modul für Tische und Service aktiviert ist.",
+    "answer": "Die Übersicht „Lizenz & Abo“ zeigt die verfügbaren Module, ihren Status und Rechnungen. Prüfe dort, ob das Tischsystem und die benötigten Zusatzmodule aktiviert sind.",
     "view": "lizenz",
     "id": "topic-7"
   },

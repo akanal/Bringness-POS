@@ -1,0 +1,78 @@
+name: Staging preview preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [staging/preview-20261016]
+    paths:
+      - "ops/staging-preflight.sh"
+      - "ops/staging-preflight.test.sh"
+      - "ops/staging-bootstrap.sh"
+      - "ops/staging-bootstrap.test.sh"
+      - ".github/workflows/staging-preview-preflight.yml"
+      - "apps/web/public/pos/**"
+      - "apps/web/public/ai-workspace.html"
+      - "ops/preview-source.test.mjs"
+permissions:
+  contents: read
+jobs:
+  configuration-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify original POS and independent AI source boundaries
+        run: npm run test:preview-source
+      - name: Verify staging configuration regression cases
+        run: bash ops/staging-preflight.test.sh
+      - name: Verify bootstrap refuses unverified hosts
+        run: bash ops/staging-bootstrap.test.sh
+      - name: Reject unsafe staging settings
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_staging
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
+          STAGING_PAYMENT_MODE: sandbox
+          STAGING_TSE_MODE: disabled
+          STAGING_OUTBOUND_MESSAGES: disabled
+          STAGING_DB_ISOLATION_CONFIRMED: yes
+        run: bash ops/staging-preflight.sh
+      - name: Verify unsafe payment mode is rejected
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_staging
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
+          STAGING_PAYMENT_MODE: live
+          STAGING_TSE_MODE: disabled
+        run: |
+          if bash ops/staging-preflight.sh; then
+            echo 'Unsafe payment mode unexpectedly passed' >&2
+            exit 1
+          fi
+      - name: Verify missing database isolation is rejected
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_staging
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
+          STAGING_PAYMENT_MODE: sandbox
+          STAGING_TSE_MODE: disabled
+        run: |
+          if bash ops/staging-preflight.sh; then
+            echo 'Missing isolation confirmation unexpectedly passed' >&2
+            exit 1
+          fi
+      - name: Reject production database naming
+        env:
+          STAGING_HOST: demo.bringness-pos.de
+          STAGING_APP_DIR: /opt/bringness/staging/preview
+          STAGING_DATABASE_URL: postgresql://preview:ci-only@staging.invalid/bringness_live
+          STAGING_SESSION_SECRET: ci-test-secret-not-for-deployment
+          STAGING_PAYMENT_MODE: sandbox
+          STAGING_TSE_MODE: disabled
+          STAGING_DB_ISOLATION_CONFIRMED: yes
+        run: |
+          if bash ops/staging-preflight.sh; then
+            echo 'Production database naming unexpectedly passed' >&2
+            exit 1
+          fi

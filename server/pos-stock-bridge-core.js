@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status})};
 const uuid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -76,7 +77,7 @@ export async function processPosStockCommands(posPool,stockPool,kitchenAction,{l
  const link=(await stockPool.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.id=$1 AND c.account_id=$2 AND c.pos_restaurant_id=$3 AND c.kind='pos' AND c.consumption_mode='lifecycle' AND c.active AND a.status='active'",[cmd.connector_id,cmd.account_id,o.restaurant_id])).rows[0];
  if(!link)fail('Lageranbindung nicht aktiv',503);
  if(!(await c.query("SELECT 1 FROM users u WHERE u.id=$1 AND u.company_id=$2 AND u.status='active' AND u.role IN ('owner','admin') AND NOT coalesce(u.must_change_password,false)",[link.pos_user_id,link.pos_company_id])).rowCount)fail('Inhaberfreigabe der Kasse nicht mehr gültig',503);
- try{await kitchenAction(stockPool,{id:link.account_id,role:'restaurant'},{requestKey:cmd.id,orderId:'pos:'+o.id,action:cmd.action,...(cmd.action==='accept'?{items:cmd.items}:{}),reason:cmd.reason},link)}catch(e){
+ try{await kitchenAction(stockPool,{id:link.account_id,role:'restaurant'},{requestKey:cmd.id,orderId:'pos:'+o.id,action:cmd.action,occurredAt:new Date(cmd.created_at).toISOString(),...(cmd.action==='accept'?{items:cmd.items}:{}),reason:cmd.reason},link)}catch(e){
   if(e.status>=400&&e.status<500){await c.query("UPDATE pos_stock_commands SET state='rejected',error=$2,attempts=attempts+1 WHERE id=$1",[cmd.id,String(e.message).slice(0,500)]);await c.query('COMMIT');continue}throw e;
  }
  await c.query("UPDATE pos_stock_commands SET state='applied',error=NULL,attempts=attempts+1,applied_at=now() WHERE id=$1",[cmd.id]);
@@ -92,13 +93,13 @@ export function createPosStockHandler(pool){
  const send=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
  return async(req,res)=>{
  const p=new URL(req.url,'http://local').pathname;
- const action=p.match(/^\/api\/v1\/orders\/([0-9a-f-]{36})\/status$/i),poll=p.match(/^\/api\/v1\/stock-commands\/([0-9a-f-]{36})$/i);
+ const action=p.match(/^\/api\/v1\/orders\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/status$/i),poll=p.match(/^\/api\/v1\/stock-commands\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
  if(!action&&!poll)return false;
  if(action&&req.method!=='PATCH'||poll&&req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
  const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,''),actor=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];if(!actor)return send(res,401,{error:'Nicht angemeldet'});
  try{
  if(poll){const q=await pool.query('SELECT cmd.id,cmd.state,cmd.error,o.id order_id,o.status,o.table_id,o.restaurant_id FROM pos_stock_commands cmd JOIN orders o ON o.id=cmd.order_id JOIN restaurants r ON r.id=o.restaurant_id WHERE cmd.id=$1 AND r.company_id=$2',[poll[1],actor.company_id]);if(!q.rowCount)return send(res,404,{error:'Lagerbuchung nicht gefunden'});const r=q.rows[0];if(!['owner','admin','manager','kitchen'].includes(actor.role)&&!(actor.role==='waiter'&&(await pool.query('SELECT 1 FROM dining_tables t JOIN employees e ON (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) WHERE t.id=$1 AND e.user_id=$2 AND e.active AND e.restaurant_id=$3',[r.table_id,actor.id,r.restaurant_id])).rowCount))return send(res,403,{error:'Kein Zugriff auf Lagerbuchung'});return send(res,r.state==='rejected'?409:r.state==='pending'?202:200,{id:r.order_id,status:r.status,pending:r.state==='pending',commandId:r.id,...(r.state!=='applied'&&r.error?{error:r.error}:{})})}
- let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>4096)fail('Eingabe zu groß',400)}let b;try{b=JSON.parse(text)}catch{fail('Ungültige Eingabe',400)}
+ const b=await readJsonObject(req,{maxBytes:4096});
  const result=await requestPosStockAction(pool,actor,action[1],b);return send(res,result.pending?202:200,result);
  }catch(e){if(e.status)return send(res,e.status,{error:e.message});if(e.code==='P0001')return send(res,409,{error:e.message});throw e}
  };

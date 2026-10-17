@@ -20,16 +20,16 @@ Der bisherige Verkaufsimport unter `/api/ai/import/sales` bleibt verfügbar. Neu
 
 Ein fehlendes Rezept hält den POS-Import an. Nach Korrektur wird dieselbe Bestellung erneut versucht. POS-Stornos werden nicht automatisch als Lagerzugang behandelt: Eine Erstattung allein stellt verbrauchte Zutaten nicht wieder her. Die API unterstützt eine ausdrücklich ausgelöste Rückbuchung des tatsächlich rückgängig gemachten Verbrauchs. API-Verbindungen und direkte POS-Verbindung für dieselbe Verkaufsquelle dürfen nicht parallel importieren.
 
-## Weitere Produktplanung – noch offen
+## Weitere Produktplanung – Implementierung und externe Restpunkte
 
 | Thema | Vorhanden / noch erforderlich |
 | --- | --- |
 | Lieferantensortimente | CSV und gemeinsamer Barcode-Katalog vorhanden; Lieferanten-API für Sortiment, Nettopreise, Lieferbarkeit, Bestellabruf, Annahme und Stornierung umgesetzt; konkrete ERP-Adapter und Webhooks noch offen |
 | Fremdkassen-Adapter | Allgemeine API vorhanden; konkrete Adapter brauchen Herstellerdokumentation und Testzugänge |
-| Ketten | Mehrere Standorte und getrennte Verbindungen vorhanden; zentrale Einkaufsfreigaben und feinere Teamrechte noch offen |
-| Einkaufsvorschläge | Verbrauch, Mindestbestände und offene bestätigte Lieferungen vorhanden; grobe POS-Tagesprognose und rezeptbasierte Vorbereitungsmengen ergänzt; Wetter- und Veranstaltungsdaten noch nicht angebunden |
-| Provision | 2 % vom vermittelten Netto-Warenwert in beiden Einführungsmodellen; Zahlungsnachweise vorhanden, automatische Abbuchung und Provisionsrechnungen noch offen |
-| AI Premium | 30 kostenlose Testtage geplant; vollständige Paketfreischaltung und endgültige Preise noch offen |
+| Ketten | Mehrere Standorte und getrennte Verbindungen vorhanden; standortgebundene zentrale Bedarfseinreichung/Freigabe vorhanden (siehe `bringness-ai-regional-planning.md`); feinere Teamrechte und konkrete Kettenadapter bleiben offen |
+| Einkaufsvorschläge | Verbrauch, Mindestbestände und offene bestätigte Lieferungen vorhanden; POS-Tagesprognose, rezeptbasierte Vorbereitungsmengen, DWD-MOSMIX und manuelle regionale Termine mit ausdrücklich aktivierten Szenariofaktoren vorhanden; öffentliche Eventfeeds und automatisch gelernte Faktoren bleiben offen |
+| Provision | 2 % vom vermittelten Netto-Warenwert in beiden Einführungsmodellen; Zahlungsnachweise, monatliche Abrechnung, unveränderliche Provisionsrechnungen und gesperrt voreingestellter SEPA-Ablauf vorhanden; reale Rechnungssteller-/Mandats-/Anbietereinrichtung und strukturierte E-Rechnung bleiben externe beziehungsweise dokumentierte Restpunkte |
+| AI Premium | einmalige 30-tägige Restaurant-Testphase und expliziter Abo-/Tarifwechselablauf implementiert; keine automatische Umwandlung kostenloser Konten, Live-Einzug erst nach vollständiger Freigabe (siehe `ai-subscriptions.md`) |
 | Trennung von POS | Eigene AI-Datenbank vorhanden; AI-Server läuft derzeit noch im kombinierten Runtime-Modus und nutzt eine POS-Datenbankbrücke für Inhaberfreigabe und Verkaufsabfrage |
 
 ## Prüfung
@@ -44,4 +44,14 @@ Dokumentation: `/ai-supplier-api.html`, OpenAPI: `/ai-supplier-openapi.json`. Ve
 
 ## Grobe Tagesprognose
 
-Standortbezogene POS-Tagesprognose mit Wochentags- und Vorjahresvergleich, Originalzahlungszeit, Stundenständen und groben Vorbereitungsmengen: siehe `bringness-ai-day-forecast.md`. Keine zusätzliche Gästeerfassung. Wetter und regionale Veranstaltungstermine sind noch nicht angebunden.
+Standortbezogene POS-Tagesprognose mit Wochentags- und Vorjahresvergleich, Originalzahlungszeit, Stundenständen und groben Vorbereitungsmengen: siehe `bringness-ai-day-forecast.md`. Keine zusätzliche Gästeerfassung. DWD-Wetter und standortbezogene/ausdrücklich freigegebene regionale Termine sind inzwischen angebunden; Szenarioregeln bleiben standardmäßig deaktiviert. Siehe `bringness-ai-regional-planning.md` und `pos-ai-completion.md`.
+
+## Verifizierter Staging-Stand vom 17.10.2026
+
+Die zuvor als offen bezeichneten Wetter-, Beschaffungs-, Offline- und Steuerberaterabläufe
+sind auf dem aktuellen Staging-Stand implementiert und separat geprüft. Konkrete
+Nachweise und Grenzen stehen in `pos-ai-validation-20261017.md`,
+`pos-payment-recovery-20261017.md` und `isolated-preview-runtime.md`. Diese Übersicht
+ist kein Nachweis einer produktiven Bereitstellung oder realer Anbieterfreischaltung.
+Verschlüsselte Vorschau-Sicherung und unabhängige Rücksicherungsprüfung sind in
+`isolated-preview-recovery.md` dokumentiert.

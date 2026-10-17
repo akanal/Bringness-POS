@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {cleanMailAddress,enqueuePaidReceipt} from './transactional-mail.js';
 import crypto from "node:crypto";
 import pg from "pg";
@@ -8,30 +9,28 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
+export async function migratePaymentCheckout(db=pool){
+ await db.query(`CREATE TABLE IF NOT EXISTS pos_checkout_requests(
+  company_id uuid NOT NULL REFERENCES companies(id),request_key uuid NOT NULL,
+  fingerprint text NOT NULL,order_id uuid NOT NULL UNIQUE REFERENCES orders(id),
+  response jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(company_id,request_key));`);
+}
+
 export function createPaymentCheckout(pool){
 function send(res, status, payload) {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
   res.end(JSON.stringify(payload));
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let raw = "";
-    req.on("data", chunk => raw += chunk);
-    req.on("end", () => {
-      try { resolve(raw ? JSON.parse(raw) : {}); }
-      catch (error) { reject(error); }
-    });
-    req.on("error", reject);
-  });
-}
+const readBody=req=>readJsonObject(req,{maxBytes:65536});
 
-async function currentUser(req) {
+async function currentUser(req,db=pool,lock=false) {
   const token = String(req.headers.authorization || "").replace(/^Bearer /, "");
   if (!token) return null;
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  const q = await pool.query(
-    "SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",
+  const q = await db.query(
+    "SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)"+(lock?" FOR SHARE OF u,s":""),
     [tokenHash]
   );
   return q.rows[0] || null;
@@ -46,22 +45,25 @@ return async function handlePaymentCheckout(req, res) {
     send(res, 401, { error: "Nicht angemeldet" });
     return true;
   }
-  if (user.role === "waiter") {
+  if (!["owner", "admin", "manager"].includes(user.role)) {
     send(res, 403, { error: "Dieser Bereich ist nur für die Restaurantverwaltung freigegeben" });
     return true;
   }
 
   let body;
   try { body = await readBody(req); }
-  catch {
-    send(res, 400, { error: "Ungültige Anfrage" });
+  catch (error) {
+    send(res, error.status === 413 ? 413 : 400, { error: error.status === 413 ? "Anfrage zu groß" : "Ungültige Anfrage" });
     return true;
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) { send(res, 400, { error: "Ungültige Anfrage" }); return true; }
   let receiptEmail='';try{if(body.receiptEmail)receiptEmail=cleanMailAddress(body.receiptEmail);}catch{send(res,400,{error:'Gültige Beleg-E-Mail erforderlich'});return true;}
   const items = Array.isArray(body.items) ? body.items : [];
+  if (items.length > 100) { send(res, 400, { error: "Zu viele Warenkorbpositionen" }); return true; }
   const payments = Array.isArray(body.payments) ? body.payments : [];
   const restaurantId = String(body.restaurantId || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(restaurantId)) { send(res, 400, { error: "Ungültige Betriebskennung" }); return true; }
   if (!restaurantId || !items.length) {
     send(res, 400, { error: "Betrieb und Warenkorb sind erforderlich" });
     return true;
@@ -70,107 +72,79 @@ return async function handlePaymentCheckout(req, res) {
     send(res, 400, { error: "Mindestens eine Zahlungsart ist erforderlich" });
     return true;
   }
-  if (payments.some(p => !["cash", "card"].includes(String(p.method)) || !Number.isInteger(Number(p.amountCents)) || Number(p.amountCents) <= 0)) {
+  if (payments.some(p => !p || typeof p !== "object" || !["cash", "card"].includes(String(p.method)) || !Number.isSafeInteger(p.amountCents) || p.amountCents <= 0)) {
     send(res, 400, { error: "Ungültige Zahlungsaufteilung" });
     return true;
   }
 
-  if (payments.some(p => p.method === "card") && body.externalCardConfirmed !== true) {
-    send(res, 400, { error: "Externe Kartenzahlung muss vor dem Verbuchen bestätigt werden" });
+  // A client-supplied confirmation flag is not proof of a settled terminal payment.
+  // Keep card settlement disabled until a server-verified provider integration exists.
+  if (payments.some(p => p.method === "card")) {
+    send(res, 409, { error: "Kartenzahlung erst nach serverseitig verifizierter Terminalbestätigung verfügbar" });
     return true;
   }
 
+  if (items.some(i => !i || typeof i !== "object")) { send(res, 400, { error: "Ungültiger Artikel im Warenkorb" }); return true; }
   const ids = [...new Set(items.map(i => String(i.productId || "")).filter(Boolean))];
-  if (!ids.length || ids.length !== items.length) {
+  if (!ids.length || ids.length !== items.length || ids.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
     send(res, 400, { error: "Ungültiger Artikel im Warenkorb" });
     return true;
   }
 
-  const products = await pool.query(
-    "SELECT p.id,p.name,p.price_cents,p.tax_rate FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE p.id=ANY($1::uuid[]) AND p.restaurant_id=$2 AND r.company_id=$3 AND p.active=true",
-    [ids, restaurantId, user.company_id]
-  );
-  if (products.rows.length !== ids.length) {
-    send(res, 400, { error: "Ein oder mehrere Artikel sind nicht verfügbar" });
-    return true;
+  if(typeof body.requestKey!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestKey)){
+    send(res,400,{error:'Eindeutige Zahlungskennung erforderlich. Bitte Kasse aktualisieren.'});return true;
   }
-
-  const productMap = new Map(products.rows.map(p => [p.id, p]));
-  const cleanItems = [];
-  let totalCents = 0;
-  for (const item of items) {
-    const product = productMap.get(String(item.productId));
-    const qty = Number(item.qty);
-    if (!product || !Number.isFinite(qty) || qty <= 0 || qty > 999) {
-      send(res, 400, { error: "Ungültige Menge" });
-      return true;
-    }
-    totalCents += Math.round(Number(product.price_cents) * qty);
-    cleanItems.push({ product, qty });
+  if(items.some(item=>!Number.isSafeInteger(item.qty)||item.qty<=0||item.qty>999)){
+    send(res,400,{error:'Ungültige Menge'});return true;
   }
-  if (totalCents <= 0) {
-    send(res, 400, { error: "Ungültiger Gesamtbetrag" });
-    return true;
-  }
-
-  const paymentTotal = payments.reduce((sum, p) => sum + Number(p.amountCents), 0);
-  if (paymentTotal !== totalCents) {
-    send(res, 400, { error: "Zahlungsaufteilung stimmt nicht mit dem Gesamtbetrag überein" });
-    return true;
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const order = (await client.query(
-      "INSERT INTO orders(restaurant_id,status,total_cents,closed_at) SELECT id,'paid',$2,now() FROM restaurants WHERE id=$1 AND company_id=$3 RETURNING id,created_at",
-      [restaurantId, totalCents, user.company_id]
-    )).rows[0];
-    if (!order) {
-      await client.query("ROLLBACK");
-      send(res, 403, { error: "Betrieb nicht erlaubt" });
-      return true;
+  const requestKey=body.requestKey.toLowerCase();
+  const canonicalItems=items.map(item=>({productId:item.productId.toLowerCase(),qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId));
+  if(new Set(canonicalItems.map(item=>item.productId)).size!==canonicalItems.length){send(res,400,{error:'Doppelte Artikelkennung'});return true;}
+  const canonicalPayments=payments.map(p=>({method:p.method,amountCents:p.amountCents}));
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail})).digest('hex');
+  const client=await pool.connect();
+  const reject=(status,message)=>{throw Object.assign(Error(message),{status});};
+  try{
+    await client.query('BEGIN');
+    const actor=await currentUser(req,client,true);
+    if(!actor||actor.id!==user.id||actor.company_id!==user.company_id||!['owner','admin','manager'].includes(actor.role))reject(403,'Kassenzugang nicht mehr freigegeben');
+    if(!(await client.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2 FOR SHARE',[restaurantId,actor.company_id])).rows.length)reject(403,'Betrieb nicht erlaubt');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[actor.company_id+':checkout:'+requestKey]);
+    const previous=(await client.query('SELECT fingerprint,response FROM pos_checkout_requests WHERE company_id=$1 AND request_key=$2',[actor.company_id,requestKey])).rows[0];
+    if(previous){
+      if(previous.fingerprint!==fingerprint)reject(409,'Zahlungskennung bereits für andere Daten verwendet. Ursprüngliche Zahlung abgleichen.');
+      await client.query('COMMIT');send(res,200,{...previous.response,replayed:true});return true;
     }
-
-    for (const item of cleanItems) {
-      await client.query(
-        "INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)",
-        [order.id, item.product.id, item.product.name, item.product.price_cents, item.product.tax_rate, item.qty]
-      );
-    }
-    for (const payment of payments) {
-      await client.query(
-        "INSERT INTO payments(order_id,method,amount_cents) VALUES($1,$2,$3)",
-        [order.id, payment.method, Number(payment.amountCents)]
-      );
-    }
-
-    const receiptNumber = "BN-" + new Date().getUTCFullYear() + "-" + String((await client.query("SELECT nextval('receipt_number_seq') n")).rows[0].n).padStart(6, "0");
-    await client.query("INSERT INTO receipts(order_id,receipt_number) VALUES($1,$2)", [order.id, receiptNumber]);
-    await client.query(
-      "UPDATE receipts rc SET merchant_snapshot=(SELECT jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),co.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) FROM orders ord JOIN restaurants r ON r.id=ord.restaurant_id JOIN companies co ON co.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE ord.id=rc.order_id) WHERE rc.order_id=$1",
-      [order.id]
+    const products=await client.query(
+      'SELECT p.id,p.name,p.price_cents,p.tax_rate FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE p.id=ANY($1::uuid[]) AND p.restaurant_id=$2 AND r.company_id=$3 AND p.active=true FOR SHARE OF p,r',
+      [canonicalItems.map(i=>i.productId),restaurantId,actor.company_id]
     );
+    if(products.rows.length!==canonicalItems.length)reject(400,'Ein oder mehrere Artikel sind nicht verfügbar');
+    const productMap=new Map(products.rows.map(p=>[p.id,p]));
+    const cleanItems=[];let totalCents=0;
+    for(const item of canonicalItems){
+      const product=productMap.get(item.productId),priceCents=Number(product?.price_cents),taxRate=Number(product?.tax_rate);
+      if(!product||!Number.isSafeInteger(priceCents)||priceCents<0||priceCents>2147483647||!Number.isFinite(taxRate)||taxRate<0||taxRate>100)reject(400,'Ungültiger Artikelpreis oder Steuersatz');
+      totalCents+=priceCents*item.qty;cleanItems.push({product,qty:item.qty});
+    }
+    if(!Number.isSafeInteger(totalCents)||totalCents<=0||totalCents>2147483647)reject(400,'Ungültiger Gesamtbetrag');
+    const paymentTotal=canonicalPayments.reduce((sum,p)=>sum+p.amountCents,0);
+    if(!Number.isSafeInteger(paymentTotal)||paymentTotal!==totalCents)reject(400,'Zahlungsaufteilung stimmt nicht mit dem Gesamtbetrag überein');
+    const order=(await client.query("INSERT INTO orders(restaurant_id,status,total_cents,closed_at) VALUES($1,'paid',$2,now()) RETURNING id,created_at",[restaurantId,totalCents])).rows[0];
+    for(const item of cleanItems)await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,item.product.id,item.product.name,item.product.price_cents,item.product.tax_rate,item.qty]);
+    for(const payment of canonicalPayments)await client.query('INSERT INTO payments(order_id,method,amount_cents) VALUES($1,$2,$3)',[order.id,payment.method,payment.amountCents]);
+    const receiptNumber='BN-'+new Date().getUTCFullYear()+'-'+String((await client.query("SELECT nextval('receipt_number_seq') n")).rows[0].n).padStart(6,'0');
+    await client.query('INSERT INTO receipts(order_id,receipt_number) VALUES($1,$2)',[order.id,receiptNumber]);
+    await client.query("UPDATE receipts rc SET merchant_snapshot=(SELECT jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),co.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) FROM orders ord JOIN restaurants r ON r.id=ord.restaurant_id JOIN companies co ON co.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE ord.id=rc.order_id) WHERE rc.order_id=$1",[order.id]);
     await enqueuePaidReceipt(client,order.id,receiptEmail);
-    await client.query("COMMIT");
-
-    send(res, 201, {
-      id: order.id,
-      restaurantId,
-      totalCents,
-      status: "paid",
-      createdAt: order.created_at,
-      receiptNumber,
-      emailStatus:receiptEmail?'queued':null,
-      payments: payments.map(p => ({ method: p.method, amountCents: Number(p.amountCents) }))
-    });
-    return true;
-  } catch (error) {
-    await client.query("ROLLBACK");
+    const response={requestKey,id:order.id,restaurantId:restaurantId.toLowerCase(),totalCents,status:'paid',createdAt:order.created_at,receiptNumber,emailStatus:receiptEmail?'queued':null,payments:canonicalPayments};
+    await client.query('INSERT INTO pos_checkout_requests(company_id,request_key,fingerprint,order_id,response) VALUES($1,$2,$3,$4,$5::jsonb)',[actor.company_id,requestKey,fingerprint,order.id,JSON.stringify(response)]);
+    await client.query('COMMIT');send(res,201,response);return true;
+  }catch(error){
+    await client.query('ROLLBACK');
+    if(error.status){send(res,error.status,{error:error.message});return true;}
     throw error;
-  } finally {
-    client.release();
-  }
+  }finally{client.release();}
 }
 
 }

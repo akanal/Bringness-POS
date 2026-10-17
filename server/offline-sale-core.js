@@ -3,18 +3,27 @@ export const offlineUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-
 const fail=message=>{throw Object.assign(Error(message),{status:400})};
 // Shared by local PostgreSQL and the cloud importer. Prices always come from a
 // server-issued immutable catalog, never from fields in the sales request.
+export function offlineCatalogValidUntil(licenseValidUntil,issuedAt=new Date()) {
+ const issuedMs=typeof issuedAt==='string'||issuedAt instanceof Date?new Date(issuedAt).getTime():NaN;
+ const licenseMs=typeof licenseValidUntil==='string'||licenseValidUntil instanceof Date?new Date(licenseValidUntil).getTime():NaN;
+ if(licenseValidUntil==null||!Number.isFinite(issuedMs)||!Number.isFinite(licenseMs)||licenseMs<=issuedMs||issuedMs>Date.now()+60000)fail('Offline-Lizenz abgelaufen');
+ return new Date(Math.min(licenseMs,issuedMs+24*60*60*1000)).toISOString();
+}
 export function quoteOfflineSale(snapshot,sale) {
- if(!offlineUuid.test(sale?.id||'')||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
- const time=Date.parse(sale.createdAt),start=Date.parse(snapshot.createdAt),end=Date.parse(snapshot.validUntil);
- if(!Number.isFinite(time)||time<start-60000||time>end||time>Date.now()+60000)fail('Verkauf außerhalb der freigegebenen Offline-Zeit');
- const restaurant=snapshot.restaurants.find(r=>r.id===sale.restaurantId);if(!restaurant)fail('Betrieb nicht im Offline-Katalog');
+ if(!snapshot||typeof snapshot!=='object'||Array.isArray(snapshot)||!sale||typeof sale!=='object'||Array.isArray(sale)||typeof snapshot.id!=='string'||!snapshot.id.trim()||typeof snapshot.deviceKey!=='string'||!/^[a-zA-Z0-9_-]{12,128}$/.test(snapshot.deviceKey)||typeof sale?.id!=='string'||!offlineUuid.test(sale.id)||sale.snapshotId!==snapshot.id)fail('Ungültige Offline-Kennung');
+ const time=typeof sale.createdAt==='string'?Date.parse(sale.createdAt):NaN,start=typeof snapshot.createdAt==='string'?Date.parse(snapshot.createdAt):NaN,end=typeof snapshot.validUntil==='string'?Date.parse(snapshot.validUntil):NaN;
+ if(typeof snapshot.createdAt!=='string'||typeof snapshot.validUntil!=='string'||!Number.isFinite(start)||!Number.isFinite(end)||end<=start||end-start>24*60*60*1000||start>Date.now()+60000||!Number.isFinite(time)||time<start-60000||time>end||time>Date.now()+60000)fail('Verkauf außerhalb der freigegebenen Offline-Zeit');
+ if(!Array.isArray(snapshot.restaurants)||!Array.isArray(snapshot.products))fail('Ungültiger Offline-Katalog');
+ const matchingRestaurants=snapshot.restaurants.filter(r=>r?.id===sale.restaurantId);const restaurant=matchingRestaurants.length===1?matchingRestaurants[0]:null;if(!restaurant||typeof restaurant.id!=='string'||!restaurant.id.trim())fail('Betrieb nicht im Offline-Katalog');if(!snapshot.merchant||typeof snapshot.merchant!=='object'||Array.isArray(snapshot.merchant))fail('Fehlende Verkäuferdaten');
+ if(!Object.hasOwn(snapshot.merchant,restaurant.id)||!snapshot.merchant[restaurant.id]||typeof snapshot.merchant[restaurant.id]!=='object'||Array.isArray(snapshot.merchant[restaurant.id])||typeof snapshot.merchant[restaurant.id].businessName!=='string'||!snapshot.merchant[restaurant.id].businessName.trim())fail('Verkäuferdaten für Betrieb fehlen');
  if(!Array.isArray(sale.items)||!sale.items.length||sale.items.length>100)fail('1 bis 100 Positionen erforderlich');
  const seen=new Set();let totalCents=0;
  const items=sale.items.map(i=>{
-  const product=snapshot.products.find(p=>p.id===i.productId&&p.restaurantId===restaurant.id);
-  if(!product||seen.has(i.productId)||!Number.isInteger(i.quantity)||i.quantity<1||i.quantity>999)fail('Ungültiger Offline-Artikel oder Menge');
-  seen.add(i.productId);if(!Number.isSafeInteger(product.priceCents)||product.priceCents<0||!Number.isFinite(product.taxRate)||product.taxRate<0||product.taxRate>100)fail('Ungültiger Katalogpreis');
-  const lineCents=product.priceCents*i.quantity;totalCents+=lineCents;
+  const matches=snapshot.products.filter(p=>p?.id===i?.productId&&p?.restaurantId===restaurant.id);
+  const product=matches.length===1?matches[0]:null;
+  if(!product||typeof product.id!=='string'||!product.id.trim()||typeof i?.productId!=='string'||!i.productId.trim()||seen.has(i.productId)||!Number.isSafeInteger(i?.quantity)||i.quantity<1||i.quantity>999)fail('Ungültiger Offline-Artikel oder Menge');
+  seen.add(i.productId);if(typeof product.name!=='string'||!product.name.trim())fail('Ungültiger Artikelname');if(!Number.isSafeInteger(product.priceCents)||product.priceCents<0||!Number.isFinite(product.taxRate)||product.taxRate<0||product.taxRate>100)fail('Ungültiger Katalogpreis');
+  const lineCents=product.priceCents*i.quantity;if(!Number.isSafeInteger(lineCents)||lineCents>2147483647)fail('Ungültiger Positionsbetrag');totalCents+=lineCents;
   return {productId:product.id,name:product.name,unitPriceCents:product.priceCents,taxRate:product.taxRate,quantity:i.quantity,lineCents};
  });
  if(!Number.isSafeInteger(totalCents)||totalCents<=0||totalCents>2147483647)fail('Ungültiger Gesamtbetrag');

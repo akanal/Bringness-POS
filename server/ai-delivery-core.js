@@ -41,10 +41,18 @@ export function suggestDelivery(draft,stocks,mappings=[],knownSuppliers=[]){
 }
 export function receiptLines(lines){
  if(!Array.isArray(lines)||!lines.length||lines.length>100)reject('Bitte 1 bis 100 Positionen prüfen');
- return lines.map(l=>{if(l.reviewed!==true||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(l.stockId)))reject('Alle Artikelzuordnungen ausdrücklich prüfen');
+ const sources=new Set();
+ return lines.map(l=>{if(!l||typeof l!=='object'||Array.isArray(l))reject('Ungültige Lieferscheinposition');if(l.sourceIndex!==undefined){if(!Number.isInteger(l.sourceIndex)||l.sourceIndex<0||l.sourceIndex>=100||sources.has(l.sourceIndex))reject('Dokumentposition fehlt oder ist doppelt');sources.add(l.sourceIndex);}if(l.reviewed!==true||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(l.stockId)))reject('Alle Artikelzuordnungen ausdrücklich prüfen');
  const quantity=Number(l.quantity);if(typeof l.quantity!=='number'||!Number.isFinite(quantity)||quantity<=0||quantity>1000000||Math.abs(quantity*1000-Math.round(quantity*1000))>0.00001)reject('Positive Menge mit höchstens drei Nachkommastellen erforderlich');
  if(!['kg','l','piece'].includes(l.unit))reject('Einheit prüfen');
- const packQuantity=l.packQuantity==null||l.packQuantity===''?null:Number(l.packQuantity);if(packQuantity!=null&&(!Number.isFinite(packQuantity)||packQuantity<=0||packQuantity>1000000||Math.abs(packQuantity*1000-Math.round(packQuantity*1000))>.00001))reject('Packungsinhalt prüfen');
+ const packQuantity=l.packQuantity==null||l.packQuantity===''?null:Number(l.packQuantity);if(packQuantity!=null&&(typeof l.packQuantity!=='number'||!Number.isFinite(packQuantity)||packQuantity<=0||packQuantity>1000000||Math.abs(packQuantity*1000-Math.round(packQuantity*1000))>.00001))reject('Packungsinhalt prüfen');
  const netCents=l.netCents==null||l.netCents===''?null:Number(l.netCents);if(netCents!=null&&(typeof l.netCents!=='number'||!Number.isSafeInteger(netCents)||netCents<0||netCents>100000000))reject('Netto-Gesamtpreis der Position prüfen');
  return {stockId:l.stockId,quantity,unit:l.unit,packQuantity,netCents,reviewed:true,...(Number.isInteger(l.sourceIndex)&&l.sourceIndex>=0&&l.sourceIndex<100?{sourceIndex:l.sourceIndex}:{})};});
+}
+export function deliveryPriceLines(lines){
+ if(!Array.isArray(lines)||!lines.length||lines.length>100)reject('Geprüfte Rechnungspreise bestätigen');const seen=new Set();
+ return lines.map(line=>{
+  if(!line||typeof line!=='object'||Array.isArray(line)||(typeof line.id!=='number'&&typeof line.id!=='string')||!/^\d+$/.test(String(line.id))||!Number.isSafeInteger(Number(line.id))||Number(line.id)<1||!Number.isSafeInteger(line.netCents)||line.netCents<0||line.netCents>100000000)reject('Positionspreis prüfen');
+  const id=String(Number(line.id));if(seen.has(id))reject('Rechnungsposition doppelt angegeben');seen.add(id);return {id,netCents:line.netCents};
+ });
 }

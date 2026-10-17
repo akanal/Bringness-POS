@@ -2,10 +2,10 @@ name: Build Windows Desktop
 on:
   workflow_dispatch:
   pull_request:
-    paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
+    paths: ["apps/desktop/**", "server/offline-sale-core.js", ".github/workflows/windows-desktop.yml"]
   push:
-    branches: [main]
-    paths: ["apps/desktop/**", ".github/workflows/windows-desktop.yml"]
+    branches: [main, 'finish/**', 'staging/preview-20261016']
+    paths: ["apps/desktop/**", "server/offline-sale-core.js", ".github/workflows/windows-desktop.yml"]
 permissions:
   contents: write
 jobs:
@@ -15,9 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 20}
+        with: {node-version: 24}
       - run: npm ci
-      - run: node --test offline-sync.test.mjs
+      - run: npm test
+      - run: node --check main.cjs
       - run: npm run prepare:offline
       - name: Verify offline cash UI and native IPC isolation
         run: npx electron offline-smoke.cjs
@@ -27,6 +28,17 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      - name: Verify Windows installer output and checksum
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem dist/*.exe -ErrorAction Stop)
+          if ($installers.Count -eq 0) { throw "Windows installer missing" }
+          foreach ($installer in $installers) {
+            if ($installer.Length -lt 1048576) { throw "Windows installer unexpectedly small: $($installer.Name)" }
+            $digest = Get-FileHash -Path $installer.FullName -Algorithm SHA256
+            if ($digest.Hash -notmatch '^[0-9A-F]{64}$') { throw "Invalid installer SHA256" }
+            "Installer: $($installer.Name), bytes: $($installer.Length), SHA256: $($digest.Hash)" >> $env:GITHUB_STEP_SUMMARY
+          }
       - name: Verify installer signature
         id: signature
         shell: pwsh
@@ -44,7 +56,7 @@ jobs:
           "signed=$($valid.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           if (-not $valid) { "Unsigned test build only; public installer was not replaced." >> $env:GITHUB_STEP_SUMMARY }
       - name: Publish latest installer asset
-        if: github.event_name != 'pull_request' && steps.signature.outputs.signed == 'true'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.signature.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-latest

@@ -1,0 +1,140 @@
+{
+  "name": "bringness-isolated-preview",
+  "services": {
+    "preview-db": {
+      "image": "postgres:16-alpine",
+      "restart": "no",
+      "environment": {
+        "POSTGRES_DB": "bringness_preview",
+        "POSTGRES_USER": "preview_admin",
+        "POSTGRES_PASSWORD": "${PREVIEW_DATABASE_PASSWORD:?required}"
+      },
+      "volumes": [
+        "preview_data:/var/lib/postgresql/data"
+      ],
+      "networks": [
+        "preview_private"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U preview_admin -d bringness_preview"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 30
+      },
+      "pids_limit": 128,
+      "mem_limit": "1g"
+    },
+    "preview-app": {
+      "build": {
+        "context": "..",
+        "dockerfile": "ops/isolated-preview.Dockerfile"
+      },
+      "restart": "no",
+      "depends_on": {
+        "preview-db": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "BRINGNESS_PREVIEW_MODE": "isolated",
+        "NODE_ENV": "development",
+        "APP_MODE": "combined",
+        "PORT": "3000",
+        "PREVIEW_HOST": "demo.bringness-pos.de",
+        "PUBLIC_BASE_URL": "https://demo.bringness-pos.de",
+        "PUBLIC_URL": "https://demo.bringness-pos.de",
+        "DATABASE_URL": "postgresql://preview_admin:${PREVIEW_DATABASE_PASSWORD:?required}@preview-db:5432/bringness_preview",
+        "AI_DATABASE_NAME": "bringness_ai_preview",
+        "PREVIEW_ACCESS_USER": "bringness-preview",
+        "AI_DB_PASSWORD": "${AI_DB_PASSWORD:?required}",
+        "PREVIEW_ACCESS_PASSWORD": "${PREVIEW_ACCESS_PASSWORD:?required}",
+        "PREVIEW_SESSION_SECRET": "${PREVIEW_SESSION_SECRET:?required}",
+        "PASSWORD_PEPPER": "${PASSWORD_PEPPER:?required}",
+        "PREVIEW_OWNER_PASSWORD": "${PREVIEW_OWNER_PASSWORD:?required}"
+      },
+      "networks": [
+        "preview_private"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=128m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "pids_limit": 128,
+      "mem_limit": "2g",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "node",
+          "server/preview-healthcheck.mjs"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 40,
+        "start_period": "10s"
+      }
+    },
+    "preview-proxy": {
+      "build": {
+        "context": "..",
+        "dockerfile": "ops/isolated-preview-proxy.Dockerfile"
+      },
+      "restart": "no",
+      "depends_on": {
+        "preview-app": {
+          "condition": "service_healthy"
+        }
+      },
+      "ports": [
+        "127.0.0.1:3016:8080"
+      ],
+      "networks": [
+        "preview_private",
+        "preview_ingress"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=16m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "pids_limit": 64,
+      "mem_limit": "128m",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "wget",
+          "-q",
+          "--spider",
+          "http://127.0.0.1:8080/__proxy-health"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 20
+      }
+    }
+  },
+  "networks": {
+    "preview_private": {
+      "internal": true
+    },
+    "preview_ingress": {
+      "internal": false
+    }
+  },
+  "volumes": {
+    "preview_data": {}
+  }
+}

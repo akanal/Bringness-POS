@@ -1,0 +1,113 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {EventEmitter} from 'node:events';
+import {createPaymentCheckout} from './payment-checkout.js';
+
+const UUID='11111111-1111-4111-8111-111111111111';
+const PRODUCT='22222222-2222-4222-8222-222222222222';
+const user={id:UUID,company_id:UUID,role:'owner'};
+function request(authorization='Bearer test-token'){
+ const req=new EventEmitter();req.resume=()=>req;
+ req.url='/api/v1/orders/checkout';req.method='POST';req.headers={authorization};
+ return req;
+}
+function response(){
+ return {status:null,body:null,writeHead(status){this.status=status;},end(raw){this.body=JSON.parse(raw);}};
+}
+async function run(body,{actor=user,raw=null,chunks=null}={}){
+ const calls=[];
+ const pool={async query(sql){calls.push(sql);if(sql.includes('FROM sessions'))return {rows:actor?[actor]:[]};throw Error('Unexpected database query');},async connect(){throw Error('Checkout must not start a transaction for invalid input');}};
+ const handler=createPaymentCheckout(pool),req=request(),res=response();
+ const done=handler(req,res);
+ setImmediate(()=>{for(const chunk of chunks??[Buffer.from(raw??JSON.stringify(body))])req.emit('data',chunk);req.emit('end');});
+ await done;
+ return {res,calls};
+}
+const valid=()=>({requestKey:UUID,restaurantId:UUID,items:[{productId:PRODUCT,qty:1}],payments:[{method:'cash',amountCents:100}]});
+test('unauthenticated checkout is rejected before any writes',async()=>{
+ const {res,calls}=await run(valid(),{actor:null});
+ assert.equal(res.status,401);assert.equal(calls.length,1);
+});
+test('non-management role cannot settle sales',async()=>{
+ const {res,calls}=await run(valid(),{actor:{...user,role:'waiter'}});
+ assert.equal(res.status,403);assert.equal(calls.length,1);
+});
+test('card checkout requires explicit terminal confirmation before database writes',async()=>{
+ const body=valid();body.payments=[{method:'card',amountCents:100}];
+ const {res,calls}=await run(body);
+ assert.equal(res.status,409);assert.match(res.body.error,/Kartenzahlung/);assert.equal(calls.length,1);
+});
+test('invalid split payments cannot reach checkout transaction',async()=>{
+ for(const payments of [[],[{method:'cash',amountCents:0}],[{method:'cash',amountCents:-1}],[{method:'cash',amountCents:1.5}],[{method:'unknown',amountCents:100}],Array.from({length:3},()=>({method:'cash',amountCents:1}))]){
+  const {res,calls}=await run({...valid(),payments});
+  assert.equal(res.status,400);assert.equal(calls.length,1);
+ }
+});
+
+test('client-reported card confirmation cannot create a paid order',async()=>{
+ const body=valid();body.payments=[{method:'card',amountCents:100}];body.externalCardConfirmed=true;
+ const {res,calls}=await run(body);
+ assert.equal(res.status,409);assert.equal(calls.length,1);
+});
+
+test('mixed cash and card cannot bypass card verification',async()=>{
+ const body=valid();body.payments=[{method:'cash',amountCents:50},{method:'card',amountCents:50}];body.externalCardConfirmed=true;
+ const result=await run(body);
+ assert.equal(result.res.status,409);
+ assert.equal(result.calls.length,1);
+});
+
+test('repeated product IDs are rejected before payment creation',async()=>{
+ const body=valid();body.items.push({productId:PRODUCT,qty:1});
+ const result=await run(body);
+ assert.equal(result.res.status,400);
+ assert.equal(result.calls.length,1);
+});
+
+test('oversized UTF-8 checkout body is rejected by byte size',async()=>{
+ const body=valid();body.note='ä'.repeat(40000);
+ const {res,calls}=await run(body);
+ assert.equal(res.status,413);
+ assert.equal(calls.length,1);
+});
+
+test('split UTF-8 characters survive streamed JSON parsing',async()=>{
+ const body=valid();body.note='ä';body.payments=[{method:'card',amountCents:100}];
+ const bytes=Buffer.from(JSON.stringify(body));
+ const position=bytes.indexOf(Buffer.from('ä'));
+ assert(position>0);
+ const result=await run(body,{chunks:[bytes.subarray(0,position+1),bytes.subarray(position+1)]});
+ assert.equal(result.res.status,409);
+ assert.equal(result.calls.length,1);
+});
+
+test('invalid payload syntax yields a client error',async()=>{
+ const result=await run(valid(),{raw:'oops'});
+ assert.equal(result.res.status,400);
+});
+
+test('request size is enforced across separate data chunks',async()=>{
+ const body=valid();
+ const chunks=[Buffer.from(JSON.stringify(body)),Buffer.alloc(65536,32)];
+ const result=await run(body,{chunks});
+ assert.equal(result.res.status,413);
+ assert.equal(result.calls.length,1);
+});
+
+ test('missing and malformed checkout keys cannot start a financial transaction',async()=>{
+ for(const requestKey of [undefined,null,'',UUID+'x',42,{},'not-a-uuid']){
+  const result=await run({...valid(),requestKey});assert.equal(result.res.status,400);assert.equal(result.calls.length,1);
+ }
+});
+ test('uppercase-equivalent product IDs cannot create duplicate checkout lines',async()=>{
+ const product='abcdefab-abcd-4abc-8abc-abcdefabcdef';
+ const result=await run({...valid(),items:[{productId:product,qty:1},{productId:product.toUpperCase(),qty:1}]});
+ assert.equal(result.res.status,400);assert.equal(result.calls.length,1);
+});
+
+test('aborted checkout body is rejected without opening a transaction',async()=>{
+ const pool={query:async()=>({rows:[user]}),connect:async()=>{throw Error('must not write')}};
+ const req=request(),res=response(),done=createPaymentCheckout(pool)(req,res);
+ setImmediate(()=>{req.emit('data',Buffer.from('{'));req.emit('aborted');});
+ await done;assert.equal(res.status,400);
+});

@@ -5,6 +5,7 @@
   "description": "Bringness POS Windows Desktop Client",
   "main": "main.cjs",
   "scripts": {
+    "test": "node --test",
     "build": "npm run prepare:offline && electron-builder --win nsis",
     "prepare:offline": "node prepare-offline.cjs"
   },
@@ -17,6 +18,7 @@
     "productName": "Bringness POS",
     "files": [
       "main.cjs",
+      "device-license.cjs",
       "offline-ledger.mjs",
       "offline-runtime.cjs",
       "offline-sync.mjs",

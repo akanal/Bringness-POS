@@ -1,16 +1,27 @@
 name: POS and AI completion validation
 on:
   pull_request:
-    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/pos/settlement-flow.js", "apps/web/public/pos/app.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
   push:
-    branches: [main]
-    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+    branches: [main, 'finish/**', 'staging/preview-20261016']
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/pos/settlement-flow.js", "apps/web/public/pos/app.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
 permissions:
   contents: read
 jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: device_test
+          POSTGRES_PASSWORD: device_test
+          POSTGRES_DB: bringness_device_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U device_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,10 +29,81 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm ci --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
       - run: node --test server/billing-policy.test.js server/billing-status.test.js server/billing-quote.test.js server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
+      - name: Verify billing webhook integrity and simultaneous recurring notifications on PostgreSQL 16
+        run: node server/ai-tests/billing-webhook.mjs
+        env:
+          BILLING_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - name: Verify restaurant suspension races against stock authorization on PostgreSQL 16
+        run: node server/ai-tests/stock-authority-races.mjs
+        env:
+          STOCK_AUTH_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/transactional-mail.mjs
+      - run: node server/ai-tests/checkout-ui.mjs
+      - run: node server/ai-tests/settlement-ui.mjs
+      - run: node server/ai-tests/table-settlement.mjs
+      - name: Verify immutable table settlement and concurrent retries on PostgreSQL 16
+        run: node server/ai-tests/table-settlement.mjs
+        env:
+          SETTLEMENT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/checkout-recovery.mjs
+      - name: Verify concurrent cash checkout and lost replies on PostgreSQL 16
+        run: node server/ai-tests/checkout-recovery.mjs
+        env:
+          CHECKOUT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/displays.mjs
       - run: node server/ai-tests/billing-eligibility.mjs
+      - run: node server/ai-tests/module-approval.mjs
       - run: node server/ai-tests/remote-support.mjs
+      - run: node server/ai-tests/admin-audit.mjs
+      - run: node server/ai-tests/device-license.mjs
+      - name: Verify simultaneous device activation on PostgreSQL
+        run: node server/ai-tests/device-license.mjs
+        env:
+          DEVICE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/offline-ui.mjs
+      - run: node server/ai-tests/accountant-ui.mjs
       - run: node server/ai-tests/offline-accountant.mjs
+      - name: Verify accountant microsecond pagination and revocation on PostgreSQL 16
+        run: node server/ai-tests/accountant-postgres.mjs
+        env:
+          ACCOUNTANT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/offline-http-sync.mjs
+      - name: Verify HTTP reconnect and exactly-once import on PostgreSQL 16
+        run: node server/ai-tests/offline-http-sync.mjs
+        env:
+          OFFLINE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/automatic-policy.mjs
+      - name: Verify one-connection procurement and competing workers on PostgreSQL 16
+        run: node server/ai-tests/automatic-concurrency.mjs
+        env:
+          PROCUREMENT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/consumption-history.mjs
+      - run: node server/ai-tests/stock-lifecycle.mjs
       - run: node server/ai-tests/pos-stock-bridge.mjs
+      - name: Verify password-change and suspension races during POS and AI login
+        run: node server/ai-tests/login-session-races.mjs
+        env:
+          SESSION_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/integration.mjs
+      - name: Verify POS authentication, staff and service flows
+        run: |
+          node server/ai-tests/pos-auth.mjs
+          node server/ai-tests/admin-reset-integration.mjs
+          node server/ai-tests/personnel.mjs
+          node server/ai-tests/personnel-service.mjs
+          node server/ai-tests/staff-lifecycle.mjs
+          node server/ai-tests/duty-planning.mjs
+          node server/ai-tests/table-waiters.mjs
+          node server/ai-tests/waiter-workflow.mjs
+          node server/ai-tests/waiter-draft.mjs
+          node server/ai-tests/waiter-push.mjs
+          node server/ai-tests/waiter-signal.mjs
+      - name: Verify guest pickup, billing and simulated fiscal providers
+        run: |
+          node server/ai-tests/pickup-notify.mjs
+          node server/ai-tests/qr-guest-push.mjs
+          node server/ai-tests/center-onsite.mjs
+          node server/ai-tests/center-simple-ui.mjs
+          node server/ai-tests/billing-mail.mjs
+          node server/ai-tests/fiskaly-test.mjs
+          node server/ai-tests/fiskaly-sandbox.mjs

@@ -1,10 +1,14 @@
 const $=id=>document.getElementById(id);
 const money=cents=>(cents/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
 const offerings=[
-  {code:'pos_base_monthly',title:'Online-Basis',intro:'Die Grundkasse für 34,99 € netto monatlich inklusive Cloud-TSE.',items:['Artikel, Kategorien und Zahlungen','Cloud-TSE im Preis enthalten – LIVE-Aktivierung noch ausstehend','Konto und gemeinsame Datenbank','Monatlich kündbares Abo'],featured:true},
-  {code:'restaurant_monthly',title:'Restaurant-Kasse',intro:'Vollständige Restaurant-Kasse inklusive normaler Kasse.',items:['Normale Kasse im Preis enthalten','Tische, Service, Bestellungen und Küche','Tisch-QR optional für 29,99 € netto / Monat']},
-  {code:'table_qr_monthly',title:'Tisch-QR',intro:'QR-Bestellungen direkt am Tisch als Ergänzung.',items:['QR-Code je Tisch','Digitale Speisekarte und Bestellung','Für jede Kassenlizenz separat buchbar']},
-  {code:'download_license',title:'Windows-Download',intro:'Einmalige Lizenz für die reine Windows-Kasse.',items:['Windows-Installation','Normale Kasse, Artikel, Belege und Schicht','Tisch-QR optional für 29,99 € netto / Monat','Download erst nach bestätigter Zahlung']}
+ {code:'pos_base_monthly',title:'Online-Grundkasse',intro:'Die normale Kasse für jede Branche, inklusive Cloud-TSE.',items:['34,99 € netto pro Monat','Artikel, Zahlungen und Belege','Cloud-TSE im Preis enthalten – LIVE-Aktivierung noch ausstehend','Zusatzmodule einzeln buchbar'],featured:true},
+ {code:'table_management_monthly',title:'Tischsystem',intro:'Tische unabhängig von einem QR-System verwalten.',items:['9,99 € netto pro Monat','Für Online- und Download-Kasse','Voraussetzung für alle drei Bestellsysteme']},
+ {code:'table_qr_monthly',title:'Tisch-QR-Bestellsystem',intro:'Speisekarte und Bestellung direkt am Tisch.',items:['29,99 € netto pro Monat','Tischsystem zusätzlich erforderlich: 9,99 € monatlich','Gesamt mit Tischsystem: 39,98 € zusätzlich zur Grundkasse']},
+ {code:'counter_qr_monthly',title:'Tresen-System',intro:'QR-Bestellung mit Abholung am Tresen.',items:['29,99 € netto pro Monat','Tischsystem zusätzlich erforderlich: 9,99 € monatlich','Eigenständiges Bestellsystem']},
+ {code:'center_monthly',title:'Center-System',intro:'Gemeinsamer Bestellbereich mit mehreren Betrieben.',items:['29,99 € netto pro Monat','Tischsystem zusätzlich erforderlich: 9,99 € monatlich','Getrennt vom Tisch-QR- und Tresen-System']},
+ {code:'personnel_monthly',title:'Personalmanagement',intro:'Personal unabhängig von Tischen oder QR-Systemen zubuchen.',items:['9,99 € netto pro Monat','Mitarbeiter, Dienstzeiten und Dienstplanung']},
+ {code:'kitchen_monthly',title:'Küche',intro:'Optionale Küchenansicht für die Gastronomie.',items:['9,99 € netto pro Monat','Nicht in der Grundkasse enthalten']},
+ {code:'download_license',title:'Windows-Download',intro:'Normale Windows-Kasse für 399 € netto einmalig.',items:['Einmalige Grundlizenz','Alle Zusatzmodule zu denselben Monatspreisen buchbar','QR-Systeme setzen das Tischsystem voraus','Hardware-TSE separat; Integration und Freigabe ausstehend']}
 ];
 let plans=new Map(),billingState=null,selected=null,selectedQuotedNet=null,accountMode='register',token=localStorage.getItem('bringness-pos-token'),downloadAccess=null;
 async function request(path,options={}){const response=await fetch('/api/v1'+path,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...options.headers}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Die Anfrage ist fehlgeschlagen.');return data}
@@ -14,7 +18,7 @@ function planState(code){
     const state=(billingState.plans||[]).find(item=>item.code===code);
     if(state)return state;
   }
-  if(code==='restaurant_monthly')return {active:false,eligible:true,requires:[]};
+  if(code!=='pos_base_monthly'&&code!=='download_license')return {active:false,eligible:false,requires:['pos_base']};
   if(code==='table_qr_monthly')return {active:false,eligible:false,requires:['pos_base']};
   return {active:false,eligible:true,requires:[]};
 }
@@ -23,8 +27,8 @@ function dependencyText(code,state){
   if(state.active)return 'Aktiv';
   if(state.eligible)return code==='download_license'?'Kauf möglich':'Jetzt buchbar';
   if(code==='restaurant_monthly')return 'Zuerst Online-Basis aktivieren';
-  if(billingState?.downloadOnly)return 'In der Download-Kasse nicht buchbar';
-  if(code==='table_qr_monthly')return 'Zuerst Kassenlizenz aktivieren';
+
+  if(['table_qr_monthly','counter_qr_monthly','center_monthly'].includes(code))return 'Kassenlizenz und Tischsystem erforderlich';
   return 'Derzeit nicht buchbar';
 }
 function buttonText(code,state){
@@ -42,8 +46,8 @@ function card(offer){
   return '<article class="plan'+(offer.featured?' featured':'')+(state.active?' active-plan':'')+'"><div class="eyebrow">'+(plan.billingType==='monthly'?'Monatlicher Tarif':'Einmaliger Kauf')+'</div><div class="plan-status '+(state.active?'is-active':state.eligible?'is-ready':'is-locked')+'">'+dependencyText(offer.code,state)+'</div><h3>'+offer.title+'</h3><div class="price">'+money(net)+' <small>netto '+period+'</small></div><div class="tax">zzgl. 19 % MwSt. ('+money(vat)+') · Gesamt '+money(net+vat)+'</div>'+(state.standardAmount!=null&&state.amount<state.standardAmount?'<p class="fine">Individuell vereinbarter Monatspreis für dieses Konto.</p>':'')+'<p>'+offer.intro+'</p><ul>'+offer.items.map(item=>'<li>'+item+'</li>').join('')+'</ul><button class="btn" type="button" data-plan="'+offer.code+'" '+((state.active||!state.eligible)?'disabled':'')+'>'+buttonText(offer.code,state)+'</button></article>';
 }
 function renderPlans(){
-  $('onlinePlans').innerHTML=offerings.slice(0,3).map(card).join('')||'Tarife sind derzeit nicht verfügbar.';
-  $('downloadPlans').innerHTML=card(offerings[3])||'Lizenz ist derzeit nicht verfügbar.';
+  $('onlinePlans').innerHTML=offerings.filter(o=>o.code!=='download_license').map(card).join('')||'Tarife sind derzeit nicht verfügbar.';
+  $('downloadPlans').innerHTML=card(offerings.find(o=>o.code==='download_license'))||'Lizenz ist derzeit nicht verfügbar.';
   document.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',()=>choose(button.dataset.plan)));
 }
 async function loadBillingStatus(){
@@ -60,7 +64,7 @@ async function loadPlans(){
   }catch(error){$('onlinePlans').textContent='Preise konnten nicht geladen werden. Bitte versuche es später erneut.';$('downloadPlans').textContent=error.message}
 }
 function choose(code){
-  const plan=plans.get(code),state=planState(code);if(!plan)return;
+  const plan=plans.get(code),state=planState(code);if(!plan)return;if(!['pos_base_monthly','download_license'].includes(code)){location.assign('/pos/?view=lizenz');return;}
   if(state.active||!state.eligible)return;
   selected=code;const net=Math.round(Number(state.amount??plan.amount)*100),vat=Math.round(net*0.19);selectedQuotedNet=net;$('selection').textContent=plan.name+' · '+money(net)+' netto'+(plan.billingType==='monthly'?' pro Monat':' einmalig');$('checkoutSummary').textContent='Zu zahlen: '+money(net+vat)+' inkl. '+money(vat)+' MwSt.'+(plan.billingType==='monthly'?' pro Monat':' einmalig');$('purchaseMessage').textContent='';$('kaufen').hidden=false;$('kaufen').scrollIntoView({behavior:'smooth',block:'start'});syncAccount()}
 async function syncAccount(){if(!token){$('accountFields').hidden=false;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=false);$('signedIn').hidden=true;return}try{const data=await request('/billing/profile');$('accountFields').hidden=true;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=true);$('signedIn').hidden=false;const p=data.profile||{};for(const [field,key] of [['company','company_name'],['contact','contact_name'],['street','street'],['postal','postal_code'],['city','city'],['country','country'],['vatId','vat_id']])if(p[key])$(field).value=p[key]}catch(error){token=null;localStorage.removeItem('bringness-pos-token');billingState=null;renderPlans();$('accountFields').hidden=false;$('accountFields').querySelectorAll('input').forEach(input=>input.disabled=false);$('signedIn').hidden=true}}

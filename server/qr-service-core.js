@@ -1,3 +1,5 @@
+import {orderingModuleAccess} from './module-catalog.js';
+import {readJsonObject} from './http-body.js';
 import crypto from "node:crypto";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -6,11 +8,7 @@ export function queueOrder(orders) {
   return [...orders].sort((a,b) => new Date(a.created_at)-new Date(b.created_at) || String(a.id).localeCompare(String(b.id)));
 }
 const send=(res,status,data)=>{res.writeHead(status,{"content-type":"application/json; charset=utf-8","cache-control":"no-store"});res.end(JSON.stringify(data));return true};
-async function body(req) {
-  let text="";
-  for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>4096)throw new Error("BODY_LIMIT")}
-  return text?JSON.parse(text):{};
-}
+const body=req=>readJsonObject(req,{maxBytes:4096});
 export function createQrService(pool) {
   async function actor(req) {
     const raw=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
@@ -60,6 +58,7 @@ export function createQrService(pool) {
         const r=await c.query("SELECT qr_service_mode FROM restaurants WHERE id=$1 AND company_id=$2 FOR UPDATE",[setting[1],u.company_id]);
         if(!r.rowCount){await c.query("ROLLBACK");return send(res,404,{error:"Betrieb nicht gefunden"})}
         if(r.rows[0].qr_service_mode!==b.mode) {
+          if(!await orderingModuleAccess(c,u.company_id,b.mode)){await c.query('ROLLBACK');return send(res,402,{error:'Bitte zuerst das passende QR-System und das Tischsystem buchen'})}
           const open=await c.query("SELECT 1 FROM orders WHERE restaurant_id=$1 AND source='qr' AND status<>'cancelled' AND (status<>'paid' OR (qr_service_mode='pickup' AND qr_ready_at IS NULL)) LIMIT 1",[setting[1]]);
           if(open.rowCount){await c.query("ROLLBACK");return send(res,409,{error:"Offene QR-Bestellungen zuerst abschließen"})}
           await c.query("UPDATE restaurants SET qr_service_mode=$2 WHERE id=$1",[setting[1],b.mode]);

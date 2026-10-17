@@ -9,7 +9,9 @@ test('a broken restaurant bridge does not prevent another restaurant from signin
   if(sql.startsWith('SELECT id,restaurant_id'))return {rows:[{id:'broken',restaurant_id:'one'},{id:'good',restaurant_id:'two'}]};
   if(sql.includes("SET state='starting'"))return {rows:[{id:args[0],restaurant_id:'two',receipt_id:'receipt',process_data:{totalsMatch:true}}]};
   if(sql.startsWith('SELECT serial_number'))return {rows:[{serial_number:'serial-two',certified:true,status:'connected'}]};
-  if(sql.includes("state='signed'"))return {rows:[{state:'signed',tse_transaction_number:'7',signature:'signed-proof'}]};
+  if(sql.includes("SET state='finishing'"))return {rows:[{id:args[0]}],rowCount:1};
+  if(sql.includes("state='signed'"))return {rows:[{state:'signed',tse_transaction_number:'7',signature:'signed-proof'}],rowCount:1};
+  if(sql.includes("UPDATE receipts SET fiscal_status='signed'"))return {rows:[],rowCount:1};
   return {rows:[]};
  },connect:async()=>({query:(...args)=>pool.query(...args),release(){}})};
  const outcomes=await processPreparedTse(pool,async restaurantId=>{
@@ -31,7 +33,7 @@ test('an ambiguous signing response is not retried and the batch continues',asyn
   if(sql.startsWith('SELECT id,restaurant_id'))return {rows:[...states].filter(([,s])=>s==='prepared').map(([id])=>({id,restaurant_id:id}))};
   if(sql.includes("SET state='starting'")){states.set(args[0],'starting');return {rows:[{id:args[0],restaurant_id:args[0],process_data:{totalsMatch:true}}]};}
   if(sql.startsWith('SELECT serial_number'))return {rows:[{serial_number:args[0],certified:true,status:'connected'}]};
-  if(sql.includes("SET state='finishing'"))states.set(args[0],'finishing');
+  if(sql.includes("SET state='finishing'")){states.set(args[0],'finishing');return {rows:[{id:args[0]}],rowCount:1};}
   if(sql.includes("SET state='needs_review'"))states.set(args[0],'needs_review');
   return {rows:[]};
  }};

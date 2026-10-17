@@ -1,3 +1,5 @@
+import {lockAiRestaurant} from './ai-write-authorization.js';
+import {migrateConsumptionHistory} from './ai-consumption.js';
 import {blockUnavailableRecipes} from './ai-stock-lifecycle.js';
 import {aiPool} from './ai-database.js';
 import {uuid,hash} from './ai-policy.js';
@@ -21,6 +23,7 @@ async function pendingConfirmations(c,accountId=null){return (await c.query(`
  ORDER BY min(greatest(o.created_at,o.updated_at)),coalesce(o.supplier_order_id,o.id)
  `,[accountId])).rows}
 export async function migrateAiInventory(){await pool.query(`
+ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS occurred_at timestamptz;
 ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'legacy';
 ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS quantity_before numeric(15,3);
 ALTER TABLE ai_stock_moves ADD COLUMN IF NOT EXISTS quantity_after numeric(15,3);
@@ -28,32 +31,32 @@ CREATE TABLE IF NOT EXISTS ai_inventory_requests(actor_id uuid NOT NULL REFERENC
 CREATE TABLE IF NOT EXISTS ai_monitor_state(account_id uuid PRIMARY KEY REFERENCES ai_accounts(id),last_checked timestamptz,last_error text NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS ai_monitor_findings(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),finding_key text NOT NULL,kind text NOT NULL,severity text NOT NULL,title text NOT NULL,message text NOT NULL,detail jsonb NOT NULL,first_seen timestamptz NOT NULL DEFAULT now(),last_seen timestamptz NOT NULL DEFAULT now(),resolved_at timestamptz,acknowledged_at timestamptz,UNIQUE(account_id,finding_key));
 CREATE INDEX IF NOT EXISTS ai_monitor_account_idx ON ai_monitor_findings(account_id,resolved_at);
-`)}
+`);await migrateConsumptionHistory(aiPool())}
 async function movement(c,s,u,delta,kind,why,after){await c.query('INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason,kind,quantity_before,quantity_after) VALUES($1,$2,$3,$4,$5,$6,$7)',[s.id,u.id,delta,why,kind,s.quantity,after])}
 async function inventoryWrite(path,b,u){
  const count=path.endsWith('/count');id(b.requestKey);if(b.confirmed!==true)fail('Lagerbuchung ausdrücklich bestätigen');const why=reason(b.reason);let lines;
  if(count){if(!Array.isArray(b.lines)||!b.lines.length||b.lines.length>200)fail('1 bis 200 Zählpositionen erforderlich');lines=b.lines.map(l=>{if(!l)fail('Ungültige Zählposition');return {stockId:id(l.stockId),expectedQuantity:qty(l.expectedQuantity),countedQuantity:qty(l.countedQuantity)}}).sort((a,z)=>a.stockId.localeCompare(z.stockId));if(new Set(lines.map(l=>l.stockId)).size!==lines.length)fail('Zutat doppelt angegeben')}
  else{if(!['waste','spoilage','spillage','own_use'].includes(b.kind))fail('Schwund, Verderb, Verschütten oder Eigenverbrauch auswählen');lines=[{stockId:id(b.stockId),quantity:qty(b.quantity)}];if(!lines[0].quantity)fail('Verlustmenge muss größer als 0 sein')}
- const fingerprint=hash(JSON.stringify({kind:count?'count':b.kind,lines,reason:why})),c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);const old=(await c.query('SELECT * FROM ai_inventory_requests WHERE actor_id=$1 AND request_key=$2',[u.id,b.requestKey])).rows[0];if(old){if(old.fingerprint!==fingerprint)fail('Buchungskennung bereits anders verwendet',409);await c.query('COMMIT');return {...old.response,replayed:true}}
+ const fingerprint=hash(JSON.stringify({kind:count?'count':b.kind,lines,reason:why})),c=await pool.connect();try{await c.query('BEGIN');await lockAiRestaurant(c,u.id);const old=(await c.query('SELECT * FROM ai_inventory_requests WHERE actor_id=$1 AND request_key=$2',[u.id,b.requestKey])).rows[0];if(old){if(old.fingerprint!==fingerprint)fail('Buchungskennung bereits anders verwendet',409);await c.query('COMMIT');return {...old.response,replayed:true}}
   const rows=(await c.query('SELECT * FROM ai_stock WHERE id=ANY($1::uuid[]) AND account_id=$2 ORDER BY id FOR UPDATE',[lines.map(l=>l.stockId),u.id])).rows;if(rows.length!==lines.length)fail('Zutat nicht gefunden',404);
   for(const line of lines){const s=rows.find(s=>s.id===line.stockId);const before=Number(s.quantity);if(count&&rounded(before)!==line.expectedQuantity)fail('Bestand während der Zählung geändert. Lager neu laden und Zählung prüfen',409);if(!count&&line.quantity>before)fail('Verlustmenge übersteigt den aktuellen Bestand',409);const after=count?line.countedQuantity:rounded(before-line.quantity),delta=rounded(after-before);await c.query('UPDATE ai_stock SET quantity=$2 WHERE id=$1',[s.id,after]);await movement(c,s,u,delta,count?'count':b.kind,why,after)}
   await blockUnavailableRecipes(c,u.id);const response={ok:true,positions:lines.length};await c.query('INSERT INTO ai_inventory_requests VALUES($1,$2,$3,$4::jsonb)',[u.id,b.requestKey,fingerprint,JSON.stringify(response)]);await c.query('INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,$2,$3::jsonb)',[u.id,count?'inventory_count':'inventory_'+b.kind,JSON.stringify({requestKey:b.requestKey,positions:lines.length,reason:why})]);await c.query('COMMIT');return response;
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
-export async function refreshMonitor(accountId){
- const c=await pool.connect();try{await c.query('BEGIN');await c.query('INSERT INTO ai_monitor_state(account_id) VALUES($1) ON CONFLICT DO NOTHING',[accountId]);await c.query('SELECT account_id FROM ai_monitor_state WHERE account_id=$1 FOR UPDATE',[accountId]);const account=(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active'",[accountId])).rows[0];if(!account){await c.query('ROLLBACK');return}
+export async function refreshMonitor(accountId,{db=pool,client}={}){
+ const c=client||await db.connect();try{await c.query('BEGIN');await c.query('INSERT INTO ai_monitor_state(account_id) VALUES($1) ON CONFLICT DO NOTHING',[accountId]);await c.query('SELECT account_id FROM ai_monitor_state WHERE account_id=$1 FOR UPDATE',[accountId]);const account=(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active'",[accountId])).rows[0];if(!account){await c.query('ROLLBACK');return}
  const stock=(await c.query(`SELECT s.*,l.name location_name,
  COALESCE((SELECT sum(o.pack_quantity*o.packs) FROM ai_orders o WHERE o.stock_id=s.id AND o.buyer_id=$1 AND o.status='accepted' AND NOT o.unavailable AND COALESCE(o.confirmed_delivery_date,o.delivery_date)>=(now() AT TIME ZONE 'Europe/Berlin')::date AND NOT EXISTS(SELECT 1 FROM ai_order_replacements r WHERE r.order_id=o.id AND r.status='pending') AND COALESCE(o.confirmed_delivery_date,o.delivery_date)<=((now() AT TIME ZONE 'Europe/Berlin')::date+6)),0) incoming
  FROM ai_stock s JOIN ai_locations l ON l.id=s.location_id WHERE s.account_id=$1 ORDER BY s.id`,[accountId])).rows;
- const sales=(await c.query(`SELECT e.stock_id,
- sum(-e.delta) consumption,
- sum(-e.delta) FILTER(WHERE v.created_at>=now()-interval '7 days') recent,
- sum(-e.delta) FILTER(WHERE v.created_at<now()-interval '7 days') previous,
- count(DISTINCT (v.created_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale') days,
- count(DISTINCT (v.created_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.created_at>=now()-interval '7 days') recent_days,
- count(DISTINCT (v.created_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.created_at<now()-interval '7 days') previous_days,
- LEAST(28,GREATEST(1,1+(now() AT TIME ZONE 'Europe/Berlin')::date-((min(v.created_at) FILTER(WHERE v.event_type='sale')) AT TIME ZONE 'Europe/Berlin')::date)) observed_days
- FROM ai_sale_effects e JOIN ai_sale_events v ON v.id=e.event_id WHERE v.account_id=$1 AND v.created_at>=now()-interval '28 days' GROUP BY e.stock_id`,[accountId])).rows;
+ const sales=(await c.query(`SELECT v.stock_id,
+ sum(-v.delta) consumption,
+ sum(-v.delta) FILTER(WHERE v.occurred_at>=now()-interval '7 days') recent,
+ sum(-v.delta) FILTER(WHERE v.occurred_at<now()-interval '7 days') previous,
+ count(DISTINCT (v.occurred_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale') days,
+ count(DISTINCT (v.occurred_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.occurred_at>=now()-interval '7 days') recent_days,
+ count(DISTINCT (v.occurred_at AT TIME ZONE 'Europe/Berlin')::date) FILTER(WHERE v.event_type='sale' AND v.occurred_at<now()-interval '7 days') previous_days,
+ LEAST(28,GREATEST(1,1+(now() AT TIME ZONE 'Europe/Berlin')::date-((min(v.occurred_at) FILTER(WHERE v.event_type='sale')) AT TIME ZONE 'Europe/Berlin')::date)) observed_days
+ FROM ai_consumption_events v WHERE v.account_id=$1 AND v.occurred_at>=now()-interval '28 days' AND v.occurred_at<=now() GROUP BY v.stock_id`,[accountId])).rows;
  const losses=(await c.query("SELECT m.stock_id,sum(-m.delta) quantity,count(*) records FROM ai_stock_moves m JOIN ai_stock s ON s.id=m.stock_id WHERE s.account_id=$1 AND m.kind IN ('waste','spoilage') AND m.created_at>=now()-interval '28 days' GROUP BY m.stock_id",[accountId])).rows;
  const findings=[];const add=(kind,subject,severity,title,message,detail)=>findings.push({key:kind+':'+subject,kind,severity,title,message,detail});
  for(const s of stock){const sale=sales.find(x=>x.stock_id===s.id),loss=losses.find(x=>x.stock_id===s.id),quantity=Math.max(0,Number(s.quantity)-Number(s.reserved_quantity||0)),minimum=Number(s.minimum),incoming=Number(s.incoming),days=Number(sale?.days||0),daily=sale?Math.max(0,Number(sale.consumption))/Math.max(1,Number(sale.observed_days)||1):0;
@@ -72,9 +75,24 @@ export async function refreshMonitor(accountId){
  for(const r of repeated)if(Number(r.problem_orders)>=3)add('delivery_repeat',r.supplier_id,'review','Wiederholte Lieferprobleme',r.business_name+': In mindestens drei deiner Aufträge der letzten 90 Tage wurde Nichtlieferbarkeit oder eine Mindermenge gemeldet. Lieferbedingungen gemeinsam prüfen.',{supplierId:r.supplier_id,supplier:r.business_name,problemOrders:Number(r.problem_orders),totalOrders:Number(r.total_orders),action:'orders'});
  for(const f of findings)await c.query(`INSERT INTO ai_monitor_findings(account_id,finding_key,kind,severity,title,message,detail) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT(account_id,finding_key) DO UPDATE SET kind=EXCLUDED.kind,severity=EXCLUDED.severity,title=EXCLUDED.title,message=EXCLUDED.message,detail=EXCLUDED.detail,last_seen=now(),resolved_at=NULL,acknowledged_at=CASE WHEN ai_monitor_findings.detail IS DISTINCT FROM EXCLUDED.detail OR ai_monitor_findings.resolved_at IS NOT NULL THEN NULL ELSE ai_monitor_findings.acknowledged_at END`,[accountId,f.key,f.kind,f.severity,f.title,f.message,JSON.stringify(f.detail)]);
  await c.query('UPDATE ai_monitor_findings SET resolved_at=now() WHERE account_id=$1 AND resolved_at IS NULL AND NOT(finding_key=ANY($2::text[]))',[accountId,findings.map(f=>f.key)]);await c.query("UPDATE ai_monitor_state SET last_checked=now(),last_error='' WHERE account_id=$1",[accountId]);await c.query('COMMIT');return {monitoredStocks:stock.length,historyQualifiedStocks:sales.filter(s=>Number(s.days)>=7).length};
- }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }catch(e){await c.query('ROLLBACK');throw e}finally{if(!client)c.release()}
 }
-export async function monitorTick(){const c=await pool.connect();let locked=false;try{locked=(await c.query('SELECT pg_try_advisory_lock(771093) locked')).rows[0].locked;if(!locked)return;const accounts=(await c.query("SELECT a.id FROM ai_accounts a LEFT JOIN ai_monitor_state m ON m.account_id=a.id WHERE a.role='restaurant' AND a.status='active' AND (m.last_checked IS NULL OR m.last_checked<now()-interval '5 minutes') ORDER BY m.last_checked NULLS FIRST,a.id LIMIT 20")).rows;for(const a of accounts){try{await refreshMonitor(a.id)}catch{await c.query("INSERT INTO ai_monitor_state(account_id,last_checked,last_error) VALUES($1,now(),'Prüfung fehlgeschlagen') ON CONFLICT(account_id) DO UPDATE SET last_checked=now(),last_error=EXCLUDED.last_error",[a.id])}}}finally{try{if(locked)await c.query('SELECT pg_advisory_unlock(771093)')}finally{c.release()}}}
+export async function monitorTick({db=pool,refresh=refreshMonitor}={}){
+ const c=await db.connect();let locked=false;
+ try{
+  locked=(await c.query('SELECT pg_try_advisory_lock(771093) locked')).rows[0].locked;if(!locked)return;
+  const accounts=(await c.query("SELECT a.id FROM ai_accounts a LEFT JOIN ai_monitor_state m ON m.account_id=a.id WHERE a.role='restaurant' AND a.status='active' AND (m.last_checked IS NULL OR m.last_checked<now()-interval '5 minutes') ORDER BY m.last_checked NULLS FIRST,a.id LIMIT 20")).rows;
+  for(const a of accounts){
+   try{await refresh(a.id,{client:c});}
+   catch{await c.query("INSERT INTO ai_monitor_state(account_id,last_checked,last_error) VALUES($1,now(),'Prüfung fehlgeschlagen') ON CONFLICT(account_id) DO UPDATE SET last_checked=now(),last_error=EXCLUDED.last_error",[a.id]);}
+  }
+ }finally{
+  let releaseError;
+  try{if(locked&&(await c.query('SELECT pg_advisory_unlock(771093) AS unlocked')).rows?.[0]?.unlocked!==true)releaseError=Error('Monitor lock not released');}
+  catch(error){releaseError=error;}
+  c.release(releaseError);
+ }
+}
 export async function inventoryRoutes(path,method,b,u,url,admin=false){
  if(admin){if(path!=='/api/ai/admin/monitor'||method!=='GET')fail('Funktion nicht gefunden',404);return {pendingConfirmations:await pendingConfirmations(pool),openDeliveryIssues:Number((await pool.query('SELECT count(*) FROM ai_fulfilment_alerts WHERE resolved_at IS NULL')).rows[0].count),suppliers:(await pool.query("SELECT s.id,s.business_name,count(*) open_issues,count(DISTINCT o.buyer_id) restaurants FROM ai_fulfilment_alerts a JOIN ai_orders o ON o.id=a.order_id JOIN ai_accounts s ON s.id=o.supplier_id WHERE a.resolved_at IS NULL GROUP BY s.id,s.business_name ORDER BY count(*) DESC,s.business_name")).rows,monitoredRestaurants:Number((await pool.query("SELECT count(*) FROM ai_monitor_state m JOIN ai_accounts a ON a.id=m.account_id WHERE a.role='restaurant' AND a.status='active' AND m.last_checked>now()-interval '1 day' AND m.last_error='' ")).rows[0].count)}}
  if(u.role!=='restaurant')fail('Nur Restaurantkonten haben Zugriff auf ihre Warenwirtschaft',403);

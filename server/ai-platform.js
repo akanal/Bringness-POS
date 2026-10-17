@@ -1,3 +1,7 @@
+import {issueLoginSession} from './login-session.js';
+import {saltedSecretHash as passwordHash,secretMatches} from './secret-derivation.js';
+import {readJsonObject} from './http-body.js';
+import {isolatedPreview} from './preview-policy.js';
 import {adminAccountDetail,adminDisableProcurement} from './ai-admin-account.js';
 import {migrateAutoProcurement,automaticProcurementRoutes,automaticProcurementTick} from './ai-auto-procurement.js';
 import {cartTransaction} from './ai-cart.js';
@@ -22,7 +26,7 @@ import crypto from 'node:crypto';
 import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';
 import {migrateAiRecipes,recipeRoutes,apiSalesToken,ingestSale,syncPosSales,syncPosKitchen} from './ai-recipes.js';
 import {aiPool,platformPool,ensureAiDatabase,copyLegacyAiData} from './ai-database.js';
-import {supplierRoles,units,uuid,hash,passwordHash,passwordMatches,validPassword,passwordMessage,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
+import {supplierRoles,units,uuid,hash,validPassword,passwordMessage,quantity,money,orderAmounts,mayActOnOrder} from './ai-policy.js';
 const pool={query:(...args)=>aiPool().query(...args),connect:()=>aiPool().connect()};
 let aiReady=false;
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
@@ -30,7 +34,7 @@ class InputError extends Error{}
 const fail=message=>{throw new InputError(message)};
 function text(value,max=150){const v=String(value||'').trim();if(v.length>max)fail(`Höchstens ${max} Zeichen erlaubt`);return v}
 function id(value){if(!uuid.test(String(value)))fail('Ungültige ID');return value}
-async function body(req){let raw='';const limit=req.url.split('?')[0]==='/api/ai/delivery-notes/upload'?12*1024*1024:null;for await(const chunk of req){raw+=chunk;if(raw.length>(limit||(req.url.split('?')[0].match(/\/barcodes\/csv(?:-preview)?$|\/v1\/supplier\/products$|\/ads$|\/products$|\/cart\/(preview|checkout)$|\/inventory\/count$/)?220000:16000)))fail('Anfrage zu groß')}try{return JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}
+async function body(req){const path=req.url.split('?')[0];const maxBytes=path==='/api/ai/delivery-notes/upload'?12*1024*1024:path.match(/\/barcodes\/csv(?:-preview)?$|\/v1\/supplier\/products$|\/ads$|\/products$|\/cart\/(preview|checkout)$|\/inventory\/count$/)?220000:16000;return readJsonObject(req,{maxBytes});}
 const bearer=req=>String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
 async function actor(req){return (await pool.query("SELECT u.id,u.email,u.name,u.business_name,u.role,u.status,u.city,u.postal_code,u.address,u.delivery_area,u.minimum_order_cents,u.delivery_terms,u.shop_plan,u.cuisine_type FROM ai_sessions s JOIN ai_accounts u ON u.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'",[hash(bearer(req))])).rows[0]}
 async function platformActor(req){return (await platformPool.query("SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT COALESCE(u.must_change_password,false)",[hash(bearer(req))])).rows[0]}
@@ -101,7 +105,7 @@ export async function handleAiPlatform(req,res){
    if(!(await settings()).onboardingEnabled)return send(res,409,{error:'Neue Registrierungen sind vorübergehend pausiert.'});
    if(!await rate('register:'+emailAddress,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
    const existing=await pool.query('SELECT id FROM ai_accounts WHERE email=$1',[emailAddress]);if(existing.rowCount)return send(res,200,{message:'Wenn die Anmeldung möglich ist, erhältst du eine Bestätigung. Bei bestehendem Konto nutze Anmeldung oder Passwort vergessen.'});
-   const c=await pool.connect();try{await c.query('BEGIN');const u=(await c.query('INSERT INTO ai_accounts(email,password_hash,name,business_name,role) VALUES($1,$2,$3,$4,$5) RETURNING id',[emailAddress,passwordHash(b.password),name,business,role])).rows[0];const token=crypto.randomBytes(32).toString('hex');await c.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'verify',now()+interval '48 hours',NULL)",[hash(token),u.id]);await c.query("INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$1,'introduction_agreed',$2)",[u.id,JSON.stringify({monthlyCents:0,commissionBps:supplierRoles.includes(role)?200:0,version:1})]);await email(emailAddress,name,token,'verify');await c.query('COMMIT');return send(res,201,{message:'Bestätigung versendet. Bitte prüfe auch deinen Spamordner.'})}catch(e){await c.query('ROLLBACK');console.error('AI registration failed:',e.code||e.name);return send(res,503,{error:'Bestätigung konnte nicht versendet werden. Bitte später erneut registrieren.'})}finally{c.release()}
+   const c=await pool.connect();try{await c.query('BEGIN');const u=(await c.query('INSERT INTO ai_accounts(email,password_hash,name,business_name,role) VALUES($1,$2,$3,$4,$5) RETURNING id',[emailAddress,await passwordHash(b.password),name,business,role])).rows[0];const token=crypto.randomBytes(32).toString('hex');await c.query("INSERT INTO ai_auth_tokens VALUES($1,$2,'verify',now()+interval '48 hours',NULL)",[hash(token),u.id]);await c.query("INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$1,'introduction_agreed',$2)",[u.id,JSON.stringify({monthlyCents:0,commissionBps:supplierRoles.includes(role)?200:0,version:1})]);await email(emailAddress,name,token,'verify');await c.query('COMMIT');return send(res,201,{message:'Bestätigung versendet. Bitte prüfe auch deinen Spamordner.'})}catch(e){await c.query('ROLLBACK');console.error('AI registration failed:',e.code||e.name);return send(res,503,{error:'Bestätigung konnte nicht versendet werden. Bitte später erneut registrieren.'})}finally{c.release()}
   }
   if(p==='/api/ai/resend'&&req.method==='POST'){
    const b=await body(req),address=text(b.email,254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))fail('Gültige E-Mail-Adresse erforderlich');if(!await rate('resend:'+address,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
@@ -115,8 +119,8 @@ export async function handleAiPlatform(req,res){
    const b=await body(req),emailAddress=text(b.email,254).toLowerCase();if(typeof b.password!=='string'||!b.password.length||b.password.length>128)fail('E-Mail und Passwort erforderlich');if(!await rate('login:'+emailAddress))return send(res,429,{error:'Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.'});
    const u=(await pool.query('SELECT * FROM ai_accounts WHERE email=$1',[emailAddress])).rows[0];
    const stored=u?.password_hash||'00000000000000000000000000000000:'+ '0'.repeat(128);
-   if(!passwordMatches(b.password,stored)||u?.status!=='active')return send(res,401,{error:'Anmeldung nicht möglich. Prüfe deine Zugangsdaten und E-Mail-Bestätigung.'});
-   const token=crypto.randomBytes(32).toString('hex');await pool.query("INSERT INTO ai_sessions VALUES($1,$2,now()+interval '12 hours')",[hash(token),u.id]);await pool.query('DELETE FROM ai_auth_attempts WHERE key=$1',[hash('login:'+emailAddress)]);return send(res,200,{token});
+   if(!await secretMatches(b.password,stored,{allowLegacy:false})||u?.status!=='active')return send(res,401,{error:'Anmeldung nicht möglich. Prüfe deine Zugangsdaten und E-Mail-Bestätigung.'});
+   const token=await issueLoginSession(pool,{kind:'ai',userId:u.id,passwordHash:stored,role:u.role});if(!token)return send(res,401,{error:'Anmeldung inzwischen geändert. Bitte erneut anmelden.'});await pool.query('DELETE FROM ai_auth_attempts WHERE key=$1',[hash('login:'+emailAddress)]);return send(res,200,{token});
   }
   if(p==='/api/ai/forgot'&&req.method==='POST'){
    const b=await body(req),emailAddress=text(b.email,254).toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress))fail('Gültige E-Mail-Adresse erforderlich');if(!await rate('reset:'+emailAddress,3))return send(res,429,{error:'Bitte später erneut versuchen.'});
@@ -125,7 +129,7 @@ export async function handleAiPlatform(req,res){
   }
   if(p==='/api/ai/reset'&&req.method==='POST'){
    const b=await body(req);if(!validPassword(b.password)||!/^[a-f0-9]{64}$/.test(String(b.token)))fail('Neues Passwort erforderlich. '+passwordMessage);
-   const c=await pool.connect();try{await c.query('BEGIN');const t=(await c.query("SELECT account_id FROM ai_auth_tokens WHERE token_hash=$1 AND kind='reset' AND used_at IS NULL AND expires_at>now() FOR UPDATE",[hash(b.token)])).rows[0];if(!t){await c.query('ROLLBACK');return send(res,400,{error:'Link ungültig oder abgelaufen.'})}await c.query('UPDATE ai_accounts SET password_hash=$2 WHERE id=$1',[t.account_id,passwordHash(b.password)]);await c.query("UPDATE ai_auth_tokens SET used_at=now() WHERE account_id=$1 AND kind='reset'",[t.account_id]);await c.query('DELETE FROM ai_sessions WHERE account_id=$1',[t.account_id]);await c.query('COMMIT');return send(res,200,{message:'Passwort geändert. Bitte neu anmelden.'})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+   const c=await pool.connect();try{await c.query('BEGIN');const t=(await c.query("SELECT account_id FROM ai_auth_tokens WHERE token_hash=$1 AND kind='reset' AND used_at IS NULL AND expires_at>now() FOR UPDATE",[hash(b.token)])).rows[0];if(!t){await c.query('ROLLBACK');return send(res,400,{error:'Link ungültig oder abgelaufen.'})}await c.query('UPDATE ai_accounts SET password_hash=$2 WHERE id=$1',[t.account_id,await passwordHash(b.password)]);await c.query("UPDATE ai_auth_tokens SET used_at=now() WHERE account_id=$1 AND kind='reset'",[t.account_id]);await c.query('DELETE FROM ai_sessions WHERE account_id=$1',[t.account_id]);await c.query('COMMIT');return send(res,200,{message:'Passwort geändert. Bitte neu anmelden.'})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
   }
   if(p.startsWith('/api/ai/admin')){
    const admin=await platformActor(req);if(!admin)return send(res,403,{error:'Nur Plattformadministratoren haben Zugriff.'});
@@ -263,18 +267,18 @@ export async function handleAiPlatform(req,res){
  }catch(e){if(e.status)return send(res,e.status,{error:e.message});if(e instanceof InputError||/Menge|Nettopreis|Packungen|Bestellwert/.test(e.message))return send(res,400,{error:e.message});console.error('AI API error:',e.code||e.name);return send(res,500,{error:'Aktion fehlgeschlagen. Bitte erneut versuchen.'})}
 }
 
-setInterval(()=>{if(aiReady)syncPosSales()},15000).unref();
+setInterval(()=>{if(aiReady&&!isolatedPreview())syncPosSales()},15000).unref();
 
-setInterval(()=>{if(aiReady)collectionTick().catch(()=>console.error('AI collection worker unavailable'))},60000).unref();
+setInterval(()=>{if(aiReady&&!isolatedPreview())collectionTick().catch(()=>console.error('AI collection worker unavailable'))},60000).unref();
 
-setInterval(()=>{if(aiReady)monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
+setInterval(()=>{if(aiReady&&!isolatedPreview())monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
 
-setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
-
-
+setInterval(()=>{if(aiReady&&!isolatedPreview())forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
 
 
 
-setInterval(()=>{if(aiReady)syncPosKitchen()},3000).unref();
 
-setInterval(()=>{if(aiReady)automaticProcurementTick().catch(()=>console.error('AI automatic procurement unavailable'))},3600000).unref();
+
+setInterval(()=>{if(aiReady&&!isolatedPreview())syncPosKitchen()},3000).unref();
+
+setInterval(()=>{if(aiReady&&!isolatedPreview())automaticProcurementTick().catch(()=>console.error('AI automatic procurement unavailable'))},3600000).unref();

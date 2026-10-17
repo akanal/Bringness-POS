@@ -59,3 +59,10 @@ Fehler eines Kontos unterbrechen die übrigen Konten nicht; der nächste Durchla
 ## Validierung
 
 Embedded PostgreSQL prüft atomare Zählung einschließlich Änderung während der Inventur, Mandantentrennung, Arten/Einheiten und Vorher-/Nachherwerte, Bestandsuntergrenze, Duplikatschutz, alle sieben Hinweisarten, zurückgebuchten Verbrauch, normalisierte Packungspreise und tatsächliche Einkaufswerte. Ein Worker-Durchlauf verändert weder Bestellungen noch Provisionszahlungen. JSDOM prüft Restaurantablauf Inventur → Verderb → begründeter Hinweis/Kenntnisnahme → Monatsauswertung und die Admin-Lieferübersicht. Zahlungsanbieter und SMTP bleiben in der Gesamttestfolge simuliert.
+
+
+## Consumption history (development, 2026-10-16)
+
+Purchasing and monitor rules read the same `ai_consumption_events` view. Sales use the known original event time and retain import time as a separate audit field; legacy events without a source timestamp use their existing import time. Kitchen consumption and confirmed ingredient returns are included through their dedicated stock movement kinds. Sales-generated legacy stock moves, counts, supplier receipts and losses are not included a second time. Time windows exclude future events. Tenant scope comes from the stock/account relationship.
+
+Kitchen commands preserve their original server command time; offline kitchen reconciliation preserves the historical POS payment time. Direct API start/return actions may supply their own validated `occurredAt`. Known timestamps cannot change under the same request key. Legacy requests and moves retain their original import-time basis without silent backfill. The view is installed by the inventory migration after the recipe schema and stock-movement kind column exist. It changes analytics only; it does not rewrite stock, orders or historical audit entries.

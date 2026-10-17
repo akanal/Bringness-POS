@@ -1,4 +1,5 @@
 // Deliberately approximate, explainable forecasts; no external service or auto-order.
+// Forecast outputs are advisory and must never authorize automatic purchases.
 export function berlinClock(now=new Date()) {
  const parts=Object.fromEntries(new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
  return {date:`${parts.year}-${parts.month}-${parts.day}`,hour:Number(parts.hour)};
@@ -7,8 +8,10 @@ const dayNumber=date=>Date.parse(date+'T12:00:00Z')/86400000;
 const weekday=date=>new Date(date+'T12:00:00Z').getUTCDay();
 const median=values=>{const a=[...values].sort((x,y)=>x-y);return a.length?(a[Math.floor((a.length-1)/2)]+a[Math.ceil((a.length-1)/2)])/2:0};
 export function approximateDay(rows,clock=berlinClock()) {
- const daily=new Map();
- for(const row of rows){const date=String(row.day).slice(0,10);if(date>clock.date)continue;let d=daily.get(date);if(!d){d={date,orders:0,revenueCents:0,hours:[]};daily.set(date,d)}const hour=Number(row.hour),orders=Number(row.orders),revenue=Number(row.revenue_cents);d.orders+=orders;d.revenueCents+=revenue;d.hours.push({hour,orders,revenueCents:revenue});}
+ if(!clock||typeof clock.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(clock.date)||!Number.isInteger(clock.hour)||clock.hour<0||clock.hour>23)throw Error('Invalid forecast clock');
+ if(!Number.isFinite(Date.parse(clock.date+'T12:00:00Z'))||new Date(clock.date+'T12:00:00Z').toISOString().slice(0,10)!==clock.date)throw Error('Invalid forecast clock');
+ const daily=new Map(),invalidDays=new Set();
+ for(const row of Array.isArray(rows)?rows:[]){if(!row||typeof row.day!=='string')continue;const date=row.day;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T12:00:00Z'))||new Date(date+'T12:00:00Z').toISOString().slice(0,10)!==date||date>clock.date)continue;const h=row.hour,o=row.orders,v=row.revenue_cents;if(!Number.isInteger(h)||h<0||h>23||!Number.isSafeInteger(o)||o<0||!Number.isSafeInteger(v)||v<0||invalidDays.has(date))continue;let d=daily.get(date);if(!d){d={date,orders:0,revenueCents:0,hours:[]};daily.set(date,d)}const hour=Number(row.hour),orders=Number(row.orders),revenue=Number(row.revenue_cents);if(!Number.isSafeInteger(d.orders+orders)||!Number.isSafeInteger(d.revenueCents+revenue)){daily.delete(date);invalidDays.add(date);continue;}d.orders+=orders;d.revenueCents+=revenue;d.hours.push({hour,orders,revenueCents:revenue});}
  const past=[...daily.values()].filter(d=>d.date<clock.date).sort((a,b)=>b.date.localeCompare(a.date));
  const same=past.filter(d=>weekday(d.date)===weekday(clock.date));
  const recent=same.filter(d=>dayNumber(clock.date)-dayNumber(d.date)<=56).slice(0,8);
@@ -24,8 +27,8 @@ export function approximateDay(rows,clock=berlinClock()) {
  const completed=today.hours.filter(h=>h.hour<clock.hour).reduce((s,h)=>s+h.orders,0);
  const expectedCompleted=median(samples.map(d=>d.hours.filter(h=>h.hour<clock.hour).reduce((s,h)=>s+h.orders,0)));
  const progress=baseOrders?expectedCompleted/baseOrders:0;
- const pace=ready&&progress>=0.2&&expectedCompleted>0?Math.max(0.5,Math.min(2,completed/expectedCompleted)):1;
- const ratio=ready&&progress>=0.2?completed/expectedCompleted:null;
+ const pace=ready&&today.hours.some(h=>h.hour<clock.hour)&&progress>=0.2&&expectedCompleted>0?Math.max(0.5,Math.min(2,completed/expectedCompleted)):1;
+ const ratio=ready&&today.hours.some(h=>h.hour<clock.hour)&&progress>=0.2&&expectedCompleted>0?completed/expectedCompleted:null;
  const estimate=(base,current)=>Math.max(current,Math.round(base*pace));
  const orders=estimate(baseOrders,currentOrders),revenue=estimate(baseRevenue,currentRevenue);
  const band=(values,current,estimate)=>{const spread=median(values.map(v=>Math.abs(v-median(values))));const margin=Math.max(estimate*0.25,spread*1.5);return {low:Math.max(current,Math.floor(estimate-margin)),high:Math.max(current,Math.ceil(estimate+margin))}};

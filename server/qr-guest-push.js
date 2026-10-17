@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 import webpush from 'web-push';
 import {validateGuestSubscription} from './center-guest-push.js';
@@ -16,7 +17,7 @@ export function createQrGuestPush(pool,{env=process.env,sender=(sub,payload)=>we
       const url=new URL(req.url,'http://local'),p=url.pathname;
       if(p!=='/api/v1/guest/collection-push')return false;
       if(!['GET','POST'].includes(req.method))return reply(res,405,{error:'Methode nicht erlaubt'});
-      let b={};if(req.method==='POST'){let raw='';try{for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>8192)throw Error()}b=JSON.parse(raw)}catch{return reply(res,400,{error:'Ungültige Eingabe'})}}
+      let b={};if(req.method==='POST'){try{b=await readJsonObject(req,{maxBytes:8192});}catch(error){return reply(res,error.status===413?413:400,{error:'Ungültige oder zu große Eingabe'});}}
       const o=await order(b.orderId||url.searchParams.get('orderId'),b.requestId||url.searchParams.get('requestId'));if(!o)return reply(res,404,{error:'Abholbestellung nicht gefunden oder abgelaufen'});
       if(req.method==='GET')return reply(res,200,{publicKey:env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY?env.VAPID_PUBLIC_KEY:null});
       let sub;try{sub=validateGuestSubscription(b.subscription)}catch{return reply(res,400,{error:'Ungültiges Push-Abonnement'})}

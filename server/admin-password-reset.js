@@ -1,3 +1,5 @@
+import {legacyPasswordHash as passwordHash} from './secret-derivation.js';
+import {readJsonObject} from './http-body.js';
 import {clearLoginAttempts} from './auth-attempts.js';
 import {sendSmtpMail} from './smtp-mail.js';
 import {createMailProbe} from './ai-mail-health.js';
@@ -14,20 +16,12 @@ const pool=new pg.Pool({
 });
 const tokenPattern=/^[a-f0-9]{64}$/;
 const emailPattern=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const passwordHash=password=>crypto.scryptSync(password,process.env.PASSWORD_PEPPER||"bringness-pos",64).toString("hex");
 const hash=value=>crypto.createHash("sha256").update(value).digest("hex");
 function send(res,status,value){
   res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});
   res.end(JSON.stringify(value));
 }
-async function body(req){
-  let raw="";
-  for await(const chunk of req){
-    raw+=chunk;
-    if(raw.length>8192)throw Error("Anfrage zu groß");
-  }
-  return raw?JSON.parse(raw):{};
-}
+const body=req=>readJsonObject(req,{maxBytes:8192});
 function mailConfigured(){
   return Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
 }
@@ -63,13 +57,13 @@ export async function handleAdminPasswordReset(req,res){
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const current=String(input.currentPassword||""),next=String(input.newPassword||"");
     if(current.length>128||!validPassword(next)){send(res,400,{error:passwordMessage});return true}
-    const given=Buffer.from(passwordHash(current),"hex"),stored=Buffer.from(user.password_hash,"hex");
+    const given=Buffer.from(await passwordHash(current),"hex"),stored=Buffer.from(user.password_hash,"hex");
     if(given.length!==stored.length||!crypto.timingSafeEqual(given,stored)){send(res,403,{error:"Bisheriges Passwort ist falsch"});return true}
     if(current===next){send(res,400,{error:"Bitte ein anderes Passwort wählen"});return true}
     const client=await pool.connect();
     try{
       await client.query("BEGIN");
-      const updated=await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1 AND password_hash=$3",[user.id,passwordHash(next),user.password_hash]);
+      const updated=await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1 AND password_hash=$3",[user.id,await passwordHash(next),user.password_hash]);
       if(!updated.rowCount){await client.query("ROLLBACK");send(res,409,{error:"Passwort wurde inzwischen geändert. Bitte erneut anmelden."});return true}
       await client.query("DELETE FROM sessions WHERE user_id=$1",[user.id]);
       await client.query("DELETE FROM password_reset_tokens WHERE user_id=$1",[user.id]);
@@ -122,7 +116,7 @@ export async function handleAdminPasswordReset(req,res){
         FOR UPDATE OF pr, u
       `,[hash(token)])).rows[0];
       if(!row){await client.query("ROLLBACK");send(res,400,{error:"Reset-Link ist ungültig oder abgelaufen"});return true}
-      await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1",[row.user_id,passwordHash(password)]);
+      await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1",[row.user_id,await passwordHash(password)]);
       await client.query("UPDATE password_reset_tokens SET used_at=now() WHERE token_hash=$1",[row.token_hash]);
       await client.query("DELETE FROM password_reset_tokens WHERE user_id=$1 AND token_hash<>$2",[row.user_id,row.token_hash]);
       await client.query("DELETE FROM sessions WHERE user_id=$1",[row.user_id]);

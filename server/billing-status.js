@@ -21,7 +21,7 @@ async function currentUser(req){
   const q=await pool.query(`
     SELECT u.id,u.company_id,u.role
     FROM sessions s JOIN users u ON u.id=s.user_id
-    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'
+    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)
   `,[tokenHash]);
   return q.rows[0]||null;
 }
@@ -33,6 +33,8 @@ export async function handleBillingStatus(req,res){
 
   const user=await currentUser(req);
   if(!user){send(res,401,{error:"Nicht angemeldet"});return true}
+
+  if(!["owner","admin"].includes(user.role)){send(res,403,{error:"Abrechnungsdaten nur für die Betriebsverwaltung"});return true}
 
   const [plans,features,entitlements]=await Promise.all([
     pool.query(`SELECT bp.code,bp.name,bp.billing_type,bp.amount_cents,bp.currency,bp.active,
@@ -54,7 +56,7 @@ export async function handleBillingStatus(req,res){
 
   const download=entitlements.rows.some(row=>row.code==='download_license'&&row.status==='active');
   const baseEntitlement=entitlements.rows.some(row=>row.code==='pos_base_monthly'&&row.status==='active'&&(!row.current_period_end||new Date(row.current_period_end)>new Date()));
-  const policy=billingPolicy({baseAccess:activeFeature('pos_base'),base:baseEntitlement||(featureMap.get('pos_base')?.payment_status==='trial'&&activeFeature('pos_base')),restaurant:activeFeature('restaurant'),tableQr:activeFeature('table_qr'),download});
+  const policy=billingPolicy({baseAccess:activeFeature('pos_base'),base:baseEntitlement||(featureMap.get('pos_base')?.payment_status==='trial'&&activeFeature('pos_base')),restaurant:activeFeature('restaurant'),tableQr:activeFeature('table_qr'),tableManagement:activeFeature('table_management'),counterQr:activeFeature('counter_qr'),center:activeFeature('center'),personnel:activeFeature('personnel'),kitchen:activeFeature('kitchen'),legacyTableQr:activeFeature('table_qr')&&entitlements.rows.some(r=>r.code==='table_qr_monthly'&&r.purchased_at&&new Date(r.purchased_at)<new Date('2026-10-17T08:19:00Z')),download});
   const state={...policy.features,pos_base:policy.features.pos_base||activeFeature("pos_base")},dependencyState=policy.plans;
 
   const latestEntitlement=new Map();
@@ -64,7 +66,7 @@ export async function handleBillingStatus(req,res){
     features:state,
     downloadOnly:download&&!state.restaurant,
     featureRows:features.rows,
-    plans:plans.rows.map(plan=>{
+    plans:plans.rows.filter(plan=>plan.code!=='restaurant_monthly'||activeFeature('restaurant')).map(plan=>{
       const ent=latestEntitlement.get(plan.code)||null;
       const dependency=dependencyState[plan.code]||{eligible:true,requires:[]};
       const active=dependency.active;

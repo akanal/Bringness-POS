@@ -130,7 +130,7 @@ export async function markTransactionStarted(pool,id,{tseTransactionNumber,start
   const q=await pool.query(`
     UPDATE tse_transactions SET
       state='started',tse_transaction_number=COALESCE($2,tse_transaction_number),started_at=$3,updated_at=now()
-    WHERE id=$1 RETURNING *
+    WHERE id=$1 AND state='starting' RETURNING *
   `,[id,tseTransactionNumber ?? null,startedAt]);
   return q.rows[0] ?? null;
 }
@@ -150,7 +150,7 @@ export async function markTransactionSigned(pool,id,result={}){
       error_code=NULL,
       error_message=NULL,
       updated_at=now()
-    WHERE id=$1 RETURNING *
+    WHERE id=$1 AND state='finishing' RETURNING *
   `,[
     id,
     result.transactionNumber ?? null,
@@ -169,7 +169,7 @@ export async function markTransactionFailed(pool,id,error={}){
   const q=await pool.query(`
     UPDATE tse_transactions SET
       state='failed',error_code=$2,error_message=$3,updated_at=now()
-    WHERE id=$1 RETURNING *
+    WHERE id=$1 AND state NOT IN ('signed','needs_review') RETURNING *
   `,[id,String(error.code ?? "TSE_ERROR"),String(error.message ?? "TSE-Fehler")]);
   return q.rows[0] ?? null;
 }

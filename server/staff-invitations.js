@@ -1,3 +1,5 @@
+import {legacyPasswordHash as pass} from './secret-derivation.js';
+import {readJsonObject} from './http-body.js';
 import {accessMail} from './mail-templates.js';
 import {createStaffLifecycle} from './staff-lifecycle.js';
 import {enqueueMail} from './transactional-mail.js';
@@ -6,9 +8,8 @@ import pg from 'pg';
 
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==='production'?{rejectUnauthorized:false}:false});
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
-const pass=x=>crypto.scryptSync(x,process.env.PASSWORD_PEPPER||'bringness-pos',64).toString('hex');
 const reply=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
-async function input(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192)throw Error('Anfrage zu groß')}return raw?JSON.parse(raw):{}}
+const input=req=>readJsonObject(req,{maxBytes:8192});
 const configured=()=>Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
 
 export async function migrateStaffInvitations(){await pool.query(`CREATE TABLE IF NOT EXISTS staff_invitations(token_hash text PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at timestamptz NOT NULL,used_at timestamptz,created_at timestamptz NOT NULL DEFAULT now()); CREATE INDEX IF NOT EXISTS staff_invitations_user_idx ON staff_invitations(user_id);`)}
@@ -34,7 +35,7 @@ export async function handleStaffInvitations(req,res){
     await c.query('BEGIN');
     const r=await c.query("SELECT name FROM restaurants WHERE id=$1 AND company_id=$2 AND mode='restaurant'",[restaurantId,actor.company_id]);
     if(!r.rowCount){await c.query('ROLLBACK');return reply(res,404,{error:'Restaurant nicht gefunden'})}
-    const user=(await c.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role,must_change_password) VALUES($1,$2,$3,$4,'pending','waiter',true) RETURNING id",[actor.company_id,email,pass(pin),name])).rows[0];
+    const user=(await c.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role,must_change_password) VALUES($1,$2,$3,$4,'pending','waiter',true) RETURNING id",[actor.company_id,email,await pass(pin),name])).rows[0];
     const employee=(await c.query("INSERT INTO employees(restaurant_id,display_name,role,active,user_id) VALUES($1,$2,'waiter',true,$3) RETURNING id,display_name,active",[restaurantId,name,user.id])).rows[0];
     await c.query("INSERT INTO staff_invitations(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '48 hours')",[sha(token),user.id]);
     await enqueueMail(c,'staff:'+user.id,email,{expiresAt:new Date(Date.now()+48*3600000).toISOString(),...accessMail('invitation',{restaurant:r.rows[0].name,link:origin+'/service/#activate='+token})});

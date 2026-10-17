@@ -1134,6 +1134,11 @@
             "items": {
               "$ref": "#/components/schemas/SaleItem"
             }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optionaler ursprünglicher Ereigniszeitpunkt mit Zeitzone. Nicht mehr als 60 Sekunden in der Zukunft. Ohne Angabe bleibt die Importzeit die historische Grundlage. Ein gespeicherter Quellzeitpunkt darf bei Wiederholung nicht geändert werden."
           }
         }
       },
@@ -1160,6 +1165,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 150
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optionaler ursprünglicher Ereigniszeitpunkt mit Zeitzone. Nicht mehr als 60 Sekunden in der Zukunft. Ohne Angabe bleibt die Importzeit die historische Grundlage. Ein gespeicherter Quellzeitpunkt darf bei Wiederholung nicht geändert werden."
           }
         }
       },
@@ -1243,6 +1253,11 @@
                 }
               }
             }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optionaler ursprünglicher Zeitpunkt dieser Lageraktion mit Zeitzone. Bei Start/Rückbuchung als Quellzeit der Lagerbewegung gespeichert; keine Änderung bereits gebuchter Ereignisse durch Wiederholung."
           }
         }
       }

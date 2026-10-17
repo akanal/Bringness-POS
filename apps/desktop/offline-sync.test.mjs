@@ -1,38 +1,292 @@
-import {test} from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createOfflineSync} from './offline-sync.mjs';
-function fixture(count=1){
- const sales=Array.from({length:count},(_,id)=>({id,request:{id}})),accepted=[],errors=[];
- const ledger={pending:async()=>sales.slice(0,100),acknowledge:async(id)=>{accepted.push(id);sales.splice(sales.findIndex(s=>s.id===id),1)},error:async(id,message)=>errors.push({id,message}),catalog:async()=>{}};
- return {ledger,sales,accepted,errors};
+
+function fixture(ids,{reply,failAck}={}){
+ const pending=new Map(ids.map(id=>[id,{id,request:{id,snapshotId:'catalog-id',restaurantId:'restaurant-default'}}]));
+ const calls=[],errors=[];
+ const ledger={
+  pendingCount:async()=>pending.size,
+  pending:async(excluded=[])=>[...pending.values()].filter(s=>!excluded.includes(s.id)).slice(0,100),
+  acknowledge:async(id,receipt)=>{if(failAck===id)throw Error('disk unavailable');assert.equal(receipt.id,'cloud-'+id);pending.delete(id);},
+  error:async(id,message)=>{errors.push([id,message]);},
+  catalog:async()=>{}
+ };
+ const connect=async()=>async(type,payload)=>{
+  if(type==='catalog')return {snapshot:{id:'catalog-id',validUntil:new Date(Date.now()+60000).toISOString()}};
+  calls.push(payload.sales.map(s=>s.id));
+  return reply?reply(payload.sales):{results:payload.sales.map(s=>({offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id}))};
+ };
+ return {ledger,connect,pending,calls,errors};
 }
-test('all batches are drained before catalog refresh',async()=>{
- const f=fixture(205),events=[];
- const c=createOfflineSync({ledger:f.ledger,connect:async()=>async(endpoint)=>{events.push(endpoint);return {snapshot:{}}}});
- assert.equal((await c.sync()).state,'success');assert.equal(f.accepted.length,205);assert.equal(events.at(-1),'catalog');assert.equal(f.sales.length,0);
+
+test('drains more than 100 sales without resending a sale in the same run',async()=>{
+ const f=fixture(Array.from({length:125},(_,i)=>'sale-'+i));
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'success');
+ assert.equal(f.pending.size,0);
+ assert.equal(f.calls.flat().length,125);
+ assert.equal(new Set(f.calls.flat()).size,125);
+ assert.ok(f.calls.every(batch=>batch.length<=20));
 });
-test('failed sale stays pending; retry never resends acknowledged sales',async()=>{
- const f=fixture(3);let failing=true;const sent=[];
- const c=createOfflineSync({ledger:f.ledger,connect:async()=>async(endpoint,body)=>{if(endpoint==='sales'){sent.push(body.sale.id);if(failing&&body.sale.id===1)throw Error('Verbindung unterbrochen');}return {snapshot:{}}}});
- assert.equal((await c.sync()).state,'error');assert.deepEqual(f.accepted,[0]);assert.deepEqual(f.sales.map(s=>s.id),[1,2]);assert.equal(f.errors[0].id,1);
- failing=false;assert.equal((await c.sync(true)).state,'success');assert.deepEqual(sent,[0,1,1,2]);
+
+test('a rejected sale remains pending and is not resent during the same run',async()=>{
+ const f=fixture(['a','b','c'],{reply:sales=>({results:sales.map(s=>s.id==='a'?{offlineId:s.id,ok:false,error:'rejected'}:{offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id})})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['a']);
+ assert.equal(f.calls.flat().filter(id=>id==='a').length,1);
+ assert.equal(f.errors.length,1);
 });
-test('concurrent manual and automatic runs share one transfer',async()=>{
- const f=fixture();let release;const gate=new Promise(r=>release=r);let connects=0;
- const c=createOfflineSync({ledger:f.ledger,connect:async()=>{connects++;await gate;return async()=>({snapshot:{}})}});
- const a=c.sync(),b=c.sync(true);assert.equal(a,b);release();await a;assert.equal(connects,1);assert.deepEqual(f.accepted,[0]);
+
+test('failed local acknowledgement leaves sale queued for a later run',async()=>{
+ const f=fixture(['a','b'],{failAck:'a'});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['a']);
+ assert.equal(f.calls.flat().filter(id=>id==='a').length,1);
 });
-test('no login preserves sales and reports actionable status',async()=>{
- const f=fixture();const c=createOfflineSync({ledger:f.ledger,connect:async()=>null});
- assert.equal((await c.sync()).state,'login');assert.equal(f.sales.length,1);assert.equal(c.status().lastSuccess,null);
+
+test('ambiguous server IDs never acknowledge sales',async()=>{
+ const f=fixture(['a','b'],{reply:()=>({results:[{offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a'},{offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a'}]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.pending.size,2);
 });
-test('manual refresh renews catalog even within automatic refresh interval',async()=>{
- const f=fixture(0);let catalogs=0;
- const c=createOfflineSync({ledger:f.ledger,now:()=>1000,connect:async()=>async()=>{catalogs++;return {snapshot:{}}}});
- await c.sync();await c.sync();assert.equal(catalogs,1);await c.sync(true);assert.equal(catalogs,2);
+
+test('lost server response preserves pending sales',async()=>{
+ const f=fixture(['a'],{reply:()=>{throw Error('connection lost')}});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.pending.size,1);
 });
-test('catalog failure cannot report successful synchronization',async()=>{
- const f=fixture();f.ledger.catalog=async()=>{throw Error('Ursprünglichen Betrieb anmelden')};
- const c=createOfflineSync({ledger:f.ledger,connect:async()=>async()=>({snapshot:{}})});
- const status=await c.sync();assert.equal(status.state,'error');assert.equal(status.lastSuccess,null);assert.equal(f.sales.length,0);
+
+test('concurrent synchronization requests share one in-flight operation',async()=>{
+ const f=fixture(['a']);let release;const gate=new Promise(resolve=>{release=resolve});let connects=0;
+ const sync=createOfflineSync({...f,connect:async()=>{connects++;await gate;return f.connect()}});
+ const first=sync.sync(),second=sync.sync(true);
+ assert.equal(first,second);release();await first;
+ assert.equal(connects,1);
+ assert.equal(f.pending.size,0);
+});
+
+test('missing login preserves all pending sales',async()=>{
+ const f=fixture(['a']);
+ const status=await createOfflineSync({...f,connect:async()=>null}).sync();
+ assert.equal(status.state,'login');
+ assert.equal(f.pending.size,1);
+});
+
+test('invalid success receipt remains pending for review',async()=>{
+ const f=fixture(['a'],{reply:()=>({results:[{offlineId:'a',ok:true,id:'cloud-a'}]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.equal(f.pending.size,1);
+ assert.equal(f.errors.length,1);
+});
+
+test('out-of-order valid acknowledgements match by offline ID',async()=>{
+ const f=fixture(['a','b'],{reply:sales=>({results:sales.map(s=>({offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id})).reverse()})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'success');
+ assert.equal(f.pending.size,0);
+});
+
+test('unknown server acknowledgement ID leaves the entire batch pending',async()=>{
+ const f=fixture(['a'],{reply:()=>({results:[{offlineId:'foreign',ok:true,id:'cloud-a',receiptNumber:'R-a'}]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.pending.size,1);
+});
+
+test('rejected early sale does not block later pages of the queue',async()=>{
+ const ids=Array.from({length:140},(_,i)=>'sale-'+i);
+ const f=fixture(ids,{reply:sales=>({results:sales.map(s=>s.id==='sale-0'?{offlineId:s.id,ok:false,error:'review'}:{offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id})})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['sale-0']);
+ assert.equal(f.calls.flat().length,140);
+ assert.equal(new Set(f.calls.flat()).size,140);
+});
+
+test('catalog refresh failure never reports overall success',async()=>{
+ const f=fixture([]);
+ f.ledger.catalog=async()=>{throw Error('catalog storage failure')};
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.match(status.message,/Katalogaktualisierung fehlgeschlagen/);
+});
+
+test('cloud receipt reused for another sale cannot acknowledge that sale',async()=>{
+ const f=fixture(['a','b'],{reply:()=>({results:[
+  {offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a'},
+  {offlineId:'b',ok:true,id:'cloud-a',receiptNumber:'R-b'}
+ ]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['a','b']);
+ assert.equal(f.errors.length,1);
+});
+
+test('duplicate offline IDs in a single page are never transmitted',async()=>{
+ const f=fixture(['a']);
+ f.ledger.pending=async()=>[
+  {id:'a',request:{id:'a',snapshotId:'catalog-id',restaurantId:'restaurant-default'}},
+  {id:'a',request:{id:'a',snapshotId:'catalog-id',restaurantId:'restaurant-default'}}
+ ];
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.calls.length,0);
+ assert.equal(f.pending.size,1);
+});
+
+test('same cloud receipt number for distinct sales is rejected',async()=>{
+ const f=fixture(['a','b'],{reply:()=>({results:[
+  {offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-shared'},
+  {offlineId:'b',ok:true,id:'cloud-b',receiptNumber:'R-shared'}
+ ]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['a','b']);
+ assert.equal(f.errors.length,1);
+});
+
+test('duplicate cloud receipt number in later batch remains pending',async()=>{
+ const ids=Array.from({length:21},(_,i)=>'sale-'+i);
+ const f=fixture(ids,{reply:sales=>({results:sales.map(s=>({
+  offlineId:s.id,ok:true,id:'cloud-'+s.id,
+  receiptNumber:s.id==='sale-20'?'R-sale-0':'R-'+s.id
+ }))})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.deepEqual([...f.pending.keys()],['sale-20']);
+ assert.equal(f.calls.length,2);
+});
+
+test('different restaurants may legitimately use the same receipt number',async()=>{
+ const f=fixture(['a','b'],{reply:sales=>({results:sales.map(s=>({
+  offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-1'
+ }))})});
+ f.pending.get('a').request.restaurantId='restaurant-a';
+ f.pending.get('b').request.restaurantId='restaurant-b';
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'success');
+ assert.equal(f.pending.size,0);
+});
+
+test('missing restaurant identity stops transmission before network call',async()=>{
+ const f=fixture(['a']);
+ delete f.pending.get('a').request.restaurantId;
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.calls.length,0);
+ assert.equal(f.pending.size,1);
+});
+
+test('rejected sale can be retried with same ID in a later sync run',async()=>{
+ let reject=true;
+ const f=fixture(['a'],{reply:sales=>({results:sales.map(s=>reject
+  ?{offlineId:s.id,ok:false,error:'temporary'}
+  :{offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id})})});
+ const sync=createOfflineSync(f);
+ assert.equal((await sync.sync()).state,'warning');
+ assert.equal(f.pending.size,1);
+ reject=false;
+ assert.equal((await sync.sync()).state,'success');
+ assert.equal(f.pending.size,0);
+ assert.deepEqual(f.calls,[['a'],['a']]);
+});
+
+test('nonboolean replay flags never acknowledge a sale',async()=>{
+ const f=fixture(['a'],{reply:()=>({results:[{
+  offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a',replayed:'true'
+ }]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.equal(f.pending.size,1);
+ assert.equal(f.errors.length,1);
+});
+
+
+test('closing the UI during synchronization cannot abort sale acknowledgement or recovery',async()=>{
+ const f=fixture(['a','b']);let notifications=0;
+ const sync=createOfflineSync({...f,notify:()=>{notifications++;throw Error('webContents destroyed');}});
+ const result=await sync.sync();
+ assert.equal(result.state,'success');
+ assert.equal(f.pending.size,0);
+ assert.deepEqual(f.calls,[['a','b']]);
+ assert.ok(notifications>1);
+ const retry=await sync.sync(true);
+ assert.equal(retry.state,'success');
+ assert.equal(f.calls.length,1);
+});
+
+test('a malformed batch response never drops local sales',async()=>{
+ const f=fixture(['a','b'],{reply:()=>({results:[{offlineId:'a',ok:true,id:'cloud-a',receiptNumber:'R-a'}]})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'error');
+ assert.equal(f.pending.size,2);
+ assert.equal(f.calls.length,1);
+});
+
+test('offline catalog is not replaced when a device-bound ledger rejects it',async()=>{
+ const f=fixture([]);
+ let rejected=0;
+ f.ledger.catalog=async()=>{rejected++;throw Error('Offline-Katalog gehört nicht zu diesem Gerät.')};
+ const status=await createOfflineSync(f).sync(true);
+ assert.equal(rejected,1);
+ assert.equal(status.state,'warning');
+ assert.match(status.message,/Katalogaktualisierung fehlgeschlagen/);
+});
+
+test('lost server response is retried after reconnect',async()=>{
+ let lost=true;
+ const f=fixture(['a'],{reply:sales=>{
+  if(lost)throw Error('network unavailable');
+  return {results:sales.map(s=>({offlineId:s.id,ok:true,id:'cloud-'+s.id,receiptNumber:'R-'+s.id,replayed:true}))};
+ }});
+ const sync=createOfflineSync(f);
+ assert.equal((await sync.sync()).state,'error');
+ assert.equal(f.pending.size,1);
+ lost=false;
+ assert.equal((await sync.sync()).state,'success');
+ assert.equal(f.pending.size,0);
+ assert.deepEqual(f.calls,[['a'],['a']]);
+});
+
+test('concurrent sync calls share one upload and acknowledge once',async()=>{
+ const f=fixture(['a']);
+ let release;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const original=f.connect;
+ let requests=0;
+ let uploadStarted;
+ const started=new Promise(resolve=>{uploadStarted=resolve;});
+ f.connect=async()=>{
+  const request=await original();
+  return async(type,payload)=>{
+   if(type==='batch'){requests++;uploadStarted();await gate;}
+   return request(type,payload);
+  };
+ };
+ const coordinator=createOfflineSync(f);
+ const first=coordinator.sync();
+ const second=coordinator.sync(true);
+ assert.equal(first,second);
+ await started;
+ release();
+ const [a,b]=await Promise.all([first,second]);
+ assert.equal(a.state,'success');
+ assert.equal(b.state,'success');
+ assert.equal(requests,1);
+ assert.equal(f.pending.size,0);
+});
+
+test('server confirmation with duplicate receipt identity leaves unresolved sale pending',async()=>{
+ const f=fixture(['a','b'],{reply:sales=>({results:sales.map(s=>({offlineId:s.id,ok:true,id:'cloud-shared',receiptNumber:'R-shared'}))})});
+ const status=await createOfflineSync(f).sync();
+ assert.equal(status.state,'warning');
+ assert.equal(f.pending.size,2);
+ assert.equal(f.errors.length,1);
+ assert.equal(f.calls.length,1);
 });

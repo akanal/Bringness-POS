@@ -1,3 +1,6 @@
+import {clientInputError} from './http-body.js';
+import {isolatedPreview,assertPreviewEntrypoint} from './preview-policy.js';
+import {createTableSettlement,migrateTableSettlement} from './table-settlement.js';
 import {migrateBillingMail,createBillingMail} from './billing-mail.js';
 import {createDutyPlanning,migrateDutyPlanning} from './duty-planning.js';
 import {createWaiterDelivery,migrateWaiterDelivery} from './waiter-push-delivery.js';
@@ -20,6 +23,7 @@ import fs from "node:fs";
 import {handleCenter,migrateCenter} from "./center.js";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
+assertPreviewEntrypoint();
 const appMode = runtimeMode();
 configurePosOrigin(process.env, appMode);
 const aiFeatures = await loadAiFeatures(appMode);
@@ -27,7 +31,7 @@ import { Readable } from "node:stream";
 import http from "node:http";
 import pg from "pg";
 import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./restaurant-owner-features.js";
-import { handlePaymentCheckout } from "./payment-checkout.js";
+import { handlePaymentCheckout, migratePaymentCheckout } from "./payment-checkout.js";
 import { handlePaymentReceipt } from "./payment-receipt.js";
 import { handlePublicReceipt, migratePublicReceipts } from "./public-receipt.js";
 import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
@@ -58,6 +62,7 @@ const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
+const handleTableSettlement=createTableSettlement(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
@@ -114,12 +119,15 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleBillingStatus(req,res)) return;
       if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
+      if (await handleTableSettlement(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
       if (await handlePublicReceipt(req,res)) return;
       if (await handleRestaurantOwnerFeature(req,res)) return;
     } catch (error) {
-      console.error("Modular feature error:", error);
+      const inputError=clientInputError(error);
+      if(inputError&&!res.headersSent){res.writeHead(inputError.status,{'content-type':'application/json','cache-control':'no-store',...(inputError.status===413?{connection:'close'}:{})});return res.end(JSON.stringify({error:inputError.error}));}
+      console.error("Modular feature error:", error.code||error.name);
       if (!res.headersSent && error.code==='P0001') {res.writeHead(409,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({error:error.message}))}
       if (!res.headersSent) {
         res.writeHead(500, {"content-type":"application/json","cache-control":"no-store"});
@@ -141,7 +149,8 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (!normalized.includes('/ai') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
-        if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js"></script></body>');
+        if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=checkout-recovery-20261017"></script></body>');
+        if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js?v=checkout-recovery-20261017"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
@@ -200,9 +209,11 @@ async function migrateWithRetry(){
       await migrateAccountantAccess();
       await migrateBillingTerms();
       await migrateTransactionalMail(platformGatewayPool);
+      await migratePaymentCheckout(platformGatewayPool);
+      await migrateTableSettlement(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
-      if(appMode!=='ai'){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
+      if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
       if (aiFeatures) await aiFeatures.migrateAiPlatform();
       const pricingPool = new pg.Pool({
@@ -224,7 +235,7 @@ async function migrateWithRetry(){
   }
 }
 migrateWithRetry().then(()=>{
- if(appMode!=='ai'){const deliver=createWaiterDelivery(platformGatewayPool);setInterval(()=>deliver().catch(()=>console.error('Waiter delivery unavailable')),3000).unref();const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
+ if(appMode!=='ai'&&!isolatedPreview()){const deliver=createWaiterDelivery(platformGatewayPool);setInterval(()=>deliver().catch(()=>console.error('Waiter delivery unavailable')),3000).unref();const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
 });
 
 const availabilityPool = new pg.Pool({

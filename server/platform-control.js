@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from "node:crypto";
 import pg from "pg";
 
@@ -10,14 +11,7 @@ function send(res,status,data){
   res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});
   res.end(JSON.stringify(data));
 }
-async function readBody(req){
-  let raw="";
-  for await(const chunk of req){
-    raw+=chunk;
-    if(raw.length>16384)throw Error("Anfrage zu groß");
-  }
-  return raw?JSON.parse(raw):{};
-}
+const readBody=req=>readJsonObject(req,{maxBytes:16384});
 async function platformUser(req){
   const token=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
   if(!token)return null;

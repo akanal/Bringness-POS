@@ -1,17 +1,19 @@
+import {lockAiRestaurant} from './ai-write-authorization.js';
 import {Worker} from 'node:worker_threads';
 import {aiPool} from './ai-database.js';
-import {documentBytes,textDraft,receiptLines,reject,normalizeName,suggestDelivery} from './ai-delivery-core.js';
+import {documentBytes,textDraft,receiptLines,deliveryPriceLines,reject,normalizeName,suggestDelivery} from './ai-delivery-core.js';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let busy=false;
-export async function recognizeDocument(bytes,mime){
- if(busy)reject('Eine Dokumenterkennung läuft bereits. Bitte gleich erneut versuchen.',429);busy=true;
+export async function recognizeDocument(bytes,mime,{WorkerClass=Worker,timeoutMs=90000}={}){
+ if(busy)reject('Eine Dokumenterkennung läuft bereits. Bitte gleich erneut versuchen.',429);busy=true;let w;
  try{return await new Promise((resolve,rejectPromise)=>{
-  const w=new Worker(new URL('./ai-delivery-worker.js',import.meta.url),{execArgv:[],workerData:{bytes,mime},resourceLimits:{maxOldGenerationSizeMb:384}});
-  const timer=setTimeout(()=>{w.terminate();rejectPromise(Object.assign(new Error('Die Erkennung dauert zu lange. Bitte erneut versuchen oder manuell erfassen.'),{status:422}));},90000);
-  w.once('message',r=>{clearTimeout(timer);w.terminate();r.error?rejectPromise(Object.assign(new Error(r.error),{status:422})):resolve(textDraft(r.text,r.confidence));});
-  w.once('error',()=>{clearTimeout(timer);rejectPromise(Object.assign(new Error('Dokumenterkennung derzeit nicht verfügbar'),{status:503}));});
-  w.once('exit',code=>{clearTimeout(timer);if(code!==0)rejectPromise(Object.assign(new Error('Dokumenterkennung wurde beendet. Bitte erneut versuchen.'),{status:503}));});
- });}finally{busy=false;}
+  let settled=false;const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);error?rejectPromise(error):resolve(value);};
+  const unavailable=()=>Object.assign(Error('Dokumenterkennung wurde beendet. Bitte erneut versuchen.'),{status:503});
+  const timer=setTimeout(()=>finish(Object.assign(Error('Die Erkennung dauert zu lange. Bitte erneut versuchen oder manuell erfassen.'),{status:422})),timeoutMs);
+  try{w=new WorkerClass(new URL('./ai-delivery-worker.js',import.meta.url),{execArgv:[],workerData:{bytes,mime},resourceLimits:{maxOldGenerationSizeMb:384}});}catch{finish(unavailable());return;}
+  w.once('message',r=>{if(!r||typeof r!=='object'||typeof r.text!=='string'&&!r.error){finish(unavailable());return;}if(r.error){finish(Object.assign(Error(String(r.error).slice(0,300)),{status:422}));return;}try{finish(null,textDraft(r.text,r.confidence));}catch{finish(unavailable());}});
+  w.once('error',()=>finish(unavailable()));w.once('exit',()=>{if(!settled)finish(unavailable());});
+ });}finally{try{await w?.terminate();}catch{}busy=false;}
 }
 export const deliveryMigration=`
 CREATE TABLE IF NOT EXISTS ai_delivery_notes(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),location_id uuid NOT NULL REFERENCES ai_locations(id),document_hash text NOT NULL,document_mime text NOT NULL,document_data bytea NOT NULL,filename text NOT NULL,extraction jsonb NOT NULL,supplier text NOT NULL DEFAULT '',reference text NOT NULL DEFAULT '',delivery_date date,status text NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','confirmed')),confirmed_at timestamptz,confirmation jsonb,created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(account_id,document_hash));
@@ -31,12 +33,13 @@ export async function confirmNote(pool,b,u){
  const lines=receiptLines(b.lines),supplier=label(b.supplier,200),reference=label(b.reference,100);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.deliveryDate))||!Number.isFinite(Date.parse(b.deliveryDate))||new Date(b.deliveryDate).toISOString().slice(0,10)!==b.deliveryDate)reject('Lieferdatum prüfen');
  const confirmation={lines,supplier,reference,deliveryDate:b.deliveryDate};const c=await pool.connect();
- try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);
+ try{await c.query('BEGIN');await lockAiRestaurant(c,u.id);
   const note=(await c.query('SELECT * FROM ai_delivery_notes WHERE id=$1 AND account_id=$2 FOR UPDATE',[b.id,u.id])).rows[0];if(!note)reject('Lieferschein nicht gefunden',404);
   if(note.supplier_order_id)reject('Dieser Lieferschein gehört zu einer Bringness-Bestellung. Wareneingang ausschließlich am Auftrag bestätigen.',409);
   if(note.status==='confirmed'){if(JSON.stringify(note.confirmation)!==JSON.stringify(confirmation)&&JSON.stringify(normalize(note.confirmation))!==JSON.stringify(normalize(confirmation)))reject('Bereits mit anderen Angaben gebucht',409);await c.query('COMMIT');return {ok:true,duplicate:true};}
   if((await c.query("SELECT id FROM ai_delivery_notes WHERE account_id=$1 AND lower(supplier)=lower($2) AND lower(reference)=lower($3) AND (status='confirmed' OR supplier_order_id IS NOT NULL)",[u.id,supplier,reference])).rowCount)reject('Dieser Lieferschein wurde bereits gebucht oder einem Auftrag zugeordnet',409);
-  for(const line of [...lines].sort((a,b)=>a.stockId.localeCompare(b.stockId))){const stock=(await c.query('SELECT * FROM ai_stock WHERE id=$1 AND account_id=$2 AND location_id=$3 FOR UPDATE',[line.stockId,u.id,note.location_id])).rows[0];if(!stock||stock.unit!==line.unit)reject('Artikel oder Einheit passt nicht zum eigenen Standort',409);if(Number(stock.quantity)+line.quantity>999999999999)reject('Bestand ist zu groß');}
+  const totals=new Map();
+  for(const line of [...lines].sort((a,b)=>a.stockId.localeCompare(b.stockId))){const stock=(await c.query('SELECT * FROM ai_stock WHERE id=$1 AND account_id=$2 AND location_id=$3 FOR UPDATE',[line.stockId,u.id,note.location_id])).rows[0];if(!stock||stock.unit!==line.unit)reject('Artikel oder Einheit passt nicht zum eigenen Standort',409);const total=(totals.get(line.stockId.toLowerCase())||0)+Math.round(line.quantity*1000);totals.set(line.stockId.toLowerCase(),total);if(!Number.isSafeInteger(total)||Math.round(Number(stock.quantity)*1000)+total>999999999999000)reject('Bestand ist zu groß');}
   for(const line of lines){await c.query('UPDATE ai_stock SET quantity=quantity+$2 WHERE id=$1',[line.stockId,line.quantity]);await c.query('INSERT INTO ai_stock_moves(stock_id,actor_id,delta,reason) VALUES($1,$2,$3,$4)',[line.stockId,u.id,line.quantity,`Lieferschein ${reference} · ${supplier} · ${note.id}`]);await c.query('INSERT INTO ai_delivery_note_lines(note_id,stock_id,unit,quantity,pack_quantity,net_cents) VALUES($1,$2,$3,$4,$5,$6)',[note.id,line.stockId,line.unit,line.quantity,line.packQuantity,line.netCents]);}
   const learnable=new Map();for(const line of lines){const source=textDraft(note.extraction.text,note.extraction.confidence).lines?.[line.sourceIndex];if(!source||source.header)continue;const key=normalizeName(source.description);if(!key)continue;const previous=learnable.get(key);learnable.set(key,previous&&previous.stockId!==line.stockId?{ambiguous:true}:line);}
   for(const [sourceKey,line] of learnable){if(line.ambiguous)continue;await c.query('INSERT INTO ai_delivery_mappings(account_id,location_id,supplier_key,supplier_name,source_key,stock_id,pack_quantity) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,location_id,supplier_key,source_key) DO UPDATE SET supplier_name=excluded.supplier_name,stock_id=excluded.stock_id,pack_quantity=excluded.pack_quantity,updated_at=now()',[u.id,note.location_id,normalizeName(supplier),supplier,sourceKey,line.stockId,line.packQuantity]);}
@@ -48,7 +51,7 @@ function normalize(x){if(Array.isArray(x))return x.map(normalize);if(x&&typeof x
 export async function linkNote(pool,b,u){
  if(!uuid.test(String(b.id))||!uuid.test(String(b.groupId))||b.confirmed!==true)reject('Lieferschein und eigenen Auftrag ausdrücklich zuordnen');
  const reference=label(b.reference,100);if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.deliveryDate))||!Number.isFinite(Date.parse(b.deliveryDate))||new Date(b.deliveryDate).toISOString().slice(0,10)!==b.deliveryDate)reject('Lieferdatum prüfen');
- const c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);
+ const c=await pool.connect();try{await c.query('BEGIN');await lockAiRestaurant(c,u.id);await lockAiRestaurant(c,u.id);
   const orders=(await c.query('SELECT o.*,st.location_id FROM ai_orders o JOIN ai_stock st ON st.id=o.stock_id WHERE coalesce(o.supplier_order_id,o.id)=$1 ORDER BY o.id FOR UPDATE OF o',[b.groupId])).rows;
   if(!orders.length||orders.some(o=>o.buyer_id!==u.id))reject('Eigener Auftrag nicht gefunden',404);
   const n=(await c.query('SELECT * FROM ai_delivery_notes WHERE id=$1 AND account_id=$2 FOR UPDATE',[b.id,u.id])).rows[0];if(!n)reject('Lieferschein nicht gefunden',404);
@@ -81,8 +84,8 @@ export async function deliveryRoutes(path,method,b,u){
  if(path==='/api/ai/delivery-notes/link'&&method==='POST')return linkNote(pool,b,u);
  if(path==='/api/ai/delivery-notes/prices'&&method==='POST'){
   if(!uuid.test(String(b.id))||b.confirmed!==true||!Array.isArray(b.lines)||!b.lines.length||b.lines.length>100)reject('Geprüfte Rechnungspreise bestätigen');
-  const c=await pool.connect();try{await c.query('BEGIN');const note=(await c.query("SELECT id,supplier_order_id FROM ai_delivery_notes WHERE id=$1 AND account_id=$2 AND status='confirmed' FOR UPDATE",[b.id,u.id])).rows[0];if(!note)reject('Gebuchter eigener Lieferschein nicht gefunden',404);if(note.supplier_order_id)reject('Preise verknüpfter Lieferungen stammen aus dem bestätigten Auftrag.',409);
-   for(const line of b.lines){if(!Number.isSafeInteger(Number(line.id))||!Number.isSafeInteger(line.netCents)||line.netCents<0||line.netCents>100000000)reject('Positionspreis prüfen');const old=(await c.query('SELECT net_cents FROM ai_delivery_note_lines WHERE id=$1 AND note_id=$2 FOR UPDATE',[line.id,note.id])).rows[0];if(!old)reject('Position nicht gefunden',404);await c.query('UPDATE ai_delivery_note_lines SET net_cents=$2 WHERE id=$1',[line.id,line.netCents]);await c.query("INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$2,'delivery_note_price_confirmed',$3)",[u.id,note.id,JSON.stringify({lineId:line.id,before:old.net_cents,netCents:line.netCents})]);}await c.query('COMMIT');return {ok:true};
+  const priceLines=deliveryPriceLines(b.lines),c=await pool.connect();try{await c.query('BEGIN');await lockAiRestaurant(c,u.id);const note=(await c.query("SELECT id,supplier_order_id FROM ai_delivery_notes WHERE id=$1 AND account_id=$2 AND status='confirmed' FOR UPDATE",[b.id,u.id])).rows[0];if(!note)reject('Gebuchter eigener Lieferschein nicht gefunden',404);if(note.supplier_order_id)reject('Preise verknüpfter Lieferungen stammen aus dem bestätigten Auftrag.',409);
+   for(const line of priceLines){if(!Number.isSafeInteger(Number(line.id))||!Number.isSafeInteger(line.netCents)||line.netCents<0||line.netCents>100000000)reject('Positionspreis prüfen');const old=(await c.query('SELECT net_cents FROM ai_delivery_note_lines WHERE id=$1 AND note_id=$2 FOR UPDATE',[line.id,note.id])).rows[0];if(!old)reject('Position nicht gefunden',404);await c.query('UPDATE ai_delivery_note_lines SET net_cents=$2 WHERE id=$1',[line.id,line.netCents]);await c.query("INSERT INTO ai_audit(actor_id,target_id,action,detail) VALUES($1,$2,'delivery_note_price_confirmed',$3)",[u.id,note.id,JSON.stringify({lineId:line.id,before:old.net_cents,netCents:line.netCents})]);}await c.query('COMMIT');return {ok:true};
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }
  const m=path.match(/^\/api\/ai\/delivery-notes\/([0-9a-f-]+)$/);if(m&&method==='GET'&&uuid.test(m[1])){const note=(await pool.query('SELECT id,location_id,filename,status,supplier,reference,delivery_date,supplier_order_id,extraction,confirmation,document_mime,encode(document_data,\'base64\') data FROM ai_delivery_notes WHERE id=$1 AND account_id=$2',[m[1],u.id])).rows[0];if(!note)reject('Lieferschein nicht gefunden',404);if(note.status==='draft')note.extraction=await deliverySuggestions(pool,u.id,note.location_id,textDraft(note.extraction.text,note.extraction.confidence));note.lines=(await pool.query('SELECT l.*,s.name FROM ai_delivery_note_lines l JOIN ai_stock s ON s.id=l.stock_id WHERE l.note_id=$1 ORDER BY l.id',[note.id])).rows;return {note};}

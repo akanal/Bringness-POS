@@ -16,6 +16,8 @@ CREATE TABLE ai_recipes(id uuid PRIMARY KEY,account_id uuid REFERENCES ai_accoun
 CREATE TABLE ai_recipe_items(recipe_id uuid REFERENCES ai_recipes(id),stock_id uuid REFERENCES ai_stock(id),quantity numeric(15,3));
 CREATE TABLE ai_connectors(id uuid PRIMARY KEY,account_id uuid,location_id uuid,active boolean,kind text);
 CREATE TABLE ai_stock_moves(id bigserial PRIMARY KEY,stock_id uuid,actor_id uuid,delta numeric(15,3),reason text,kind text,quantity_before numeric(15,3),quantity_after numeric(15,3),created_at timestamptz DEFAULT now());
+CREATE TABLE ai_sale_events(id uuid PRIMARY KEY,account_id uuid,event_type text,occurred_at timestamptz,created_at timestamptz DEFAULT now());
+CREATE TABLE ai_sale_effects(event_id uuid,stock_id uuid,delta numeric);
 CREATE TABLE ai_audit(id bigserial PRIMARY KEY,actor_id uuid,target_id uuid,action text,detail jsonb);
 `);
 const account=crypto.randomUUID(),other=crypto.randomUUID(),location=crypto.randomUUID(),otherLocation=crypto.randomUUID(),stock=crypto.randomUUID(),recipe=crypto.randomUUID();
@@ -41,7 +43,13 @@ await act('cancel','A',{reason:'Gast storniert'});s=await getStock();assert.equa
 await assert.rejects(act('start','A'),/Bestellstatus/);checks++;
 await assert.rejects(act('return','A',{confirmed:true,reason:'Test',lines:[{stockId:stock,quantity:0.1}]}),/Keine verbrauchten/);checks++;
 await act('accept','C',{items:[{productCode:'burger',quantity:6}]});assert.equal((await recipeAvailability(pool,account))[0].available,false);checks++;
-await act('start','C');s=await getStock();assert.equal(Number(s.quantity),0.1);assert.equal(Number(s.reserved_quantity),0);checks++;
+const kitchenSourceTime=new Date(Date.now()-5*86400000).toISOString();
+const startC={action:'start',orderId:'C',locationId:location,requestKey:crypto.randomUUID(),occurredAt:kitchenSourceTime};
+await kitchenAction(pool,user,startC);
+assert.equal((await kitchenAction(pool,user,startC)).replayed,true);
+await assert.rejects(kitchenAction(pool,user,{...startC,occurredAt:new Date(Date.parse(kitchenSourceTime)+1000).toISOString()}),e=>e.status===409);
+assert.equal(new Date((await query("SELECT occurred_at FROM ai_stock_moves WHERE kind='recipe_consumption'")).rows[0].occurred_at).toISOString(),kitchenSourceTime);checks++;
+s=await getStock();assert.equal(Number(s.quantity),0.1);assert.equal(Number(s.reserved_quantity),0);checks++;
 await query('UPDATE ai_recipe_items SET quantity=0.5 WHERE recipe_id=$1',[recipe]);
 await act('cancel','C',{reason:'Nach Zubereitung storniert'});assert.equal(Number((await getStock()).quantity),0.1);checks++;
 await assert.rejects(act('return','C',{confirmed:false,reason:'Test',lines:[{stockId:stock,quantity:0.1}]}),/ausdrücklich/);checks++;
@@ -67,7 +75,7 @@ await assert.rejects(act('start','API-A'),/nicht gefunden/);checks++;
 globalThis.stockTestPool=pool;
 let inventorySource=fs.readFileSync(new URL('../ai-inventory.js',import.meta.url),'utf8');
 inventorySource=inventorySource.replace("import {aiPool} from './ai-database.js';","const aiPool=()=>globalThis.stockTestPool;");
-for(const path of ['ai-stock-lifecycle.js','ai-policy.js'])inventorySource=inventorySource.replace("'./"+path+"'",JSON.stringify(new URL('../'+path,import.meta.url).href));
+for(const path of ['ai-stock-lifecycle.js','ai-policy.js','ai-consumption.js','ai-write-authorization.js'])inventorySource=inventorySource.replace("'./"+path+"'",JSON.stringify(new URL('../'+path,import.meta.url).href));
 const inventory=await import('data:text/javascript;base64,'+Buffer.from(inventorySource).toString('base64'));await inventory.migrateAiInventory();
 await query('UPDATE ai_stock SET quantity=3 WHERE id=$1',[stock]);
 for(const kind of ['spillage','own_use','spoilage','waste']){

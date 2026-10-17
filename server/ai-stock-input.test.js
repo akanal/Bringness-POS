@@ -1,0 +1,14 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {stockUnits,aggregateIngredients,replenishment} from './ai-stock-lifecycle-core.js';
+test('stock quantities refuse object coercion and nondecimal forms',()=>{
+ for(const value of [[],[1],{},true,null,' ','0x10','1e2'])assert.throws(()=>stockUnits(value));assert.equal(stockUnits('1.125'),1125);assert.equal(stockUnits(0),0);
+});
+
+test('ingredient aggregation bounds cumulative demand and rejects malformed lines',()=>{
+ for(const lines of [null,[null],[{stockId:'a',quantity:-1,portions:-1}],[{stockId:'a',quantity:true,portions:1}],[{stockId:'a',quantity:1000000000,portions:1},{stockId:'a',quantity:1,portions:1}]])assert.throws(()=>aggregateIngredients(lines));
+ assert.deepEqual(aggregateIngredients([{stockId:'a',quantity:.1,portions:2},{stockId:'a',quantity:.2,portions:1}]),[{stockId:'a',quantity:.4}]);
+});
+
+test('replenishment refuses corrupt stock and incoming demand rather than generating NaN purchases',()=>{
+ const stock={quantity:2,minimum:3,target_quantity:5};assert.equal(replenishment(stock).shortage,3);
+ for(const value of [NaN,Infinity,null,true])assert.throws(()=>replenishment({...stock,quantity:value}));assert.throws(()=>replenishment(stock,{incoming:-1}));assert.equal(replenishment({...stock,quantity:-1}).available,0);assert.throws(()=>replenishment({...stock,minimum:-1}));
+});

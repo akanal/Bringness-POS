@@ -1,13 +1,14 @@
+import {legacyPasswordHash as passwordHash} from './secret-derivation.js';
+import {readJsonObject} from './http-body.js';
 import {validPassword,passwordMessage} from "./password-policy.js";
 import crypto from "node:crypto";
 import pg from "pg";
 
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
 const sha=s=>crypto.createHash("sha256").update(s).digest("hex");
-const passwordHash=s=>crypto.scryptSync(s,process.env.PASSWORD_PEPPER||"bringness-pos",64).toString("hex");
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function send(res,code,payload){res.writeHead(code,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(payload))}
-async function read(req){let raw="";for await(const chunk of req){raw+=chunk;if(raw.length>8192)throw Error("Anfrage zu groß")}return raw?JSON.parse(raw):{}}
+const read=req=>readJsonObject(req,{maxBytes:8192});
 async function admin(req){const token=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");if(!token)return null;const q=await pool.query(`SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id
   WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND u.role IN ('owner','admin')`,[sha(token)]);return q.rows[0]||null}
 
@@ -36,7 +37,7 @@ export async function handleAdminTeam(req,res){
     const client=await pool.connect();
     try{
       await client.query("BEGIN");
-      const user=(await client.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role,must_change_password) VALUES($1,$2,$3,$4,'active','admin',true) RETURNING id,display_name,email,role,status",[actor.company_id,email,passwordHash(password),name])).rows[0];
+      const user=(await client.query("INSERT INTO users(company_id,email,password_hash,display_name,status,role,must_change_password) VALUES($1,$2,$3,$4,'active','admin',true) RETURNING id,display_name,email,role,status",[actor.company_id,email,await passwordHash(password),name])).rows[0];
       await client.query("INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id) VALUES($1,$2,'admin.account.created','user',$3)",[actor.company_id,actor.id,user.id]);
       await client.query("COMMIT");send(res,201,{admin:user,message:"Admin-Konto angelegt. Startpasswort persönlich übergeben; beim ersten Login muss es geändert werden."});return true;
     }catch(error){await client.query("ROLLBACK");if(error.code==="23505"){send(res,409,{error:"E-Mail ist bereits vergeben"});return true}throw error}finally{client.release()}
@@ -68,7 +69,7 @@ export async function handleAdminTeam(req,res){
     if(!uuid.test(String(input.restaurantId||""))||name.length<2||name.length>100||!["cashier","kitchen","manager"].includes(role)||pin.length>32){send(res,400,{error:"Betrieb, Name oder Rolle ungültig"});return true}
     const q=await pool.query(`INSERT INTO employees(restaurant_id,display_name,role,pin_hash)
       SELECT id,$2,$3,$4 FROM restaurants WHERE id=$1 AND company_id=$5
-      RETURNING id,display_name,role,active`,[input.restaurantId,name,role,pin?passwordHash(pin):null,actor.company_id]);
+      RETURNING id,display_name,role,active`,[input.restaurantId,name,role,pin?await passwordHash(pin):null,actor.company_id]);
     if(!q.rowCount){send(res,404,{error:"Betrieb nicht gefunden"});return true}
     send(res,201,q.rows[0]);return true;
   }

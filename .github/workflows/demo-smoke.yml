@@ -1,0 +1,43 @@
+name: Demo smoke tests
+on:
+  push:
+    branches:
+      - staging/preview-20261016
+    paths:
+      - apps/web/public/demo/index.html
+      - ops/demo-smoke.test.mjs
+      - package.json
+      - ops/windows-workflow.test.mjs
+      - ops/preview-source.test.mjs
+      - server/ai-collection.js
+      - server/ai-collection.test.mjs
+      - server/ai-auto-procurement.js
+      - server/ai-auto-procurement.test.js
+      - apps/web/public/pos/**
+      - apps/web/public/ai-workspace.html
+      - .github/workflows/windows-desktop.yml
+      - .github/workflows/demo-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run test:demo
+      - run: npm run test:ci-workflows
+      - run: npm run test:preview-source
+      - run: npm run test:ai-commission
+      - run: npm ci --ignore-scripts
+      - run: node --test server/ai-auto-procurement.test.js
+      - name: Package tested offline demo for private review
+        uses: actions/upload-artifact@v4
+        with:
+          name: bringness-static-demo-review
+          path: apps/web/public/demo/index.html
+          retention-days: 3
+          if-no-files-found: error

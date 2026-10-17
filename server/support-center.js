@@ -1,10 +1,11 @@
+import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 import pg from 'pg';
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==='production'?{rejectUnauthorized:false}:false});
 import {topics,supportAnswer,mayRead} from './support-policy.js';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
-async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>10000)throw Error('Anfrage zu groß')}return JSON.parse(raw||'{}')}
+const body=req=>readJsonObject(req,{maxBytes:10000});
 export async function migrateSupport(){await pool.query(`CREATE TABLE IF NOT EXISTS support_conversations(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid NOT NULL REFERENCES companies(id),user_id uuid NOT NULL REFERENCES users(id),subject text NOT NULL,status text NOT NULL DEFAULT 'open',created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());CREATE TABLE IF NOT EXISTS support_messages(id bigserial PRIMARY KEY,conversation_id uuid NOT NULL REFERENCES support_conversations(id) ON DELETE CASCADE,author_kind text NOT NULL,author_user_id uuid REFERENCES users(id),content text NOT NULL,topic_id text,created_at timestamptz NOT NULL DEFAULT now());CREATE INDEX IF NOT EXISTS support_company_idx ON support_conversations(company_id,updated_at DESC);CREATE INDEX IF NOT EXISTS support_messages_chat_idx ON support_messages(conversation_id,id);`)}
 export async function handleSupport(req,res){
  const url=new URL(req.url,'http://local'),p=url.pathname;

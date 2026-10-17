@@ -26,3 +26,12 @@ test('whole packs cover shortage and costs, unknown packs stay unavailable',()=>
  assert.equal(r.items[0].packs,3);assert.equal(r.items[0].purchaseQuantity,3);assert.equal(r.items[0].surplusQuantity,.7);assert.equal(r.items[0].estimatedPackNetCents,600);assert.equal(r.packComplete,false);assert.equal(r.knownPackNetCents,600);
  assert.equal(purchaseEstimate([{suggestedQuantity:.3,packQuantity:.1,unitCents:100}]).items[0].packs,3);
 });
+
+test('recipe costing refuses malformed positions and unsafe subtotals',()=>{
+ assert.throws(()=>recipeCost([null]));assert.throws(()=>recipeCost(null));assert.throws(()=>recipeCost([{quantity:2,unit_cents:Number.MAX_SAFE_INTEGER}]));
+});
+
+test('sub-millilitre packs cannot cause division by zero and estimates remain representable',()=>{
+ const result=purchaseEstimate([{suggestedQuantity:1,packQuantity:.0001,unitCents:1}]);assert.equal(result.items[0].packs,null);assert.equal(result.packComplete,false);
+ assert.throws(()=>purchaseEstimate([{suggestedQuantity:100,unitCents:Number.MAX_SAFE_INTEGER}]));
+});

@@ -1,3 +1,5 @@
+import {orderingModuleAccess} from './module-catalog.js';
+import {readJsonObject,readRequestBytes} from './http-body.js';
 import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
 import {recoverGuestPayment} from './center-payment-recovery.js';
 import {centerPushConfiguration,saveGuestSubscription,manageGuestSubscription} from './center-guest-push.js';
@@ -18,14 +20,7 @@ const send = (res, status, data) => {
   res.end(JSON.stringify(data));
   return true;
 };
-async function body(req) {
-  let raw = '';
-  for await (const part of req) {
-    raw += part;
-    if (Buffer.byteLength(raw) > 8192) throw new Error('BODY_LIMIT');
-  }
-  return raw ? JSON.parse(raw) : {};
-}
+const body=req=>readJsonObject(req,{maxBytes:8192});
 export function centerPaymentOptions(restaurant,env=process.env){
  const mode=restaurant.payment_mode||'online';return {paymentMode:mode,onsiteAvailable:['onsite','choice'].includes(mode)&&restaurant.contract_status==='signed'&&env.CENTER_ONSITE_ENABLED!=='false',onlineAvailable:['online','choice'].includes(mode)&&centerOrderingAvailable(restaurant.provider_ready,env)};
 }
@@ -99,10 +94,11 @@ export function createCenterHandler(pool) {
       if (req.method !== 'GET') return send(res, 405, {error: 'Methode nicht erlaubt'});
       const code = url.searchParams.get('code') || '';
       if (!token.test(code)) return send(res, 404, {error: 'Center-Code ungültig'});
-      const table = (await pool.query(`SELECT t.id,t.name,c.id center_id,c.name center_name
+      const table = (await pool.query(`SELECT t.id,t.name,c.id center_id,c.name center_name,c.company_id,c.module_license_required
         FROM center_tables t JOIN centers c ON c.id=t.center_id
         WHERE t.qr_token=$1 AND t.active=true AND c.active=true`, [code])).rows[0];
       if (!table) return send(res, 404, {error: 'Center-Code ungültig'});
+      if(table.module_license_required&&!await orderingModuleAccess(pool,table.company_id,'center'))return send(res,402,{error:'Center-System und Tischsystem sind nicht aktiv'});
       const restaurantId = url.searchParams.get('restaurantId');
       if (p === '/api/v1/guest/center/restaurants') {
         const restaurants = (await pool.query(`SELECT r.id,r.name,r.logo_data,cr.payment_mode,cr.contract_status,(cr.contract_status='signed' AND cr.payment_status='verified' AND EXISTS(
@@ -138,7 +134,7 @@ export function createCenterHandler(pool) {
     }
     if(p==='/api/v1/centers/mollie/webhook'){
       if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
-      let rawBody='';for await(const part of req){rawBody+=part;if(Buffer.byteLength(rawBody)>1024)return send(res,413,{error:'Anfrage zu groß'});}
+      const rawBody=(await readRequestBytes(req,{maxBytes:1024})).toString('utf8');
       const paymentId=new URLSearchParams(rawBody).get('id');
       try{const result=await verifyAndReleaseMolliePayment(pool,paymentId);return send(res,200,{received:true});}
       catch{return send(res,503,{error:'Zahlungsprüfung vorübergehend nicht verfügbar'});}
@@ -186,7 +182,7 @@ export function createCenterHandler(pool) {
     const name = String(b.name || '').trim();
     if (p === '/api/v1/centers' && req.method === 'POST') {
       if (!name || name.length > 120) return send(res, 400, {error: 'Centername erforderlich (maximal 120 Zeichen)'});
-      const center = (await pool.query('INSERT INTO centers(company_id,name) VALUES($1,$2) RETURNING id,name,active', [user.company_id, name])).rows[0];
+      const center = (await pool.query('INSERT INTO centers(company_id,name,module_license_required) VALUES($1,$2,true) RETURNING id,name,active', [user.company_id, name])).rows[0];
       return send(res, 201, {center});
     }
     const verify=p.match(/^\/api\/v1\/centers\/([0-9a-f-]{36})\/restaurants\/([0-9a-f-]{36})\/verify-payment$/i);

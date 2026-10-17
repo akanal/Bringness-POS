@@ -95,6 +95,11 @@ assert.equal((await call('procurement-draft',{...draftBody,deliveryDate:'2026-02
 await query("UPDATE ai_accounts SET delivery_area='Berlin' WHERE id=$1",[ids.supplier]);
 const draftOrders=Number((await query('SELECT count(*) FROM ai_orders')).rows[0].count),draftStock=Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[st.id])).rows[0].quantity);
 const draft=await call('procurement-draft',draftBody,tokens.buyer);assert.equal(draft.status,200);assert.equal(draft.complete,true);assert.equal(draft.lines[0].productId,product.id);assert.equal(draft.lines[0].packs,2);
+// PostgreSQL numeric pack sizes must survive the typed procurement boundary.
+await query('UPDATE ai_products SET pack_quantity=0.5 WHERE id=$1',[product.id]);
+const fractionalDraft=await call('procurement-draft',draftBody,tokens.buyer);
+assert.equal(fractionalDraft.complete,true);assert.equal(fractionalDraft.lines[0].packQuantity,0.5);assert.equal(fractionalDraft.lines[0].packs,16);
+await query('UPDATE ai_products SET pack_quantity=5 WHERE id=$1',[product.id]);
 assert.equal((await call('procurement-draft',draftBody,tokens.other)).lines.length,0);
 assert.equal(Number((await query('SELECT count(*) FROM ai_orders')).rows[0].count),draftOrders);assert.equal(Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[st.id])).rows[0].quantity),draftStock);
 await query("UPDATE ai_accounts SET delivery_area='Unklar' WHERE id=$1",[ids.supplier]);assert.equal((await call('procurement-draft',draftBody,tokens.buyer)).complete,false);await query("UPDATE ai_accounts SET delivery_area='Berlin' WHERE id=$1",[ids.supplier]);
@@ -192,9 +197,13 @@ const dry=await call('v1/sales/validate',{eventId:'dry-1',items:[{productCode:'d
 assert.equal((await call('v1/sales',{eventId:'bad-type',items:[{productCode:'dish-1',quantity:true}]},key.token)).status,400);
 assert.equal((await call('v1/sales',{eventId:'x'.repeat(151),items:[{productCode:'dish-1',quantity:1}]},key.token)).status,400);
 assert.equal((await call('v1/products',null,tokens.other)).status,401);
-const sale={eventId:'sale-1',items:[{productCode:'dish-1',quantity:4}]};assert.equal((await call('import/sales',sale,key.token)).status,200);assert.equal((await call('import/sales',sale,key.token)).duplicate,true);
+const delayedSaleTime=new Date(Date.now()-10*86400000).toISOString();
+const sale={eventId:'sale-1',occurredAt:delayedSaleTime,items:[{productCode:'dish-1',quantity:4}]};assert.equal((await call('import/sales',sale,key.token)).status,200);assert.equal((await call('import/sales',sale,key.token)).duplicate,true);
 assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),4);
 assert.equal((await call('v1/sales',sale,key.token)).duplicate,true);
+assert.equal(new Date((await query("SELECT occurred_at FROM ai_sale_events WHERE external_id='sale-1'")).rows[0].occurred_at).toISOString(),delayedSaleTime);
+assert.equal((await call('v1/sales',{...sale,occurredAt:new Date(Date.parse(delayedSaleTime)+1000).toISOString()},key.token)).status,409);
+assert.equal((await call('v1/sales',{eventId:sale.eventId,items:sale.items},key.token)).duplicate,true);
 const duplicateDry=await call('v1/sales/validate',sale,key.token);assert.equal(duplicateDry.dryRun,true);assert.equal(duplicateDry.duplicate,true);
 assert.equal((await call('import/sales',{...sale,items:[{productCode:'dish-1',quantity:5}]},key.token)).status,409);
 assert.equal((await call('import/sales',{eventId:'missing',items:[{productCode:'unknown',quantity:1}]},key.token)).status,400);
@@ -205,6 +214,8 @@ assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),5
 assert.equal((await call('import/sales',{eventId:'reverse-2',type:'reversal',reversesEventId:'sale-1'},key.token)).status,409);
 assert.equal((await call('import/sales',{eventId:'sale-2',items:[{productCode:'dish-1',quantity:10}]},key.token)).status,200);
 assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-15);
+assert.equal((await call('import/sales',{eventId:'sale-2',occurredAt:delayedSaleTime,items:[{productCode:'dish-1',quantity:10}]},key.token)).duplicate,true);
+assert.equal((await query("SELECT occurred_at FROM ai_sale_events WHERE external_id='sale-2'")).rows[0].occurred_at,null);
 await call('connector-status',{id:link.id,active:false},tokens.buyer);assert.equal((await call('import/sales',{eventId:'blocked',items:[{productCode:'dish-1',quantity:1}]},key.token)).status,401);
 
 assert.equal((await call('connector-key',{id:link.id},tokens.other)).status,404);
@@ -223,7 +234,10 @@ await query("INSERT INTO orders VALUES($1,$2,'paid',now()+interval '1 minute',no
 await recipeModule.syncPosSales();assert.match((await call('connectors',null,tokens.buyer)).connectors.find(c=>c.id===posLink.id).last_error,/Rezept fehlt/);
 await call('recipes',{locationId:loc.id,name:'POS dish',productCode:posProduct,items:[{stockId:st.id,quantity:0.5}]},tokens.buyer);
 await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
+const sourcePaid=(await query('SELECT closed_at FROM orders WHERE id=$1',[posOrder])).rows[0].closed_at;
+assert.equal(new Date((await query('SELECT occurred_at FROM ai_sale_events WHERE external_id=$1',["pos:"+posOrder])).rows[0].occurred_at).toISOString(),new Date(sourcePaid).toISOString());
 await recipeModule.syncPosSales();assert.equal(Number((await call('stock',null,tokens.buyer)).stock[0].quantity),-16);
+assert.equal(new Date((await query('SELECT occurred_at FROM ai_sale_events WHERE external_id=$1',["pos:"+posOrder])).rows[0].occurred_at).toISOString(),new Date(sourcePaid).toISOString());
 await db.exec('ALTER TABLE orders ADD COLUMN total_cents int NOT NULL DEFAULT 0');
 const mapping=await call('pos-products?connectorId='+posLink.id,null,tokens.buyer);assert.equal(mapping.status,200);assert.equal(mapping.unmapped,0);assert.equal(mapping.products[0].id,posProduct);assert.equal((await call('pos-products?connectorId='+posLink.id,null,tokens.other)).status,404);
 await query('UPDATE users SET must_change_password=true WHERE id=$1',[posOwner]);assert.equal((await call('pos-products?connectorId='+posLink.id,null,tokens.buyer)).status,403);await recipeModule.syncPosSales();assert.match((await call('connectors',null,tokens.buyer)).connectors.find(c=>c.id===posLink.id).last_error,/freigabe/i);await query('UPDATE users SET must_change_password=false WHERE id=$1',[posOwner]);await recipeModule.syncPosSales();

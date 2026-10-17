@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import pg from 'pg';
+import {PGlite} from '@electric-sql/pglite';
+import {createTableSettlement,migrateTableSettlement} from '../table-settlement.js';
+const uuid=()=>crypto.randomUUID(),postgresUrl=process.env.SETTLEMENT_TEST_DATABASE_URL;
+let db,adminDb,schema;
+if(postgresUrl){const url=new URL(postgresUrl);assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname==='/bringness_device_test');schema='table_settle_'+crypto.randomBytes(8).toString('hex');adminDb=new pg.Pool({connectionString:postgresUrl});await adminDb.query('CREATE SCHEMA '+schema);db=new pg.Pool({connectionString:postgresUrl,options:'-c search_path='+schema});db.exec=sql=>db.query(sql);db.close=()=>db.end();}else{db=new PGlite();await db.waitReady;}
+const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0};}const r=await db.query(sql,args);return {...r,rowCount:r.rowCount??r.affectedRows??r.rows.length};};
+let failRecord=false;
+const pool={query,connect:async()=>{const c=postgresUrl?await db.connect():{query,release(){}};return {query:async(sql,args)=>{if(failRecord&&sql.startsWith('INSERT INTO pos_table_settlements'))throw Error('fixture failure');return c.query(sql,args);},release:()=>c.release()};}};
+await db.exec((await fs.readFile(new URL('../../db/schema.sql',import.meta.url),'utf8')).replace('CREATE EXTENSION IF NOT EXISTS pgcrypto;',''));
+await db.exec(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner';ALTER TABLE users ADD COLUMN must_change_password boolean DEFAULT false;
+ CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE SEQUENCE receipt_number_seq;
+ ALTER TABLE receipts ADD COLUMN merchant_snapshot jsonb;
+ CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);
+ CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid REFERENCES restaurants(id),status text);
+ ALTER TABLE orders ADD COLUMN table_id uuid REFERENCES dining_tables(id);`);
+await migrateTableSettlement(pool);await migrateTableSettlement(pool);
+const company=uuid(),restaurant=uuid(),owner=uuid(),table=uuid(),token='synthetic-table-session';
+await query("INSERT INTO companies(id,name) VALUES($1,'Fixture')",[company]);await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Restaurant')",[restaurant,company]);await query("INSERT INTO users(id,company_id,email,password_hash,display_name) VALUES($1,$2,'owner@example.test','fixture','Owner')",[owner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[crypto.createHash('sha256').update(token).digest('hex'),owner]);await query("INSERT INTO dining_tables VALUES($1,$2,'open')",[table,restaurant]);
+const addOrder=async(amount=500)=>{const id=uuid();await query("INSERT INTO orders(id,restaurant_id,table_id,status,total_cents) VALUES($1,$2,$3,'open',$4)",[id,restaurant,table,amount]);await query("UPDATE dining_tables SET status='open' WHERE id=$1",[table]);return id;};
+const ids=[await addOrder(),await addOrder()],handler=createTableSettlement(pool);let loseReply=false;
+const server=http.createServer(async(req,res)=>{if(loseReply){loseReply=false;await handler(req,{writeHead(){},end(){}});res.destroy();}else await handler(req,res);});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const url='http://127.0.0.1:'+server.address().port+'/api/v1/tables/settle';
+const pay=async(body,auth=token)=>{const r=await fetch(url,{method:'POST',headers:{authorization:'Bearer '+auth,'content-type':'application/json'},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};};
+const request={requestKey:uuid(),tableId:table,paymentMethod:'cash',orderIds:ids,expectedTotalCents:1000};
+const count=async name=>Number((await query('SELECT count(*) n FROM '+name)).rows[0].n);
+try{
+ assert.equal((await pay({...request,paymentMethod:'card',externalCardConfirmed:true})).status,409);assert.equal(await count('payments'),0);
+ assert.equal((await pay({...request,expectedTotalCents:999})).body.code,'SETTLEMENT_CHANGED');assert.equal(await count('receipts'),0);
+ loseReply=true;await assert.rejects(pay(request));assert.equal(await count('payments'),2);assert.equal(await count('receipts'),2);
+ const third=await addOrder(700);const replay=await pay(request);assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);assert.equal(replay.body.totalCents,1000);assert.equal(await count('payments'),2);assert.equal((await query('SELECT status FROM orders WHERE id=$1',[third])).rows[0].status,'open');assert.equal((await query('SELECT status FROM dining_tables WHERE id=$1',[table])).rows[0].status,'open');
+ assert.equal((await pay({...request,orderIds:[third],expectedTotalCents:700})).status,409);
+ assert.equal((await pay(request,'expired')).status,401);
+ await query("UPDATE users SET role='waiter' WHERE id=$1",[owner]);assert.equal((await pay(request)).status,403);await query("UPDATE users SET role='owner' WHERE id=$1",[owner]);
+ const next={...request,requestKey:uuid(),orderIds:[third],expectedTotalCents:700};
+ failRecord=true;assert.equal((await pay(next)).status,503);failRecord=false;assert.equal(await count('payments'),2);assert.equal((await query('SELECT status FROM orders WHERE id=$1',[third])).rows[0].status,'open');
+ const settled=await pay(next);assert.equal(settled.status,200);assert.equal(settled.body.paidOrders,1);assert.equal(await count('payments'),3);
+ const fourth=await addOrder(900),concurrent={...request,requestKey:uuid(),orderIds:[fourth],expectedTotalCents:900};
+ if(postgresUrl){const results=await Promise.all(Array.from({length:5},()=>pay(concurrent)));assert.equal(results.filter(r=>!r.body.replayed).length,1);assert.equal(results.filter(r=>r.body.replayed).length,4);assert.equal(new Set(results.map(r=>r.body.receiptIds[0])).size,1);}else assert.equal((await pay(concurrent)).status,200);
+ assert.equal(await count('payments'),4);assert.equal(await count('receipts'),4);assert.equal(Number((await query("SELECT count(*) n FROM receipts WHERE fiscal_status<>'pending'")).rows[0].n),0);
+ const fifth=await addOrder(100);await query("INSERT INTO payments(order_id,method,amount_cents) VALUES($1,'cash',100)",[fifth]);assert.equal((await pay({...request,requestKey:uuid(),orderIds:[fifth],expectedTotalCents:100})).status,409);assert.equal(await count('receipts'),4);
+ console.log('Table settlement passed: verified cash only, exact order/amount snapshot, lost HTTP reply, replay leaves later orders open, role/session guards, atomic rollback, partial-payment conflict'+(postgresUrl?', concurrent exactly-once settlement':'')+' and pending fiscal status.');
+}finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await db.close();if(adminDb){await adminDb.query('DROP SCHEMA '+schema+' CASCADE');await adminDb.end();}}

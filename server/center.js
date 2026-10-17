@@ -1,3 +1,4 @@
+import {isolatedPreview} from './preview-policy.js';
 import {centerPushConfiguration,dispatchCenterGuestPush} from './center-guest-push.js';
 import pg from 'pg';
 import {createCenterHandler} from './center-core.js';
@@ -10,6 +11,7 @@ export async function migrateCenter() {
       company_id uuid NOT NULL REFERENCES companies(id),
       name text NOT NULL, active boolean NOT NULL DEFAULT true
     );
+    ALTER TABLE centers ADD COLUMN IF NOT EXISTS module_license_required boolean NOT NULL DEFAULT false;
     CREATE TABLE IF NOT EXISTS center_tables (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       center_id uuid NOT NULL REFERENCES centers(id),
@@ -113,4 +115,4 @@ export async function centerPushTick(){
  await dispatchCenterGuestPush(pool,(subscription,payload)=>webpush.sendNotification(subscription,payload,{TTL:300,timeout:15000}));
  }finally{pushBusy=false;}
 }
-const pushTimer=setInterval(()=>centerPushTick().catch(()=>console.error('Center guest push worker failed')),10000);pushTimer.unref();
+const pushTimer=setInterval(()=>{if(!isolatedPreview())return centerPushTick().catch(()=>console.error('Center guest push worker failed'))},10000);pushTimer.unref();
