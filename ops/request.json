@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
-  "target": "pos",
+  "target": "ai",
   "revision": "c80fede3dd30c76a754594b51bdd08b067b9a361",
-  "requestId": "netcup-pos-release-20261017"
+  "requestId": "netcup-ai-release-20261017"
 }
