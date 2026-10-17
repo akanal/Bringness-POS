@@ -62,3 +62,12 @@ test('invalid commission order references are rejected before querying',async()=
   await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[orderId],supplier_id:id,month:'2026-09',net_cents:200}),/Ungültige Bestellreferenz/);
  }
 });
+
+test('unexpected order rows cannot pass commission debit validation',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const id='11111111-1111-4111-8111-111111111111';
+ const other='22222222-2222-4222-8222-222222222222';
+ const job={kind:'commission',order_ids:[id],supplier_id:id,month:'2026-09',net_cents:200};
+ const db={query:async()=>({rows:[{id:other,commission_cents:200,paid:null}]})};
+ await assert.rejects(validateBillingJob(db,job),/Fremde Abrechnungsposition/);
+});
