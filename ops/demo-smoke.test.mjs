@@ -31,7 +31,7 @@ test('demo includes accessible navigation and essential action controls',()=>{
 });
 test('demo avoids real payment and fiscal operations',()=>{
   assert.doesNotMatch(html,/https?:\/\//);
-  assert.doesNotMatch(html,/mollie\.com|stripe\.com|tse-sign|payment\/checkout/i);
+  assert.doesNotMatch(html,/mollie\.com|stripe\.com|\/api\/tse|payment\/checkout/i);
   assert.match(html,/keine TSE-Signatur/);
 });
 test('demo uses only temporary in-memory orders',()=>{
