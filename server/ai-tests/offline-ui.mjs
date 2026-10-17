@@ -9,8 +9,8 @@ import {quoteOfflineSale} from '../offline-sale-core.js';
 const db=new PGlite();
 try{
  const ledger=await createOfflineLedger(db,quoteOfflineSale),uuid=()=>crypto.randomUUID();
- const restaurant=uuid(),product=uuid();
- const snapshot={id:uuid(),companyId:uuid(),deviceKey:'a'.repeat(64),createdAt:new Date().toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),restaurants:[{id:restaurant,name:'Test'}],products:[{id:product,restaurantId:restaurant,name:'Coffee',priceCents:250,taxRate:19}],merchant:{[restaurant]:{businessName:'Test'}}};
+ const restaurant=uuid(),product=uuid(),issuedAt=Date.now();
+ const snapshot={id:uuid(),companyId:uuid(),deviceKey:'a'.repeat(64),createdAt:new Date(issuedAt).toISOString(),validUntil:new Date(issuedAt+86400000).toISOString(),restaurants:[{id:restaurant,name:'Test'}],products:[{id:product,restaurantId:restaurant,name:'Coffee',priceCents:250,taxRate:19}],merchant:{[restaurant]:{businessName:'Test'}}};
  await ledger.catalog(snapshot);
  const html=await fs.readFile(new URL('../../apps/desktop/offline.html',import.meta.url),'utf8');
  const script=await fs.readFile(new URL('../../apps/desktop/offline-ui.js',import.meta.url),'utf8');
