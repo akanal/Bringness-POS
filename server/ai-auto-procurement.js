@@ -24,6 +24,9 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
  if(!(now instanceof Date)||!Number.isFinite(now.getTime()))fail('Ungültiger Ausführungszeitpunkt');
  const today=berlinClock(now).date,policyRow=(await db.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1',[user.id])).rows[0];if(!policyRow?.policy?.enabled)return {state:'disabled'};
  const policy=policyRow.policy;
+ // Serialize a restaurant's daily procurement across scheduler instances.
+ const runLock=await db.query('SELECT pg_try_advisory_lock(hashtext($1)) AS locked',[`ai-procurement:${user.id}`]);if(!runLock.rows[0]?.locked)return {state:'busy'};
+ try{
  const run=(await db.query('INSERT INTO ai_auto_procurement_runs(account_id,day) VALUES($1,$2) ON CONFLICT(account_id,day) DO UPDATE SET day=EXCLUDED.day RETURNING *',[user.id,today])).rows[0];if(run.state==='ordered')return {state:'ordered',replayed:true,netCents:run.net_cents};
  try{
   const deliveryDate=new Date(Date.parse(today+'T12:00:00Z')+policy.leadDays*86400000).toISOString().slice(0,10);
@@ -49,6 +52,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
    }
   });return {state:'ordered',orders:result.orders,netCents:preview.quote.netCents};
  }catch(e){await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,String(e.message).slice(0,1000)]);return durableRunResult(db,run.id,{state:'blocked',error:e.message})}
+ }finally{await db.query('SELECT pg_advisory_unlock(hashtext($1))',[`ai-procurement:${user.id}`]);}
 }
 let running=false;
 export async function automaticProcurementTick({db=aiPool(),run=runAutomaticProcurement,onError=()=>console.error('AI automatic procurement account unavailable')}={}){
