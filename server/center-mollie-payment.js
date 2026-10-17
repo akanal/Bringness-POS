@@ -1,11 +1,8 @@
+import {providerEuroCents} from './provider-money.js';
 import {molliePaymentReadUrl} from './center-mollie-mode.js';
 import {withMerchantToken} from './center-mollie-merchant.js';
 import {releaseCenterPayment} from './center-payment-release.js';
-export function eurCents(amount){
- if(amount?.currency!=='EUR'||typeof amount.value!=='string'||!/^\d+\.\d{2}$/.test(amount.value))throw Error('INVALID_EUR_AMOUNT');
- const [whole,fraction]=amount.value.split('.');const cents=Number(whole)*100+Number(fraction);
- if(!Number.isSafeInteger(cents))throw Error('INVALID_EUR_AMOUNT');return cents;
-}
+export const eurCents=providerEuroCents;
 export function normalizeMolliePayment(payment,credential){
  if(payment.profileId!==credential.profile_id||!credential.verified_at)throw Error('PAYMENT_PROFILE_MISMATCH');
  return {paymentId:payment.id,orderId:payment.metadata?.bringnessOrderId,merchantReference:credential.organization_id,
