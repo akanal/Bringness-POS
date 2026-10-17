@@ -11,6 +11,8 @@ on:
       - ops/preview-source.test.mjs
       - server/ai-collection.js
       - server/ai-collection.test.mjs
+      - server/ai-auto-procurement.js
+      - server/ai-auto-procurement.test.js
       - apps/web/public/pos/**
       - apps/web/public/ai-workspace.html
       - .github/workflows/windows-desktop.yml
@@ -30,6 +32,7 @@ jobs:
       - run: npm run test:ci-workflows
       - run: npm run test:preview-source
       - run: npm run test:ai-commission
+      - run: node --test server/ai-auto-procurement.test.js
       - name: Package tested offline demo for private review
         uses: actions/upload-artifact@v4
         with:
