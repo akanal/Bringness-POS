@@ -9,3 +9,7 @@ export async function call(path,{body='',method='GET',actor={role:'owner',id:rid
 test('owner guest order rejects invalid bounded bodies before database work',async()=>{
  for(const [body,status] of [['null',400],['[]',400],['{',400],['x'.repeat(65537),413]])await assert.rejects(call('/api/v1/guest/order-v2',{method:'POST',body}),e=>e.status===status);
 });
+
+test('owner and receipt APIs exclude password-gated sessions',async()=>{
+ const r=await call('/api/v1/products/'+rid+'/extras',{query:async sql=>{assert.match(sql,/must_change_password/);return {rows:[],rowCount:0};}});assert.equal(r.status,401);assert.equal(r.calls.length,1);
+});

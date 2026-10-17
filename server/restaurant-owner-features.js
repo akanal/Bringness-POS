@@ -20,7 +20,7 @@ async function user(req,db=pool){
   const tokenHash=crypto.createHash("sha256").update(raw).digest("hex");
   const q=await db.query(`SELECT u.id,u.company_id,u.email,u.display_name,u.role
     FROM sessions s JOIN users u ON u.id=s.user_id
-    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`,[tokenHash]);
+    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)`,[tokenHash]);
   return q.rows[0]||null;
 }
 async function owner(req,res,db=pool){
