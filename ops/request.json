@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "eb4f5a0d793081e827a7c720749a3f9be48d0f9c",
-  "requestId": "netcup-ean-scanner-module-20261017"
+  "revision": "7195021e6f36ecf96b5bc18385fbb8738ba41586",
+  "requestId": "netcup-display-owned-modules-20261017"
 }
