@@ -1,5 +1,6 @@
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status})};
 export function stockUnits(value){
+  if(typeof value!=='number'&&(typeof value!=='string'||!/^\d+(?:\.\d{1,3})?$/.test(value)))fail('Ungültige Menge');
   const n=Number(value);
   if(value===null||value===''||typeof value==='boolean'||!Number.isFinite(n)||n<0||n>1000000000||Math.abs(n*1000-Math.round(n*1000))>0.00001)fail('Ungültige Menge (höchstens drei Nachkommastellen)');
   return Math.round(n*1000);
