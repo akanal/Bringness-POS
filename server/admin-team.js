@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {validPassword,passwordMessage} from "./password-policy.js";
 import crypto from "node:crypto";
 import pg from "pg";
@@ -7,7 +8,7 @@ const sha=s=>crypto.createHash("sha256").update(s).digest("hex");
 const passwordHash=s=>crypto.scryptSync(s,process.env.PASSWORD_PEPPER||"bringness-pos",64).toString("hex");
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function send(res,code,payload){res.writeHead(code,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(payload))}
-async function read(req){let raw="";for await(const chunk of req){raw+=chunk;if(raw.length>8192)throw Error("Anfrage zu groß")}return raw?JSON.parse(raw):{}}
+const read=req=>readJsonObject(req,{maxBytes:8192});
 async function admin(req){const token=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");if(!token)return null;const q=await pool.query(`SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id
   WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND u.role IN ('owner','admin')`,[sha(token)]);return q.rows[0]||null}
 
