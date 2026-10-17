@@ -187,3 +187,13 @@ test('Unicode-equivalent stock IDs cannot produce duplicate purchase lines',()=>
 test('Unicode-normalized whitespace-only stock identifiers are rejected',()=>{
  assert.throws(()=>prepareProcurement([item('\u3000',[offer('a','A',100)])]),/Lagerposition/);
 });
+
+ test('fractional database pack sizes are valid but coercible and nonfinite inputs remain blocked',()=>{
+ for(const quantity of [0.001,0.5,1.25,5]){
+  const result=prepareProcurement([item('stock',[{...offer('a','A',500),pack_quantity:quantity}])]);
+  assert.equal(result.complete,true);assert.equal(result.lines[0].packQuantity,quantity);
+ }
+ for(const quantity of ['0.500',true,NaN,Infinity,0,-0.5,1e12]){
+  assert.equal(prepareProcurement([item('stock',[{...offer('a','A',500),pack_quantity:quantity}])]).complete,false);
+ }
+});

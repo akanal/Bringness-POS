@@ -95,6 +95,11 @@ assert.equal((await call('procurement-draft',{...draftBody,deliveryDate:'2026-02
 await query("UPDATE ai_accounts SET delivery_area='Berlin' WHERE id=$1",[ids.supplier]);
 const draftOrders=Number((await query('SELECT count(*) FROM ai_orders')).rows[0].count),draftStock=Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[st.id])).rows[0].quantity);
 const draft=await call('procurement-draft',draftBody,tokens.buyer);assert.equal(draft.status,200);assert.equal(draft.complete,true);assert.equal(draft.lines[0].productId,product.id);assert.equal(draft.lines[0].packs,2);
+// PostgreSQL numeric pack sizes must survive the typed procurement boundary.
+await query('UPDATE ai_products SET pack_quantity=0.5 WHERE id=$1',[product.id]);
+const fractionalDraft=await call('procurement-draft',draftBody,tokens.buyer);
+assert.equal(fractionalDraft.complete,true);assert.equal(fractionalDraft.lines[0].packQuantity,0.5);assert.equal(fractionalDraft.lines[0].packs,16);
+await query('UPDATE ai_products SET pack_quantity=5 WHERE id=$1',[product.id]);
 assert.equal((await call('procurement-draft',draftBody,tokens.other)).lines.length,0);
 assert.equal(Number((await query('SELECT count(*) FROM ai_orders')).rows[0].count),draftOrders);assert.equal(Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[st.id])).rows[0].quantity),draftStock);
 await query("UPDATE ai_accounts SET delivery_area='Unklar' WHERE id=$1",[ids.supplier]);assert.equal((await call('procurement-draft',draftBody,tokens.buyer)).complete,false);await query("UPDATE ai_accounts SET delivery_area='Berlin' WHERE id=$1",[ids.supplier]);
