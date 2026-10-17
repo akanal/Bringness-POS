@@ -16,8 +16,9 @@ export function lifecycleTransition(state,action){
   return next;
 }
 export function aggregateIngredients(lines){
+  if(!Array.isArray(lines)||lines.length>10000)fail('Ungültige Verbrauchspositionen');
   const totals=new Map();
-  for(const line of lines){const units=Math.ceil(Number(line.quantity)*Number(line.portions)*1000-1e-8);if(!Number.isSafeInteger(units)||units<1||units>1000000000000)fail('Verbrauchsmenge ungültig');totals.set(line.stockId,(totals.get(line.stockId)||0)+units)}
+  for(const line of lines){if(!line||typeof line.stockId!=='string'||!line.stockId||[line.quantity,line.portions].some(v=>typeof v!=='number'&&typeof v!=='string'))fail('Ungültige Verbrauchsposition');const units=Math.ceil(Number(line.quantity)*Number(line.portions)*1000-1e-8);if(!Number.isSafeInteger(units)||units<1||units>1000000000000)fail('Verbrauchsmenge ungültig');const sum=(totals.get(line.stockId)||0)+units;if(!Number.isSafeInteger(sum)||sum>1000000000000)fail('Gesamte Verbrauchsmenge zu groß');totals.set(line.stockId,sum)}
   return [...totals].sort(([a],[b])=>a.localeCompare(b)).map(([stockId,units])=>({stockId,quantity:units/1000}));
 }
 export function validateStockTargets(minimum,target){const min=stockUnits(minimum),max=stockUnits(target);if(max<min)fail('Zielbestand darf nicht unter dem Mindestbestand liegen');return {minimum:min/1000,target:max/1000}}
