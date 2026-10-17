@@ -1,7 +1,8 @@
 const fail=message=>{throw Object.assign(Error(message),{status:409})};
 export async function validateBillingJob(c,j){
+ if(!j||!['subscription','commission'].includes(j.kind))fail('Unbekannte Abrechnungsart; kein Einzug');
  if(j.kind==='subscription'){
-  const charge=(await c.query('SELECT * FROM ai_subscription_charges WHERE id=$1 AND job_id=$2 FOR SHARE',[j.source_id,j.id])).rows[0];if(!charge||Number(charge.net_cents)!==Number(j.net_cents)||j.order_ids.length||+new Date(charge.starts_at)!==+new Date(j.period_start)||+new Date(charge.ends_at)!==+new Date(j.period_end))fail('Abo-Abrechnungsposition stimmt nicht überein');return {orders:[],subscription:charge.snapshot};
+  const charge=(await c.query('SELECT * FROM ai_subscription_charges WHERE id=$1 AND job_id=$2 FOR SHARE',[j.source_id,j.id])).rows[0];if(!charge||!Number.isSafeInteger(Number(j.net_cents))||Number(j.net_cents)<=0||!Number.isSafeInteger(Number(charge.net_cents))||Number(charge.net_cents)<=0||Number(charge.net_cents)!==Number(j.net_cents)||!Array.isArray(j.order_ids)||j.order_ids.length||!Number.isFinite(+new Date(j.period_start))||!Number.isFinite(+new Date(j.period_end))||+new Date(j.period_start)>=+new Date(j.period_end)||+new Date(charge.starts_at)!==+new Date(j.period_start)||+new Date(charge.ends_at)!==+new Date(j.period_end))fail('Abo-Abrechnungsposition stimmt nicht überein');return {orders:[],subscription:charge.snapshot};
  }
  if(!Array.isArray(j.order_ids)||!j.order_ids.length||new Set(j.order_ids).size!==j.order_ids.length)fail('Abrechnungspositionen fehlen oder sind doppelt');
  if(j.order_ids.some(id=>typeof id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))fail('Ungültige Bestellreferenz; kein Einzug');
