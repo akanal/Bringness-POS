@@ -49,3 +49,10 @@ export function receiptLines(lines){
  const netCents=l.netCents==null||l.netCents===''?null:Number(l.netCents);if(netCents!=null&&(typeof l.netCents!=='number'||!Number.isSafeInteger(netCents)||netCents<0||netCents>100000000))reject('Netto-Gesamtpreis der Position prüfen');
  return {stockId:l.stockId,quantity,unit:l.unit,packQuantity,netCents,reviewed:true,...(Number.isInteger(l.sourceIndex)&&l.sourceIndex>=0&&l.sourceIndex<100?{sourceIndex:l.sourceIndex}:{})};});
 }
+export function deliveryPriceLines(lines){
+ if(!Array.isArray(lines)||!lines.length||lines.length>100)reject('Geprüfte Rechnungspreise bestätigen');const seen=new Set();
+ return lines.map(line=>{
+  if(!line||typeof line!=='object'||Array.isArray(line)||(typeof line.id!=='number'&&typeof line.id!=='string')||!/^\d+$/.test(String(line.id))||!Number.isSafeInteger(Number(line.id))||Number(line.id)<1||!Number.isSafeInteger(line.netCents)||line.netCents<0||line.netCents>100000000)reject('Positionspreis prüfen');
+  const id=String(Number(line.id));if(seen.has(id))reject('Rechnungsposition doppelt angegeben');seen.add(id);return {id,netCents:line.netCents};
+ });
+}
