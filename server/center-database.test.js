@@ -24,6 +24,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  if(process.env.CENTER_TEST_DATABASE_URL){db.exec=sql=>db.query(sql);db.close=()=>db.end();}
  try {
  await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text DEFAULT 'Company'); CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);
+ CREATE TABLE company_features(company_id uuid,feature_code text,status text,ends_at timestamptz,grace_until timestamptz);
  CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);
  CREATE SEQUENCE receipt_number_seq;
  CREATE TABLE receipts(issued_at timestamptz DEFAULT now(),public_token uuid UNIQUE DEFAULT gen_random_uuid(),order_id uuid UNIQUE,receipt_number text UNIQUE,fiscal_status text,merchant_snapshot jsonb);
@@ -41,6 +42,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  await db.exec(migration);await db.exec(migration);
  const company=crypto.randomUUID(),admin=crypto.randomUUID(),owner=crypto.randomUUID(),restaurant=crypto.randomUUID();
  await db.query('INSERT INTO companies(id) VALUES($1)',[company]);
+ for(const feature of ['pos_base','table_management','center'])await db.query("INSERT INTO company_features VALUES($1,$2,'active',NULL,NULL)",[company,feature]);
  await db.query("INSERT INTO users(id,company_id,role,status) VALUES($1,$3,'owner','active'),($2,$3,'owner','active')",[admin,owner,company]);
  await db.query('INSERT INTO platform_admins VALUES($1,true)',[admin]);
  for(const [id,key] of [[admin,'admin'],[owner,'owner']])await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[id,crypto.createHash('sha256').update(key).digest('hex')]);
@@ -136,6 +138,10 @@ test('database migration and delegated setup lifecycle',async()=>{
  const guestProvider=async(url,options)=>{guestCreates++;const payload=JSON.parse(options.body);assert.equal(payload.amount.value,'25.00');return {ok:true,json:async()=>({id:'tr_guest',profileId:payload.profileId,amount:payload.amount,metadata:payload.metadata,_links:{checkout:{href:'https://www.mollie.com/checkout/guest'}}})};};
  const guestEnv={...env,CENTER_PAYMENT_ORIGIN:'https://example.test',CENTER_CHECKOUT_ENABLED:'true'};
  const guestResult=await guestCenterCheckout(pool,guestRequest,guestEnv,guestProvider);assert.equal(guestResult.checkoutUrl,'https://www.mollie.com/checkout/guest');
+ await db.query("UPDATE company_features SET ends_at=now()-interval '1 day' WHERE feature_code='center'");
+ assert.equal((await guestCenterCheckout(pool,guestRequest,guestEnv,()=>{throw Error('no duplicate payment')})).orderId,guestResult.orderId);
+ await assert.rejects(guestCenterCheckout(pool,{...guestRequest,requestId:crypto.randomUUID()},guestEnv,guestProvider),/CENTER_LICENSE_INACTIVE/);
+ await db.query("UPDATE company_features SET ends_at=NULL WHERE feature_code='center'");
  assert.equal((await guestCenterCheckout(pool,guestRequest,guestEnv,()=>{throw Error('no duplicate payment')})).orderId,guestResult.orderId);assert.equal(guestCreates,1);
  await assert.rejects(guestCenterCheckout(pool,{...guestRequest,items:[{productId:product,quantity:3}]},guestEnv,guestProvider),/REQUEST_REUSED_WITH_DIFFERENT_CART/);
  assert.equal((await db.query('SELECT total_cents,status FROM orders WHERE id=$1',[guestResult.orderId])).rows[0].total_cents,2500);
