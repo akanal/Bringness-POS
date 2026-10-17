@@ -120,3 +120,55 @@ test('automatic checkout refuses an empty supplier quote without creating an ord
   }});
  assert.equal(result.state,'blocked');assert.match(result.error,/Lieferantenangebot/);assert.equal(orders,0);
 });
+
+test('automatic procurement refuses concurrent restaurant run before creating a daily order',async()=>{
+ const policy={enabled:true,days:2,leadDays:1,supplierIds:['supplier']};
+ let inserts=0,released=0,unlocks=0;
+ const db={
+  query:async sql=>{
+   if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+   if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))inserts++;
+   return {rows:[]};
+  },
+  connect:async()=>({
+   query:async sql=>{
+    if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:false}]};
+    if(sql.includes('pg_advisory_unlock')){unlocks++;return {rows:[{pg_advisory_unlock:false}]}};
+    throw Error('Unexpected lock query');
+   },
+   release:()=>{released++}
+  })
+ };
+ const result=await runAutomaticProcurement({id:'restaurant-1',role:'restaurant'},{db});
+ assert.deepEqual(result,{state:'busy'});
+ assert.equal(inserts,0);
+ assert.equal(unlocks,1);
+ assert.equal(released,1);
+});
+
+test('automatic procurement releases the same advisory-lock connection after a no-need run',async()=>{
+ const policy={enabled:true,days:2,leadDays:1,supplierIds:['supplier']};
+ let locks=0,unlocks=0,releases=0;
+ const connection={
+  query:async sql=>{
+   if(sql.includes('pg_try_advisory_lock')){locks++;return {rows:[{locked:true}]}};
+   if(sql.includes('pg_advisory_unlock')){unlocks++;return {rows:[{pg_advisory_unlock:true}]}};
+   throw Error('Unexpected advisory connection query');
+  },
+  release:()=>{releases++}
+ };
+ const db={
+  connect:async()=>connection,
+  query:async sql=>{
+   if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+   if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'pending'}]};
+   if(sql.startsWith('SELECT state,net_cents'))return {rows:[{state:'no_need',net_cents:0}]};
+   return {rows:[]};
+  }
+ };
+ const result=await runAutomaticProcurement({id:'restaurant-1',role:'restaurant'},{db,draft:async()=>({complete:true,lines:[]})});
+ assert.equal(result.state,'no_need');
+ assert.equal(locks,1);
+ assert.equal(unlocks,1);
+ assert.equal(releases,1);
+});
