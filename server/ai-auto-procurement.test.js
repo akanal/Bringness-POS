@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {automaticProcurementTick,runAutomaticProcurement} from './ai-auto-procurement.js';
+import {automaticProcurementTick,runAutomaticProcurement,saveProcurementPolicy} from './ai-auto-procurement.js';
 import {cartTransaction} from './ai-cart.js';
 
 test('automatic procurement isolates account failures and prevents overlapping worker batches',async()=>{
@@ -231,4 +231,20 @@ test('automatic checkout rejects zero-net supplier orders before creating an ord
  assert.equal(result.state,'blocked');
  assert.match(result.error,/Warenwertgrenze/);
  assert.equal(created,0);
+});
+
+test('disabling automatic procurement ignores stale supplier fields and increments the policy version',async()=>{
+ const queries=[];
+ const db={connect:async()=>({query:async(sql,args)=>{
+  queries.push({sql,args});
+  if(sql.startsWith('SELECT id FROM ai_accounts'))return {rowCount:1,rows:[{id:'restaurant'}]};
+  if(sql.startsWith('UPDATE ai_auto_procurement'))return {rowCount:1,rows:[{account_id:'restaurant'}]};
+  return {rowCount:1,rows:[]};
+ },release:()=>{}})};
+ assert.deepEqual(await saveProcurementPolicy(db,{id:'restaurant',role:'restaurant'},{
+  enabled:false,supplierIds:[],days:0,leadDays:0,maxDailyNetCents:0
+ }),{ok:true});
+ assert.equal(queries.some(q=>q.sql.includes("policy=jsonb_set")),true);
+ assert.equal(queries.some(q=>q.sql.includes('minimum_order_cents')),false);
+ assert.equal(queries.at(-1).sql,'COMMIT');
 });
