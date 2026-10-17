@@ -53,3 +53,12 @@ test('invalid supplier identity cannot reach collection database',async()=>{
   await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[id],supplier_id,month:'2026-09',net_cents:200}),/Ungültiger Lieferant/);
  }
 });
+
+test('invalid commission order references are rejected before querying',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const id='11111111-1111-4111-8111-111111111111';
+ const db={query:()=>{throw Error('Invalid order must not query database')}};
+ for(const orderId of ['',null,'not-a-uuid']){
+  await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[orderId],supplier_id:id,month:'2026-09',net_cents:200}),/Ungültige Bestellreferenz/);
+ }
+});
