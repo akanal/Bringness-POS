@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {clearLoginAttempts} from './auth-attempts.js';
 import {sendSmtpMail} from './smtp-mail.js';
 import {createMailProbe} from './ai-mail-health.js';
@@ -20,14 +21,7 @@ function send(res,status,value){
   res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});
   res.end(JSON.stringify(value));
 }
-async function body(req){
-  let raw="";
-  for await(const chunk of req){
-    raw+=chunk;
-    if(raw.length>8192)throw Error("Anfrage zu groß");
-  }
-  return raw?JSON.parse(raw):{};
-}
+const body=req=>readJsonObject(req,{maxBytes:8192});
 function mailConfigured(){
   return Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
 }
