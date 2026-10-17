@@ -73,7 +73,7 @@ export async function automaticProcurementTick({db=aiPool(),run=runAutomaticProc
 }
 export async function saveProcurementPolicy(db,user,b){
  if(!b||typeof b!=='object'||Array.isArray(b))fail('Ungültige Beschaffungsfreigabe');
- const disable=b.enabled===false&&!b.supplierIds,policy=disable?null:procurementPolicy(b);
+ const disable=b.enabled===false,policy=disable?null:procurementPolicy(b);
  const c=await db.connect();try{
   await c.query('BEGIN');
   if(!(await c.query("SELECT id FROM ai_accounts WHERE id=$1 AND role='restaurant' AND status='active' FOR UPDATE",[user.id])).rowCount)fail('Restaurantkonto nicht mehr freigegeben',403);
