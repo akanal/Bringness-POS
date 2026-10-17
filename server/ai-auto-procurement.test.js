@@ -208,3 +208,27 @@ test('automatic procurement never exposes internal errors in run history or API 
  assert.equal(result.error,'Automatische Beschaffung vorübergehend nicht möglich');
  assert.equal(storedError,result.error);
 });
+
+test('automatic checkout rejects zero-net supplier orders before creating an order',async()=>{
+ const policy={enabled:true,days:2,leadDays:1,maxDailyNetCents:10000,supplierIds:['supplier'],supplierTerms:{supplier:['Berlin','terms',0]}};
+ const db={query:async sql=>{
+  if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+  if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'pending'}]};
+  if(sql.startsWith('SELECT state,net_cents'))return {rows:[{state:'blocked',net_cents:0}]};
+  return {rows:[]};
+ }};
+ let created=0;
+ const quote={netCents:0,groups:[{supplierId:'supplier',deliveryArea:'Berlin',terms:'terms',minimumCents:0}]};
+ const result=await runAutomaticProcurement({id:'buyer',role:'restaurant'},{db,
+  now:new Date('2026-10-16T12:00:00Z'),clock:()=>new Date('2026-10-16T12:00:00Z'),
+  draft:async()=>({complete:true,lines:[{stockId:'stock',productId:'product',packs:1}]}),
+  cart:async(_db,_user,_body,options)=>{
+   if(options.checkout===false)return {canOrder:true,quote};
+   await options.authorize(db,quote);
+   created++;
+  }
+ });
+ assert.equal(result.state,'blocked');
+ assert.match(result.error,/Warenwertgrenze/);
+ assert.equal(created,0);
+});
