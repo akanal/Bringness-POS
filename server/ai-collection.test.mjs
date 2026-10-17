@@ -107,3 +107,15 @@ test('paid reconciliation rejects missing or invalid orders before payment recor
  assert.match(source,/if\(!o\|\|!Number\.isSafeInteger\(Number\(o\.commission_cents\)\)\|\|Number\(o\.commission_cents\)<=0\)fail\('Bestellung für Zahlungsabgleich fehlt oder ist ungültig'/);
  assert.match(source,/SELECT 1 FROM ai_commission_payments WHERE order_id=\$1/);
 });
+
+test('commission monetary amounts must be canonical integer cents',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const id='11111111-1111-4111-8111-111111111111';
+ const base={kind:'commission',order_ids:[id],supplier_id:id,month:'2026-09',net_cents:200};
+ for(const bad of ['2e2','200.0',' 200',200.5,Infinity,null]){
+  const db={query:async()=>({rows:[{id,commission_cents:bad,paid:null}]})};
+  await assert.rejects(validateBillingJob(db,base),/Ungültige Provisionsbeträge/);
+  const validDb={query:async()=>({rows:[{id,commission_cents:200,paid:null}]})};
+  await assert.rejects(validateBillingJob(validDb,{...base,net_cents:bad}),/Ungültige Provisionsbeträge/);
+ }
+});
