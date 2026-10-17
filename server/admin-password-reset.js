@@ -5,7 +5,7 @@ import {sendSmtpMail} from './smtp-mail.js';
 import {createMailProbe} from './ai-mail-health.js';
 const adminMailStatus=createMailProbe();
 let recoverySchema;
-function ensureRecoverySchema(){if(!recoverySchema)recoverySchema=pool.query("ALTER TABLE password_reset_tokens ADD COLUMN IF NOT EXISTS delivered_at timestamptz").catch(error=>{recoverySchema=null;throw error});return recoverySchema;}
+function ensureRecoverySchema(){if(!recoverySchema)recoverySchema=pool.query("ALTER TABLE password_reset_tokens ADD COLUMN IF NOT EXISTS delivered_at timestamptz, ADD COLUMN IF NOT EXISTS purpose text").catch(error=>{recoverySchema=null;throw error});return recoverySchema;}
 import {validPassword,passwordMessage} from "./password-policy.js";
 import crypto from "node:crypto";
 import pg from "pg";
@@ -28,7 +28,7 @@ function mailConfigured(){
 async function sendResetMail(email,token,returnTo){
   const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness.de')).replace(/\/$/,"");
   if(new URL(origin).protocol!=="https:")throw Error("Öffentliche Adresse muss HTTPS verwenden");
-  const link=origin+"/admin/reset.html"+(returnTo==='ai'?"?returnTo=ai":returnTo==='pos-login'?"?returnTo=pos":"")+"#token="+token;
+  const link=origin+(returnTo==='pos-login'?"/pos/reset.html":"/admin/reset.html")+(returnTo==='ai'?"?returnTo=ai":"")+"#token="+token;
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   await sendSmtpMail({
     from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
@@ -87,10 +87,10 @@ export async function handleAdminPasswordReset(req,res){
     const user=result.rows.length===1?result.rows[0]:null;
     const generic={message:posRecovery?"Wenn ein aktives Konto mit dieser E-Mail existiert, erhältst du einen Link zum Zurücksetzen. Bitte prüfe auch den Spamordner.":"Wenn ein aktives Admin-Konto mit dieser E-Mail existiert, erhält es einen Reset-Link."};
     if(!user){send(res,200,generic);return true}
-    const recent=await pool.query("SELECT 1 FROM password_reset_tokens WHERE user_id=$1 AND created_at>now()-interval '2 minutes' AND used_at IS NULL AND delivered_at IS NOT NULL",[user.id]);
+    const recent=await pool.query("SELECT 1 FROM password_reset_tokens WHERE user_id=$1 AND COALESCE(purpose,'admin')=$2 AND created_at>now()-interval '2 minutes' AND used_at IS NULL AND delivered_at IS NOT NULL",[user.id,posRecovery?'pos':'admin']);
     if(recent.rowCount){send(res,200,generic);return true}
     const token=crypto.randomBytes(32).toString("hex"),tokenHash=hash(token);
-    await pool.query("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '30 minutes')",[tokenHash,user.id]);
+    await pool.query("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at,purpose) VALUES($1,$2,now()+interval '30 minutes',$3)",[tokenHash,user.id,posRecovery?'pos':'admin']);
     try{await sendResetMail(user.email,token,posRecovery?'pos-login':input.returnTo==='ai'?'ai':'pos');await pool.query('UPDATE password_reset_tokens SET delivered_at=now() WHERE token_hash=$1',[tokenHash])}
     catch(error){
       await pool.query("DELETE FROM password_reset_tokens WHERE token_hash=$1",[tokenHash]);
@@ -100,6 +100,7 @@ export async function handleAdminPasswordReset(req,res){
     send(res,200,generic);return true;
   }
   if((path==="/api/v1/admin/password/reset"||path==="/api/v1/auth/reset-password")&&req.method==="POST"){
+    await ensureRecoverySchema();
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const token=String(input.token||""),password=String(input.password||"");
     if(!tokenPattern.test(token)||!validPassword(password)){
@@ -111,10 +112,10 @@ export async function handleAdminPasswordReset(req,res){
       const row=(await client.query(`
         SELECT pr.token_hash,pr.user_id,u.company_id,u.email
         FROM password_reset_tokens pr JOIN users u ON u.id=pr.user_id
-        WHERE pr.token_hash=$1 AND pr.used_at IS NULL AND pr.expires_at>now()
+        WHERE pr.token_hash=$1 AND COALESCE(pr.purpose,'admin')=$2 AND pr.used_at IS NULL AND pr.expires_at>now()
           AND ${eligibleRoles} AND u.status='active'
         FOR UPDATE OF pr, u
-      `,[hash(token)])).rows[0];
+      `,[hash(token),posRecovery?'pos':'admin'])).rows[0];
       if(!row){await client.query("ROLLBACK");send(res,400,{error:"Reset-Link ist ungültig oder abgelaufen"});return true}
       await client.query("UPDATE users SET password_hash=$2,must_change_password=false WHERE id=$1",[row.user_id,await passwordHash(password)]);
       await client.query("UPDATE password_reset_tokens SET used_at=now() WHERE token_hash=$1",[row.token_hash]);

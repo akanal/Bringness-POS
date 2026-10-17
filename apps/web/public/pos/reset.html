@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Kassen-Passwort zurücksetzen · Bringness</title>
+<link rel="stylesheet" href="/styles.css">
+<style>body{background:#f3f6f8}.reset{max-width:480px;margin:45px auto;padding:20px}.card{background:#fff;border-radius:18px;padding:25px;box-shadow:0 4px 22px rgba(15,25,35,.06)}input{display:block;box-sizing:border-box;width:100%;padding:12px;margin:7px 0 17px;border:1px solid #d6dde3;border-radius:9px}label{display:block}#message{min-height:1.5em}</style>
+</head>
+<body>
+<header><a class="brand home" href="/">Bringness <span>Kasse</span></a></header>
+<main class="reset"><section class="card"><h1>Passwort zurücksetzen</h1><p>Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen).</p><form id="resetForm"><label for="newPassword">Neues Passwort</label><input id="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><label for="repeatPassword">Passwort wiederholen</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" pattern="(?=.*\p{Lu})(?=.*\p{Ll})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}\s]).{6,128}" title="Mindestens 6 Zeichen, ein Großbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)." required><button id="submit" class="btn" type="submit">Passwort ändern</button></form><p id="message" role="status"></p><a href="/pos/">Zur Kassen-Anmeldung</a></section></main>
+<script>
+const params=new URLSearchParams(location.hash.slice(1));
+const token=params.get('token')||'';
+history.replaceState(null,'',location.pathname);
+const message=document.getElementById('message'),form=document.getElementById('resetForm');
+if(!/^[a-f0-9]{64}$/.test(token)){form.hidden=true;message.textContent='Reset-Link ist ungültig. Bitte fordere einen neuen Link an.'}
+form.addEventListener('submit',async event=>{event.preventDefault();const password=document.getElementById('newPassword').value;if(password!==document.getElementById('repeatPassword').value){message.textContent='Die Passwörter stimmen nicht überein.';return}const button=document.getElementById('submit');button.disabled=true;message.textContent='';try{const response=await fetch('/api/v1/auth/reset-password',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,password})});const result=await response.json();if(!response.ok)throw Error(result.error||'Zurücksetzen fehlgeschlagen');form.hidden=true;message.textContent=result.message+' Bitte melde dich erneut an.';localStorage.removeItem('bringness-pos-token')}catch(error){message.textContent=error.message;button.disabled=false}});
+document.querySelectorAll('input[type="password"]').forEach(input=>{const button=document.createElement('button');button.type='button';button.textContent='👁️';button.setAttribute('aria-label','Passwort anzeigen');button.setAttribute('aria-pressed','false');button.onclick=()=>{const visible=input.type==='password';input.type=visible?'text':'password';button.textContent=visible?'🙈':'👁️';button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Passwort verbergen':'Passwort anzeigen')};input.insertAdjacentElement('afterend',button)});
+</script>
+</body>
+</html>
+
+
+
+
