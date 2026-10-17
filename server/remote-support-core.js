@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 export const supportUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function supportInput(b){
@@ -29,7 +30,7 @@ export function createRemoteSupport(pool){
    const adminPath=!p.startsWith('/api/v1/remote-support/device/');
    if(adminPath&&!user.platform_admin)return send(403,{error:'Nur Plattformadministratoren.'});
 
-   let b={};if(req.method==='POST'){let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>250000)return send(413,{error:'Anfrage zu groß.'})}try{b=JSON.parse(raw||'{}')}catch{return send(400,{error:'Ungültige Anfrage.'})}}
+   const b=req.method==='POST'?await readJsonObject(req,{maxBytes:250000}):{};
    await cleanupRemoteSupport(pool);
    if(p==='/api/v1/remote-support/devices'&&req.method==='GET')return send(200,{devices:(await pool.query(`SELECT d.id,d.name,d.app_version,d.status,d.last_seen_at,d.support_diagnostics,d.support_grant,c.name company_name,rs.id session_id,rs.state session_state,rs.expires_at FROM devices d JOIN companies c ON c.id=d.company_id LEFT JOIN remote_support_sessions rs ON rs.device_id=d.id AND rs.state IN ('requested','active') WHERE d.platform IN ('windows','win32') ORDER BY d.last_seen_at DESC NULLS LAST LIMIT 500`)).rows,limit:500});
    let device;
