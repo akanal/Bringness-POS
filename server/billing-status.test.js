@@ -2,10 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import {handleBillingStatus} from './billing-status.js';
-let features=[],entitlements=[];
+let features=[],entitlements=[],role='owner';
 const original=pg.Pool.prototype.query;
 pg.Pool.prototype.query=async function(sql){
- if(sql.includes('FROM sessions'))return {rows:[{id:'owner',company_id:'company',role:'owner'}]};
+ if(sql.includes('FROM sessions')){assert.match(sql,/must_change_password/);return {rows:[{id:'owner',company_id:'company',role}]};}
  if(sql.includes('FROM billing_plans bp'))return {rows:['pos_base_monthly','restaurant_monthly','table_qr_monthly','download_license'].map((code,i)=>({code,amount_cents:[2999,6999,2999,39900][i],currency:'EUR',billing_type:i===3?'one_time':'monthly'}))};
  if(sql.includes('FROM company_features'))return {rows:features};
  if(sql.includes('FROM company_entitlements'))return {rows:entitlements};
@@ -19,3 +19,5 @@ test('download can book QR without restaurant and costs 399 euros',async()=>{fea
 test('expired restaurant disables QR even if QR feature remains active',async()=>{features=[{...feature('restaurant'),ends_at:'2020-01-01'},feature('table_qr')];entitlements=[];const s=await status();assert.equal(s.features.table_qr,false);assert.equal(s.plans.find(p=>p.code==='table_qr_monthly').eligible,false)});
 test('canceled QR remains available until paid end, then base POS remains',async()=>{features=[feature('pos_base'),{...feature('table_qr'),payment_status:'canceled',ends_at:'2099-01-01'}];entitlements=[];let s=await status();assert(s.features.table_qr);assert.equal(s.features.restaurant,false);features[1].ends_at='2020-01-01';s=await status();assert.equal(s.features.table_qr,false);assert(s.features.pos_base)});
 test.after(()=>{pg.Pool.prototype.query=original});
+
+test('waiter cannot read private subscription terms',async()=>{role='waiter';let code;try{await handleBillingStatus({url:'/api/v1/billing/status',method:'GET',headers:{authorization:'Bearer fixture'}},{writeHead(s){code=s;},end(){}});assert.equal(code,403);}finally{role='owner';}});

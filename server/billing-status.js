@@ -21,7 +21,7 @@ async function currentUser(req){
   const q=await pool.query(`
     SELECT u.id,u.company_id,u.role
     FROM sessions s JOIN users u ON u.id=s.user_id
-    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'
+    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)
   `,[tokenHash]);
   return q.rows[0]||null;
 }
@@ -33,6 +33,8 @@ export async function handleBillingStatus(req,res){
 
   const user=await currentUser(req);
   if(!user){send(res,401,{error:"Nicht angemeldet"});return true}
+
+  if(!["owner","admin"].includes(user.role)){send(res,403,{error:"Abrechnungsdaten nur für die Betriebsverwaltung"});return true}
 
   const [plans,features,entitlements]=await Promise.all([
     pool.query(`SELECT bp.code,bp.name,bp.billing_type,bp.amount_cents,bp.currency,bp.active,
