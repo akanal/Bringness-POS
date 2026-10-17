@@ -2,7 +2,12 @@
 
 Staging configuration CI passed on commit 4383bd07359f517f52a9351a58ebe9a62d75a59d; interactive demo smoke tests passed on commit 46bab14e8e5d3934313078384ac0558f380c1843. These verify **only** repository-level checks, not infrastructure readiness. The demo HTML is a standalone simulation, not the connected Bringness POS application.
 
-## Prepared static demo
+## Approved preview source boundaries
+- Use the existing POS UI at `apps/web/public/pos/index.html` with its normal application modules. Do not present the old standalone simulation as the product.
+- Bringness AI remains a separate product and workspace at `apps/web/public/ai-workspace.html`; any integration must be explicitly optional.
+- `npm run test:preview-source` enforces these boundaries at source level. This does not establish deployed behavior.
+
+## Prepared static demo (superseded; not for product approval)
 - Source: `apps/web/public/demo/index.html` on `staging/preview-20261016`.
 - Checks: `npm run test:demo` and GitHub workflow `Demo smoke tests`.
 - Behavior: cart, table selection, kitchen tickets, sample stock, all in browser memory; no backend, real payments or TSE.
