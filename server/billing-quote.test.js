@@ -14,3 +14,8 @@ test('new online base quote includes VAT and preserves an agreed lower price',()
  assert.deepEqual(billingQuote({billing_type:"monthly",amount_cents:3499},null),{netCents:3499,vatCents:665,grossCents:4164});
  assert.deepEqual(billingQuote({billing_type:"monthly",amount_cents:3499},{monthly_net_cents:2999}),{netCents:2999,vatCents:570,grossCents:3569});
 });
+
+test('VAT is integer-rounded and oversized or coerced tariff totals are rejected',()=>{
+ assert.deepEqual(billingQuote({amount_cents:50}),{netCents:50,vatCents:10,grossCents:60});
+ for(const amount_cents of [Number.MAX_SAFE_INTEGER,2147483647,true])assert.throws(()=>billingQuote({amount_cents}));
+});
