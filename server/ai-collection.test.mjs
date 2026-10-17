@@ -155,3 +155,8 @@ test('duplicate commission references never reach database',async()=>{const {val
 test('empty commission batch never reaches database',async()=>{const {validateBillingJob}=await import('./ai-billing-validation.js');let queries=0;const db={query:async()=>{queries++;return {rows:[]}}};await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[],supplier_id:'11111111-1111-4111-8111-111111111111',month:'2026-09',net_cents:100}),/fehlen oder sind doppelt/);assert.equal(queries,0);});
 
 test('subscription rejects invalid end date',async()=>{const {validateBillingJob}=await import('./ai-billing-validation.js');const db={query:async()=>({rows:[{net_cents:100,starts_at:'2026-09-01',ends_at:'2026-10-01',snapshot:{}}]})};await assert.rejects(validateBillingJob(db,{kind:'subscription',id:'job',source_id:'charge',order_ids:[],net_cents:100,period_start:'2026-09-01',period_end:'not-a-date'}),/Abo-Abrechnungsposition/);});
+
+test('paid reconciliation locks and compares the charged amount and mandate identity',()=>{
+ assert.match(source,/SELECT state,payment_id,kind,net_cents,gross_cents,customer_id,mandate_id,invoice_reference,order_ids,supplier_id,month,source_id,period_start,period_end FROM ai_collection_jobs WHERE id=\$1 FOR UPDATE/);
+ for(const field of ['gross_cents','customer_id','mandate_id','invoice_reference'])assert.ok(source.includes('locked.'+field+'!==j.'+field),'must compare locked '+field);
+});
