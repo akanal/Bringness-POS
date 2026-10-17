@@ -119,3 +119,5 @@ test('commission monetary amounts must be canonical integer cents',async()=>{
   await assert.rejects(validateBillingJob(validDb,{...base,net_cents:bad}),/Ungültige Provisionsbeträge/);
  }
 });
+
+test('previously paid commission order is rejected',async()=>{const {validateBillingJob}=await import('./ai-billing-validation.js');const id='11111111-1111-4111-8111-111111111111';const db={query:async()=>({rows:[{id,commission_cents:200,paid:id}]})};await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[id],supplier_id:id,month:'2026-09',net_cents:200}),/Abrechnungsbetrag verändert/);});
