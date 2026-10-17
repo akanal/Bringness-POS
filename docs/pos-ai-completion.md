@@ -18,7 +18,7 @@ Fiscal signing remains pending under the existing TSE launch gate. Offline sale 
 
 The accountant page exposes receipt snapshots, payment allocations, original line quantities/prices/taxes and CSV/JSON download. It offers no POS administration or mutation routes. Every page rechecks expiration/revocation. Keyset pagination and a recorded-at cutoff include more than 200 receipts and exclude receipts imported after the export started. CSV cells guard spreadsheet formula prefixes. Internal JSON and CSV are explicitly not official DSFinV-K exports.
 
-The existing owner/platform-admin roles and administration screens remain responsible for device licenses, staff, audit, billing and platform controls. Native remote-support transport is still unconfigured; a support command is not reported completed without a transport.
+The existing owner/platform-admin roles and administration screens remain responsible for device licenses, staff, audit, billing and platform controls. Native Windows remote-support transport is implemented; see `docs/remote-support.md`. PostgreSQL/DOM tests and Windows Electron smoke validate consent, capture, bounded input and stop. A command acknowledgement confirms native input delivery, not successful completion of a financial operation. Customer-device operational acceptance remains separate.
 
 ## Weather / events
 
