@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import pg from 'pg';
 import crypto from 'node:crypto';
 import {quoteOfflineSale,offlineUuid,offlineFingerprint,offlineCatalogValidUntil} from './offline-sale-core.js';
@@ -80,7 +81,7 @@ export async function handleOfflineSales(req,res,{db=pool}={}){
     [user.company_id,state,limit,restaurantId])).rows;
    return send(200,{sales,filters:{state,limit,restaurantId}});
   }
-  let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>(path.endsWith('/batch')?262144:64000))fail('Anfrage zu groß',413)}let b;try{b=JSON.parse(raw)}catch{fail('Ungültige Anfrage')}
+  const b=await readJsonObject(req,{maxBytes:path.endsWith('/batch')?262144:64000});
   if(path.endsWith('/batch')){
    if(!b||typeof b!=='object'||!/^[a-f0-9]{64}$/.test(b.deviceKey||''))fail('Ungültige Gerätekennung');
    if(!Array.isArray(b.sales)||b.sales.length<1||b.sales.length>20)fail('1 bis 20 Offline-Verkäufe pro Synchronisierung erforderlich');
