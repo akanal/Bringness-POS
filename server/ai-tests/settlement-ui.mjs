@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {JSDOM} from 'jsdom';
+const script=fs.readFileSync(new URL('../../apps/web/public/pos/settlement-flow.js',import.meta.url),'utf8');
+const table='11111111-1111-4111-8111-111111111111',order='22222222-2222-4222-8222-222222222222';
+const selection={tableId:table,paymentMethod:'cash',orderIds:[order],expectedTotalCents:500},key='bringness.table-settlement.pending.v1:'+table;
+const fixture=()=>{const d=new JSDOM('<div id="host"><div class="tabledetail"><div id="tableOrderDetails"></div></div></div><p id="tableFeedback"></p>',{runScripts:'outside-only',url:'https://register.test/pos/'});d.window.eval(script);return d.window;};
+const result=body=>({requestKey:body.requestKey,tableId:body.tableId,method:'cash',paidOrders:body.orderIds.length,totalCents:body.expectedTotalCents,receiptIds:body.orderIds.map(()=>order),receiptNumbers:body.orderIds.map(()=> 'BN-1')});
+let w=fixture(),original;
+w.api=async(path,opt)=>{original=JSON.parse(opt.body);throw Error('socket after commit');};await assert.rejects(w.bnSettleTable(selection),/nicht erneut kassieren/);const saved=w.localStorage.getItem(key);assert(saved);w.close();
+w=fixture();w.localStorage.setItem(key,saved);assert(w.bnHasPendingTable(table));
+w.api=async(path,opt)=>{assert.deepEqual(JSON.parse(opt.body),original);return {...result(original),replayed:true};};
+// Reopen the actual POS dialog on an already-paid table: recovery must remain clickable.
+const app=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8');
+const dialog=app.slice(app.indexOf('function showTableSettlement('),app.indexOf('async function showTableTransfer('));
+w.esc=String;w.euro=String;w.$=id=>w.document.getElementById(id);w.renderTableDashboard=async()=>{};w.Element.prototype.scrollIntoView=()=>{};
+w.eval(dialog);w.showTableSettlement({id:table,name:'1'},'restaurant',w.document.getElementById('host'),[],0);
+assert.equal(w.document.getElementById('confirmTablePayment').disabled,false);await w.document.getElementById('confirmTablePayment').onclick();assert.equal(w.localStorage.getItem(key),null);assert(w.document.getElementById('tableFeedback').textContent.includes('vorherige Zahlung abgeglichen'));assert(!w.document.getElementById('tableFeedback').textContent.includes('ist frei'));w.close();
+w=fixture();let calls=0,resolve;
+w.api=async(path,opt)=>{calls++;return new Promise(done=>{resolve=()=>done(result(JSON.parse(opt.body)));});};const pending=w.bnSettleTable(selection);await assert.rejects(w.bnSettleTable(selection),/bereits/);assert.equal(calls,1);resolve();await pending;w.close();
+w=fixture();w.api=async()=>{throw Error('must not dispatch');};await assert.rejects(w.bnSettleTable({...selection,paymentMethod:'card'}),/serverseitig/);w.close();
+w=fixture();let attempt=0,requestKey;
+w.api=async(path,opt)=>{const b=JSON.parse(opt.body);if(!attempt++){requestKey=b.requestKey;throw Object.assign(Error('changed'),{code:'SETTLEMENT_CHANGED'});}assert.equal(b.requestKey,requestKey);assert.equal(b.expectedTotalCents,700);return result(b);};await assert.rejects(w.bnSettleTable(selection));await w.bnSettleTable({...selection,expectedTotalCents:700});assert.equal(w.localStorage.getItem(key),null);w.close();
+w=fixture();w.api=async()=>({});await assert.rejects(w.bnSettleTable(selection),/Unvollständige/);assert(w.localStorage.getItem(key));w.close();
+w=fixture();let contacted=false;w.api=async()=>{contacted=true;};Object.defineProperty(w,'localStorage',{value:{getItem:()=>null,setItem(){throw Error('quota');}}});await assert.rejects(w.bnSettleTable(selection),/Keine Zahlung/);assert.equal(contacted,false);w.close();
+console.log('Settlement UI passed: persisted replay, empty-table dialog recovery, no false free-table claim, duplicate click guard, card/storage guards, same-key snapshot correction and incomplete-reply retention.');
