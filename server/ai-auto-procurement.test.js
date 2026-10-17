@@ -248,3 +248,26 @@ test('disabling automatic procurement ignores stale supplier fields and incremen
  assert.equal(queries.some(q=>q.sql.includes('minimum_order_cents')),false);
  assert.equal(queries.at(-1).sql,'COMMIT');
 });
+
+test('automatic procurement discards pooled connection if advisory unlock fails',async()=>{
+ let discarded;
+ const policy={enabled:true};
+ const db={
+  query:async sql=>{
+   if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+   if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'ordered',net_cents:123}]};
+   return {rows:[]};
+  },
+  connect:async()=>({
+   query:async sql=>{
+    if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:true}]};
+    if(sql.includes('pg_advisory_unlock'))throw Error('connection lost');
+    throw Error('unexpected query');
+   },
+   release:error=>{discarded=error}
+  })
+ };
+ const result=await runAutomaticProcurement({id:'restaurant-a'},{db});
+ assert.equal(result.state,'ordered');
+ assert.match(discarded.message,/connection lost/);
+});
