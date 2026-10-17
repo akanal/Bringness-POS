@@ -146,6 +146,26 @@ test('automatic procurement refuses concurrent restaurant run before creating a 
  assert.equal(released,1);
 });
 
+test('automatic procurement namespaces locks by restaurant account',async()=>{
+ const keys=[];
+ const policy={enabled:true,days:2,leadDays:1,supplierIds:['supplier']};
+ const db={
+  query:async sql=>{
+   if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+   if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'ordered',net_cents:100}]};
+   return {rows:[]};
+  },
+  connect:async()=>({query:async(sql,args)=>{keys.push({sql,args});return {rows:[{locked:true}]};},release:()=>{}})
+ };
+ await runAutomaticProcurement({id:'restaurant-a'},{db});
+ await runAutomaticProcurement({id:'restaurant-b'},{db});
+ const locks=keys.filter(x=>x.sql.includes('pg_try_advisory_lock'));
+ const unlocks=keys.filter(x=>x.sql.includes('pg_advisory_unlock'));
+ assert.equal(locks.length,2);
+ assert.deepEqual(locks.map(x=>x.args),[['bringness-ai-auto-procurement','restaurant-a'],['bringness-ai-auto-procurement','restaurant-b']]);
+ assert.deepEqual(unlocks.map(x=>x.args),locks.map(x=>x.args));
+});
+
 test('automatic procurement releases the same advisory-lock connection after a no-need run',async()=>{
  const policy={enabled:true,days:2,leadDays:1,supplierIds:['supplier']};
  let locks=0,unlocks=0,releases=0;
