@@ -30,3 +30,13 @@ test('wrong key, modified ciphertext, changed header and truncation never leave 
   await chmod(p('key'),0o644);await assert.rejects(encryptBackup(Readable.from(['sql']),p('unsafe'),p('key')),/private regular/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+test('an interrupted database dump removes its partial archive and rejects invalid or symbolic keys',async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'preview-backup-'));const p=name=>path.join(dir,name);
+ try{
+  await createBackupKey(p('key'));
+  const broken=Readable.from((async function*(){yield 'partial SQL';throw Error('database disconnected');})());
+  await assert.rejects(encryptBackup(broken,p('partial'),p('key')),/disconnected/);await assert.rejects(stat(p('partial')),{code:'ENOENT'});
+  await writeFile(p('short'),'short',{mode:0o600});await assert.rejects(encryptBackup(Readable.from(['sql']),p('bad'),p('short')),/Invalid backup key/);
+  const {symlink}=await import('node:fs/promises');await symlink(p('key'),p('link'));await assert.rejects(encryptBackup(Readable.from(['sql']),p('linked'),p('link')),/private regular/);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});

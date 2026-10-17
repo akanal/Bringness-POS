@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {readFile,writeFile} from 'node:fs/promises';
 const env=Object.fromEntries((await readFile(process.argv[2]||'.env.preview.local','utf8')).trim().split('\n').map(line=>{const at=line.indexOf('=');return [line.slice(0,at),line.slice(at+1)];}));
+const stateFile=process.argv[3];
+let previous;
+if(stateFile){try{previous=JSON.parse(await readFile(stateFile,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}}
 const base='http://127.0.0.1:3016';
 const anonymous=await fetch(base+'/health');assert.equal(anonymous.status,401);assert.match(anonymous.headers.get('x-robots-tag'),/noindex/);
 const basic='Basic '+Buffer.from('bringness-preview:'+env.PREVIEW_ACCESS_PASSWORD).toString('base64');
@@ -15,9 +18,10 @@ for(const path of ['/pos/','/ai-workspace.html']){const res=await fetch(base+pat
 const login=await request('/api/v1/auth/login',{method:'POST',body:{email:'preview@example.test',password:env.PREVIEW_OWNER_PASSWORD}});assert.equal(login.status,200);assert.equal(typeof login.data.token,'string');const token=login.data.token;
 const bootstrap=await request('/api/v1/bootstrap',{token});assert.equal(bootstrap.status,200);assert.equal(bootstrap.data.restaurants.length,1);assert.equal(bootstrap.data.products.length,2);
 const product=bootstrap.data.products.find(p=>p.name==='Vorschau Kaffee');assert(product);
-const sale={requestKey:crypto.randomUUID(),restaurantId:bootstrap.data.restaurants[0].id,items:[{productId:product.id,qty:1}],payments:[{method:'cash',amountCents:250}]};
-const paid=await request('/api/v1/orders/checkout',{method:'POST',body:sale,token});assert.equal(paid.status,201);const replay=await request('/api/v1/orders/checkout',{method:'POST',body:sale,token});assert.equal(replay.status,200);assert.equal(replay.data.id,paid.data.id);assert.equal(replay.data.replayed,true);
+const sale=previous?.sale||{requestKey:crypto.randomUUID(),restaurantId:bootstrap.data.restaurants[0].id,items:[{productId:product.id,qty:1}],payments:[{method:'cash',amountCents:250}]};
+const paid=await request('/api/v1/orders/checkout',{method:'POST',body:sale,token});assert.equal(paid.status,previous?200:201);if(previous){assert.equal(paid.data.id,previous.orderId);assert.equal(paid.data.replayed,true);}const replay=await request('/api/v1/orders/checkout',{method:'POST',body:sale,token});assert.equal(replay.status,200);assert.equal(replay.data.id,paid.data.id);assert.equal(replay.data.replayed,true);
 for(const path of ['/api/v1/billing/checkout','/api/v1/mollie/webhook','/api/v1/fiskaly-test/setup','/api/v1/tse/sign','/api/ai/automatic-procurement/run','/api/ai/collection/setup']){const blocked=await request(path,{method:'POST',body:{},token});assert.equal(blocked.status,403);assert.equal(blocked.data.code,'PREVIEW_ACTION_DISABLED');}
 const aiLogin=await request('/api/ai/login',{method:'POST',body:{email:'preview@example.test',password:env.PREVIEW_OWNER_PASSWORD}});assert.equal(aiLogin.status,200);assert.equal(typeof aiLogin.data.token,'string');const stock=await request('/api/ai/stock',{token:aiLogin.data.token});assert.equal(stock.status,200);assert.equal(stock.data.stock.length,1);assert.equal(stock.data.stock[0].name,'Vorschau Mehl');
 const revoked=await fetch(base+'/health',{headers:{cookie:cookie+'tampered'}});assert.equal(revoked.status,401);
+if(stateFile&&!previous)await writeFile(stateFile,JSON.stringify({sale,orderId:paid.data.id})+'\n',{flag:'wx',mode:0o600});
 console.log('Isolated preview smoke passed: access protection, actual POS/AI assets and logins, idempotent synthetic cash sale, separate AI stock, cookie tamper and forbidden provider actions.');
