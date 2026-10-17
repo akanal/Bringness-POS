@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
 import {recoverGuestPayment} from './center-payment-recovery.js';
 import {centerPushConfiguration,saveGuestSubscription,manageGuestSubscription} from './center-guest-push.js';
@@ -18,14 +19,7 @@ const send = (res, status, data) => {
   res.end(JSON.stringify(data));
   return true;
 };
-async function body(req) {
-  let raw = '';
-  for await (const part of req) {
-    raw += part;
-    if (Buffer.byteLength(raw) > 8192) throw new Error('BODY_LIMIT');
-  }
-  return raw ? JSON.parse(raw) : {};
-}
+const body=req=>readJsonObject(req,{maxBytes:8192});
 export function centerPaymentOptions(restaurant,env=process.env){
  const mode=restaurant.payment_mode||'online';return {paymentMode:mode,onsiteAvailable:['onsite','choice'].includes(mode)&&restaurant.contract_status==='signed'&&env.CENTER_ONSITE_ENABLED!=='false',onlineAvailable:['online','choice'].includes(mode)&&centerOrderingAvailable(restaurant.provider_ready,env)};
 }
