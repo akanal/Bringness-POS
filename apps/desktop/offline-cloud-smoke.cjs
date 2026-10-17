@@ -27,8 +27,10 @@ app.whenReady().then(async()=>{
   };
   const sync=()=>window.webContents.executeJavaScript('offlinePOS.sync()');
   const sale=async()=>{
-   await wait(()=>window.webContents.executeJavaScript('document.querySelectorAll("#products button").length===1 && document.getElementById("pay").disabled===false'));
-   await window.webContents.executeJavaScript('document.querySelector("#products button").click();document.getElementById("pay").click()');
+   await wait(()=>window.webContents.executeJavaScript('document.querySelectorAll("#products button").length===1'));
+   await window.webContents.executeJavaScript('document.querySelector("#products button").click()');
+   await wait(()=>window.webContents.executeJavaScript('document.getElementById("pay").disabled===false'));
+   await window.webContents.executeJavaScript('document.getElementById("pay").click()');
    await wait(async()=>await runtime.ledger.pendingCount()===1);
    const request=(await runtime.ledger.pending())[0].request;
    await wait(()=>window.webContents.executeJavaScript(`document.getElementById('receipt').textContent.includes(${JSON.stringify(request.id)})`));
