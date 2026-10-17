@@ -6,3 +6,8 @@ test('delegated purchasing permission cannot survive a failed audit or revoked o
  await assert.rejects(planningRoutes('/api/ai/purchase-delegates','POST',{locationId:id,email:'delegate@example.test',active:true},{id,role:'restaurant'}));assert.equal(calls.at(-1),'ROLLBACK');assert(!calls.includes('COMMIT'));if(!active)assert(!calls.some(q=>q.startsWith('INSERT')));
  }}finally{pg.Pool.prototype.connect=original;for(const [k,v] of Object.entries(env)){if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 });
+
+test('purchase requests reject null and UUID case-duplicate ingredients before opening a transaction',async()=>{
+ const stock='AAAAAAAA-1111-4111-8111-111111111111',line={stockId:stock,quantity:1},db={connect(){throw Error('Unexpected connection');}};
+ for(const lines of [[null],[line,{...line,stockId:stock.toLowerCase()}]])await assert.rejects(planningRoutes('/api/ai/purchase-requests','POST',{locationId:id,requestKey:id,deliveryDate:'2026-10-17',lines},{id,role:'restaurant'},null,{db}),e=>e.status===400);
+});
