@@ -52,7 +52,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
     await c.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'automatic_procurement_ordered',$2::jsonb)",[user.id,JSON.stringify({runId:run.id,policyVersion:policyRow.version,netCents:quote.netCents,orders:orders.map(o=>o.id)})]);
    }
   });return {state:'ordered',orders:result.orders,netCents:preview.quote.netCents};
- }catch(e){await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,String(e.message).slice(0,1000)]);return durableRunResult(db,run.id,{state:'blocked',error:e.message})}
+ }catch(e){const safeError=Number.isInteger(e?.status)&&e.status>=400&&e.status<500?String(e.message).slice(0,1000):'Automatische Beschaffung vorübergehend nicht möglich';await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,safeError]);return durableRunResult(db,run.id,{state:'blocked',error:safeError})}
  }finally{if(lockClient){await lockClient.query('SELECT pg_advisory_unlock(hashtext($1),hashtext($2))',['bringness-ai-auto-procurement',user.id]).catch(()=>{});lockClient.release();}}
 }
 let running=false;
