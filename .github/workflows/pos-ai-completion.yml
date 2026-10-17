@@ -1,10 +1,10 @@
 name: POS and AI completion validation
 on:
   pull_request:
-    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
   push:
     branches: [main, 'finish/**', 'staging/preview-20261016']
-    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
 permissions:
   contents: read
 jobs:
@@ -30,6 +30,12 @@ jobs:
       - run: npm ci --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
       - run: node --test server/billing-policy.test.js server/billing-status.test.js server/billing-quote.test.js server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
       - run: node server/ai-tests/transactional-mail.mjs
+      - run: node server/ai-tests/checkout-ui.mjs
+      - run: node server/ai-tests/checkout-recovery.mjs
+      - name: Verify concurrent cash checkout and lost replies on PostgreSQL 16
+        run: node server/ai-tests/checkout-recovery.mjs
+        env:
+          CHECKOUT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/displays.mjs
       - run: node server/ai-tests/billing-eligibility.mjs
       - run: node server/ai-tests/remote-support.mjs
