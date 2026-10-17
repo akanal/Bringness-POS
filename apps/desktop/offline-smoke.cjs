@@ -14,7 +14,7 @@ app.whenReady().then(async()=>{let runtime,rogue;try{
  // Restart both before persistence and after persistence but before UI acknowledgement.
  for(const alreadySaved of [false,true]){
   const before=await runtime.ledger.pendingCount();
-  const request={id:crypto.randomUUID(),createdAt:new Date().toISOString(),snapshotId:snapshot.id,restaurantId:snapshot.restaurants[0].id,createdAt:new Date().toISOString(),paymentMethod:'cash',items:[{productId:snapshot.products[0].id,quantity:1}]};
+  const request={id:crypto.randomUUID(),snapshotId:snapshot.id,restaurantId:snapshot.restaurants[0].id,createdAt:new Date().toISOString(),paymentMethod:'cash',items:[{productId:snapshot.products[0].id,quantity:1}]};
   if(alreadySaved)await runtime.ledger.sale(request);
   await window.webContents.executeJavaScript(`localStorage.setItem('bringness.offline.pending-sale.v1',${JSON.stringify(JSON.stringify(request))})`);
   const loaded=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await loaded;
