@@ -52,6 +52,7 @@ jobs:
         env:
           DEVICE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/offline-ui.mjs
+      - run: node server/ai-tests/accountant-ui.mjs
       - run: node server/ai-tests/offline-accountant.mjs
       - name: Verify accountant microsecond pagination and revocation on PostgreSQL 16
         run: node server/ai-tests/accountant-postgres.mjs
