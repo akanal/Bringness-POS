@@ -11,7 +11,8 @@
     "test:center": "node --test server/center-browser.test.js server/center-database.test.js",
     "test:demo": "node --test ops/demo-smoke.test.mjs",
     "test:ci-workflows": "node --test ops/windows-workflow.test.mjs",
-    "test:preview-source": "node --test ops/preview-source.test.mjs"
+    "test:preview-source": "node --test ops/preview-source.test.mjs",
+    "test:ai-commission": "node --test server/ai-collection.test.mjs"
   },
   "engines": {
     "node": ">=20"
