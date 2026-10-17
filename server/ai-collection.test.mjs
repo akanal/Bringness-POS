@@ -35,3 +35,12 @@ test('nonpositive commission amounts cannot pass debit validation',async()=>{
  await assert.rejects(validateBillingJob(db,job),/Ungültige Provisionsbeträge/);
  await assert.rejects(validateBillingJob(db,{...job,net_cents:0}),/Ungültige Provisionsbeträge/);
 });
+
+test('invalid billing month is rejected before any database query',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const id='11111111-1111-4111-8111-111111111111';
+ const db={query:()=>{throw Error('Invalid period must not query database')}};
+ for(const month of ['2026-00','2026-13','2026-9','invalid']){
+  await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[id],supplier_id:id,month,net_cents:200}),/Ungültiger Abrechnungsmonat/);
+ }
+});
