@@ -15,6 +15,11 @@ async function request(path,{method='GET',body,token}={}){
  return {status:response.status,data:await response.json()};
 }
 for(const path of ['/pos/','/ai-workspace.html']){const res=await fetch(base+path,{headers:{cookie}});assert.equal(res.status,200);const html=await res.text();assert.match(html,path==='/pos/'?/\/pos\/app\.js/:/\/ai-workspace\.js/);assert(!html.includes('standalone simulation'));}
+// Reject malformed or unbounded public login payloads before database/auth work.
+for(const raw of ['null','[]','42','{bad']){
+ const response=await fetch(base+'/api/v1/auth/login',{method:'POST',headers:{cookie,'content-type':'application/json'},body:raw});assert.equal(response.status,400);
+}
+const oversizedLogin=await fetch(base+'/api/v1/auth/login',{method:'POST',headers:{cookie,'content-type':'application/json'},body:JSON.stringify({padding:'x'.repeat(4*1024*1024)})});assert.equal(oversizedLogin.status,413);
 const login=await request('/api/v1/auth/login',{method:'POST',body:{email:'preview@example.test',password:env.PREVIEW_OWNER_PASSWORD}});assert.equal(login.status,200);assert.equal(typeof login.data.token,'string');const token=login.data.token;
 const bootstrap=await request('/api/v1/bootstrap',{token});assert.equal(bootstrap.status,200);assert.equal(bootstrap.data.restaurants.length,1);assert.equal(bootstrap.data.products.length,2);
 const product=bootstrap.data.products.find(p=>p.name==='Vorschau Kaffee');assert(product);
