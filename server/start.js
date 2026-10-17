@@ -155,7 +155,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
         if (!html.includes('/personnel-report.js')) html = html.replace("</body>", '<script src="/personnel-report.js?v=20261012"></script></body>');
-        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js"></script></body>');
+        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=dismiss-notice-20261017"></script></body>');
         if (!html.includes('/pos/personnel.js')) html = html.replace("</body>", '<script src="/pos/personnel.js"></script></body>');
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
       }
