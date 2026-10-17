@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {accessMail} from './mail-templates.js';
 import {createStaffLifecycle} from './staff-lifecycle.js';
 import {enqueueMail} from './transactional-mail.js';
@@ -8,7 +9,7 @@ const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.en
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const pass=x=>crypto.scryptSync(x,process.env.PASSWORD_PEPPER||'bringness-pos',64).toString('hex');
 const reply=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
-async function input(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192)throw Error('Anfrage zu groß')}return raw?JSON.parse(raw):{}}
+const input=req=>readJsonObject(req,{maxBytes:8192});
 const configured=()=>Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
 
 export async function migrateStaffInvitations(){await pool.query(`CREATE TABLE IF NOT EXISTS staff_invitations(token_hash text PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at timestamptz NOT NULL,used_at timestamptz,created_at timestamptz NOT NULL DEFAULT now()); CREATE INDEX IF NOT EXISTS staff_invitations_user_idx ON staff_invitations(user_id);`)}
