@@ -192,3 +192,19 @@ test('automatic procurement releases the same advisory-lock connection after a n
  assert.equal(unlocks,1);
  assert.equal(releases,1);
 });
+
+test('automatic procurement never exposes internal errors in run history or API results',async()=>{
+ const policy={enabled:true,days:2,leadDays:1,supplierIds:['supplier']};
+ let storedError;
+ const db={query:async(sql,args)=>{
+  if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+  if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'pending'}]};
+  if(sql.includes("state='blocked'")){storedError=args[1];return {rows:[]}};
+  if(sql.startsWith('SELECT state,net_cents'))return {rows:[{state:'blocked',net_cents:0}]};
+  return {rows:[]};
+ }};
+ const result=await runAutomaticProcurement({id:'restaurant-a'},{db,draft:async()=>{throw Error('postgresql password=SECRET host=internal') }});
+ assert.equal(result.state,'blocked');
+ assert.equal(result.error,'Automatische Beschaffung vorübergehend nicht möglich');
+ assert.equal(storedError,result.error);
+});
