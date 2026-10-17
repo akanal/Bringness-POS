@@ -1,3 +1,4 @@
+import {legacyGuestItems} from './guest-cart-input.js';
 import {readJsonObject} from './http-body.js';
 import crypto from "node:crypto";
 import pg from "pg";
@@ -131,7 +132,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
   }
 
   if(p==="/api/v1/guest/order-v2" && req.method==="POST"){
-    const b=await readBody(req),items=Array.isArray(b.items)?b.items:[],code=String(b.code||""),requestId=String(b.requestId||"");
+    const b=await readBody(req),items=legacyGuestItems(b.items),code=String(b.code||""),requestId=String(b.requestId||"");
     if(!/^[a-f0-9]{48}$/.test(code)||!items.length||items.length>20||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))return json(res,400,{error:"Ungültiger Tisch oder Warenkorb"});
     const ids=items.map(i=>String(i.productId||"")); if(new Set(ids).size!==ids.length)return json(res,400,{error:"Doppelte Artikel im Warenkorb"});
     const c=await pool.connect();
