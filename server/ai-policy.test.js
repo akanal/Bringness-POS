@@ -23,3 +23,5 @@ console.log('AI policy checks passed: password hashing, quantities, commission a
 
 
 for(const value of [null,true,false,[],[1],{},'', ' ', '0x10','1e2']){assert.throws(()=>quantity(value));assert.throws(()=>money(value));}assert.equal(money('1250'),1250);
+
+for(const bps of [-1,10001,1.5,'200',NaN])assert.throws(()=>orderAmounts(100,1,bps));assert.deepEqual(orderAmounts(100,1,0),{netCents:100,commissionCents:0});
