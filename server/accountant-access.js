@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import pg from 'pg';
 import crypto from 'node:crypto';
 import {validDay} from './ai-planning-core.js';
@@ -43,7 +44,7 @@ export function accountantHandler(db){return async(req,res)=>{
   }
   if(!admin)return send(owner?403:401,{error:'Nur die Betriebsverwaltung kann Zugänge verwalten'});
   if(p==='/api/v1/accountant/grants'&&req.method==='GET')return send(200,{grants:(await db.query('SELECT id,restaurant_id,label,from_day,to_day,expires_at,revoked_at FROM accountant_grants WHERE company_id=$1 ORDER BY created_at DESC LIMIT 100',[owner.company_id])).rows});
-  let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>4096)fail('Anfrage zu groß',413)}let b;try{b=JSON.parse(raw)}catch{fail('Ungültige Anfrage')}if(!b||typeof b!=='object'||Array.isArray(b))fail('Ungültige Anfrage');
+  const b=await readJsonObject(req,{maxBytes:4096});
   if(p==='/api/v1/accountant/grants'&&req.method==='POST'){
    if(typeof b.restaurantId!=='string'||!offlineUuid.test(b.restaurantId)||!validDay(b.from)||!validDay(b.to)||b.from>b.to)fail('Betrieb und gültiger Zeitraum erforderlich');
    if(!Number.isInteger(b.days)||b.days<1||b.days>30)fail('Zugang für 1 bis 30 Tage freigeben');const label=String(b.label||'').trim();if(!label||label.length>100)fail('Bezeichnung mit höchstens 100 Zeichen erforderlich');
