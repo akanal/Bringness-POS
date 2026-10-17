@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {cleanMailAddress,enqueueMail} from './transactional-mail.js';
 import {systemActor} from './system-access.js';
 import crypto from 'node:crypto';
@@ -8,7 +9,7 @@ export const pinHash=pin=>{const salt=crypto.randomBytes(16).toString('hex');ret
 export function pinMatches(pin,stored){if(!stored)return false;const [salt,value]=stored.split(':');const expected=value?crypto.scryptSync(pin,salt,64).toString('hex'):legacyHash(pin),actual=value||salt;return actual.length===expected.length&&crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(expected))}
 const uuid=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||''));
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
-async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>20000)throw Object.assign(Error('Anfrage zu groß'),{status:413})}try{return JSON.parse(text||'{}')}catch{throw Object.assign(Error('Ungültige Anfrage'),{status:400})}}
+const body=req=>readJsonObject(req,{maxBytes:20000});
 const fail=(text,status=400)=>{throw Object.assign(Error(text),{status})};
 export function nextClockState(state,action){const next={off:{start:'working'},working:{pause:'paused',end:'off'},paused:{resume:'working',end:'off'}}[state]?.[action];if(!next)fail('Diese Buchung passt nicht zum aktuellen Status.',409);return next}
 export async function migratePersonnel(pool){await pool.query(`
