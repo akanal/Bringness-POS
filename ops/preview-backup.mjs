@@ -8,6 +8,7 @@ import {pipeline} from 'node:stream/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createBackupKey,encryptBackup,decryptBackup} from './preview-backup-crypto.mjs';
+let phase='arguments';
 const composeFile='ops/isolated-preview.compose.json';
 const databases=['bringness_ai_preview','bringness_languages','bringness_preview','postgres'];
 const envKeys=['AI_DB_PASSWORD','PASSWORD_PEPPER','PREVIEW_ACCESS_PASSWORD','PREVIEW_DATABASE_PASSWORD','PREVIEW_OWNER_PASSWORD','PREVIEW_SESSION_SECRET'];
@@ -37,7 +38,7 @@ function child(args){
  const completion=new Promise(resolve=>{process.once('error',()=>resolve(-1));process.once('close',code=>resolve(code));});return {process,completion};
 }
 async function backup(envFile,file,keyFile){
- const info=await lstat(envFile);if(!info.isFile()||(info.mode&0o077)!==0)throw Error('Preview configuration must be private');
+ phase='backup configuration';const info=await lstat(envFile);if(!info.isFile()||(info.mode&0o077)!==0)throw Error('Preview configuration must be private');
  const config=environment(await readFile(envFile,'utf8'));
  const compose=['compose','--env-file',envFile,'-f',composeFile];
  if(command([...compose,'ps','--status','running','-q','preview-app']))throw Error('Stop the preview application before backup for a consistent cross-database snapshot');
@@ -45,8 +46,8 @@ async function backup(envFile,file,keyFile){
  const inspected=JSON.parse(command(['inspect',container]))[0];
  if(inspected.Config.Labels?.['com.docker.compose.project']!=='bringness-isolated-preview'||inspected.Config.Labels?.['com.docker.compose.service']!=='preview-db')throw Error('Unexpected database container');
  for(const network of Object.keys(inspected.NetworkSettings.Networks))if(!JSON.parse(command(['network','inspect',network]))[0].Internal)throw Error('Preview database network is not isolated');
- const metadata={format:'bringness-preview-backup-v1',createdAt:new Date().toISOString(),configuration:config,snapshot:snapshot(container,'preview_admin')};
- const dump=child(['exec',container,'pg_dumpall','-U','preview_admin']);
+ phase='source database fingerprints';const metadata={format:'bringness-preview-backup-v1',createdAt:new Date().toISOString(),configuration:config,snapshot:snapshot(container,'preview_admin')};
+ phase='encrypted cluster dump';const dump=child(['exec',container,'pg_dumpall','-U','preview_admin']);
  const source=Readable.from((async function*(){yield JSON.stringify(metadata)+'\n';for await(const chunk of dump.process.stdout)yield chunk;if(await dump.completion!==0)throw Error('Database dump failed');})());
  try{await encryptBackup(source,file,keyFile);}finally{if(dump.process.exitCode===null)dump.process.kill();}
  console.log('Private encrypted preview backup created, including independent configuration, database roles and all preview databases.');
@@ -55,20 +56,20 @@ async function verify(file,keyFile){
  const dir=await mkdtemp(path.join(os.tmpdir(),'bringness-preview-restore-')),plain=path.join(dir,'authenticated.sql');
  const container='bringness-preview-restore-'+crypto.randomBytes(8).toString('hex');let started=false;
  try{
-  await decryptBackup(file,plain,keyFile);
+  phase='archive authentication';await decryptBackup(file,plain,keyFile);
   const handle=await open(plain,'r');let bytes;try{const buffer=Buffer.alloc(256*1024);const {bytesRead}=await handle.read(buffer,0,buffer.length,0);bytes=buffer.subarray(0,bytesRead);}finally{await handle.close();}
-  const end=bytes.indexOf(10);if(end<0)throw Error('Invalid backup metadata');
+  phase='archive metadata';const end=bytes.indexOf(10);if(end<0)throw Error('Invalid backup metadata');
   const metadata=JSON.parse(bytes.subarray(0,end).toString('utf8'));if(metadata.format!=='bringness-preview-backup-v1')throw Error('Invalid backup format');
   environment(Object.entries(metadata.configuration).map(([k,v])=>k+'='+v).join('\n'));
   // No source volume, exposed port, external network or application process.
-  command(['run','-d','--name',container,'--network','none','--read-only','--tmpfs','/var/lib/postgresql/data:rw,nosuid,size=1g','--tmpfs','/var/run/postgresql:rw,nosuid,size=16m','--label','bringness.preview.restore=disposable','-e','POSTGRES_USER=bringness_restore_verifier','-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:16-alpine'],{stage:'Disposable recovery database startup'});started=true;
-  let ready=false;for(let attempt=0;attempt<120;attempt++){
-   const check=spawnSync('docker',['exec',container,'pg_isready','-U','bringness_restore_verifier','-d','postgres'],{stdio:'ignore',timeout:3000});if(check.status===0){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,500));
+  phase='recovery container startup';started=true;command(['run','-d','--name',container,'--network','none','--read-only','--tmpfs','/var/lib/postgresql/data:rw,nosuid,size=1g','--tmpfs','/var/run/postgresql:rw,nosuid,size=16m','--label','bringness.preview.restore=disposable','-e','POSTGRES_USER=bringness_restore_verifier','-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:16-alpine'],{stage:'Disposable recovery database startup'});
+  phase='recovery database readiness';let ready=false;for(let attempt=0;attempt<120;attempt++){
+   const check=spawnSync('docker',['exec',container,'pg_isready','-h','127.0.0.1','-U','bringness_restore_verifier','-d','postgres'],{stdio:'ignore',timeout:3000});if(check.status===0){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,500));
   }
   if(!ready)throw Error('Disposable recovery database was not ready');
-  const restore=child(['exec','-i',container,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','bringness_restore_verifier','-d','postgres']);restore.process.stdout.resume();
+  phase='cluster SQL restore';const restore=child(['exec','-i',container,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','bringness_restore_verifier','-d','postgres']);restore.process.stdout.resume();
   await pipeline(createReadStream(plain,{start:end+1}),restore.process.stdin);if(await restore.completion!==0)throw Error('Database restore failed; sensitive output withheld');
-  assert.deepEqual(snapshot(container,'bringness_restore_verifier'),metadata.snapshot,'Restored database rows or roles differ');
+  phase='restored database fingerprints';assert.deepEqual(snapshot(container,'bringness_restore_verifier'),metadata.snapshot,'Restored database rows or roles differ');
   console.log('Recovery verified: all preview database table counts/content fingerprints and role credentials match; original runtime and volume were not modified.');
  }finally{
   try{if(started)command(['rm','-f',container],{stage:'Disposable recovery cleanup'});}finally{await rm(dir,{recursive:true,force:true});}
@@ -80,4 +81,4 @@ try{
  else if(operation==='backup'&&args.length===3)await backup(...args);
  else if(operation==='verify'&&args.length===2)await verify(...args);
  else throw Error('Usage: create-key KEY | backup ENV BACKUP KEY | verify BACKUP KEY');
-}catch{console.error('Preview backup/recovery failed. Check private configuration, arguments, file permissions, stopped application, dedicated database and Docker readiness. Sensitive details withheld.');process.exitCode=1;}
+}catch(error){const code=/^[A-Z0-9_]+$/.test(error.code||'')?error.code:'OPERATION_FAILED';console.error('Preview backup/recovery failed ('+phase+', '+code+'). Check private configuration, arguments, file permissions, stopped application, dedicated database and Docker readiness. Sensitive details withheld.');process.exitCode=1;}
