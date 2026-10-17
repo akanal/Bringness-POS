@@ -26,3 +26,12 @@ test('duplicate and empty commission order references are rejected before queryi
  await assert.rejects(validateBillingJob(db,{...base,order_ids:[]}),/fehlen oder sind doppelt/);
  await assert.rejects(validateBillingJob(db,{...base,order_ids:[id,id]}),/fehlen oder sind doppelt/);
 });
+
+test('nonpositive commission amounts cannot pass debit validation',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const id='11111111-1111-4111-8111-111111111111';
+ const job={kind:'commission',order_ids:[id],supplier_id:id,month:'2026-09',net_cents:200};
+ const db={query:async()=>({rows:[{id,commission_cents:0,paid:null}]})};
+ await assert.rejects(validateBillingJob(db,job),/Ungültige Provisionsbeträge/);
+ await assert.rejects(validateBillingJob(db,{...job,net_cents:0}),/Ungültige Provisionsbeträge/);
+});
