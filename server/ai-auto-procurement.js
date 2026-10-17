@@ -26,8 +26,9 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
  const policy=policyRow.policy;
  // Serialize a restaurant's daily procurement across scheduler instances.
  const lockClient=typeof db.connect==='function'?await db.connect():null;
+ let lockAcquired=false;
  try{
- if(lockClient){const runLock=await lockClient.query('SELECT pg_try_advisory_lock(hashtext($1),hashtext($2)) AS locked',['bringness-ai-auto-procurement',user.id]);if(!runLock.rows[0]?.locked)return {state:'busy'};}
+ if(lockClient){const runLock=await lockClient.query('SELECT pg_try_advisory_lock(hashtext($1),hashtext($2)) AS locked',['bringness-ai-auto-procurement',user.id]);if(!runLock.rows[0]?.locked)return {state:'busy'};lockAcquired=true;}
  const run=(await db.query('INSERT INTO ai_auto_procurement_runs(account_id,day) VALUES($1,$2) ON CONFLICT(account_id,day) DO UPDATE SET day=EXCLUDED.day RETURNING *',[user.id,today])).rows[0];if(run.state==='ordered')return {state:'ordered',replayed:true,netCents:run.net_cents};
  try{
   const deliveryDate=new Date(Date.parse(today+'T12:00:00Z')+policy.leadDays*86400000).toISOString().slice(0,10);
@@ -53,7 +54,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
    }
   });return {state:'ordered',orders:result.orders,netCents:preview.quote.netCents};
  }catch(e){const safeError=Number.isInteger(e?.status)&&e.status>=400&&e.status<500?String(e.message).slice(0,1000):'Automatische Beschaffung vorübergehend nicht möglich';await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,safeError]);return durableRunResult(db,run.id,{state:'blocked',error:safeError})}
- }finally{if(lockClient){let releaseError;try{const unlocked=await lockClient.query('SELECT pg_advisory_unlock(hashtext($1),hashtext($2)) AS unlocked',['bringness-ai-auto-procurement',user.id]);if(unlocked.rows?.[0]?.unlocked!==true)releaseError=new Error('Advisory lock not released');}catch(e){releaseError=e;}lockClient.release(releaseError);}}
+ }finally{if(lockClient){let releaseError;try{if(lockAcquired){const unlocked=await lockClient.query('SELECT pg_advisory_unlock(hashtext($1),hashtext($2)) AS unlocked',['bringness-ai-auto-procurement',user.id]);if(unlocked.rows?.[0]?.unlocked!==true)releaseError=new Error('Advisory lock not released');}}catch(e){releaseError=e;}lockClient.release(releaseError);}}
 }
 let running=false;
 export async function automaticProcurementTick({db=aiPool(),run=runAutomaticProcurement,onError=()=>console.error('AI automatic procurement account unavailable')}={}){
