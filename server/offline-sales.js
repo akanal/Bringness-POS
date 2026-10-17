@@ -48,18 +48,18 @@ export async function importOfflineSale(db,user,deviceKey,request){
  await c.query('COMMIT');return {id:order.id,receiptNumber:receipt.receiptNumber,stockState:'pending'};
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
-export async function handleOfflineSales(req,res){
+export async function handleOfflineSales(req,res,{db=pool}={}){
  const path=new URL(req.url,'http://local').pathname;if(!['/api/v1/offline/catalog','/api/v1/offline/sales','/api/v1/offline/status','/api/v1/offline/summary','/api/v1/offline/retry','/api/v1/offline/batch'].includes(path))return false;
  const send=(status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
  try{
   if(req.method!=='POST'&&!((path.endsWith('/status')||path.endsWith('/summary'))&&req.method==='GET'))return send(405,{error:'Methode nicht erlaubt'});
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-  const user=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
+  const user=(await db.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
   if(!user)return send(401,{error:'Nicht angemeldet'});if(!['owner','admin'].includes(user.role))return send(403,{error:'Nur Betriebsverwaltung'});
   if(path.endsWith('/summary')){
    const restaurantId=new URL(req.url,'http://local').searchParams.get('restaurantId');
    if(restaurantId!==null&&!offlineUuid.test(restaurantId))fail('Ungültige Betriebskennung');
-   const rows=(await pool.query(
+   const rows=(await db.query(
     "SELECT s.stock_state, count(*)::integer AS count FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::uuid IS NULL OR o.restaurant_id=$2) GROUP BY s.stock_state ORDER BY s.stock_state",
     [user.company_id,restaurantId])).rows;
    const counts={pending:0,applied:0,conflict:0};
@@ -75,7 +75,7 @@ export async function handleOfflineSales(req,res){
    const limit=Number(limitText);
    const restaurantId=params.get('restaurantId');
    if(restaurantId!==null&&!offlineUuid.test(restaurantId))fail('Ungültige Betriebskennung');
-   const sales=(await pool.query(
+   const sales=(await db.query(
     'SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::text IS NULL OR s.stock_state=$2) AND ($4::uuid IS NULL OR o.restaurant_id=$4) ORDER BY s.created_at DESC,s.id DESC LIMIT $3',
     [user.company_id,state,limit,restaurantId])).rows;
    return send(200,{sales,filters:{state,limit,restaurantId}});
@@ -87,7 +87,7 @@ export async function handleOfflineSales(req,res){
    const results=[];
    for(const sale of b.sales){
     try{
-     const result=await importOfflineSale(pool,user,b.deviceKey,sale);
+     const result=await importOfflineSale(db,user,b.deviceKey,sale);
      results.push({offlineId:sale?.id||null,ok:true,...result});
     }catch(error){
      results.push({offlineId:typeof sale?.id==='string'?sale.id:null,ok:false,
@@ -96,8 +96,8 @@ export async function handleOfflineSales(req,res){
    }
    return send(200,{results,succeeded:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length});
   }
-  if(path.endsWith('/retry')){if(!b||typeof b!=='object'||!offlineUuid.test(b.id||''))fail('Ungültige Verkaufskennung');const result=await pool.query("UPDATE pos_offline_sales s SET stock_state='pending',stock_error=NULL FROM pos_offline_catalogs c WHERE s.catalog_id=c.id AND c.company_id=$1 AND s.id=$2 AND s.stock_state='conflict'",[user.company_id,b.id]);if(!result.rowCount)fail('Kein zugänglicher Lagerkonflikt',404);return send(200,{ok:true})}
+  if(path.endsWith('/retry')){if(!b||typeof b!=='object'||!offlineUuid.test(b.id||''))fail('Ungültige Verkaufskennung');const result=await db.query("UPDATE pos_offline_sales s SET stock_state='pending',stock_error=NULL FROM pos_offline_catalogs c WHERE s.catalog_id=c.id AND c.company_id=$1 AND s.id=$2 AND s.stock_state='conflict'",[user.company_id,b.id]);if(!result.rowCount)fail('Kein zugänglicher Lagerkonflikt',404);return send(200,{ok:true})}
   if(!b||typeof b!=='object'||!/^[a-f0-9]{64}$/.test(b.deviceKey||''))fail('Ungültige Gerätekennung');
-  return send(200,path.endsWith('/catalog')?{snapshot:await issueOfflineCatalog(pool,user,b.deviceKey)}:await importOfflineSale(pool,user,b.deviceKey,b.sale));
+  return send(200,path.endsWith('/catalog')?{snapshot:await issueOfflineCatalog(db,user,b.deviceKey)}:await importOfflineSale(db,user,b.deviceKey,b.sale));
  }catch(e){return send(e.status||503,{error:e.status?e.message:'Offline-Synchronisierung momentan nicht verfügbar'});}
 }
