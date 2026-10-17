@@ -13,3 +13,13 @@ test('owner guest order rejects invalid bounded bodies before database work',asy
 test('owner and receipt APIs exclude password-gated sessions',async()=>{
  const r=await call('/api/v1/products/'+rid+'/extras',{query:async sql=>{assert.match(sql,/must_change_password/);return {rows:[],rowCount:0};}});assert.equal(r.status,401);assert.equal(r.calls.length,1);
 });
+
+test('table details reject unassigned waiters before returning guest/order data',async()=>{
+ const actor={id:rid,company_id:rid,role:'waiter'};let orderRead=false;
+ const r=await call('/api/v1/tables/'+rid+'/details',{actor,query:async sql=>{
+  if(sql.includes('FROM sessions'))return {rows:[actor],rowCount:1};
+  if(sql.includes('FROM employees'))return {rows:[],rowCount:0};
+  if(sql.includes('SELECT t.*'))return {rows:[{id:rid,restaurant_id:rid,waiter_employee_ids:[]}],rowCount:1};
+  orderRead=true;throw Error('Unexpected private order read');
+ }});assert.equal(r.status,403);assert.equal(orderRead,false);
+});

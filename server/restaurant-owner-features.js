@@ -205,6 +205,8 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     const u=await user(req,db);if(!u)return json(res,401,{error:"Nicht angemeldet"});
     const t=await pool.query("SELECT t.* FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.id=$1 AND r.company_id=$2",[tableDetails[1],u.company_id]);
     if(!t.rowCount)return json(res,404,{error:"Tisch nicht gefunden"});
+    if(!['owner','admin','manager','kitchen','waiter'].includes(u.role))return json(res,403,{error:'Kein Zugriff auf Tischbestellungen'});
+    if(u.role==='waiter'&&!(await pool.query("SELECT 1 FROM employees e WHERE e.user_id=$1 AND e.restaurant_id=$2 AND e.active AND (e.id=$3 OR e.id=ANY($4::uuid[]))",[u.id,t.rows[0].restaurant_id,t.rows[0].waiter_employee_id,t.rows[0].waiter_employee_ids||[]])).rowCount)return json(res,403,{error:'Tisch nicht zugeordnet'});
     const q=await pool.query(`SELECT o.id,o.status,o.total_cents,o.created_at,o.closed_at,o.source,o.guest_email,o.qr_service_mode,o.qr_ready_at,
       (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity,'note',oi.guest_note,'extras',oi.extras_snapshot)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
       FROM orders o WHERE o.table_id=$1 AND o.restaurant_id=$2
