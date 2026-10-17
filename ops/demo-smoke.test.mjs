@@ -39,3 +39,10 @@ test('demo uses only temporary in-memory orders',()=>{
   assert.match(html,/orders\.push\(/);
   assert.match(html,/nextOrder\+\+/);
 });
+
+test('demo blocks network and external resources with a content security policy',()=>{
+  assert.match(html,/http-equiv="Content-Security-Policy"/);
+  assert.match(html,/default-src &#39;none&#39;/);
+  assert.match(html,/connect-src &#39;none&#39;/);
+  assert.match(html,/form-action &#39;none&#39;/);
+});
