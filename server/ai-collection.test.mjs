@@ -71,3 +71,11 @@ test('unexpected order rows cannot pass commission debit validation',async()=>{
  const db={query:async()=>({rows:[{id:other,commission_cents:200,paid:null}]})};
  await assert.rejects(validateBillingJob(db,job),/Fremde Abrechnungsposition/);
 });
+
+test('duplicate database rows cannot inflate commission collection',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const id='11111111-1111-4111-8111-111111111111';
+ const job={kind:'commission',order_ids:[id],supplier_id:id,month:'2026-09',net_cents:400};
+ const db={query:async()=>({rows:[{id,commission_cents:200,paid:null},{id,commission_cents:200,paid:null}]})};
+ await assert.rejects(validateBillingJob(db,job),/Fremde Abrechnungsposition/);
+});
