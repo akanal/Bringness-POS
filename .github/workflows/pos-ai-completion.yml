@@ -59,6 +59,10 @@ jobs:
         env:
           OFFLINE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/automatic-policy.mjs
+      - name: Verify one-connection procurement and competing workers on PostgreSQL 16
+        run: node server/ai-tests/automatic-concurrency.mjs
+        env:
+          PROCUREMENT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/consumption-history.mjs
       - run: node server/ai-tests/stock-lifecycle.mjs
       - run: node server/ai-tests/pos-stock-bridge.mjs
