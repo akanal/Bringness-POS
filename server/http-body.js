@@ -35,6 +35,6 @@ export async function readJsonObject(req,options={}){
 }
 
 export function clientInputError(error){
- const known={INVALID_BODY:[400,'Ungültige Anfrage'],BODY_TOO_LARGE:[413,'Anfrage zu groß'],INVALID_SECRET:[400,'Ungültige Zugangsdaten'],AUTH_CAPACITY:[503,'Zu viele gleichzeitige Zugangsprüfungen. Bitte kurz warten und erneut versuchen.']};
+ const known={AUTH_RATE_CAPACITY:[429,'Zugangsprüfung ausgelastet. Bitte später erneut versuchen.'],INVALID_BODY:[400,'Ungültige Anfrage'],BODY_TOO_LARGE:[413,'Anfrage zu groß'],INVALID_SECRET:[400,'Ungültige Zugangsdaten'],AUTH_CAPACITY:[503,'Zu viele gleichzeitige Zugangsprüfungen. Bitte kurz warten und erneut versuchen.']};
  const match=known[error?.code];return match?{status:match[0],error:match[1]}:null;
 }
