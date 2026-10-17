@@ -115,3 +115,8 @@ test('guest receipt link is scoped to its status capability and verified release
  },'/api/v1/guest/center/status?token='+'d'.repeat(64));
  assert.equal(r.status,200);assert.equal(r.data.order.receipt_url,'/beleg/'+id);
 });
+
+test('oversized payment webhook refuses payload before database/provider access',async()=>{
+ const req=Readable.from(['id='+ 'x'.repeat(1024)]);Object.assign(req,{url:'/api/v1/centers/mollie/webhook',method:'POST',headers:{}});let status;
+ await assert.rejects(createCenterHandler({query(){throw Error('Unexpected database');}})(req,{writeHead(s){status=s;},end(){}}),e=>e.status===413);assert.equal(status,undefined);
+});

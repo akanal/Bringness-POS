@@ -1,4 +1,4 @@
-import {readJsonObject} from './http-body.js';
+import {readJsonObject,readRequestBytes} from './http-body.js';
 import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
 import {recoverGuestPayment} from './center-payment-recovery.js';
 import {centerPushConfiguration,saveGuestSubscription,manageGuestSubscription} from './center-guest-push.js';
@@ -132,7 +132,7 @@ export function createCenterHandler(pool) {
     }
     if(p==='/api/v1/centers/mollie/webhook'){
       if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt'});
-      let rawBody='';for await(const part of req){rawBody+=part;if(Buffer.byteLength(rawBody)>1024)return send(res,413,{error:'Anfrage zu groß'});}
+      const rawBody=(await readRequestBytes(req,{maxBytes:1024})).toString('utf8');
       const paymentId=new URLSearchParams(rawBody).get('id');
       try{const result=await verifyAndReleaseMolliePayment(pool,paymentId);return send(res,200,{received:true});}
       catch{return send(res,503,{error:'Zahlungsprüfung vorübergehend nicht verfügbar'});}
