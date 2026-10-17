@@ -25,22 +25,24 @@ export async function verifiedMandate(supplierId,db=aiPool()){
  await db.query('UPDATE ai_collection_mandates SET verified_at=now() WHERE supplier_id=$1',[supplierId]);return m;
 }
 export async function supplierMayTrade(supplierId,db=aiPool()){const cfg=await collectionSettings(db);if(!cfg.requireMandate)return true;try{await verifiedMandate(supplierId,db);return true}catch{return false}}
-export async function prepareCollectionJobs(){
+export async function prepareCollectionJobs(db=aiPool()){
  // Calendar month is fixed in Europe/Berlin; only completed received periods are proposed.
- await aiPool().query(`INSERT INTO ai_collection_jobs(supplier_id,month,net_cents,order_ids) SELECT o.supplier_id,to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM'),sum(o.commission_cents),jsonb_agg(o.id ORDER BY o.id) FROM ai_orders o LEFT JOIN ai_commission_payments p ON p.order_id=o.id WHERE o.status='received' AND o.commission_cents>0 AND p.order_id IS NULL AND to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM')<$1 GROUP BY o.supplier_id,to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM') ON CONFLICT(supplier_id,month) WHERE kind='commission' DO UPDATE SET net_cents=excluded.net_cents,order_ids=excluded.order_ids,updated_at=now() WHERE ai_collection_jobs.state='draft'`,[currentMonth()]);
+ await db.query(`INSERT INTO ai_collection_jobs(supplier_id,month,net_cents,order_ids) SELECT o.supplier_id,to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM'),sum(o.commission_cents),jsonb_agg(o.id ORDER BY o.id) FROM ai_orders o LEFT JOIN ai_commission_payments p ON p.order_id=o.id WHERE o.status='received' AND o.commission_cents>0 AND p.order_id IS NULL AND to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM')<$1 GROUP BY o.supplier_id,to_char(o.received_at AT TIME ZONE 'Europe/Berlin','YYYY-MM') ON CONFLICT(supplier_id,month) WHERE kind='commission' DO UPDATE SET net_cents=excluded.net_cents,order_ids=excluded.order_ids,updated_at=now() WHERE ai_collection_jobs.state='draft'`,[currentMonth()]);
 }
-async function notice(job){
- const invoice=(await aiPool().query('SELECT invoice_number,snapshot FROM ai_commission_invoices WHERE job_id=$1',[job.id])).rows[0];
+async function notice(job,{db=aiPool()}={}){
+ const invoice=(await db.query('SELECT invoice_number,snapshot FROM ai_commission_invoices WHERE job_id=$1',[job.id])).rows[0];
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))fail('SMTP für Vorankündigung fehlt',503);
- const supplier=(await aiPool().query('SELECT email,business_name FROM ai_accounts WHERE id=$1',[job.supplier_id])).rows[0];
- await sendSmtpMail({from:process.env.SMTP_FROM,to:invoice?.snapshot?.recipient?.email||supplier.email,...(invoice?{attachments:[{filename:invoice.invoice_number+'.html',content:invoiceHtml(invoice.snapshot),contentType:'text/html'}]}:{}),messageId:'<ai-collection-'+job.id+'@bringness-ai.com>',subject:'Bringness AI – SEPA-Vorankündigung '+job.month,text:`Guten Tag ${supplier.business_name},\n\nfür die Abrechnung ${job.invoice_reference} ziehen wir ${(Number(job.gross_cents)/100).toFixed(2)} EUR am ${new Date(job.due_at).toLocaleDateString('de-DE',{timeZone:'Europe/Berlin'})} per SEPA-Lastschrift ein.\nMandat: ${job.mandate_id}\nGläubiger: ${(await collectionSettings()).issuer.name}\nGläubiger-ID: ${(await collectionSettings()).issuer.creditorId}\nDie Abrechnungsübersicht finden Sie in Ihrem Bringness-AI-Konto unter Zahlungsautomatik.\n\nBitte prüfen Sie Betrag und Termin. Bei Fragen wenden Sie sich an die Plattformverwaltung.`});
+ const supplier=(await db.query('SELECT email,business_name FROM ai_accounts WHERE id=$1',[job.supplier_id])).rows[0];
+ await sendSmtpMail({from:process.env.SMTP_FROM,to:invoice?.snapshot?.recipient?.email||supplier.email,...(invoice?{attachments:[{filename:invoice.invoice_number+'.html',content:invoiceHtml(invoice.snapshot),contentType:'text/html'}]}:{}),messageId:'<ai-collection-'+job.id+'@bringness-ai.com>',subject:'Bringness AI – SEPA-Vorankündigung '+job.month,text:`Guten Tag ${supplier.business_name},\n\nfür die Abrechnung ${job.invoice_reference} ziehen wir ${(Number(job.gross_cents)/100).toFixed(2)} EUR am ${new Date(job.due_at).toLocaleDateString('de-DE',{timeZone:'Europe/Berlin'})} per SEPA-Lastschrift ein.\nMandat: ${job.mandate_id}\nGläubiger: ${(await collectionSettings(db)).issuer.name}\nGläubiger-ID: ${(await collectionSettings(db)).issuer.creditorId}\nDie Abrechnungsübersicht finden Sie in Ihrem Bringness-AI-Konto unter Zahlungsautomatik.\n\nBitte prüfen Sie Betrag und Termin. Bei Fragen wenden Sie sich an die Plattformverwaltung.`});
 }
-export async function collectionTick({sendNotice=notice}={}){
- const pool=aiPool(),c=await pool.connect();try{
-  if(!(await c.query('SELECT pg_try_advisory_lock(771092) locked')).rows[0].locked)return;
-  await prepareCollectionJobs();const cfg=await collectionSettings();await prepareSubscriptionCharges({cfg,ready:cfg.enabled&&cfg.autoInvoices&&validateIssuer(cfg.issuer)&&key().startsWith('live_'),verifyMandate:verifiedMandate});if(!cfg.enabled||!issuerReady(cfg.issuer)||!key())return;
+export async function collectionTick({sendNotice=notice,db=aiPool()}={}){
+ const c=await db.connect(),pool={query:(...args)=>c.query(...args),connect:async()=>({query:(...args)=>c.query(...args),release(){}})};
+ let lockAcquired=false;
+ try{
+  lockAcquired=(await c.query('SELECT pg_try_advisory_lock(771092) locked')).rows[0].locked;if(!lockAcquired)return;
+  await prepareCollectionJobs(pool);const cfg=await collectionSettings(pool);await prepareSubscriptionCharges({cfg,ready:cfg.enabled&&cfg.autoInvoices&&validateIssuer(cfg.issuer)&&key().startsWith('live_'),verifyMandate:supplierId=>verifiedMandate(supplierId,pool),db:pool});if(!cfg.enabled||!issuerReady(cfg.issuer)||!key())return;
   // Polling, not an unauthenticated webhook, determines payment success.
-  if(cfg.autoInvoices&&validateIssuer(cfg.issuer)){const drafts=(await pool.query("SELECT * FROM ai_collection_jobs WHERE state='draft' ORDER BY updated_at LIMIT 40")).rows;for(const draft of drafts){try{const profile=(await pool.query('SELECT electronic_consent_at,country FROM ai_invoice_profiles WHERE supplier_id=$1',[draft.supplier_id])).rows[0];if(!profile?.electronic_consent_at||profile.country!=='DE')fail('Deutsches Rechnungsprofil und Format-Zustimmung fehlen',409);const m=await verifiedMandate(draft.supplier_id);await issueInvoice(draft,cfg,m)}catch(e){await pool.query("UPDATE ai_collection_jobs SET reason=$2,updated_at=now() WHERE id=$1 AND state='draft'",[draft.id,e.status?e.message:'Rechnungserstellung fehlgeschlagen'])}}}
+  if(cfg.autoInvoices&&validateIssuer(cfg.issuer)){const drafts=(await pool.query("SELECT * FROM ai_collection_jobs WHERE state='draft' ORDER BY updated_at LIMIT 40")).rows;for(const draft of drafts){try{const profile=(await pool.query('SELECT electronic_consent_at,country FROM ai_invoice_profiles WHERE supplier_id=$1',[draft.supplier_id])).rows[0];if(!profile?.electronic_consent_at||profile.country!=='DE')fail('Deutsches Rechnungsprofil und Format-Zustimmung fehlen',409);const m=await verifiedMandate(draft.supplier_id,pool);await issueInvoice(draft,cfg,m,{db:pool})}catch(e){await pool.query("UPDATE ai_collection_jobs SET reason=$2,updated_at=now() WHERE id=$1 AND state='draft'",[draft.id,e.status?e.message:'Rechnungserstellung fehlgeschlagen'])}}}
   const jobs=(await pool.query("SELECT * FROM ai_collection_jobs WHERE state IN ('scheduled','notified','processing','pending','notification_pending') ORDER BY updated_at LIMIT 80")).rows;
   jobs.push(...(await pool.query("SELECT * FROM ai_collection_jobs WHERE state='paid' ORDER BY updated_at LIMIT 20")).rows);
   for(const j of jobs){try{await pool.query('UPDATE ai_collection_jobs SET updated_at=now() WHERE id=$1',[j.id]);
@@ -56,10 +58,10 @@ export async function collectionTick({sendNotice=notice}={}){
     }else if(j.state==='paid'&&p.status==='paid'){await pool.query('UPDATE ai_collection_jobs SET updated_at=now() WHERE id=$1',[j.id]);}else if(['failed','expired','canceled'].includes(p.status))await pool.query("UPDATE ai_collection_jobs SET state='exception',reason='Zahlung fehlgeschlagen – kein automatischer neuer Versuch',updated_at=now() WHERE id=$1",[j.id]);continue;
    }
    if(j.state==='processing'){await pool.query("UPDATE ai_collection_jobs SET state='exception',reason='Unklarer Zahlungsversuch: im Mollie-Konto abgleichen, nicht erneut abbuchen',updated_at=now() WHERE id=$1",[j.id]);continue}
-   const m=await verifiedMandate(j.supplier_id);if(m.customer_id!==j.customer_id||m.mandate_id!==j.mandate_id)fail('Mandat geändert; neue Vorankündigung erforderlich',409);
+   const m=await verifiedMandate(j.supplier_id,pool);if(m.customer_id!==j.customer_id||m.mandate_id!==j.mandate_id)fail('Mandat geändert; neue Vorankündigung erforderlich',409);
    if(j.state==='scheduled'){
     // Set notification state before sending; ambiguous email delivery is reviewed, never triggers collection.
-    j.due_at=new Date(Math.max(+new Date(j.due_at),Date.now()+15*86400000)).toISOString();await pool.query("UPDATE ai_collection_jobs SET state='notification_pending',due_at=$2,updated_at=now() WHERE id=$1",[j.id,j.due_at]);await sendNotice(j);await pool.query("UPDATE ai_collection_jobs SET state='notified',notified_at=now(),updated_at=now() WHERE id=$1",[j.id]);continue;
+    j.due_at=new Date(Math.max(+new Date(j.due_at),Date.now()+15*86400000)).toISOString();await pool.query("UPDATE ai_collection_jobs SET state='notification_pending',due_at=$2,updated_at=now() WHERE id=$1",[j.id,j.due_at]);await sendNotice(j,{db:pool});await pool.query("UPDATE ai_collection_jobs SET state='notified',notified_at=now(),updated_at=now() WHERE id=$1",[j.id]);continue;
    }
    if(j.state==='notified'&&new Date(j.due_at)<=new Date()){
     if(!j.notified_at||Date.now()-+new Date(j.notified_at)<14*86400000)fail('Vorankündigungsfrist noch nicht erfüllt',409);
@@ -71,7 +73,12 @@ export async function collectionTick({sendNotice=notice}={}){
     await pool.query("UPDATE ai_collection_jobs SET payment_id=$2,state='pending',updated_at=now() WHERE id=$1",[j.id,p.id]);
    }
   }catch(e){await c.query('ROLLBACK').catch(()=>{});if(j.payment_id&&e.status!==409){await pool.query('UPDATE ai_collection_jobs SET reason=$2,updated_at=now() WHERE id=$1',[j.id,'Anbieterstatus vorübergehend nicht verfügbar; Abgleich wird wiederholt'])}else await pool.query("UPDATE ai_collection_jobs SET state='exception',reason=$2,updated_at=now() WHERE id=$1",[j.id,e.status?e.message:'Technischer Fehler – Zahlung im Anbieterportal prüfen']);}}
- }finally{await c.query('SELECT pg_advisory_unlock(771092)').catch(()=>{});c.release()}
+ }finally{
+  let releaseError;
+  try{if(lockAcquired&&(await c.query('SELECT pg_advisory_unlock(771092) AS unlocked')).rows?.[0]?.unlocked!==true)releaseError=Error('Collection lock not released');}
+  catch(error){releaseError=error;}
+  c.release(releaseError);
+ }
 }
 export async function collectionRoutes(p,method,b,u,url,admin=false){
  const base=admin?'/api/ai/admin/collection':'/api/ai/collection';if(!admin&&!['restaurant',...supplierRoles].includes(u.role))fail('Nur Restaurant- und Lieferantenkonten',403);
