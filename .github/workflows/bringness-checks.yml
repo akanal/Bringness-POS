@@ -29,3 +29,6 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run unit tests
         run: npm run test:unit
+        env:
+          CENTER_TEST_PDFKIT: pdfkit
+          CENTER_TEST_QRCODE: qrcode
