@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "35a6734459b9f8474f40e3910c68c3cff4a73ced",
-  "requestId": "netcup-pos-recovery-separation-20261017"
+  "revision": "64126aa42ed63c7bbb850262fd617172d8e0150b",
+  "requestId": "netcup-module-hint-roster-dismiss-20261017"
 }
