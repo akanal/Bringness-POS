@@ -15,8 +15,8 @@ try{
  const company=id(),restaurant=id(),owner=id(),token=crypto.randomBytes(32).toString('hex');
  await db.query("INSERT INTO companies(id,name) VALUES($1,'Synthetic export fixture')",[company]);await db.query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Fixture')",[restaurant,company]);
  await db.query("INSERT INTO users(id,company_id,email,password_hash,display_name) VALUES($1,$2,'fixture@example.test','fixture','Owner')",[owner,company]);await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[crypto.createHash('sha256').update(token).digest('hex'),owner]);
- await db.query("INSERT INTO orders(id,restaurant_id,status,total_cents) SELECT md5('order-'||i)::uuid,$1,'paid',100 FROM generate_series(1,301) i",[restaurant]);
- await db.query("INSERT INTO receipts(id,order_id,receipt_number,issued_at,merchant_snapshot) SELECT md5('receipt-'||i)::uuid,md5('order-'||i)::uuid,'MICRO-'||i,'2026-01-15T10:11:12.123456Z'::timestamptz+(i%3)*interval '1 microsecond','{}' FROM generate_series(1,301) i");
+ await db.query("INSERT INTO orders(id,restaurant_id,status,total_cents) SELECT overlay(overlay(md5('order-'||i) placing '4' from 13) placing '8' from 17)::uuid,$1,'paid',100 FROM generate_series(1,301) i",[restaurant]);
+ await db.query("INSERT INTO receipts(id,order_id,receipt_number,issued_at,merchant_snapshot) SELECT overlay(overlay(md5('receipt-'||i) placing '4' from 13) placing '8' from 17)::uuid,overlay(overlay(md5('order-'||i) placing '4' from 13) placing '8' from 17)::uuid,'MICRO-'||i,'2026-01-15T10:11:12.123456Z'::timestamptz+(i%3)*interval '1 microsecond','{}' FROM generate_series(1,301) i");
  await db.query("INSERT INTO order_items(order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) SELECT id,'Fixture item',100,19,1 FROM orders");
  await db.query("INSERT INTO payments(order_id,method,amount_cents) SELECT id,'cash',100 FROM orders");
  const handler=accountantHandler(db);
@@ -26,7 +26,7 @@ try{
  await db.query("INSERT INTO orders(id,restaurant_id,status,total_cents) VALUES($1,$2,'paid',100)",[id(),restaurant]);
  await db.query("INSERT INTO receipts(order_id,receipt_number,issued_at,merchant_snapshot) SELECT id,'LATE','2026-01-15T10:11:12.123457Z','{}' FROM orders WHERE NOT EXISTS(SELECT 1 FROM receipts r WHERE r.order_id=orders.id) LIMIT 1");
  let cursor=first.data.nextCursor,all=[...first.data.receipts],pages=1;
- while(cursor){const page=await call('receipts?cursor='+encodeURIComponent(cursor),{auth});assert.equal(page.status,200);assert.equal(page.data.asOf,first.data.asOf);all.push(...page.data.receipts);cursor=page.data.nextCursor;assert(++pages<=5);}
+ while(cursor){const page=await call('receipts?cursor='+encodeURIComponent(cursor),{auth});assert.equal(page.status,200,JSON.stringify(page.data));assert.equal(page.data.asOf,first.data.asOf);all.push(...page.data.receipts);cursor=page.data.nextCursor;assert(++pages<=5);}
  assert.equal(all.length,301);assert.equal(new Set(all.map(r=>r.id)).size,301);assert.equal(all.some(r=>r.receipt_number==='LATE'),false);assert(all.every(r=>/\.\d{6}Z$/.test(r.issued_at)));
  const expected=(await db.query("SELECT id FROM receipts WHERE receipt_number<>'LATE' ORDER BY issued_at,id")).rows.map(r=>r.id);assert.deepEqual(all.map(r=>r.id),expected);
  await call('revoke',{method:'POST',body:{id:granted.data.id}});assert.equal((await call('receipts?cursor='+encodeURIComponent(first.data.nextCursor),{auth})).status,401);
