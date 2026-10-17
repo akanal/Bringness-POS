@@ -5,7 +5,7 @@ const env=Object.fromEntries((await readFile(process.argv[2]||'.env.preview.loca
 const base='http://127.0.0.1:3016';
 const anonymous=await fetch(base+'/health');assert.equal(anonymous.status,401);assert.match(anonymous.headers.get('x-robots-tag'),/noindex/);
 const basic='Basic '+Buffer.from('bringness-preview:'+env.PREVIEW_ACCESS_PASSWORD).toString('base64');
-const health=await fetch(base+'/health',{headers:{authorization:basic}});assert.equal(health.status,200);
+const health=await fetch(base+'/health',{headers:{authorization:basic}});assert.equal(health.status,200);const healthData=await health.json();assert.equal(healthData.preview.isolated,true);assert.equal(healthData.waiterPush,'disabled_preview');
 const cookie=health.headers.get('set-cookie')?.split(';')[0];assert(cookie);assert.match(health.headers.get('set-cookie'),/HttpOnly; Secure; SameSite=Strict/);assert.match(health.headers.get('content-security-policy'),/connect-src 'self'/);
 async function request(path,{method='GET',body,token}={}){
  const response=await fetch(base+path,{method,headers:{cookie,...(token?{authorization:'Bearer '+token}:{}),'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});

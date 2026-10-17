@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validatePreviewEnvironment,createPreviewAccess,blockedPreviewFetch,isolatedPreview} from './preview-policy.js';
+import {validatePreviewEnvironment,createPreviewAccess,blockedPreviewFetch,isolatedPreview,assertPreviewEntrypoint} from './preview-policy.js';
 import {connectSmtp} from './smtp-mail.js';
 const configuration=()=>({BRINGNESS_PREVIEW_MODE:'isolated',NODE_ENV:'development',APP_MODE:'combined',PORT:'3000',PREVIEW_HOST:'demo.bringness-pos.de',PUBLIC_BASE_URL:'https://demo.bringness-pos.de',PUBLIC_URL:'https://demo.bringness-pos.de',AI_DATABASE_NAME:'bringness_ai_preview',PREVIEW_ACCESS_USER:'bringness-preview',PREVIEW_ACCESS_PASSWORD:'a'.repeat(40),PREVIEW_SESSION_SECRET:'b'.repeat(40),PASSWORD_PEPPER:'c'.repeat(40),AI_DB_PASSWORD:'d'.repeat(40),PREVIEW_OWNER_PASSWORD:'Aa1!'+ 'x'.repeat(40),DATABASE_URL:'postgresql://preview_admin:'+ 'e'.repeat(40)+'@preview-db:5432/bringness_preview'});
 const response=()=>({headers:{},setHeader(k,v){this.headers[k]=v;},writeHead(status,headers){this.status=status;Object.assign(this.headers,headers);},end(body){this.body=body;}});
@@ -39,4 +39,9 @@ test('preview gateway denies provider actions even with valid preview access',()
   const res=response();assert.equal(access({url,method:'POST',headers:{authorization}},res),true);assert.equal(res.status,403);assert.equal(JSON.parse(res.body).code,'PREVIEW_ACTION_DISABLED');
  }
  const res=response();assert.equal(access({url:'/api/v1/orders/checkout',method:'POST',headers:{authorization}},res),false);
+});
+
+test('isolated mode cannot accidentally use an unguarded normal entrypoint',()=>{
+ assert.doesNotThrow(()=>assertPreviewEntrypoint({}));
+ assert.throws(()=>assertPreviewEntrypoint({BRINGNESS_PREVIEW_MODE:'isolated'}),/start:preview entrypoint/);
 });
