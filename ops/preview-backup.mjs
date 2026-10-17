@@ -29,7 +29,7 @@ SELECT COALESCE(json_agg(preview_restore_check ORDER BY table_name),'[]'::json) 
 function snapshot(container,user){
  const names=JSON.parse(psql(container,user,'postgres',"SELECT json_agg(datname ORDER BY datname) FROM pg_database WHERE NOT datistemplate;"));assert.deepEqual(names,databases);
  const result={};for(const name of names)result[name]={tables:JSON.parse(psql(container,user,name,tableSql)),sequences:JSON.parse(psql(container,user,name,"SELECT COALESCE(json_agg(s ORDER BY sequencename),'[]'::json) FROM (SELECT schemaname,sequencename,sequenceowner,data_type,start_value,min_value,max_value,increment_by,cycle,cache_size,last_value FROM pg_sequences WHERE schemaname='public') s;"))};
- result.roles=psql(container,user,'postgres',"SELECT md5(string_agg(row_to_json(r)::text,chr(10) ORDER BY rolname)) FROM (SELECT rolname,rolsuper,rolinherit,rolcreaterole,rolcreatedb,rolcanlogin,rolreplication,rolconnlimit,rolpassword,rolvaliduntil,rolbypassrls,rolconfig FROM pg_authid WHERE rolname NOT LIKE 'pg_%' AND rolname <> 'bringness_restore_verifier') r;");
+ result.roles=psql(container,user,'postgres',"SELECT md5(string_agg(row_to_json(r)::text,chr(10) ORDER BY rolname)) FROM (SELECT rolname,rolsuper,rolinherit,rolcreaterole,rolcreatedb,rolcanlogin,rolreplication,rolconnlimit,rolpassword,rolvaliduntil,rolbypassrls,(SELECT setconfig FROM pg_db_role_setting WHERE setrole=pg_authid.oid AND setdatabase=0) AS rolconfig FROM pg_authid WHERE rolname NOT LIKE 'pg_%' AND rolname <> 'bringness_restore_verifier') r;");
  return result;
 }
 function child(args){
