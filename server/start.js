@@ -27,7 +27,7 @@ import { Readable } from "node:stream";
 import http from "node:http";
 import pg from "pg";
 import { handleRestaurantOwnerFeature, migrateRestaurantOwnerFeatures } from "./restaurant-owner-features.js";
-import { handlePaymentCheckout } from "./payment-checkout.js";
+import { handlePaymentCheckout, migratePaymentCheckout } from "./payment-checkout.js";
 import { handlePaymentReceipt } from "./payment-receipt.js";
 import { handlePublicReceipt, migratePublicReceipts } from "./public-receipt.js";
 import { handleTseRoutes, migrateTseIntegration } from "./tse-integration.js";
@@ -141,7 +141,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (!normalized.includes('/ai') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
-        if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js"></script></body>');
+        if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js?v=checkout-recovery-20261017"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
@@ -200,6 +200,7 @@ async function migrateWithRetry(){
       await migrateAccountantAccess();
       await migrateBillingTerms();
       await migrateTransactionalMail(platformGatewayPool);
+      await migratePaymentCheckout(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
       if(appMode!=='ai'){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}

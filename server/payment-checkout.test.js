@@ -23,7 +23,7 @@ async function run(body,{actor=user,raw=null,chunks=null}={}){
  await done;
  return {res,calls};
 }
-const valid=()=>({restaurantId:UUID,items:[{productId:PRODUCT,qty:1}],payments:[{method:'cash',amountCents:100}]});
+const valid=()=>({requestKey:UUID,restaurantId:UUID,items:[{productId:PRODUCT,qty:1}],payments:[{method:'cash',amountCents:100}]});
 test('unauthenticated checkout is rejected before any writes',async()=>{
  const {res,calls}=await run(valid(),{actor:null});
  assert.equal(res.status,401);assert.equal(calls.length,1);
@@ -92,4 +92,22 @@ test('request size is enforced across separate data chunks',async()=>{
  const result=await run(body,{chunks});
  assert.equal(result.res.status,413);
  assert.equal(result.calls.length,1);
+});
+
+ test('missing and malformed checkout keys cannot start a financial transaction',async()=>{
+ for(const requestKey of [undefined,null,'',UUID+'x',42,{},'not-a-uuid']){
+  const result=await run({...valid(),requestKey});assert.equal(result.res.status,400);assert.equal(result.calls.length,1);
+ }
+});
+ test('uppercase-equivalent product IDs cannot create duplicate checkout lines',async()=>{
+ const product='abcdefab-abcd-4abc-8abc-abcdefabcdef';
+ const result=await run({...valid(),items:[{productId:product,qty:1},{productId:product.toUpperCase(),qty:1}]});
+ assert.equal(result.res.status,400);assert.equal(result.calls.length,1);
+});
+
+test('aborted checkout body is rejected without opening a transaction',async()=>{
+ const pool={query:async()=>({rows:[user]}),connect:async()=>{throw Error('must not write')}};
+ const req=request(),res=response(),done=createPaymentCheckout(pool)(req,res);
+ setImmediate(()=>{req.emit('data',Buffer.from('{'));req.emit('aborted');});
+ await done;assert.equal(res.status,400);
 });
