@@ -119,3 +119,12 @@ Lager-/Beschaffungs-/Einzugsläufe sind in dieser isolierten Vorschau nicht frei
 Die vorbereiteten synthetischen Konten erlauben die UI-Prüfung ohne solche Dienste.
 Der Seed aktiviert nur zeitlich begrenzte synthetische Funktionsfreigaben und erzeugt
 keine bezahlte Lizenz, Rechnung oder Kundenabbuchung.
+
+## Ergänzung: Datenwiederherstellung und nativer Offlineabgleich
+
+Verschlüsselte Vorschauarchive, Wiederherstellungsprüfung in einer unabhängigen
+PostgreSQL-Instanz und der Abgleich derselben Barverkaufs-ID nach Neustart sind in
+`isolated-preview-recovery.md` beschrieben. Den tatsächlichen Windows-Electron-
+HTTP-Abgleich einschließlich Socketabbrüchen, Sitzungsablauf und Rechteentzug
+dokumentiert `offline-electron-http-recovery.md`. Diese Entwicklungsnachweise
+ändern nichts am weiterhin ausstehenden öffentlichen Netcup-Stagingbetrieb.
