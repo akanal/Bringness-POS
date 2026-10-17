@@ -4,15 +4,16 @@ import {aiPool} from './ai-database.js';
 import {documentBytes,textDraft,receiptLines,reject,normalizeName,suggestDelivery} from './ai-delivery-core.js';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let busy=false;
-export async function recognizeDocument(bytes,mime){
- if(busy)reject('Eine Dokumenterkennung läuft bereits. Bitte gleich erneut versuchen.',429);busy=true;
+export async function recognizeDocument(bytes,mime,{WorkerClass=Worker,timeoutMs=90000}={}){
+ if(busy)reject('Eine Dokumenterkennung läuft bereits. Bitte gleich erneut versuchen.',429);busy=true;let w;
  try{return await new Promise((resolve,rejectPromise)=>{
-  const w=new Worker(new URL('./ai-delivery-worker.js',import.meta.url),{execArgv:[],workerData:{bytes,mime},resourceLimits:{maxOldGenerationSizeMb:384}});
-  const timer=setTimeout(()=>{w.terminate();rejectPromise(Object.assign(new Error('Die Erkennung dauert zu lange. Bitte erneut versuchen oder manuell erfassen.'),{status:422}));},90000);
-  w.once('message',r=>{clearTimeout(timer);w.terminate();r.error?rejectPromise(Object.assign(new Error(r.error),{status:422})):resolve(textDraft(r.text,r.confidence));});
-  w.once('error',()=>{clearTimeout(timer);rejectPromise(Object.assign(new Error('Dokumenterkennung derzeit nicht verfügbar'),{status:503}));});
-  w.once('exit',code=>{clearTimeout(timer);if(code!==0)rejectPromise(Object.assign(new Error('Dokumenterkennung wurde beendet. Bitte erneut versuchen.'),{status:503}));});
- });}finally{busy=false;}
+  let settled=false;const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);error?rejectPromise(error):resolve(value);};
+  const unavailable=()=>Object.assign(Error('Dokumenterkennung wurde beendet. Bitte erneut versuchen.'),{status:503});
+  const timer=setTimeout(()=>finish(Object.assign(Error('Die Erkennung dauert zu lange. Bitte erneut versuchen oder manuell erfassen.'),{status:422})),timeoutMs);
+  try{w=new WorkerClass(new URL('./ai-delivery-worker.js',import.meta.url),{execArgv:[],workerData:{bytes,mime},resourceLimits:{maxOldGenerationSizeMb:384}});}catch{finish(unavailable());return;}
+  w.once('message',r=>{if(!r||typeof r!=='object'||typeof r.text!=='string'&&!r.error){finish(unavailable());return;}if(r.error){finish(Object.assign(Error(String(r.error).slice(0,300)),{status:422}));return;}try{finish(null,textDraft(r.text,r.confidence));}catch{finish(unavailable());}});
+  w.once('error',()=>finish(unavailable()));w.once('exit',()=>{if(!settled)finish(unavailable());});
+ });}finally{try{await w?.terminate();}catch{}busy=false;}
 }
 export const deliveryMigration=`
 CREATE TABLE IF NOT EXISTS ai_delivery_notes(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),account_id uuid NOT NULL REFERENCES ai_accounts(id),location_id uuid NOT NULL REFERENCES ai_locations(id),document_hash text NOT NULL,document_mime text NOT NULL,document_data bytea NOT NULL,filename text NOT NULL,extraction jsonb NOT NULL,supplier text NOT NULL DEFAULT '',reference text NOT NULL DEFAULT '',delivery_date date,status text NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','confirmed')),confirmed_at timestamptz,confirmation jsonb,created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(account_id,document_hash));
