@@ -1,3 +1,4 @@
+import {createTableSettlement,migrateTableSettlement} from './table-settlement.js';
 import {migrateBillingMail,createBillingMail} from './billing-mail.js';
 import {createDutyPlanning,migrateDutyPlanning} from './duty-planning.js';
 import {createWaiterDelivery,migrateWaiterDelivery} from './waiter-push-delivery.js';
@@ -58,6 +59,7 @@ const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
+const handleTableSettlement=createTableSettlement(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
@@ -114,6 +116,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleBillingStatus(req,res)) return;
       if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
+      if (await handleTableSettlement(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
       if (await handlePublicReceipt(req,res)) return;
@@ -141,6 +144,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (!normalized.includes('/ai') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
+        if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=checkout-recovery-20261017"></script></body>');
         if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js?v=checkout-recovery-20261017"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
@@ -201,6 +205,7 @@ async function migrateWithRetry(){
       await migrateBillingTerms();
       await migrateTransactionalMail(platformGatewayPool);
       await migratePaymentCheckout(platformGatewayPool);
+      await migrateTableSettlement(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
       if(appMode!=='ai'){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
