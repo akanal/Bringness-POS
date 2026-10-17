@@ -6,9 +6,9 @@ import path from 'node:path';
 import {createPreviewEnv} from './create-preview-env.mjs';
 const config=JSON.parse(await readFile(new URL('./isolated-preview.compose.json',import.meta.url),'utf8'));
 test('preview containers have a private internal network and no production mounts or public database port',()=>{
- assert.equal(config.name,'bringness-isolated-preview');assert.deepEqual(config.networks,{preview_private:{internal:true}});
+ assert.equal(config.name,'bringness-isolated-preview');assert.deepEqual(config.networks,{preview_private:{internal:true},preview_ingress:{internal:false}});
  const app=config.services['preview-app'],db=config.services['preview-db'];
- assert.deepEqual(app.ports,['127.0.0.1:3016:3000']);assert.equal(db.ports,undefined);assert.equal(app.read_only,true);assert.deepEqual(app.cap_drop,['ALL']);assert.deepEqual(app.networks,['preview_private']);assert.deepEqual(db.networks,['preview_private']);
+ assert.equal(app.ports,undefined);const proxy=config.services['preview-proxy'];assert.deepEqual(proxy.ports,['127.0.0.1:3016:8080']);assert.deepEqual(proxy.networks,['preview_private','preview_ingress']);assert.equal(proxy.environment,undefined);assert.equal(proxy.read_only,true);assert.equal(db.ports,undefined);assert.equal(app.read_only,true);assert.deepEqual(app.cap_drop,['ALL']);assert.deepEqual(app.networks,['preview_private']);assert.deepEqual(db.networks,['preview_private']);
  assert.equal(app.env_file,undefined);assert.equal(app.volumes,undefined);assert.deepEqual(db.volumes,['preview_data:/var/lib/postgresql/data']);
  assert.equal(app.environment.BRINGNESS_PREVIEW_MODE,'isolated');assert.equal(app.environment.NODE_ENV,'development');
  assert(!Object.keys(app.environment).some(key=>/SMTP_|MOLLIE_|FISKALY_|VAPID_|NETCUP_|RAILWAY_/.test(key)));

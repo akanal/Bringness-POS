@@ -55,9 +55,6 @@
         "PASSWORD_PEPPER": "${PASSWORD_PEPPER:?required}",
         "PREVIEW_OWNER_PASSWORD": "${PREVIEW_OWNER_PASSWORD:?required}"
       },
-      "ports": [
-        "127.0.0.1:3016:3000"
-      ],
       "networks": [
         "preview_private"
       ],
@@ -84,11 +81,57 @@
         "retries": 40,
         "start_period": "10s"
       }
+    },
+    "preview-proxy": {
+      "build": {
+        "context": "..",
+        "dockerfile": "ops/isolated-preview-proxy.Dockerfile"
+      },
+      "restart": "no",
+      "depends_on": {
+        "preview-app": {
+          "condition": "service_healthy"
+        }
+      },
+      "ports": [
+        "127.0.0.1:3016:8080"
+      ],
+      "networks": [
+        "preview_private",
+        "preview_ingress"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=16m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "pids_limit": 64,
+      "mem_limit": "128m",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "wget",
+          "-q",
+          "--spider",
+          "http://127.0.0.1:8080/__proxy-health"
+        ],
+        "interval": "3s",
+        "timeout": "3s",
+        "retries": 20
+      }
     }
   },
   "networks": {
     "preview_private": {
       "internal": true
+    },
+    "preview_ingress": {
+      "internal": false
     }
   },
   "volumes": {

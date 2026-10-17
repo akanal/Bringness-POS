@@ -30,6 +30,12 @@ jobs:
           docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json exec -T preview-app node server/preview-seed.mjs
       - name: Verify protected real application and provider refusals
         run: node ops/preview-smoke.mjs .env.preview.local
+      - name: Install isolated browser test dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/preview-browser" --no-save playwright@1.62.1
+          node "$RUNNER_TEMP/preview-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Verify real POS and AI interfaces through a temporary local HTTPS proxy
+        run: PREVIEW_TEST_PLAYWRIGHT="$RUNNER_TEMP/preview-browser/node_modules/playwright/index.mjs" node ops/preview-browser-smoke.mjs .env.preview.local
       - name: Verify network egress is unavailable inside the preview
         run: |
           docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json exec -T preview-app node --input-type=module -e '
