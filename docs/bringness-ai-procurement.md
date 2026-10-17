@@ -17,3 +17,11 @@ Verbrauchsbasis (Entwicklungsstand 16.10.2026): Die 28-Tage-Planung verwendet di
 
 
 Beschaffungsfreigabe (Entwicklungsstand 16.10.2026): Freigabeänderung, Lieferantenkonditionen und Audit-Eintrag werden gemeinsam unter einer aktuellen Restaurantberechtigung gespeichert. Ein Fehler führt zum Rollback und wird gemeldet; eine fehlgeschlagene Änderung gilt nicht als gespeichert. Wiederholtes Ausschalten erhöht die Freigabeversion nicht erneut und erzeugt keinen zweiten Audit-Eintrag. Nach verlorener Bestellbestätigung oder parallelem Lauf hat ein bereits verbindlich gespeicherter Tagesauftrag Vorrang vor veralteten Meldungen wie „kein Bedarf“ oder „blockiert“. Die Bestellkennung bleibt unverändert.
+
+## Hintergrundverbindungen und Mehrprozessprüfung
+
+Der aktuelle Staging-Stand hält Sperre, Planung und Warenkorbtransaktionen auf einer
+physischen Verbindung. Ein-Verbindungs-Pool, konkurrierende Sitzungen, Widerruf und
+dauerhafte Wiederholung sind zusätzlich auf PostgreSQL 16 geprüft. Details,
+Fehlerursache und CI-Nachweise: `ai-worker-connections-20261017.md`. Das aktiviert
+keine bisher deaktivierte Beschaffungsfreigabe.

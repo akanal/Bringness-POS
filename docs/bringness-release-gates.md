@@ -1,7 +1,7 @@
 # Bringness release and migration gates
 
 ## Gate 1: source and test integrity
-- Use the development branch finish/pos-release-audit-20261016; preserve main until release acceptance.
+- Use the current development branch `staging/preview-20261016`; preserve main until release acceptance. `finish/pos-release-audit-20261016` is an earlier development checkpoint.
 - Require passing CI, including POS, offline, TSE, AI, Center and browser integration suites.
 - Treat mocked providers and unsigned Windows artifacts as test evidence only.
 
