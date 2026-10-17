@@ -8,7 +8,7 @@
     "dev": "node --watch server/start.js",
     "test": "node ops/run-unit-tests.mjs",
     "test:unit": "node ops/run-unit-tests.mjs",
-    "test:center": "node --test server/center-browser.test.js server/center-database.test.js",
+    "test:center": "node --test server/center-browser.test.js server/center-database.test.js server/pos-payment-browser.test.js",
     "test:demo": "node --test ops/demo-smoke.test.mjs",
     "test:ci-workflows": "node --test ops/windows-workflow.test.mjs",
     "test:preview-source": "node --test ops/preview-source.test.mjs",

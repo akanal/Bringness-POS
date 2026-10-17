@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 // Browser and database lifecycle suites have dedicated dependencies and CI jobs.
 // Keep the default test command runnable after the documented root npm ci.
 const root=fileURLToPath(new URL('../',import.meta.url));
-const dedicated=new Set(['center-browser.test.js','center-database.test.js']);
+const dedicated=new Set(['center-browser.test.js','center-database.test.js','pos-payment-browser.test.js']);
 const files=[];
 for(const directory of ['server','tests']){
  for(const name of (await readdir(new URL('../'+directory+'/',import.meta.url))).sort()){
