@@ -6,6 +6,7 @@ export const moduleCatalog=Object.freeze({
  center_monthly:{feature:'center',name:'Center-System',netCents:2999,requires:['pos_base','table_management']},
  personnel_monthly:{feature:'personnel',name:'Personalmanagement',netCents:999,requires:['pos_base']},
  ean_scanner_monthly:{feature:'ean_scanner',name:'EAN-Scanner',netCents:999,requires:['pos_base']},
+ display_control_monthly:{feature:'display_control',name:'Displaysteuerung',netCents:1499,requires:['pos_base']},
  kitchen_monthly:{feature:'kitchen',name:'Küche',netCents:999,requires:['pos_base']}
 });
 export const planFeature=code=>moduleCatalog[code]?.feature||({pos_base_monthly:'pos_base',restaurant_monthly:'restaurant'})[code]||null;

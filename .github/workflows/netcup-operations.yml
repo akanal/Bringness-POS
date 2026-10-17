@@ -30,6 +30,17 @@ jobs:
     if: github.repository == 'akanal/Bringness-POS' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: device_test
+          POSTGRES_PASSWORD: device_test
+          POSTGRES_DB: bringness_device_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U device_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       NETCUP_SSH_KEY: ${{ secrets.NETCUP_SSH_KEY }}
       NETCUP_KNOWN_HOSTS: ${{ secrets.NETCUP_KNOWN_HOSTS }}
@@ -76,6 +87,8 @@ jobs:
           node server/ai-tests/pos-ean.mjs
           node server/ai-tests/pos-ean-offline.mjs
           node server/ai-tests/pos-ean-licensing.mjs
+          BILLING_TEST_DATABASE_URL=postgres://device_test:device_test@localhost:5432/bringness_device_test node server/ai-tests/billing-checkout-guard.mjs
+          node server/ai-tests/displays.mjs
           node server/ai-tests/fiskaly-test.mjs
           node server/ai-tests/fiskaly-sandbox.mjs
           node server/ai-tests/transactional-mail.mjs

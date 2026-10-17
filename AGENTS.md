@@ -135,3 +135,8 @@ Continue authorized development autonomously and preserve established behavior a
 - Separate optional ean_scanner_monthly module, 9.99 EUR net/month; feature ean_scanner. Online and download bases, no table requirement. Hardware separately procured, keyboard-wedge scanner with Enter supported. Public compact price card and POS licensing card required.
 - Code assignment is restaurant-scoped, validated EAN/GTIN 8/12/13/14 including check digit and leading zeros. Existing product assignment or explicitly entered new name/price/tax; no automatic product/price database. Owner/admin plus existing PIN required to assign. Paid module plus base enforced server-side.
 - Known scan adds to ordinary cart; repeated scans increase quantity. Unknown/unavailable code never automatically sells. Offline sales use immutable synchronized barcode/catalog entries and bounded module validity; offline unknown codes require online assignment/sync. No checkout/receipt logic replacement.
+
+## Owner module booking safety confirmed 2026-10-17
+- Active addon cards move from available offers to Meine Module with status, price and management; public prices stay visible.
+- Prevent duplicate purchases server-side, including simultaneous tabs/devices, pending payments, ambiguous provider replies and paid periods after cancellation. Never rely on hiding buttons alone.
+- Display control price confirmed separately: 14.99 EUR net/month, not 14.90; feature display_control, base required, no table dependency. Preserve legacy restaurant display rights and all stored screens/media. Paid module gates both editor and public player/media.

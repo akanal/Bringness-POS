@@ -16,6 +16,12 @@ export function validateDisplay(b){
  return {name,orientation:b.orientation,fit:b.fit,playlist};
 }
 export async function migrateDisplays(pool){await pool.query(`CREATE TABLE IF NOT EXISTS pos_displays(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,name text NOT NULL,orientation text NOT NULL,fit text NOT NULL,playlist jsonb NOT NULL DEFAULT '[]',token text NOT NULL UNIQUE,updated_at timestamptz NOT NULL DEFAULT now());CREATE TABLE IF NOT EXISTS pos_display_media(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,mime text NOT NULL,content bytea NOT NULL,created_at timestamptz NOT NULL DEFAULT now());CREATE INDEX IF NOT EXISTS pos_displays_restaurant ON pos_displays(restaurant_id);CREATE INDEX IF NOT EXISTS pos_display_media_restaurant ON pos_display_media(restaurant_id);`)}
+export async function displayAccess(pool,companyId){
+ const rows=(await pool.query("SELECT feature_code FROM company_features WHERE company_id=$1 AND status='active' AND (ends_at IS NULL OR ends_at>now() OR grace_until>now())",[companyId])).rows;
+ const f=new Set(rows.map(r=>r.feature_code));if(f.has('restaurant'))return true;
+ if(!f.has('display_control'))return false;
+ return f.has('pos_base')||Boolean((await pool.query("SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='download_license' AND ce.status='active'",[companyId])).rowCount);
+}
 export function createDisplays(pool){
  async function owner(req,res){const raw=String(req.headers.authorization||'').replace(/^Bearer /,'');const u=raw?(await pool.query("SELECT u.id,u.company_id,u.role,s.token_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[hash(raw)])).rows[0]:null;
  if(!u){send(res,401,{error:'Nicht angemeldet'});return null}if(!['owner','admin'].includes(u.role)){send(res,403,{error:'Keine Verwaltungsberechtigung'});return null}
@@ -25,12 +31,12 @@ export function createDisplays(pool){
  try{
  const player=p.match(/^\/api\/v1\/display-player\/([a-f0-9]{48})(?:\/media\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}))?$/);
  if(player&&(req.method==='GET'||req.method==='HEAD'&&player[2])){
- const d=(await pool.query('SELECT d.*,r.name restaurant_name FROM pos_displays d JOIN restaurants r ON r.id=d.restaurant_id WHERE d.token=$1',[player[1]])).rows[0];if(!d)return send(res,404,{error:'Bildschirm nicht verbunden'});
+ const d=(await pool.query('SELECT d.*,r.company_id,r.name restaurant_name FROM pos_displays d JOIN restaurants r ON r.id=d.restaurant_id WHERE d.token=$1',[player[1]])).rows[0];if(!d)return send(res,404,{error:'Bildschirm nicht verbunden'});if(!await displayAccess(pool,d.company_id))return send(res,403,{error:'Displaysteuerung nicht aktiv',code:'MODULE_REQUIRED'});
  if(player[2]){if(!d.playlist.some(x=>x.mediaId===player[2]))return send(res,404,{error:'Medium nicht freigegeben'});const m=(await pool.query('SELECT mime,content FROM pos_display_media WHERE id=$1 AND restaurant_id=$2',[player[2],d.restaurant_id])).rows[0];if(!m)return send(res,404,{error:'Medium nicht gefunden'});const length=m.content.length,range=singleByteRange(req.headers['if-range']?'':req.headers.range,length);if(range.status===416){res.writeHead(416,{'content-range':'bytes */'+length,'accept-ranges':'bytes','content-length':0});res.end();return true}const {start,end,status}=range;res.writeHead(status,{'content-type':m.mime,'content-length':end-start+1,'accept-ranges':'bytes',...(status===206?{'content-range':`bytes ${start}-${end}/${length}`} : {}),'cache-control':'private, max-age=60','x-content-type-options':'nosniff'});res.end(req.method==='HEAD'?undefined:m.content.subarray(start,end+1));return true}
  const products=(await pool.query('SELECT p.id,p.name,p.price_cents,p.category_id,c.name category FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.restaurant_id=$1 AND p.active=true AND p.ai_stock_available=true ORDER BY c.sort_order,c.name,p.name LIMIT 250',[d.restaurant_id])).rows;
  return send(res,200,{name:d.name,restaurantName:d.restaurant_name,orientation:d.orientation,fit:d.fit,playlist:d.playlist,products,updatedAt:d.updated_at});
  }
- const rid=url.searchParams.get('restaurantId');const u=platform?await systemActor(pool,req,res,rid):await owner(req,res);if(!u)return true;if(!uuid(rid)||!(await pool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[rid,u.company_id])).rowCount)return send(res,404,{error:'Betrieb nicht gefunden'});
+ const rid=url.searchParams.get('restaurantId');const u=platform?await systemActor(pool,req,res,rid):await owner(req,res);if(!u)return true;if(!uuid(rid)||!(await pool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[rid,u.company_id])).rowCount)return send(res,404,{error:'Betrieb nicht gefunden'});if(!await displayAccess(pool,u.company_id))return send(res,403,{error:'Displaysteuerung nicht aktiv. Bitte unter Lizenz & Abo buchen.',code:'MODULE_REQUIRED'});
  if(platform&&p==='/api/v1/displays/catalog'&&req.method==='GET'){
  const [restaurants,categories,products]=await Promise.all([
  pool.query('SELECT id,name FROM restaurants WHERE id=$1',[rid]),

@@ -8,6 +8,7 @@ const offerings=[
  {code:'center_monthly',title:'Center-System',intro:'Gemeinsamer Bestellbereich mit mehreren Betrieben.',items:['29,99 € netto pro Monat','Tischsystem zusätzlich erforderlich: 9,99 € monatlich','Getrennt vom Tisch-QR- und Tresen-System']},
  {code:'personnel_monthly',title:'Personalmanagement',intro:'Personal unabhängig von Tischen oder QR-Systemen zubuchen.',items:['9,99 € netto pro Monat','Mitarbeiter, Dienstzeiten und Dienstplanung']},
  {code:'ean_scanner_monthly',title:'EAN-Scanner',intro:'Artikel per EAN anlegen und beim Verkauf direkt in den Warenkorb scannen.',items:['9,99 € netto pro Monat','Für Online- und Download-Kasse, ohne Tischsystem','Scannergerät separat; keine automatische Produktdatenbank']},
+ {code:'display_control_monthly',title:'Displaysteuerung',intro:'Bildschirme aus der Kasse steuern: Hoch- und Querformat, Preise, Bilder und Videos.',items:['14,99 € netto pro Monat','Für Online- und Download-Kasse, ohne Tischsystem','Bildschirme und Abspielgeräte separat']},
  {code:'kitchen_monthly',title:'Küche',intro:'Optionale Küchenansicht für die Gastronomie.',items:['9,99 € netto pro Monat','Nicht in der Grundkasse enthalten']},
  {code:'download_license',title:'Windows-Download',intro:'Normale Windows-Kasse für 399 € netto einmalig.',items:['Einmalige Grundlizenz','Alle Zusatzmodule zu denselben Monatspreisen buchbar','QR-Systeme setzen das Tischsystem voraus','Hardware-TSE separat; Integration und Freigabe ausstehend']}
 ];
@@ -49,7 +50,7 @@ function card(offer){
 }
 function renderPlans(){
   $('onlinePlans').innerHTML=card(offerings.find(o=>o.code==='pos_base_monthly'))||'Tarife sind derzeit nicht verfügbar.';
-  $('basicModulePlans').innerHTML=offerings.filter(o=>['table_management_monthly','personnel_monthly','kitchen_monthly','ean_scanner_monthly'].includes(o.code)).map(card).join('');
+  $('basicModulePlans').innerHTML=offerings.filter(o=>['table_management_monthly','personnel_monthly','kitchen_monthly','ean_scanner_monthly','display_control_monthly'].includes(o.code)).map(card).join('');
   $('orderingModulePlans').innerHTML=offerings.filter(o=>['table_qr_monthly','counter_qr_monthly','center_monthly'].includes(o.code)).map(card).join('');
   $('downloadPlans').innerHTML=card(offerings.find(o=>o.code==='download_license'))||'Lizenz ist derzeit nicht verfügbar.';
   document.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',()=>choose(button.dataset.plan)));

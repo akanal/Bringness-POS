@@ -1,0 +1,11 @@
+# Module booking and display control, 17 October 2026
+
+Active addon cards are grouped under **Meine Module**, with status, price and cancellation controls. They are absent from the available addon groups. Public offers remain visible. Display control is `display_control_monthly`, EUR 14.99 net monthly for either base licence; no tables required. Existing restaurant contracts retain display access. Screens, tokens, media and paid customer contracts are preserved.
+
+The server creates a durable checkout reservation before calling the payment provider. A company row lock serializes competing requests, and a partial unique index permits only one unresolved reservation per company/module (one shared slot for the base products). Approval consumption and the reservation commit together. A second browser/device, old outstanding checkout, active licence, or canceled licence with remaining paid time cannot start a second payment. Provider customer/payment calls carry reservation-based idempotency keys.
+
+Only a verified terminal provider notification resolves a linked reservation, in the same transaction as billing updates. Timeouts, lost replies and restarts never automatically release it. A reservation without a recorded provider payment requires operator reconciliation against the provider before release; do not delete or expire it to force a new payment. This deliberately favors preventing duplicate charges over silently retrying an ambiguous request. Existing customer contracts are not migrated.
+
+Display editor, player and assigned media require active display rights plus a base licence; legacy restaurant rights remain valid. Expiry stops public player refresh/media access; a received 403 clears already displayed content. Network outages preserve the existing last-content behavior. Previously cached/downloaded images cannot be remotely erased.
+
+Validation uses synthetic data only: PostgreSQL-backed reservation constraints, atomic approval rollback, legacy pending payment, cancellation/grace, tenant isolation, eight simultaneous requests and the actual checkout route with a stub provider (one payment), public/POS card rendering, display editor/player/media expiry, online/download/legacy access and existing unit/integration suites. No real customer payment is used for validation.
