@@ -11,3 +11,9 @@ test('commission jobs remain draft-only updates and exclude paid orders',()=>{
  assert.match(source,/p\.order_id IS NULL/);
  assert.match(source,/ai_collection_jobs\.state='draft'/);
 });
+
+test('collection validation enforces the Berlin accounting month before charging',()=>{
+ const validation=readFileSync(new URL('./ai-billing-validation.js',import.meta.url),'utf8');
+ assert.match(validation,/to_char\(o\.received_at AT TIME ZONE 'Europe\/Berlin','YYYY-MM'\)=\$3/);
+ assert.match(validation,/\[j\.order_ids,j\.supplier_id,j\.month\]/);
+});
