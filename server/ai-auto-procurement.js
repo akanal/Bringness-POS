@@ -29,13 +29,20 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
  let lockAcquired=false;
  try{
  if(lockClient){const runLock=await lockClient.query('SELECT pg_try_advisory_lock(hashtext($1),hashtext($2)) AS locked',['bringness-ai-auto-procurement',user.id]);if(!runLock.rows[0]?.locked)return {state:'busy'};lockAcquired=true;}
- const run=(await db.query('INSERT INTO ai_auto_procurement_runs(account_id,day) VALUES($1,$2) ON CONFLICT(account_id,day) DO UPDATE SET day=EXCLUDED.day RETURNING *',[user.id,today])).rows[0];if(run.state==='ordered')return {state:'ordered',replayed:true,netCents:run.net_cents};
+ // Keep the lock, plan and checkout on one leased connection. Acquiring another
+ // pooled connection here can exhaust the pool while every worker holds a lock.
+ // Cart owns its transaction, but only this scope releases the physical client.
+ const runDb=lockClient?{
+  query:(...args)=>lockClient.query(...args),
+  connect:async()=>({query:(...args)=>lockClient.query(...args),release(){}})
+ }:db;
+ const run=(await runDb.query('INSERT INTO ai_auto_procurement_runs(account_id,day) VALUES($1,$2) ON CONFLICT(account_id,day) DO UPDATE SET day=EXCLUDED.day RETURNING *',[user.id,today])).rows[0];if(run.state==='ordered')return {state:'ordered',replayed:true,netCents:run.net_cents};
  try{
   const deliveryDate=new Date(Date.parse(today+'T12:00:00Z')+policy.leadDays*86400000).toISOString().slice(0,10);
-  const plan=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds},{db});if(!plan.complete)fail('Nicht vollständig automatisch bestellfähig: '+plan.unresolved.map(x=>x.reason).join(' · '),409);if(!plan.lines.length){await db.query("UPDATE ai_auto_procurement_runs SET state='no_need',error=NULL,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id]);return durableRunResult(db,run.id,{state:'no_need'})}
+  const plan=await draft(user,{mode:'procurement',days:policy.days,deliveryDate,allowedSuppliers:policy.supplierIds},{db:runDb});if(!plan.complete)fail('Nicht vollständig automatisch bestellfähig: '+plan.unresolved.map(x=>x.reason).join(' · '),409);if(!plan.lines.length){await runDb.query("UPDATE ai_auto_procurement_runs SET state='no_need',error=NULL,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id]);return durableRunResult(runDb,run.id,{state:'no_need'})}
   const lines=plan.lines.map(({stockId,productId,packs})=>({stockId,productId,packs}));
-  const preview=await cart(db,user,{lines,deliveryDate},{checkout:false});if(!preview.canOrder)fail(preview.warnings.join(' · '),409);
-  const result=await cart(db,user,{lines,deliveryDate,quote:preview.quote,requestKey:run.id,confirmed:true},{
+  const preview=await cart(runDb,user,{lines,deliveryDate},{checkout:false});if(!preview.canOrder)fail(preview.warnings.join(' · '),409);
+  const result=await cart(runDb,user,{lines,deliveryDate,quote:preview.quote,requestKey:run.id,confirmed:true},{
    authorize:async(c,quote)=>{
     const checkoutTime=clock();if(!(checkoutTime instanceof Date)||!Number.isFinite(checkoutTime.getTime())||berlinClock(checkoutTime).date!==today)fail('Kalendertag inzwischen gewechselt. Lauf erneut starten.',409);
     const current=(await c.query('SELECT * FROM ai_auto_procurement WHERE account_id=$1 FOR UPDATE',[user.id])).rows[0];
@@ -53,7 +60,7 @@ export async function runAutomaticProcurement(user,{db=aiPool(),draft=procuremen
     await c.query("INSERT INTO ai_audit(actor_id,action,detail) VALUES($1,'automatic_procurement_ordered',$2::jsonb)",[user.id,JSON.stringify({runId:run.id,policyVersion:policyRow.version,netCents:quote.netCents,orders:orders.map(o=>o.id)})]);
    }
   });return {state:'ordered',orders:result.orders,netCents:preview.quote.netCents};
- }catch(e){const safeError=Number.isInteger(e?.status)&&e.status>=400&&e.status<500?String(e.message).slice(0,1000):'Automatische Beschaffung vorübergehend nicht möglich';await db.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,safeError]);return durableRunResult(db,run.id,{state:'blocked',error:safeError})}
+ }catch(e){const safeError=Number.isInteger(e?.status)&&e.status>=400&&e.status<500?String(e.message).slice(0,1000):'Automatische Beschaffung vorübergehend nicht möglich';await runDb.query("UPDATE ai_auto_procurement_runs SET state='blocked',error=$2,updated_at=now() WHERE id=$1 AND state<>'ordered'",[run.id,safeError]);return durableRunResult(runDb,run.id,{state:'blocked',error:safeError})}
  }finally{if(lockClient){let releaseError;try{if(lockAcquired){const unlocked=await lockClient.query('SELECT pg_advisory_unlock(hashtext($1),hashtext($2)) AS unlocked',['bringness-ai-auto-procurement',user.id]);if(unlocked.rows?.[0]?.unlocked!==true)releaseError=new Error('Advisory lock not released');}}catch(e){releaseError=e;}lockClient.release(releaseError);}}
 }
 let running=false;

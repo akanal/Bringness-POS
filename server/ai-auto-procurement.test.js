@@ -155,7 +155,7 @@ test('automatic procurement namespaces locks by restaurant account',async()=>{
    if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'daily',state:'ordered',net_cents:100}]};
    return {rows:[]};
   },
-  connect:async()=>({query:async(sql,args)=>{keys.push({sql,args});return {rows:[{locked:true}]};},release:()=>{}})
+  connect:async()=>({query:async(sql,args)=>{if(sql.includes('pg_try_advisory_lock')||sql.includes('pg_advisory_unlock')){keys.push({sql,args});return {rows:[{locked:true,unlocked:true}]};}return db.query(sql,args);},release:()=>{}})
  };
  await runAutomaticProcurement({id:'restaurant-a'},{db});
  await runAutomaticProcurement({id:'restaurant-b'},{db});
@@ -173,7 +173,7 @@ test('automatic procurement releases the same advisory-lock connection after a n
   query:async sql=>{
    if(sql.includes('pg_try_advisory_lock')){locks++;return {rows:[{locked:true}]}};
    if(sql.includes('pg_advisory_unlock')){unlocks++;return {rows:[{pg_advisory_unlock:true}]}};
-   throw Error('Unexpected advisory connection query');
+   return db.query(sql);
   },
   release:()=>{releases++}
  };
@@ -262,7 +262,7 @@ test('automatic procurement discards pooled connection if advisory unlock fails'
    query:async sql=>{
     if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:true}]};
     if(sql.includes('pg_advisory_unlock'))throw Error('connection lost');
-    throw Error('unexpected query');
+    return db.query(sql);
    },
    release:error=>{discarded=error}
   })
@@ -270,4 +270,33 @@ test('automatic procurement discards pooled connection if advisory unlock fails'
  const result=await runAutomaticProcurement({id:'restaurant-a'},{db});
  assert.equal(result.state,'ordered');
  assert.match(discarded.message,/connection lost/);
+});
+
+test('a one-connection pool can plan, transact and acknowledge without a second checkout lease',async()=>{
+ const policy={enabled:true,days:2,leadDays:1,maxDailyNetCents:10000,supplierIds:['supplier'],supplierTerms:{supplier:['Berlin','terms',0]}};
+ let leased=false,releases=0,acquisitions=0,ordered=false,transactions=0;
+ const query=async sql=>{
+  if(sql.startsWith('SELECT * FROM ai_auto_procurement '))return {rows:[{policy,version:1}]};
+  if(sql.startsWith('INSERT INTO ai_auto_procurement_runs'))return {rows:[{id:'run',state:'pending'}]};
+  if(sql.startsWith('SELECT state'))return {rows:[{state:ordered?'ordered':'pending',net_cents:100}]};
+  if(sql.includes("state='ordered'"))ordered=true;
+  if(sql==='BEGIN')transactions++;
+  if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:true}]};
+  if(sql.includes('pg_advisory_unlock'))return {rows:[{unlocked:true}]};
+  return {rows:[]};
+ };
+ const db={query:async(...args)=>{assert.equal(leased,false,'pool query would wait for the only leased connection');return query(...args);},connect:async()=>{
+  assert.equal(leased,false,'second lease would exhaust the pool');leased=true;acquisitions++;
+  return {query,release(){assert.equal(ordered,true);leased=false;releases++;}};
+ }};
+ const lines=[{stockId:'stock',productId:'product',packs:1}],quote={netCents:100,groups:[{supplierId:'supplier',deliveryArea:'Berlin',terms:'terms',minimumCents:0}]};
+ const result=await runAutomaticProcurement({id:'buyer',role:'restaurant'},{db,
+  draft:async(_u,_b,{db:scoped})=>{await scoped.query('SELECT 1');return {complete:true,lines};},
+  cart:async(scoped,_u,_b,options)=>{
+   const borrowed=await scoped.connect();await borrowed.query('BEGIN');
+   if(options.checkout===false){await borrowed.query('COMMIT');borrowed.release();return {canOrder:true,quote};}
+   await options.authorize(borrowed,quote);await options.onCreated(borrowed,{quote,orders:[{id:'order'}]});
+   await borrowed.query('COMMIT');borrowed.release();return {orders:[{id:'order'}]};
+  }});
+ assert.equal(result.state,'ordered');assert.equal(acquisitions,1);assert.equal(releases,1);assert.equal(transactions,2);assert.equal(leased,false);
 });
