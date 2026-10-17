@@ -80,7 +80,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
   const pool=db;
   const url=new URL(req.url,"http://local"),p=url.pathname;
 
-  const receiptQr=p.match(/^\/api\/v1\/receipts\/([0-9a-f-]{36})\/number-qr$/i);
+  const receiptQr=p.match(/^\/api\/v1\/receipts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/number-qr$/i);
   if(receiptQr && req.method==="GET"){
     const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
     const q=await pool.query(`SELECT rc.receipt_number,rc.public_token FROM receipts rc
@@ -93,7 +93,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     res.end(svg); return true;
   }
 
-  const extras=p.match(/^\/api\/v1\/products\/([0-9a-f-]{36})\/extras$/i);
+  const extras=p.match(/^\/api\/v1\/products\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/extras$/i);
   if(extras && req.method==="GET"){
     const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
     if(!await ensureProductOwner(extras[1],u.company_id,db))return json(res,404,{error:"Produkt nicht gefunden"});
@@ -109,7 +109,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     json(res,201,q.rows[0]); return true;
   }
 
-  const extraDelete=p.match(/^\/api\/v1\/product-extras\/([0-9a-f-]{36})$/i);
+  const extraDelete=p.match(/^\/api\/v1\/product-extras\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
   if(extraDelete && req.method==="DELETE"){
     const u=await owner(req,res,db); if(!u)return true;
     const q=await pool.query(`UPDATE product_extras pe SET active=false
@@ -185,7 +185,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     json(res,410,{error:'Dienstzeiten ausschließlich an der Kasse mit persönlicher Stempel-PIN buchen.'});return true;
   }
 
-  const tableDetails=p.match(/^\/api\/v1\/tables\/([0-9a-f-]{36})\/details$/i);
+  const tableDetails=p.match(/^\/api\/v1\/tables\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/details$/i);
   if(tableDetails && req.method==="GET"){
     const u=await user(req,db);if(!u)return json(res,401,{error:"Nicht angemeldet"});
     const t=await pool.query("SELECT t.* FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.id=$1 AND r.company_id=$2",[tableDetails[1],u.company_id]);
@@ -203,6 +203,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
   if(p==="/api/v1/owner/presence" && req.method==="GET"){
     const u=await owner(req,res,db); if(!u)return true;
     const rid=String(url.searchParams.get("restaurantId")||"");
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rid))return json(res,400,{error:"Betriebskennung ungültig"});
     const q=await pool.query(`SELECT wp.id,wp.started_at,wp.ended_at,e.id employee_id,e.display_name
       FROM waiter_presence wp JOIN employees e ON e.id=wp.employee_id JOIN restaurants r ON r.id=e.restaurant_id
       WHERE r.id=$1 AND r.company_id=$2 ORDER BY wp.started_at DESC LIMIT 300`,[rid,u.company_id]);
@@ -212,6 +213,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
   if(p==="/api/v1/owner/schedules" && req.method==="GET"){
     const u=await owner(req,res,db); if(!u)return true;
     const rid=String(url.searchParams.get("restaurantId")||"");
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rid))return json(res,400,{error:"Betriebskennung ungültig"});
     const q=await pool.query(`SELECT ws.id,ws.employee_id,e.display_name,ws.starts_at,ws.ends_at,ws.note,ws.recurrence
       FROM waiter_schedules ws JOIN employees e ON e.id=ws.employee_id JOIN restaurants r ON r.id=ws.restaurant_id
       WHERE ws.restaurant_id=$1 AND r.company_id=$2 AND ws.ends_at>now()-interval '7 days'

@@ -27,3 +27,8 @@ test('table details reject unassigned waiters before returning guest/order data'
 test('legacy handset presence cannot bypass personal POS stamping',async()=>{
  for(const action of ['start','end']){const r=await call('/api/v1/waiter/presence/'+action,{method:'POST',actor:{id:rid,company_id:rid,role:'waiter'}});assert.equal(r.status,410);assert.equal(r.calls.length,1);}
 });
+
+test('malformed UUID paths and owner filters never reach PostgreSQL UUID casts',async()=>{
+ for(const path of ['/api/v1/products/'+ '-'.repeat(36)+'/extras','/api/v1/tables/'+ '-'.repeat(36)+'/details']){const r=await call(path);assert.equal(r.handled,false);assert.equal(r.calls.length,0);}
+ for(const path of ['/api/v1/owner/presence','/api/v1/owner/schedules']){const r=await call(path+'?restaurantId=bad');assert.equal(r.status,400);assert.equal(r.calls.length,1);}
+});
