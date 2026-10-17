@@ -62,7 +62,7 @@ async function verify(file,keyFile){
   const metadata=JSON.parse(bytes.subarray(0,end).toString('utf8'));if(metadata.format!=='bringness-preview-backup-v1')throw Error('Invalid backup format');
   environment(Object.entries(metadata.configuration).map(([k,v])=>k+'='+v).join('\n'));
   // No source volume, exposed port, external network or application process.
-  phase='recovery container startup';started=true;command(['run','-d','--name',container,'--network','none','--read-only','--tmpfs','/var/lib/postgresql/data:rw,nosuid,size=1g','--tmpfs','/var/run/postgresql:rw,nosuid,size=16m','--label','bringness.preview.restore=disposable','-e','POSTGRES_USER=bringness_restore_verifier','-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:16-alpine'],{stage:'Disposable recovery database startup'});
+  phase='recovery container startup';started=true;command(['run','-d','--name',container,'--network','none','--read-only','--tmpfs','/var/lib/postgresql/data:rw,nosuid,size=1g','--tmpfs','/var/run/postgresql:rw,nosuid,size=16m','--label','bringness.preview.restore=disposable','-e','POSTGRES_USER=bringness_restore_verifier','-e','POSTGRES_DB=postgres','-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:16-alpine'],{stage:'Disposable recovery database startup'});
   phase='recovery database readiness';let ready=false;for(let attempt=0;attempt<120;attempt++){
    const check=spawnSync('docker',['exec',container,'pg_isready','-h','127.0.0.1','-U','bringness_restore_verifier','-d','postgres'],{stdio:'ignore',timeout:3000});if(check.status===0){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,500));
   }
