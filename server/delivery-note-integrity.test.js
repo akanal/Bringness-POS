@@ -9,3 +9,8 @@ test('delivery confirmation caps the combined quantity for repeated ingredients 
   if(sql.includes('SELECT * FROM ai_stock'))return {rows:[{id,unit:'kg',quantity:'999999000000'}]};return {rows:[{id}],rowCount:1};
  }};await assert.rejects(confirmNote({connect:async()=>c},body,{id}),e=>e.status===400);assert(rolledBack);assert.equal(writes,0);
 });
+
+test('revoked restaurant cannot confirm delivery or replay a previous acknowledgement',async()=>{
+ const queries=[];const c={release(){},query:async sql=>{queries.push(sql);return {rows:[]};}};
+ await assert.rejects(confirmNote({connect:async()=>c},body,{id}),e=>e.status===403);assert.equal(queries.at(-1),'ROLLBACK');assert(!queries.some(q=>q.includes('ai_delivery_notes')));
+});

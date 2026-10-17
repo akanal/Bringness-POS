@@ -1,3 +1,4 @@
+import {lockAiRestaurant} from './ai-write-authorization.js';
 import {Worker} from 'node:worker_threads';
 import {aiPool} from './ai-database.js';
 import {documentBytes,textDraft,receiptLines,reject,normalizeName,suggestDelivery} from './ai-delivery-core.js';
@@ -31,7 +32,7 @@ export async function confirmNote(pool,b,u){
  const lines=receiptLines(b.lines),supplier=label(b.supplier,200),reference=label(b.reference,100);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.deliveryDate))||!Number.isFinite(Date.parse(b.deliveryDate))||new Date(b.deliveryDate).toISOString().slice(0,10)!==b.deliveryDate)reject('Lieferdatum prüfen');
  const confirmation={lines,supplier,reference,deliveryDate:b.deliveryDate};const c=await pool.connect();
- try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);
+ try{await c.query('BEGIN');await lockAiRestaurant(c,u.id);
   const note=(await c.query('SELECT * FROM ai_delivery_notes WHERE id=$1 AND account_id=$2 FOR UPDATE',[b.id,u.id])).rows[0];if(!note)reject('Lieferschein nicht gefunden',404);
   if(note.supplier_order_id)reject('Dieser Lieferschein gehört zu einer Bringness-Bestellung. Wareneingang ausschließlich am Auftrag bestätigen.',409);
   if(note.status==='confirmed'){if(JSON.stringify(note.confirmation)!==JSON.stringify(confirmation)&&JSON.stringify(normalize(note.confirmation))!==JSON.stringify(normalize(confirmation)))reject('Bereits mit anderen Angaben gebucht',409);await c.query('COMMIT');return {ok:true,duplicate:true};}
@@ -49,7 +50,7 @@ function normalize(x){if(Array.isArray(x))return x.map(normalize);if(x&&typeof x
 export async function linkNote(pool,b,u){
  if(!uuid.test(String(b.id))||!uuid.test(String(b.groupId))||b.confirmed!==true)reject('Lieferschein und eigenen Auftrag ausdrücklich zuordnen');
  const reference=label(b.reference,100);if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.deliveryDate))||!Number.isFinite(Date.parse(b.deliveryDate))||new Date(b.deliveryDate).toISOString().slice(0,10)!==b.deliveryDate)reject('Lieferdatum prüfen');
- const c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id]);
+ const c=await pool.connect();try{await c.query('BEGIN');await lockAiRestaurant(c,u.id);await lockAiRestaurant(c,u.id);
   const orders=(await c.query('SELECT o.*,st.location_id FROM ai_orders o JOIN ai_stock st ON st.id=o.stock_id WHERE coalesce(o.supplier_order_id,o.id)=$1 ORDER BY o.id FOR UPDATE OF o',[b.groupId])).rows;
   if(!orders.length||orders.some(o=>o.buyer_id!==u.id))reject('Eigener Auftrag nicht gefunden',404);
   const n=(await c.query('SELECT * FROM ai_delivery_notes WHERE id=$1 AND account_id=$2 FOR UPDATE',[b.id,u.id])).rows[0];if(!n)reject('Lieferschein nicht gefunden',404);
