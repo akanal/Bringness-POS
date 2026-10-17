@@ -93,7 +93,7 @@ export function createPosStockHandler(pool){
  const send=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
  return async(req,res)=>{
  const p=new URL(req.url,'http://local').pathname;
- const action=p.match(/^\/api\/v1\/orders\/([0-9a-f-]{36})\/status$/i),poll=p.match(/^\/api\/v1\/stock-commands\/([0-9a-f-]{36})$/i);
+ const action=p.match(/^\/api\/v1\/orders\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/status$/i),poll=p.match(/^\/api\/v1\/stock-commands\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
  if(!action&&!poll)return false;
  if(action&&req.method!=='PATCH'||poll&&req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
  const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,''),actor=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];if(!actor)return send(res,401,{error:'Nicht angemeldet'});

@@ -9,3 +9,7 @@ test('stock action rejects malformed objects before acquiring a write connection
   await handler(req,{writeHead(code){status=code;},end(){}});assert.equal(status,expected);
  }
 });
+
+test('malformed stock command poll IDs are refused before querying PostgreSQL',async()=>{
+ const handler=createPosStockHandler({query(){throw Error('Unexpected SQL');}});const req=Readable.from([]);Object.assign(req,{url:'/api/v1/stock-commands/'+ '-'.repeat(36),method:'GET',headers:{}});assert.equal(await handler(req,{writeHead(){},end(){}}),false);
+});
