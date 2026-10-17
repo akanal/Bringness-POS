@@ -102,3 +102,8 @@ test('invalid subscription dates and amounts cannot be debited',async()=>{
   await assert.rejects(validateBillingJob(db,{...base,...changes}),/Abo-Abrechnungsposition/);
  }
 });
+
+test('paid reconciliation rejects missing or invalid orders before payment records',()=>{
+ assert.match(source,/if\(!o\|\|!Number\.isSafeInteger\(Number\(o\.commission_cents\)\)\|\|Number\(o\.commission_cents\)<=0\)fail\('Bestellung für Zahlungsabgleich fehlt oder ist ungültig'/);
+ assert.match(source,/SELECT 1 FROM ai_commission_payments WHERE order_id=\$1/);
+});
