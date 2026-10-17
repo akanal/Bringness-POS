@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {Readable} from 'node:stream';
-import {readRequestBytes,readJsonObject} from './http-body.js';
+import {readRequestBytes,readJsonObject,clientInputError} from './http-body.js';
 test('JSON object parser preserves split UTF-8 and counts bytes rather than characters',async()=>{
  const data=Buffer.from('{"name":"🍊Küche"}');
  const parts=[data.subarray(0,11),data.subarray(11,13),data.subarray(13)];
@@ -34,4 +34,10 @@ test('legacy event-stream adapters receive the same bounded and cleaned-up body 
   else{req.emit('data',Buffer.from(data));req.emit('end');assert.equal((await pending).toString(),data);}
   for(const name of ['data','end','aborted','error'])assert.equal(req.listenerCount(name),0);
  }
+});
+
+test('only known client error codes map to public responses and raw messages remain private',()=>{
+ assert.deepEqual(clientInputError({code:'INVALID_BODY',message:'private database password'}),{status:400,error:'Ungültige Anfrage'});
+ assert.equal(clientInputError({status:400,message:'private database query'}),null);assert.equal(clientInputError(Error('private')),null);
+ assert.equal(clientInputError({code:'AUTH_CAPACITY'}).status,503);assert.equal(clientInputError({code:'BODY_TOO_LARGE'}).status,413);
 });

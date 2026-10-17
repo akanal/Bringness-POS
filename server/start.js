@@ -1,3 +1,4 @@
+import {clientInputError} from './http-body.js';
 import {isolatedPreview,assertPreviewEntrypoint} from './preview-policy.js';
 import {createTableSettlement,migrateTableSettlement} from './table-settlement.js';
 import {migrateBillingMail,createBillingMail} from './billing-mail.js';
@@ -124,7 +125,9 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handlePublicReceipt(req,res)) return;
       if (await handleRestaurantOwnerFeature(req,res)) return;
     } catch (error) {
-      console.error("Modular feature error:", error);
+      const inputError=clientInputError(error);
+      if(inputError&&!res.headersSent){res.writeHead(inputError.status,{'content-type':'application/json','cache-control':'no-store',...(inputError.status===413?{connection:'close'}:{})});return res.end(JSON.stringify({error:inputError.error}));}
+      console.error("Modular feature error:", error.code||error.name);
       if (!res.headersSent && error.code==='P0001') {res.writeHead(409,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({error:error.message}))}
       if (!res.headersSent) {
         res.writeHead(500, {"content-type":"application/json","cache-control":"no-store"});

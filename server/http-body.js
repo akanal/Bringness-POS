@@ -33,3 +33,8 @@ export async function readJsonObject(req,options={}){
  if(value===null||typeof value!=='object'||Array.isArray(value))throw invalid();
  return value;
 }
+
+export function clientInputError(error){
+ const known={INVALID_BODY:[400,'Ungültige Anfrage'],BODY_TOO_LARGE:[413,'Anfrage zu groß'],INVALID_SECRET:[400,'Ungültige Zugangsdaten'],AUTH_CAPACITY:[503,'Zu viele gleichzeitige Zugangsprüfungen. Bitte kurz warten und erneut versuchen.']};
+ const match=known[error?.code];return match?{status:match[0],error:match[1]}:null;
+}

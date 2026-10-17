@@ -21,6 +21,9 @@ for(const raw of ['null','[]','42','{bad']){
 }
 const oversizedLogin=await fetch(base+'/api/v1/auth/login',{method:'POST',headers:{cookie,'content-type':'application/json'},body:JSON.stringify({padding:'x'.repeat(4*1024*1024)})});assert.equal(oversizedLogin.status,413);
 const login=await request('/api/v1/auth/login',{method:'POST',body:{email:'preview@example.test',password:env.PREVIEW_OWNER_PASSWORD}});assert.equal(login.status,200);assert.equal(typeof login.data.token,'string');const token=login.data.token;
+for(const path of ['/api/v1/support/message','/api/v1/admin/password/change','/api/v1/staff/confirm']){
+ const response=await fetch(base+path,{method:'POST',headers:{cookie,authorization:'Bearer '+token,'content-type':'application/json'},body:'null'});assert.equal(response.status,400);
+}
 const bootstrap=await request('/api/v1/bootstrap',{token});assert.equal(bootstrap.status,200);assert.equal(bootstrap.data.restaurants.length,1);assert.equal(bootstrap.data.products.length,2);
 const product=bootstrap.data.products.find(p=>p.name==='Vorschau Kaffee');assert(product);
 const sale=previous?.sale||{requestKey:crypto.randomUUID(),restaurantId:bootstrap.data.restaurants[0].id,items:[{productId:product.id,qty:1}],payments:[{method:'cash',amountCents:250}]};
