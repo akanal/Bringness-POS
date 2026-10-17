@@ -11,6 +11,7 @@ async function call(path,{method='GET',body=null,mime='application/json',publicC
 }
 const base='/api/v1/displays',q='?restaurantId='+rid;
 const upload=async()=>{const r=await call(base+'/media'+q,{method:'POST',mime:'image/png',body:png});assert.equal(r.status,201);return r.result};
+for(const [mime,body] of [['image/png',Buffer.from('<html>invalid</html>')],['video/mp4',png]])assert.equal((await call(base+'/media'+q,{method:'POST',mime,body})).status,400);
 const original=await upload(),payload={name:'A Theke',orientation:'landscape',fit:'contain',playlist:[{type:'image',mediaId:original.id,seconds:15}]};
 const first=(await call(base+q,{method:'POST',body:payload})).result,second=(await call(base+q,{method:'POST',body:{...payload,name:'B Eingang'}})).result;assert.notEqual(first.token,second.token);
 // Restart handlers/migrations: server content and distinct screen links survive without client storage.

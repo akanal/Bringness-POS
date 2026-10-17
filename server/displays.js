@@ -1,3 +1,4 @@
+import {matchesDisplayMedia} from './display-media-type.js';
 import {readRequestBytes,readJsonObject} from './http-body.js';
 import {systemActor} from './system-access.js';
 import crypto from 'node:crypto';
@@ -56,7 +57,7 @@ export function createDisplays(pool){
 
  if(p==='/api/v1/displays/media'&&req.method==='POST'){
  const mime=String(req.headers['content-type']||'').split(';')[0];if(!['image/png','image/jpeg','image/webp','video/mp4','video/webm'].includes(mime))return send(res,400,{error:'Bitte PNG, JPEG, WebP, MP4 oder WebM hochladen'});
- const content=await readRequestBytes(req,{maxBytes:25*1024*1024});if(!content.length)return send(res,400,{error:'Datei ist leer'});
+ const content=await readRequestBytes(req,{maxBytes:25*1024*1024});if(!content.length)return send(res,400,{error:'Datei ist leer'});if(!matchesDisplayMedia(mime,content))return send(res,400,{error:'Dateiinhalt passt nicht zum angegebenen Bild- oder Videoformat'});
  // Keep uploads bounded per venue; inactive replacement media remain within the quota.
  const c=await pool.connect();try{await c.query('BEGIN');await c.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[rid]);const q=await c.query('SELECT coalesce(sum(octet_length(content)),0)::bigint bytes FROM pos_display_media WHERE restaurant_id=$1',[rid]);if(Number(q.rows[0].bytes)+content.length>250*1024*1024){await c.query('ROLLBACK');return send(res,413,{error:'Medienlimit von 250 MB erreicht'})}const m=(await c.query('INSERT INTO pos_display_media(restaurant_id,mime,content) VALUES($1,$2,$3) RETURNING id',[rid,mime,content])).rows[0];await c.query('COMMIT');return send(res,201,{id:m.id,type:mime.startsWith('video/')?'video':'image'})}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
  }
