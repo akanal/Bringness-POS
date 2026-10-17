@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 import {enqueueMail} from './transactional-mail.js';
 const digest=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -37,7 +38,7 @@ export function createDutyPlanning(pool){return async(req,res)=>{
  const url=new URL(req.url,'http://local'),p=url.pathname,own=p==='/api/v1/waiter/duty',roster=p==='/api/v1/roster',schedules=p==='/api/v1/owner/schedules';if(!own&&!roster&&!schedules)return false;let c;
  try{
  const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');const u=token?(await pool.query("SELECT u.id,u.company_id,u.role,s.token_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[digest(token)])).rows[0]:null;if(!u)fail('Nicht angemeldet',401);
- let b={};if(req.method==='POST'){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>10000)fail('Anfrage zu groß',413)}try{b=JSON.parse(raw||'{}')}catch{fail('Ungültige Anfrage')}}else b=Object.fromEntries(url.searchParams);
+ let b={};if(req.method==='POST'){b=await readJsonObject(req,{maxBytes:10000});}else b=Object.fromEntries(url.searchParams);
  let employee,rid=b.restaurantId;
  if(own){if(u.role!=='waiter')fail('Kein Kellnerzugang',403);employee=(await pool.query('SELECT id,restaurant_id,display_name FROM employees WHERE user_id=$1 AND active=true',[u.id])).rows[0];if(!employee)fail('Mitarbeiter nicht gefunden',404);rid=employee.restaurant_id;}
  else if(!['owner','admin'].includes(u.role))fail('Keine Verwaltungsberechtigung',403);
