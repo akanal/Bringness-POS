@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'finish/**'
+      - 'staging/preview-20261016'
   pull_request:
     branches:
       - main
