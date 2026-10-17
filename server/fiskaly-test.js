@@ -1,3 +1,4 @@
+import {readJsonObject,clientInputError} from './http-body.js';
 import crypto from 'node:crypto';
 // TEST onboarding only. Never selected by the receipt signing worker.
 export const FISKALY_AUTH_URL='https://kassensichv-middleware.fiskaly.com/api/v2/auth';
@@ -7,7 +8,7 @@ function encryptionKey(env){const material=env.FISKALY_CREDENTIAL_KEY||env.PASSW
 export function sealTestCredentials(value,env=process.env){const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',encryptionKey(env),iv);cipher.setAAD(Buffer.from(value.companyId));return Buffer.concat([iv,cipher.update(JSON.stringify(value)),cipher.final(),cipher.getAuthTag()]).toString('base64')}
 export function openTestCredentials(payload,companyId,env=process.env){const b=Buffer.from(payload,'base64'),cipher=crypto.createDecipheriv('aes-256-gcm',encryptionKey(env),b.subarray(0,12));cipher.setAAD(Buffer.from(companyId));cipher.setAuthTag(b.subarray(-16));return JSON.parse(Buffer.concat([cipher.update(b.subarray(12,-16)),cipher.final()]).toString())}
 export async function migrateFiskalyTest(pool){await pool.query(`CREATE TABLE IF NOT EXISTS fiskaly_test_credentials(company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,payload text NOT NULL,updated_at timestamptz NOT NULL DEFAULT now(),checked_at timestamptz,status text NOT NULL CHECK(status IN ('connected','failed')));`)}
-async function body(req){let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>8192)fail('Anfrage zu groß.',413)}try{const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw Error();return value}catch{fail('Ungültige Anfrage.')}}
+const body=req=>readJsonObject(req,{maxBytes:8192});
 export function validateTestCredentials(value){const apiKey=typeof value.apiKey==='string'?value.apiKey.trim():'',apiSecret=typeof value.apiSecret==='string'?value.apiSecret.trim():'';if(!/^test_[A-Za-z0-9_-]{8,250}$/.test(apiKey))fail('Bitte ausschließlich einen Fiskaly TEST-API-Schlüssel eingeben.');if(!apiSecret||apiSecret.length>2048||/[\s]/.test(apiSecret))fail('Bitte das API Secret vollständig eingeben.');return {apiKey,apiSecret}}
 export async function authenticateTest(credentials,fetcher=fetch){validateTestCredentials(credentials);let response;try{response=await fetcher(FISKALY_AUTH_URL,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json'},body:JSON.stringify({api_key:credentials.apiKey,api_secret:credentials.apiSecret})})}catch{fail('Fiskaly ist momentan nicht erreichbar. Bitte erneut testen.',502)}if(!response.ok){if([400,401,403].includes(response.status))fail('Fiskaly hat die TEST-Zugangsdaten abgelehnt. Bitte API-Schlüssel und Secret prüfen.',422);fail('Fiskaly konnte den Verbindungstest nicht abschließen. Bitte später erneut testen.',502)}let result;try{result=await response.json()}catch{fail('Ungültige Antwort von Fiskaly.',502)}if(typeof result.access_token!=='string'||!result.access_token)fail('Fiskaly hat keinen Zugang bestätigt.',502);return true}
 export function createFiskalyTest(pool,{env=process.env,fetcher=fetch,sandboxStatus,requestSetup}={}){
@@ -36,6 +37,6 @@ export function createFiskalyTest(pool,{env=process.env,fetcher=fetch,sandboxSta
    if(req.method==='PUT')await pool.query(`INSERT INTO fiskaly_test_credentials(company_id,payload,status,checked_at) VALUES($1,$2,'connected',now()) ON CONFLICT(company_id) DO UPDATE SET payload=excluded.payload,status='connected',updated_at=now(),checked_at=now()`,[companyId,payload]);
    else await pool.query("UPDATE fiskaly_test_credentials SET status='connected',checked_at=now() WHERE company_id=$1 AND payload=$2",[companyId,payload]);
    return send(res,200,{mode:'TEST',configured:true,status:'connected',message:'Fiskaly TEST-Verbindung erfolgreich. Zugangsdaten sind geschützt gespeichert. Der TEST-Zugang ist bereit.'});
-  }catch(error){return send(res,error.status||500,{error:error.publicMessage||'TEST-Einrichtung momentan nicht verfügbar.'})}
+  }catch(error){const input=clientInputError(error);return send(res,input?.status||error.status||500,{error:input?.error||error.publicMessage||'TEST-Einrichtung momentan nicht verfügbar.'})}
  };
 }
