@@ -1,3 +1,4 @@
+import {decodeAccountantCursor} from './accountant-cursor.js';
 import {readJsonObject} from './http-body.js';
 import pg from 'pg';
 import crypto from 'node:crypto';
@@ -33,7 +34,7 @@ export function accountantHandler(db){return async(req,res)=>{
    const day=v=>v instanceof Date?v.toISOString().slice(0,10):String(v).slice(0,10);scope.from_day=day(scope.from_day);scope.to_day=day(scope.to_day);
    if(!offlineUuid.test(scope.restaurant_id||'')||!validDay(scope.from_day)||!validDay(scope.to_day)||scope.from_day>scope.to_day)fail('Betrieb und gültiger Zeitraum erforderlich');
    const binding=hash(JSON.stringify([scope.company_id,scope.restaurant_id,scope.from_day,scope.to_day,scope.id||'owner']));
-   let cursor=null;if(url.searchParams.get('cursor')){try{cursor=JSON.parse(Buffer.from(url.searchParams.get('cursor'),'base64url').toString())}catch{fail('Ungültige Seitenkennung')}if(!cursor||typeof cursor!=='object'||Array.isArray(cursor)||cursor.binding!==binding||typeof cursor.id!=='string'||!offlineUuid.test(cursor.id)||typeof cursor.date!=='string'||!Number.isFinite(Date.parse(cursor.date))||typeof cursor.asOf!=='string'||!Number.isFinite(Date.parse(cursor.asOf))||Date.parse(cursor.asOf)>Date.now()+1000)fail('Ungültige Seitenkennung');}
+   const rawCursor=url.searchParams.get('cursor'),cursor=rawCursor?decodeAccountantCursor(rawCursor,binding):null;
    const asOf=cursor?.asOf||(await db.query(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS as_of`)).rows[0].as_of;
    const rows=(await db.query(`SELECT rc.id,rc.receipt_number,rc.issued_at,to_char(rc.issued_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_issued_at,rc.fiscal_status,rc.merchant_snapshot,o.id order_id,o.total_cents,o.source,
     COALESCE((SELECT jsonb_agg(jsonb_build_object('name',i.product_name_snapshot,'quantity',i.quantity,'unitPriceCents',i.unit_price_cents,'taxRate',i.tax_rate_snapshot) ORDER BY i.id) FROM order_items i WHERE i.order_id=o.id),'[]') items,
