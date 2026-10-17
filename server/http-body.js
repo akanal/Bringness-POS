@@ -3,15 +3,25 @@ export async function readRequestBytes(req,{maxBytes=65536}={}){
  if(!Number.isSafeInteger(maxBytes)||maxBytes<1)throw TypeError('Invalid request byte limit');
  if(req.aborted)throw invalid();
  const chunks=[];let size=0;
+ const accept=part=>{
+  const bytes=Buffer.isBuffer(part)?part:typeof part==='string'?Buffer.from(part):part instanceof Uint8Array?Buffer.from(part):null;
+  if(!bytes)throw invalid();size+=bytes.length;
+  if(size>maxBytes){req.resume?.();throw invalid('Anfrage zu groß',413);}
+  chunks.push(bytes);
+ };
+ if(typeof req[Symbol.asyncIterator]!=='function'&&typeof req.on==='function'){
+  await new Promise((resolve,reject)=>{
+   let done=false;
+   const finish=error=>{if(done)return;done=true;for(const [event,listener] of listeners)req.removeListener?.(event,listener);error?reject(error):resolve();};
+   const listeners=[['data',part=>{try{accept(part);}catch(e){finish(e);}}],['end',()=>finish()],['aborted',()=>finish(invalid())],['error',()=>finish(invalid())]];
+   for(const [event,listener] of listeners)req.on(event,listener);
+  });
+  return Buffer.concat(chunks,size);
+ }
  // Keep the socket available long enough for the handler to return 400/413.
  const input=typeof req.iterator==='function'?req.iterator({destroyOnReturn:false}):req;
  try{
-  for await(const part of input){
-   const bytes=Buffer.isBuffer(part)?part:typeof part==='string'?Buffer.from(part):part instanceof Uint8Array?Buffer.from(part):null;
-   if(!bytes)throw invalid();size+=bytes.length;
-   if(size>maxBytes){req.resume?.();throw invalid('Anfrage zu groß',413);}
-   chunks.push(bytes);
-  }
+  for await(const part of input)accept(part);
  }catch(error){if(error?.code==='BODY_TOO_LARGE'||error?.code==='INVALID_BODY')throw error;throw invalid();}
  if(req.aborted)throw invalid();
  return Buffer.concat(chunks,size);

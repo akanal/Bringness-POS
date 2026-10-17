@@ -25,3 +25,13 @@ test('binary reader preserves exact bytes and validates its configured limit',as
  const data=Buffer.from([0,255,7]);assert.deepEqual(await readRequestBytes(Readable.from([data]),{maxBytes:3}),data);
  await assert.rejects(readRequestBytes(Readable.from([data]),{maxBytes:0}),TypeError);
 });
+
+test('legacy event-stream adapters receive the same bounded and cleaned-up body handling',async()=>{
+ const {EventEmitter}=await import('node:events');
+ for(const [data,status] of [['{"ok":true}',null],['x'.repeat(33),413]]){
+  const req=new EventEmitter();req.resume=()=>{};const pending=readRequestBytes(req,{maxBytes:32});
+  if(status){const failure=assert.rejects(pending,e=>e.status===status);req.emit('data',Buffer.from(data));await failure;}
+  else{req.emit('data',Buffer.from(data));req.emit('end');assert.equal((await pending).toString(),data);}
+  for(const name of ['data','end','aborted','error'])assert.equal(req.listenerCount(name),0);
+ }
+});
