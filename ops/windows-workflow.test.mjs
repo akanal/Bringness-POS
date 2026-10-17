@@ -16,3 +16,8 @@ test('public installer release is gated to main and a valid signature',()=>{
   assert.match(y,/github\.ref == 'refs\/heads\/main'/);
   assert.match(y,/steps\.signature\.outputs\.signed == 'true'/);
 });
+
+test('staging build is allowed but staging cannot publish a public installer',()=>{
+  assert.match(y,/staging\/preview-20261016/);
+  assert.match(y,/github\.ref == 'refs\/heads\/main' && github\.event_name != 'pull_request'/);
+});
