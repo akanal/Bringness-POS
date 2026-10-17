@@ -69,7 +69,15 @@ async function verify(file,keyFile){
   if(!ready)throw Error('Disposable recovery database was not ready');
   phase='cluster SQL restore';const restore=child(['exec','-i',container,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','bringness_restore_verifier','-d','postgres']);restore.process.stdout.resume();
   await pipeline(createReadStream(plain,{start:end+1}),restore.process.stdin);if(await restore.completion!==0)throw Error('Database restore failed; sensitive output withheld');
-  phase='restored database fingerprints';assert.deepEqual(snapshot(container,'bringness_restore_verifier'),metadata.snapshot,'Restored database rows or roles differ');
+  phase='restored database fingerprints';const restored=snapshot(container,'bringness_restore_verifier');
+  const differences=[];
+  for(const name of databases){
+   for(const table of metadata.snapshot[name].tables)if(JSON.stringify(restored[name].tables.find(t=>t.table_name===table.table_name))!==JSON.stringify(table))differences.push(name+':table:'+table.table_name);
+   if(JSON.stringify(restored[name].sequences)!==JSON.stringify(metadata.snapshot[name].sequences))differences.push(name+':sequence state');
+  }
+  if(restored.roles!==metadata.snapshot.roles)differences.push('role attributes or credentials');
+  if(differences.length)console.error('Recovery mismatch categories (no row contents): '+differences.join(', '));
+  assert.deepEqual(restored,metadata.snapshot,'Restored database rows or roles differ');
   console.log('Recovery verified: all preview database table counts/content fingerprints and role credentials match; original runtime and volume were not modified.');
  }finally{
   try{if(started)command(['rm','-f',container],{stage:'Disposable recovery cleanup'});}finally{await rm(dir,{recursive:true,force:true});}
