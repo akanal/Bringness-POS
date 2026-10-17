@@ -86,3 +86,19 @@ test('unsafe aggregate commission amounts are rejected',async()=>{
  const db={query:async()=>({rows:[{id:a,commission_cents:Number.MAX_SAFE_INTEGER,paid:null},{id:b,commission_cents:1,paid:null}]})};
  await assert.rejects(validateBillingJob(db,{kind:'commission',order_ids:[a,b],supplier_id:a,month:'2026-09',net_cents:200}),/Ungültige Provisionsbeträge|Abrechnungsbetrag verändert/);
 });
+
+test('unknown billing job kinds cannot be debited',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const db={query:()=>{throw Error('Unknown kind must not query')}};
+ await assert.rejects(validateBillingJob(db,{kind:'other'}),/Unbekannte Abrechnungsart/);
+ await assert.rejects(validateBillingJob(db,null),/Unbekannte Abrechnungsart/);
+});
+test('invalid subscription dates and amounts cannot be debited',async()=>{
+ const {validateBillingJob}=await import('./ai-billing-validation.js');
+ const base={kind:'subscription',id:'job',source_id:'charge',order_ids:[],net_cents:200,period_start:'2026-09-01',period_end:'2026-10-01'};
+ const charge={net_cents:200,starts_at:'2026-09-01',ends_at:'2026-10-01',snapshot:{}};
+ const db={query:async()=>({rows:[charge]})};
+ for(const changes of [{net_cents:0},{net_cents:Number.MAX_SAFE_INTEGER+1},{period_start:'bad'},{period_end:'2026-08-01'},{order_ids:null}]){
+  await assert.rejects(validateBillingJob(db,{...base,...changes}),/Abo-Abrechnungsposition/);
+ }
+});
