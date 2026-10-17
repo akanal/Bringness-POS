@@ -48,7 +48,7 @@ test("mode selection is owner-only and rejects mixed models",async()=>{
   assert.equal(pool.calls.some(x=>x.sql.startsWith("UPDATE")),false);
 });
 test("model switch locks the restaurant and rejects unfinished orders, including prepaid pickup",async()=>{
-  const pool=db(sql=>sql.includes("FROM sessions")?rows(user):sql.startsWith("SELECT qr_service_mode")?rows({qr_service_mode:"restaurant"}):sql.startsWith("SELECT 1 FROM orders")?rows({one:1}):rows());
+  const pool=db(sql=>sql.includes("FROM sessions")?rows(user):sql.startsWith("SELECT feature_code FROM company_features")?rows({feature_code:"pos_base"},{feature_code:"table_management"},{feature_code:"counter_qr"}):sql.startsWith("SELECT qr_service_mode")?rows({qr_service_mode:"restaurant"}):sql.startsWith("SELECT 1 FROM orders")?rows({one:1}):rows());
   const result=await request(pool,"/api/v1/restaurants/"+rid+"/qr-service",{method:"PUT",payload:{mode:"pickup"}});
   assert.equal(result.status,409);
   assert.ok(pool.calls.some(x=>x.sql.includes("FOR UPDATE")));

@@ -11,6 +11,7 @@ export async function migrateCenter() {
       company_id uuid NOT NULL REFERENCES companies(id),
       name text NOT NULL, active boolean NOT NULL DEFAULT true
     );
+    ALTER TABLE centers ADD COLUMN IF NOT EXISTS module_license_required boolean NOT NULL DEFAULT false;
     CREATE TABLE IF NOT EXISTS center_tables (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       center_id uuid NOT NULL REFERENCES centers(id),

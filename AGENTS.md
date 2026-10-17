@@ -121,3 +121,12 @@ Continue authorized development autonomously and preserve established behavior a
 
 ## Final online base price confirmed 2026-10-15
 - Owner explicitly approved publishing 34.99 EUR net/month (41.64 EUR incl. 19% VAT) for new online base purchases, including Cloud-TSE. Supersedes 29.99 online base. Existing customer subscriptions and agreed special prices remain unchanged; recurring amounts continue from the paid transaction/provider contract. Download remains 399 EUR net once; QR price is unchanged. Clearly disclose that productive TSE activation remains pending. Modular sales migration is a separate unfinished change; do not describe it as deployed based solely on this price update.
+
+
+## Owner final modular catalogue confirmed 2026-10-17
+- Supersedes earlier proposals: online base 34.99 EUR net/month, Windows download 399 EUR net once. Both base licences allow the same monthly addons. Retire restaurant_monthly from new purchases only; preserve existing contracts and stored business data.
+- table_management_monthly: 9.99 EUR net/month, independently bookable without QR.
+- table_qr_monthly, counter_qr_monthly, center_monthly: three distinct systems, each 29.99 EUR net/month, each requires the table module plus a base licence. Preserve Center separation from the other QR systems.
+- personnel_monthly and kitchen_monthly: each 9.99 EUR net/month, independently optional; neither belongs in the ordinary base POS. A retail/newsagent base has no kitchen.
+- Booking starts in protected owner settings with administrative PIN, time-limited single-use owner-email confirmation and verified provider payment. No automatic migration or repricing of existing subscriptions.
+- Owner explicitly authorized publication of these exact prices and modules in this session; no further routine confirmation is needed.

@@ -1,3 +1,4 @@
+import {planFeature} from '../module-catalog.js';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -21,10 +22,10 @@ try{
  const company=crypto.randomUUID(),plan=crypto.randomUUID(),txid=crypto.randomUUID();await db.query("INSERT INTO billing_plans VALUES($1,'pos_base_monthly','Fixture POS','monthly')",[plan]);
  await db.query("INSERT INTO billing_transactions(id,company_id,plan_id,provider_payment_id,status,amount_cents,currency,net_cents,vat_cents,vat_rate,mollie_customer_id,mollie_subscription_id) VALUES($1,$2,$3,'tr_first','open',3569,'EUR',2999,570,19,'cst_fixture','sub_fixture')",[txid,company,plan]);
  const route=(await readFile(new URL('../index.js',import.meta.url),'utf8')).split('\n').find(line=>line.startsWith('if(p==="/api/v1/mollie/webhook"'));
- const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor,run=new AsyncFunction('p','req','res','json','pool','billingWebhookId','billingPaymentMatches','recurringBillingSource','mollieFetch','recordBillingMail',route);
+ const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor,run=new AsyncFunction('p','req','res','json','pool','billingWebhookId','billingPaymentMatches','recurringBillingSource','mollieFetch','recordBillingMail','planFeature',route);
  let payment={id:'tr_first',status:'paid',customerId:'cst_fixture',subscriptionId:'sub_fixture',amount:{currency:'EUR',value:'35.69'}};
  const keys=[];const call=async(provider,{mail=recordBillingMail,subscriptionId='sub_provisioned'}={})=>{const req=Readable.from(['id='+provider.id]);Object.assign(req,{method:'POST',headers:{host:'fixture.example.test'}});let response;
- await run('/api/v1/mollie/webhook',req,{},(_,status,data)=>response={status,data},db,billingWebhookId,billingPaymentMatches,recurringBillingSource,async(url,options)=>{if(url.endsWith('/subscriptions')){keys.push(options.headers['Idempotency-Key']);return {ok:true,status:200,json:async()=>({id:subscriptionId})};}return {ok:true,json:async()=>structuredClone(provider)};},mail);return response;};
+ await run('/api/v1/mollie/webhook',req,{},(_,status,data)=>response={status,data},db,billingWebhookId,billingPaymentMatches,recurringBillingSource,async(url,options)=>{if(url.endsWith('/subscriptions')){keys.push(options.headers['Idempotency-Key']);return {ok:true,status:200,json:async()=>({id:subscriptionId})};}return {ok:true,json:async()=>structuredClone(provider)};},mail,planFeature);return response;};
  for(const patch of [{amount:{currency:'EUR',value:'35.6901'}},{amount:{currency:'USD',value:'35.69'}},{amount:{currency:'EUR',value:'1.00'}},{customerId:'cst_other'},{status:'invented'},{amountRefunded:{currency:'EUR',value:'0.01'}}]){assert.equal((await call({...payment,...patch})).status,409);assert.equal((await db.query('SELECT count(*)::int n FROM company_entitlements')).rows[0].n,0);}
  await assert.rejects(call(payment,{mail:async()=>{throw Error('Synthetic audit/mail failure');}}));assert.equal((await db.query('SELECT paid_at FROM billing_transactions WHERE id=$1',[txid])).rows[0].paid_at,null);assert.equal((await db.query('SELECT count(*)::int n FROM company_entitlements')).rows[0].n,0);
  assert.equal((await call(payment)).status,200);const first=(await db.query('SELECT * FROM billing_transactions WHERE id=$1',[txid])).rows[0];assert(first.invoice_number);assert.equal((await call(payment)).status,200);assert.equal((await call({...payment,status:'failed'})).status,409);
