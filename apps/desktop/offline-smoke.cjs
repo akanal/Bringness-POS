@@ -29,7 +29,7 @@ app.whenReady().then(async()=>{let runtime,rogue;try{
  const shutdown=runtime.close();
  assert.equal(runtime.close(),shutdown);
  await shutdown;
- assert.equal(window.webContents.isDestroyed(),true);
+ assert.equal(window.isDestroyed(),true);
  assert.throws(()=>runtime.open(),/bereits geschlossen/);
  assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.view().then(()=>false,()=>true)'),true);
  assert.equal(await rogue.webContents.executeJavaScript('offlinePOS.export().then(()=>false,()=>true)'),true);
