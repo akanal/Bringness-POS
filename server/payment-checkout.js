@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import {cleanMailAddress,enqueuePaidReceipt} from './transactional-mail.js';
 import crypto from "node:crypto";
 import pg from "pg";
@@ -22,32 +23,7 @@ function send(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let bytes = 0;
-    let finished = false;
-    req.on("data", chunk => {
-      if (finished) return;
-      bytes += Buffer.byteLength(chunk);
-      if (bytes > 65536) {
-        finished = true;
-        reject(Object.assign(new Error("Request too large"), { status: 413 }));
-        req.resume();
-        return;
-      }
-      chunks.push(Buffer.from(chunk));
-    });
-    req.on("end", () => {
-      if (finished) return;
-      finished = true;
-      try { const raw = Buffer.concat(chunks).toString("utf8"); resolve(raw ? JSON.parse(raw) : {}); }
-      catch (error) { reject(error); }
-    });
-    req.on("error", error => { if (!finished) { finished = true; reject(error); } });
-    req.on("aborted", () => { if (!finished) { finished = true; reject(Object.assign(Error("Request aborted"),{status:400})); } });
-  });
-}
+const readBody=req=>readJsonObject(req,{maxBytes:65536});
 
 async function currentUser(req,db=pool,lock=false) {
   const token = String(req.headers.authorization || "").replace(/^Bearer /, "");
