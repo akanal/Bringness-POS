@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "c80fede3dd30c76a754594b51bdd08b067b9a361",
-  "requestId": "netcup-ai-release-20261017"
+  "revision": "3974c615c46211f19516c6d6d599fbd3d63c4ad7",
+  "requestId": "netcup-modular-ai-release-20261017"
 }
