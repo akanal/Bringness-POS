@@ -2,12 +2,12 @@ import crypto from 'node:crypto';
 import {hash,uuid,orderAmounts} from './ai-policy.js';
 import {supplierMayTrade} from './ai-collection.js';
 const fail=message=>{throw Object.assign(Error(message),{status:400})};
-const id=value=>{if(!uuid.test(String(value)))fail('Ungültige ID');return value};
+const id=value=>{if(typeof value!=='string'||!uuid.test(value))fail('Ungültige ID');return value.toLowerCase()};
 export async function cartTransaction(db,u,b,{checkout=true,trade=supplierMayTrade,authorize,onCreated}={}){
  if(u.role!=='restaurant')throw Object.assign(Error('Nur Restaurants können bestellen'),{status:403});
    if(!Array.isArray(b.lines)||!b.lines.length||b.lines.length>50)fail('1 bis 50 Positionen erforderlich');
    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.deliveryDate))||!Number.isFinite(Date.parse(b.deliveryDate))||new Date(b.deliveryDate).toISOString().slice(0,10)!==b.deliveryDate)fail('Gültiges Lieferdatum erforderlich');
-   const seen=new Set();const lines=b.lines.map(l=>{id(l.productId);id(l.stockId);if(!Number.isInteger(l.packs)||l.packs<1||l.packs>10000)fail('Ganze Packungen zwischen 1 und 10000 erforderlich');const key=l.productId+':'+l.stockId;if(seen.has(key))fail('Doppelte Position bitte zusammenfassen');seen.add(key);return {productId:l.productId,stockId:l.stockId,packs:l.packs}}).sort((a,z)=>(a.productId+a.stockId).localeCompare(z.productId+z.stockId));
+   const seen=new Set();const lines=b.lines.map(l=>{if(!l||typeof l!=='object'||Array.isArray(l))fail('Ungültige Warenkorbposition');const productId=id(l.productId),stockId=id(l.stockId);if(!Number.isInteger(l.packs)||l.packs<1||l.packs>10000)fail('Ganze Packungen zwischen 1 und 10000 erforderlich');const key=productId+':'+stockId;if(seen.has(key))fail('Doppelte Position bitte zusammenfassen');seen.add(key);return {productId,stockId,packs:l.packs}}).sort((a,z)=>(a.productId+a.stockId).localeCompare(z.productId+z.stockId));
    if(checkout){id(b.requestKey);if(b.confirmed!==true)fail('Bestellung muss ausdrücklich bestätigt werden');}
    const fingerprint=hash(JSON.stringify({lines,deliveryDate:b.deliveryDate,quote:b.quote}));
    const c=await db.connect();try{await c.query('BEGIN');const buyer=(await c.query('SELECT * FROM ai_accounts WHERE id=$1 FOR UPDATE',[u.id])).rows[0];
