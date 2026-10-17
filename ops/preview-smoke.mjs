@@ -37,6 +37,16 @@ for(const [prefix,auth,paths] of [
  const response=await fetch(base+prefix+path,{method:'POST',headers:{cookie,authorization:'Bearer '+auth,'content-type':'application/json'},body:'null'});
  assert.equal(response.status,400,'Invalid JSON object: '+prefix+path);const result=await response.json();assert.equal(typeof result.error,'string');
 }
+const rid=bootstrap.data.restaurants[0].id;
+for(const [path,auth,body] of [
+ ['/api/v1/guest/order-v2',token,{code:'a'.repeat(48),requestId:crypto.randomUUID(),items:[null]}],
+ ['/api/v1/products/'+product.id+'/extras',token,null],
+ ['/api/ai/cart/preview',aiLogin.data.token,{deliveryDate:'2026-10-17',lines:[null]}],
+ ['/api/ai/purchase-requests',aiLogin.data.token,{locationId:rid,requestKey:crypto.randomUUID(),deliveryDate:'2026-10-17',lines:[null]}],
+ ['/api/ai/delivery-notes/prices',aiLogin.data.token,{id:rid,confirmed:true,lines:[null]}]
+]){
+ const response=await fetch(base+path,{method:'POST',headers:{cookie,authorization:'Bearer '+auth,'content-type':'application/json'},body:JSON.stringify(body)});assert.equal(response.status,400,'Nested request validation: '+path);
+}
 const revoked=await fetch(base+'/health',{headers:{cookie:cookie+'tampered'}});assert.equal(revoked.status,401);
 if(stateFile&&!previous)await writeFile(stateFile,JSON.stringify({sale,orderId:paid.data.id})+'\n',{flag:'wx',mode:0o600});
 console.log('Isolated preview smoke passed: access protection, actual POS/AI assets and logins, idempotent synthetic cash sale, separate AI stock, cookie tamper and forbidden provider actions.');

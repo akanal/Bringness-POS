@@ -1,5 +1,5 @@
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const fail=()=>{throw Object.assign(Error('Ungültiger Artikel, Menge oder Beilage'),{status:400});};
+const fail=()=>{throw Object.assign(Error('Ungültiger Artikel, Menge oder Beilage'),{status:400,code:'INVALID_BODY'});};
 export function legacyGuestItems(items){
  if(!Array.isArray(items)||!items.length||items.length>20)fail();const seen=new Set();
  return items.map(item=>{
