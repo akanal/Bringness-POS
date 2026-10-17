@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "64126aa42ed63c7bbb850262fd617172d8e0150b",
-  "requestId": "netcup-module-hint-roster-dismiss-20261017"
+  "revision": "eb4f5a0d793081e827a7c720749a3f9be48d0f9c",
+  "requestId": "netcup-ean-scanner-module-20261017"
 }
