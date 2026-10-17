@@ -5,7 +5,7 @@
   const token=()=>localStorage.getItem("bringness-pos-token");
   async function api(path){const r=await fetch('/api/v1'+path,{headers:{authorization:'Bearer '+token()}});const j=await r.json();if(!r.ok)throw Error(j.error||'Fehler');return j}
   function download(name,type,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();URL.revokeObjectURL(a.href);a.remove()}
-  function csvCell(v){return '"'+String(v??'').replace(/^[=+\-@\t\r]/,"'$&").replace(/"/g,'""')+'"'}
+  function csvCell(v){return '"'+String(v??'').replace(/^[\s\uFEFF]*[=+\-@\t\r\n]/,"'$&").replace(/"/g,'""')+'"'}
   function inRange(date){const from=$('taxFrom')?.value,to=$('taxTo')?.value,d=new Date(date),start=from?new Date(from+'T00:00:00'):null,end=to?new Date(to+'T23:59:59.999'):null;return (!start||d>=start)&&(!end||d<=end)}
   async function load(){const rid=$('restaurant')?.value;if(!rid)throw Error('Bitte zuerst einen Betrieb auswählen.');const receipts=[];let cursor=null;const params=new URLSearchParams({restaurantId:rid,from:$('taxFrom')?.value||'2000-01-01',to:$('taxTo')?.value||'2100-12-31'});do{if(cursor)params.set('cursor',cursor);const page=await api('/accountant/receipts?'+params);receipts.push(...page.receipts.map(r=>({...r,payment_method:r.payments.map(p=>p.method).join('/')})));cursor=page.nextCursor}while(cursor);const fiscal=await api('/fiscal/status?restaurantId='+encodeURIComponent(rid));return {rid,receipts,fiscal}}
 
