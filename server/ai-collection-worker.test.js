@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {collectionTick} from './ai-collection.js';
+import {issueInvoice} from './ai-invoices.js';
 test('disabled collection prepares existing bookkeeping on its single leased connection without provider actions',async()=>{
  let leases=0,releases=0;const queries=[];
  const client={query:async sql=>{
@@ -26,4 +27,8 @@ test('collection skips competing worker and discards sessions whose lock release
   },release:error=>{released={error};}};
   await collectionTick({db:{connect:async()=>client}});assert.equal(unlocks,mode==='busy'?0:1);assert.equal(Boolean(released.error),mode!=='busy');
  }
+});
+
+test('invoice issuer validation runs before requesting a database connection',async()=>{
+ let connections=0;await assert.rejects(issueInvoice({}, {issuer:{}},null,{db:{connect:async()=>{connections++;throw Error('unexpected database access');}}}),/Rechnungssteller/);assert.equal(connections,0);
 });
