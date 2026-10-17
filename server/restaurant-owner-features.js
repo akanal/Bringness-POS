@@ -1,3 +1,4 @@
+import {readJsonObject} from './http-body.js';
 import crypto from "node:crypto";
 import pg from "pg";
 import QRCode from "qrcode";
@@ -12,18 +13,18 @@ const pool = new Pool({
 });
 
 const json=(res,status,data)=>{res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(data))};
-const readBody=req=>new Promise((resolve,reject)=>{let d="";req.on("data",c=>d+=c);req.on("end",()=>{try{resolve(d?JSON.parse(d):{})}catch(e){reject(e)}});req.on("error",reject)});
+const readBody=req=>readJsonObject(req,{maxBytes:65536});
 const bearer=req=>String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
-async function user(req){
+async function user(req,db=pool){
   const raw=bearer(req); if(!raw)return null;
   const tokenHash=crypto.createHash("sha256").update(raw).digest("hex");
-  const q=await pool.query(`SELECT u.id,u.company_id,u.email,u.display_name,u.role
+  const q=await db.query(`SELECT u.id,u.company_id,u.email,u.display_name,u.role
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`,[tokenHash]);
   return q.rows[0]||null;
 }
-async function owner(req,res){
-  const u=await user(req);
+async function owner(req,res,db=pool){
+  const u=await user(req,db);
   if(!u){json(res,401,{error:"Nicht angemeldet"});return null}
   if(!["owner","admin"].includes(u.role)){json(res,403,{error:"Nur Restaurantbesitzer oder Administratoren"});return null}
   return u;
@@ -70,17 +71,18 @@ export async function migrateRestaurantOwnerFeatures(){
   `);
 }
 
-async function ensureProductOwner(productId,companyId){
-  const q=await pool.query("SELECT p.id FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE p.id=$1 AND r.company_id=$2",[productId,companyId]);
+async function ensureProductOwner(productId,companyId,db=pool){
+  const q=await db.query("SELECT p.id FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE p.id=$1 AND r.company_id=$2",[productId,companyId]);
   return !!q.rowCount;
 }
 
-export async function handleRestaurantOwnerFeature(req,res){
+export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
+  const pool=db;
   const url=new URL(req.url,"http://local"),p=url.pathname;
 
   const receiptQr=p.match(/^\/api\/v1\/receipts\/([0-9a-f-]{36})\/number-qr$/i);
   if(receiptQr && req.method==="GET"){
-    const u=await user(req); if(!u)return json(res,401,{error:"Nicht angemeldet"});
+    const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
     const q=await pool.query(`SELECT rc.receipt_number,rc.public_token FROM receipts rc
       JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id
       WHERE rc.id=$1 AND r.company_id=$2`,[receiptQr[1],u.company_id]);
@@ -93,14 +95,14 @@ export async function handleRestaurantOwnerFeature(req,res){
 
   const extras=p.match(/^\/api\/v1\/products\/([0-9a-f-]{36})\/extras$/i);
   if(extras && req.method==="GET"){
-    const u=await user(req); if(!u)return json(res,401,{error:"Nicht angemeldet"});
-    if(!await ensureProductOwner(extras[1],u.company_id))return json(res,404,{error:"Produkt nicht gefunden"});
+    const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
+    if(!await ensureProductOwner(extras[1],u.company_id,db))return json(res,404,{error:"Produkt nicht gefunden"});
     const q=await pool.query("SELECT id,name,price_cents,active,sort_order FROM product_extras WHERE product_id=$1 ORDER BY sort_order,name",[extras[1]]);
     json(res,200,{extras:q.rows}); return true;
   }
   if(extras && req.method==="POST"){
-    const u=await owner(req,res); if(!u)return true;
-    if(!await ensureProductOwner(extras[1],u.company_id))return json(res,404,{error:"Produkt nicht gefunden"});
+    const u=await owner(req,res,db); if(!u)return true;
+    if(!await ensureProductOwner(extras[1],u.company_id,db))return json(res,404,{error:"Produkt nicht gefunden"});
     const b=await readBody(req),name=String(b.name||"").trim(),price=Number(b.priceCents);
     if(!name||name.length>100||!Number.isInteger(price)||price<0||price>1000000)return json(res,400,{error:"Beilage oder Preis ungültig"});
     const q=await pool.query("INSERT INTO product_extras(product_id,name,price_cents,sort_order) VALUES($1,$2,$3,$4) RETURNING id,name,price_cents,active,sort_order",[extras[1],name,price,Number.isInteger(b.sortOrder)?b.sortOrder:0]);
@@ -109,7 +111,7 @@ export async function handleRestaurantOwnerFeature(req,res){
 
   const extraDelete=p.match(/^\/api\/v1\/product-extras\/([0-9a-f-]{36})$/i);
   if(extraDelete && req.method==="DELETE"){
-    const u=await owner(req,res); if(!u)return true;
+    const u=await owner(req,res,db); if(!u)return true;
     const q=await pool.query(`UPDATE product_extras pe SET active=false
       FROM products p JOIN restaurants r ON r.id=p.restaurant_id
       WHERE pe.id=$1 AND pe.product_id=p.id AND r.company_id=$2 RETURNING pe.id`,[extraDelete[1],u.company_id]);
@@ -179,7 +181,7 @@ export async function handleRestaurantOwnerFeature(req,res){
   }
 
   if(p==="/api/v1/waiter/presence/start" && req.method==="POST"){
-    const u=await user(req); if(!u)return json(res,401,{error:"Nicht angemeldet"});
+    const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
     if(u.role!=="waiter")return json(res,403,{error:"Kein Kellnerkonto"});
     const e=(await pool.query("SELECT e.id FROM employees e JOIN restaurants r ON r.id=e.restaurant_id WHERE e.user_id=$1 AND e.active=true AND e.role='waiter' AND r.company_id=$2",[u.id,u.company_id])).rows[0];
     if(!e)return json(res,404,{error:"Kellner nicht gefunden"});
@@ -190,7 +192,7 @@ export async function handleRestaurantOwnerFeature(req,res){
   }
 
   if(p==="/api/v1/waiter/presence/end" && req.method==="POST"){
-    const u=await user(req); if(!u)return json(res,401,{error:"Nicht angemeldet"});
+    const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
     if(u.role!=="waiter")return json(res,403,{error:"Kein Kellnerkonto"});
     const q=await pool.query(`UPDATE waiter_presence wp SET ended_at=now()
       FROM employees e WHERE wp.employee_id=e.id AND e.user_id=$1 AND wp.ended_at IS NULL
@@ -200,7 +202,7 @@ export async function handleRestaurantOwnerFeature(req,res){
 
   const tableDetails=p.match(/^\/api\/v1\/tables\/([0-9a-f-]{36})\/details$/i);
   if(tableDetails && req.method==="GET"){
-    const u=await user(req);if(!u)return json(res,401,{error:"Nicht angemeldet"});
+    const u=await user(req,db);if(!u)return json(res,401,{error:"Nicht angemeldet"});
     const t=await pool.query("SELECT t.* FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.id=$1 AND r.company_id=$2",[tableDetails[1],u.company_id]);
     if(!t.rowCount)return json(res,404,{error:"Tisch nicht gefunden"});
     const q=await pool.query(`SELECT o.id,o.status,o.total_cents,o.created_at,o.closed_at,o.source,o.guest_email,o.qr_service_mode,o.qr_ready_at,
@@ -212,7 +214,7 @@ export async function handleRestaurantOwnerFeature(req,res){
   }
 
   if(p==="/api/v1/owner/presence" && req.method==="GET"){
-    const u=await owner(req,res); if(!u)return true;
+    const u=await owner(req,res,db); if(!u)return true;
     const rid=String(url.searchParams.get("restaurantId")||"");
     const q=await pool.query(`SELECT wp.id,wp.started_at,wp.ended_at,e.id employee_id,e.display_name
       FROM waiter_presence wp JOIN employees e ON e.id=wp.employee_id JOIN restaurants r ON r.id=e.restaurant_id
@@ -221,7 +223,7 @@ export async function handleRestaurantOwnerFeature(req,res){
   }
 
   if(p==="/api/v1/owner/schedules" && req.method==="GET"){
-    const u=await owner(req,res); if(!u)return true;
+    const u=await owner(req,res,db); if(!u)return true;
     const rid=String(url.searchParams.get("restaurantId")||"");
     const q=await pool.query(`SELECT ws.id,ws.employee_id,e.display_name,ws.starts_at,ws.ends_at,ws.note,ws.recurrence
       FROM waiter_schedules ws JOIN employees e ON e.id=ws.employee_id JOIN restaurants r ON r.id=ws.restaurant_id
@@ -231,7 +233,7 @@ export async function handleRestaurantOwnerFeature(req,res){
   }
 
   if(p==="/api/v1/owner/schedules" && req.method==="POST"){
-    const u=await owner(req,res); if(!u)return true;
+    const u=await owner(req,res,db); if(!u)return true;
     const b=await readBody(req),rid=String(b.restaurantId||""),employeeId=String(b.employeeId||"");
     const starts=new Date(b.startsAt),ends=new Date(b.endsAt);
     if(!employeeId||!rid||isNaN(starts)||isNaN(ends)||ends<=starts)return json(res,400,{error:"Dienstzeit ungültig"});
@@ -244,7 +246,7 @@ export async function handleRestaurantOwnerFeature(req,res){
   }
 
   if(p==="/api/v1/waiter/schedule" && req.method==="GET"){
-    const u=await user(req); if(!u)return json(res,401,{error:"Nicht angemeldet"});
+    const u=await user(req,db); if(!u)return json(res,401,{error:"Nicht angemeldet"});
     if(u.role!=="waiter")return json(res,403,{error:"Kein Kellnerkonto"});
     const q=await pool.query(`SELECT ws.id,ws.starts_at,ws.ends_at,ws.note,ws.recurrence,r.name restaurant_name
       FROM waiter_schedules ws JOIN employees e ON e.id=ws.employee_id JOIN restaurants r ON r.id=ws.restaurant_id
