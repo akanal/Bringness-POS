@@ -1,5 +1,6 @@
 {
-  "operation": "backup",
-  "target": "all",
-  "requestId": "netcup-backup-20261017-release"
+  "operation": "deploy",
+  "target": "pos",
+  "revision": "c80fede3dd30c76a754594b51bdd08b067b9a361",
+  "requestId": "netcup-pos-release-20261017"
 }
