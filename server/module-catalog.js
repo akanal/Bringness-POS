@@ -28,6 +28,6 @@ export async function orderingModuleAccess(pool,companyId,mode){
  const legacyRestaurant=features.has('restaurant');
  const download=features.has('pos_base')||legacyRestaurant||Boolean((await pool.query("SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='download_license' AND ce.status='active'",[companyId])).rowCount);
  if(!download)return false;
- const legacy=features.has('table_qr')&&Boolean((await pool.query("SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='table_qr_monthly' AND ce.purchased_at<'2026-10-17T08:19:00Z' AND ce.status IN ('active','canceled') AND (ce.current_period_end IS NULL OR ce.current_period_end>now())",[companyId])).rowCount);
+ const legacy=features.has('table_qr')&&Boolean((await pool.query("SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='table_qr_monthly' AND ce.purchased_at<'2026-10-17T08:19:00Z'",[companyId])).rowCount);
  return Boolean((features.has('table_management')||legacyRestaurant||legacy)&&(features.has(feature)||mode!=='center'&&legacy||mode==='center'&&legacyRestaurant));
 }
