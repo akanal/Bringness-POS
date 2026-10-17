@@ -142,7 +142,7 @@ test('automatic procurement refuses concurrent restaurant run before creating a 
  const result=await runAutomaticProcurement({id:'restaurant-1',role:'restaurant'},{db});
  assert.deepEqual(result,{state:'busy'});
  assert.equal(inserts,0);
- assert.equal(unlocks,1);
+ assert.equal(unlocks,0);
  assert.equal(released,1);
 });
 
