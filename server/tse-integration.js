@@ -1,3 +1,4 @@
+import {isolatedPreview} from './preview-policy.js';
 import pg from "pg";
 import {processPreparedTse} from "./tse-signing-worker.js";
 import { ensureTseSchema, createUnconfiguredTseAdapter } from "./tse-core.js";
@@ -201,4 +202,4 @@ export async function tseSigningTick(){
  if(process.env.TSE_AUTOSIGN_ENABLED!=='true'||signingBusy)return;
  signingBusy=true;try{await processPreparedTse(pool,adapterForRestaurant);}finally{signingBusy=false;}
 }
-const signingTimer=setInterval(()=>tseSigningTick().catch(()=>console.error('TSE signing worker failed')),10000);signingTimer.unref();
+const signingTimer=setInterval(()=>{if(!isolatedPreview())return tseSigningTick().catch(()=>console.error('TSE signing worker failed'))},10000);signingTimer.unref();

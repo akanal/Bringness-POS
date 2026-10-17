@@ -1,3 +1,4 @@
+import {isolatedPreview,assertPreviewEntrypoint} from './preview-policy.js';
 import {createTableSettlement,migrateTableSettlement} from './table-settlement.js';
 import {migrateBillingMail,createBillingMail} from './billing-mail.js';
 import {createDutyPlanning,migrateDutyPlanning} from './duty-planning.js';
@@ -21,6 +22,7 @@ import fs from "node:fs";
 import {handleCenter,migrateCenter} from "./center.js";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
+assertPreviewEntrypoint();
 const appMode = runtimeMode();
 configurePosOrigin(process.env, appMode);
 const aiFeatures = await loadAiFeatures(appMode);
@@ -208,7 +210,7 @@ async function migrateWithRetry(){
       await migrateTableSettlement(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
-      if(appMode!=='ai'){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
+      if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
       if (aiFeatures) await aiFeatures.migrateAiPlatform();
       const pricingPool = new pg.Pool({
@@ -230,7 +232,7 @@ async function migrateWithRetry(){
   }
 }
 migrateWithRetry().then(()=>{
- if(appMode!=='ai'){const deliver=createWaiterDelivery(platformGatewayPool);setInterval(()=>deliver().catch(()=>console.error('Waiter delivery unavailable')),3000).unref();const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
+ if(appMode!=='ai'&&!isolatedPreview()){const deliver=createWaiterDelivery(platformGatewayPool);setInterval(()=>deliver().catch(()=>console.error('Waiter delivery unavailable')),3000).unref();const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
 });
 
 const availabilityPool = new pg.Pool({

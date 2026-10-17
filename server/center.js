@@ -1,3 +1,4 @@
+import {isolatedPreview} from './preview-policy.js';
 import {centerPushConfiguration,dispatchCenterGuestPush} from './center-guest-push.js';
 import pg from 'pg';
 import {createCenterHandler} from './center-core.js';
@@ -113,4 +114,4 @@ export async function centerPushTick(){
  await dispatchCenterGuestPush(pool,(subscription,payload)=>webpush.sendNotification(subscription,payload,{TTL:300,timeout:15000}));
  }finally{pushBusy=false;}
 }
-const pushTimer=setInterval(()=>centerPushTick().catch(()=>console.error('Center guest push worker failed')),10000);pushTimer.unref();
+const pushTimer=setInterval(()=>{if(!isolatedPreview())return centerPushTick().catch(()=>console.error('Center guest push worker failed'))},10000);pushTimer.unref();

@@ -1,3 +1,4 @@
+import {isolatedPreview} from './preview-policy.js';
 import {adminAccountDetail,adminDisableProcurement} from './ai-admin-account.js';
 import {migrateAutoProcurement,automaticProcurementRoutes,automaticProcurementTick} from './ai-auto-procurement.js';
 import {cartTransaction} from './ai-cart.js';
@@ -263,18 +264,18 @@ export async function handleAiPlatform(req,res){
  }catch(e){if(e.status)return send(res,e.status,{error:e.message});if(e instanceof InputError||/Menge|Nettopreis|Packungen|Bestellwert/.test(e.message))return send(res,400,{error:e.message});console.error('AI API error:',e.code||e.name);return send(res,500,{error:'Aktion fehlgeschlagen. Bitte erneut versuchen.'})}
 }
 
-setInterval(()=>{if(aiReady)syncPosSales()},15000).unref();
+setInterval(()=>{if(aiReady&&!isolatedPreview())syncPosSales()},15000).unref();
 
-setInterval(()=>{if(aiReady)collectionTick().catch(()=>console.error('AI collection worker unavailable'))},60000).unref();
+setInterval(()=>{if(aiReady&&!isolatedPreview())collectionTick().catch(()=>console.error('AI collection worker unavailable'))},60000).unref();
 
-setInterval(()=>{if(aiReady)monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
+setInterval(()=>{if(aiReady&&!isolatedPreview())monitorTick().catch(()=>console.error('AI monitor worker unavailable'))},60000).unref();
 
-setInterval(()=>{if(aiReady)forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
-
-
+setInterval(()=>{if(aiReady&&!isolatedPreview())forecastTick().catch(()=>console.error('AI forecast worker unavailable'))},3600000).unref();
 
 
 
-setInterval(()=>{if(aiReady)syncPosKitchen()},3000).unref();
 
-setInterval(()=>{if(aiReady)automaticProcurementTick().catch(()=>console.error('AI automatic procurement unavailable'))},3600000).unref();
+
+setInterval(()=>{if(aiReady&&!isolatedPreview())syncPosKitchen()},3000).unref();
+
+setInterval(()=>{if(aiReady&&!isolatedPreview())automaticProcurementTick().catch(()=>console.error('AI automatic procurement unavailable'))},3600000).unref();
