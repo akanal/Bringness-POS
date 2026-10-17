@@ -140,3 +140,7 @@ Continue authorized development autonomously and preserve established behavior a
 - Active addon cards move from available offers to Meine Module with status, price and management; public prices stay visible.
 - Prevent duplicate purchases server-side, including simultaneous tabs/devices, pending payments, ambiguous provider replies and paid periods after cancellation. Never rely on hiding buttons alone.
 - Display control price confirmed separately: 14.99 EUR net/month, not 14.90; feature display_control, base required, no table dependency. Preserve legacy restaurant display rights and all stored screens/media. Paid module gates both editor and public player/media.
+
+## Formal email address confirmed 2026-10-17
+- Owner confirmed successful receipt and flow of the owner/module approval email. This is delivery feedback for that test, not proof of all recipients or purchases.
+- Always address recipients formally with Sie/Ihr in Bringness POS and AI emails, including subject, HTML and plain text. Preserve links, expiry, approval and payment behavior.
