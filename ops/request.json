@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "22104ce7a13aad6c26dc9cbc4bb40adf01dc9d6e",
-  "requestId": "netcup-compact-pos-modules-20261017"
+  "revision": "d862d7f656f3f51a4b0c5a63e388d74aa0d21e04",
+  "requestId": "netcup-pos-cache-refresh-20261017"
 }
