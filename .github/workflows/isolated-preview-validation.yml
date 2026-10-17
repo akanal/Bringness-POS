@@ -1,0 +1,46 @@
+name: Isolated POS AI preview validation
+on:
+  push:
+    branches: ['staging/preview-20261016', 'finish/**']
+    paths: ['server/**', 'db/**', 'apps/web/public/**', 'package*.json', 'ops/*preview*', '.dockerignore', '.github/workflows/isolated-preview-validation.yml']
+  pull_request:
+    paths: ['server/**', 'db/**', 'apps/web/public/**', 'package*.json', 'ops/*preview*', '.dockerignore', '.github/workflows/isolated-preview-validation.yml']
+permissions:
+  contents: read
+jobs:
+  isolated-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: 24}
+      - name: Verify container boundaries and create disposable credentials
+        run: |
+          node --test ops/preview-bundle.test.mjs
+          node ops/create-preview-env.mjs .env.preview.local
+      - name: Build the actual application in a separate image
+        run: docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json build
+      - name: Start a disposable isolated runtime
+        run: docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json up -d --wait --wait-timeout 180
+      - name: Seed synthetic POS and separate AI data twice without duplication
+        run: |
+          docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json exec -T preview-app node server/preview-seed.mjs
+          docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json exec -T preview-app node server/preview-seed.mjs
+      - name: Verify protected real application and provider refusals
+        run: node ops/preview-smoke.mjs .env.preview.local
+      - name: Verify network egress is unavailable inside the preview
+        run: |
+          docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json exec -T preview-app node --input-type=module -e '
+            import net from "node:net";
+            const socket=net.createConnection({host:"1.1.1.1",port:443});
+            socket.once("connect",()=>{socket.destroy();process.exitCode=1;});
+            socket.once("error",()=>{process.exitCode=0;});
+            socket.setTimeout(3000,()=>{socket.destroy();process.exitCode=0;});'
+      - name: Sanitized diagnostics on failure
+        if: failure()
+        run: node ops/preview-diagnostics.mjs .env.preview.local
+      - name: Remove only this CI job's disposable preview containers and volume
+        if: always()
+        run: docker compose --env-file .env.preview.local -f ops/isolated-preview.compose.json down --volumes --remove-orphans
