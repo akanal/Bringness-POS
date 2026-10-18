@@ -49,6 +49,12 @@ jobs:
         env:
           SETTLEMENT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/checkout-recovery.mjs
+      - run: node server/ai-tests/trade.mjs
+      - name: Verify trade checkout concurrency on PostgreSQL 16
+        run: node server/ai-tests/trade.mjs
+        env:
+          CHECKOUT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/trade-ui.mjs
       - name: Verify concurrent cash checkout and lost replies on PostgreSQL 16
         run: node server/ai-tests/checkout-recovery.mjs
         env:
