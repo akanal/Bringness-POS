@@ -1,3 +1,4 @@
+import {migrateCustomerDelivery,createCustomerDelivery} from './customer-delivery.js';
 import {normalizeDiscount,discountedSale} from './sale-discount.js';
 import {migrateParkedBons,createParkedBons} from './parked-bons.js';
 import {migrateTrade,createTradeHandler,tradeRecipient,tradePrice,tradeQuantityLimit} from './trade-pricing.js';
@@ -13,7 +14,7 @@ const pool = new Pool({
 });
 
 export async function migratePaymentCheckout(db=pool){
- await migrateTrade(db);await migrateParkedBons(db);
+ await migrateTrade(db);await migrateParkedBons(db);await migrateCustomerDelivery(db);
  await db.query(`CREATE TABLE IF NOT EXISTS pos_checkout_requests(
   company_id uuid NOT NULL REFERENCES companies(id),request_key uuid NOT NULL,
   fingerprint text NOT NULL,order_id uuid NOT NULL UNIQUE REFERENCES orders(id),
@@ -40,8 +41,9 @@ async function currentUser(req,db=pool,lock=false) {
   return q.rows[0] || null;
 }
 
-const tradeHandler=createTradeHandler(pool,currentUser),parkedHandler=createParkedBons(pool,currentUser);
+const tradeHandler=createTradeHandler(pool,currentUser),parkedHandler=createParkedBons(pool,currentUser),customerDeliveryHandler=createCustomerDelivery(pool,currentUser);
 return async function handlePaymentCheckout(req, res) {
+  if(await customerDeliveryHandler(req,res))return true;
   if(await parkedHandler(req,res))return true;
   if(await tradeHandler(req,res))return true;
   const pathname = new URL(req.url, "http://localhost").pathname;
