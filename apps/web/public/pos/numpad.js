@@ -42,7 +42,7 @@
     const summary=document.querySelector('.bn-tender-summary');
     if(!summary)return;
     const given=Number(String(window.bnCashTenderValue||'').replace(',','.'));
-    const total=typeof cart==='undefined'?0:cart.reduce((sum,item)=>sum+item.qty*item.price,0);
+    let total=typeof cart==='undefined'?0:cart.reduce((sum,item)=>sum+item.qty*item.price,0);try{if(window.bnRetailSales)total=window.bnRetailSales.total(Math.round(total*100))/100}catch{total=0}
     summary.classList.toggle('show',Number.isFinite(given)&&given>0);
     summary.querySelector('[data-given]').textContent=given.toLocaleString('de-DE',{style:'currency',currency:'EUR'});
     summary.querySelector('[data-change]').textContent=Math.max(0,given-total).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
@@ -62,6 +62,7 @@
       wrapping=false;
     }
     decorate();
+    window.bnRefreshSaleTotal?.();
     updateTender();
   }
 
