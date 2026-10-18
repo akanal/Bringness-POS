@@ -148,3 +148,8 @@ Continue authorized development autonomously and preserve established behavior a
 ## Free Händler option approved 2026-10-18
 - Under Mehr → Händler, freely switchable without a paid addon. Operator-defined independent wholesale gross unit prices and quantity tiers, large quantities, recipient-bound DIN-A4 invoices with the existing receipt identity and QR. Preserve ordinary POS prices/cart, paid modules and provider safeguards.
 - The eight uploaded retail POS photos are functional references, not an instruction to copy their old visual design. Modern dedicated trade view is authorized; unrelated POS/waiter design remains frozen. First accepted block: wholesale prices/tiers and A4 invoice; remaining photo functions require explicit status tracking.
+
+## Discounts and parked bons approved 2026-10-18
+- Owner authorized cart-wide EUR/percentage discounts and named server-side parked bons for ordinary POS and the free wholesale view. Preserve existing licensing, ordinary unit prices, provider/card guards and Windows offline behavior.
+- Discounts must be validated/calculated server-side and allocated to original lines cent-exactly across VAT rates; preserve original unit prices and record the adjustment in receipts, exports and prepared fiscal data before the receipt INSERT trigger runs. Positive remaining sale total required.
+- Parking is an unpaid draft, never a payment/order/receipt. Tenant/restaurant scope, optimistic update versions and an atomic paid transition prevent duplicate settlement of a resumed bon. Retain uncertain save/payment request identities across retries.
