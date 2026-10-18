@@ -9,9 +9,11 @@ const pool = new pg.Pool({
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
-export async function migrateTseIntegration(){
-  await ensureTseSchema(pool);
-  await pool.query(`
+export async function migrateTseIntegration(db=pool){
+  await ensureTseSchema(db);
+  const discountSql="COALESCE((SELECT (a->>'discountCents')::int FROM jsonb_array_elements(COALESCE(NEW.sale_adjustment->'allocations','[]'::jsonb)) a WHERE a->>'productId'=order_items.product_id::text),0)";
+  await db.query(`
+    ALTER TABLE receipts ADD COLUMN IF NOT EXISTS sale_adjustment jsonb;
     CREATE OR REPLACE FUNCTION bringness_prepare_tse_transaction()
     RETURNS trigger AS $$
     DECLARE
@@ -36,6 +38,8 @@ export async function migrateTseIntegration(){
         'name',product_name_snapshot,
         'quantity',quantity,
         'unitPriceCents',unit_price_cents,
+        'discountCents',${discountSql},
+        'lineTotalCents',ROUND(unit_price_cents * quantity)-${discountSql},
         'taxRate',tax_rate_snapshot
       ) ORDER BY id),'[]'::jsonb)
       INTO v_items
@@ -57,8 +61,8 @@ export async function migrateTseIntegration(){
       INTO v_vat
       FROM (
         SELECT tax_rate_snapshot::numeric AS rate,
-               SUM(ROUND(unit_price_cents * quantity))::int AS gross_cents,
-               SUM(ROUND((unit_price_cents * quantity) / (1 + tax_rate_snapshot::numeric / 100)))::int AS net_cents
+               SUM(ROUND(unit_price_cents * quantity)-${discountSql})::int AS gross_cents,
+               SUM(ROUND((ROUND(unit_price_cents * quantity)-${discountSql}) / (1 + tax_rate_snapshot::numeric / 100)))::int AS net_cents
         FROM order_items
         WHERE order_id=NEW.order_id
         GROUP BY tax_rate_snapshot

@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS receipts (
+  sale_adjustment jsonb,
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id uuid NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
   receipt_number text NOT NULL,
