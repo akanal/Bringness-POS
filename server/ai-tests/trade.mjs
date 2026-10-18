@@ -42,9 +42,18 @@ const recipient={name:'Wholesale Customer',street:'Example 1',postalCode:'10115'
 const request={requestKey:uuid(),restaurantId:restaurant,salesMode:'trade',recipient,items:[{productId:product,qty:1500}],payments:[{method:'cash',amountCents:300000}]};
 const prices={productId:product,tiers:[{minQty:1,priceCents:250},{minQty:1000,priceCents:200}]};
 try{
+ assert.equal((await send('/trade/settings?restaurantId='+restaurant)).body.enabled,false);
+ assert.equal((await send('/orders/checkout','POST',request)).status,409);
+ assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true})).status,403);
  assert.equal((await send('/trade/prices','PUT',prices)).status,403);
  const unlock='synthetic-unlock',digest=s=>crypto.createHash('sha256').update(s).digest('hex');
  await query("INSERT INTO personnel_unlocks VALUES($1,$2,$3,now()+interval '1 hour')",[digest(unlock),digest(token),owner]);
+ assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:'true'},token,unlock)).status,400);
+ await query("UPDATE users SET role='manager' WHERE id=$1",[owner]);
+ assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).status,403);
+ await query("UPDATE users SET role='owner' WHERE id=$1",[owner]);
+ assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,'wrong-unlock')).status,403);
+ assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).body.enabled,true);
  assert.equal((await send('/trade/prices','PUT',prices,token,unlock)).status,200);
  assert.equal((await send('/trade/prices?restaurantId='+restaurant)).body.tiers.length,2);
  for(const bad of [[{minQty:0,priceCents:100}],[{minQty:1,priceCents:0}],[{minQty:1,priceCents:100},{minQty:1,priceCents:50}]])assert.equal((await send('/trade/prices','PUT',{...prices,tiers:bad},token,unlock)).status,400);
@@ -65,12 +74,17 @@ try{
  await query('UPDATE products SET price_cents=9999 WHERE id=$1',[product]);
  await send('/trade/prices','PUT',{...prices,tiers:[{minQty:1,priceCents:500}]},token,unlock);
  await query("UPDATE company_billing_profiles SET company_name='Changed' WHERE company_id=$1",[company]);
+ assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:false},token,unlock)).body.enabled,false);
+ assert.equal((await send('/orders/checkout','POST',{...request,requestKey:uuid(),payments:[{method:'cash',amountCents:750000}]})).status,409);
+ assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,1);
  const replay=await send('/orders/checkout','POST',request);assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);assert.equal(replay.body.totalCents,300000);
  assert.equal((await send('/orders/checkout','POST',{...request,recipient:{...recipient,name:'Different'}})).status,409);
  const original=(await query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[sale.body.id])).rows[0].recipient;assert.equal(original.name,recipient.name);
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),1);
+ await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock);
  if(postgresUrl){const concurrent={...request,requestKey:uuid(),payments:[{method:'cash',amountCents:750000}]};const replies=await Promise.all(Array.from({length:5},()=>send('/orders/checkout','POST',concurrent)));assert.equal(replies.filter(r=>r.status===201).length,1);assert.equal(replies.filter(r=>r.status===200).length,4);assert.equal(new Set(replies.map(r=>r.body.id)).size,1);}
  const other=uuid();await query("INSERT INTO companies(id,name) VALUES($1,'Other')",[other]);await query('UPDATE users SET company_id=$1 WHERE id=$2',[other,owner]);
+ assert.equal((await send('/trade/settings?restaurantId='+restaurant)).status,404);assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).status,404);
  assert.equal((await send('/receipts/'+sale.body.receiptId+'/invoice')).status,404);assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,0);assert.equal((await send('/trade/prices','PUT',prices,token,unlock)).status,404);
  await query('UPDATE users SET company_id=$1,role=$3 WHERE id=$2',[company,owner,'waiter']);assert.equal((await send('/trade/prices?restaurantId='+restaurant)).status,403);
  console.log('Trade integration passed: PIN/tenant isolation, tier validation, large quantities, server price and payment checks, immutable recipient/price/replay, A4 dimensions/text/QR path and archived invoice.');
