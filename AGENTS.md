@@ -167,4 +167,4 @@ Continue authorized development autonomously and preserve established behavior a
 ## Cash closing block authorized 2026-10-18
 - Owner authorized cash opening/closing, deposits/withdrawals, counted cash and differences for retail and trade; live publication remains deferred.
 - See docs/cash-closing-20261018.md for server-arrival assignment, offline/unassigned-payment limits and verification. Do not describe this as a complete fiscal Z report.
-- Current cash branch depends on unmerged customer/delivery PR #90. Automatic review rejected the GitHub push; keep local work and do not bypass the rejection.
+- Current cash branch depends on unmerged customer/delivery PR #90. Owner subsequently explicitly authorized GitHub storage of the cash and invoice work; remote head 5260050 contains both. GitHub saves of agreed development are authorized without repeated routine permission. Production merging/deployment remains separately deferred.
