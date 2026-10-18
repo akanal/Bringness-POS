@@ -59,6 +59,12 @@ jobs:
         run: node server/ai-tests/customer-delivery.mjs
         env:
           CHECKOUT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/cash-closing.mjs
+      - name: Verify simultaneous cash opening on PostgreSQL 16
+        run: node server/ai-tests/cash-closing.mjs
+        env:
+          CASH_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/cash-closing-ui.mjs
       - run: node server/ai-tests/customer-delivery-ui.mjs
       - run: node server/ai-tests/trade-ui.mjs
       - run: node server/ai-tests/trade-toggle-ui.mjs
