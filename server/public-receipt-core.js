@@ -6,7 +6,7 @@ export function createPublicReceiptHandler(pool) {
 return async function handlePublicReceipt(req, res) {
   const match = new URL(req.url, "http://localhost").pathname.match(/^\/beleg\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i);
   if (!match || req.method !== "GET") return false;
-  const q = await pool.query(`SELECT rc.receipt_number,rc.issued_at,rc.fiscal_status,rc.merchant_snapshot,rc.sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id
+  const q = await pool.query(`SELECT rc.receipt_number,rc.issued_at,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id
     FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.public_token=$1`, [match[1]]);
   if (!q.rows.length) { res.writeHead(404, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }); res.end("Beleg nicht gefunden"); return true; }
   const receipt = q.rows[0];
