@@ -55,6 +55,13 @@ jobs:
         env:
           CHECKOUT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/trade-ui.mjs
+      - run: node server/ai-tests/discount-parking.mjs
+      - name: Verify parked-bon payment race and discounted fiscal data on PostgreSQL 16
+        run: node server/ai-tests/discount-parking.mjs
+        env:
+          CHECKOUT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/sale-tools-ui.mjs
+      - run: node server/ai-tests/discount-checkout-ui.mjs
       - name: Verify concurrent cash checkout and lost replies on PostgreSQL 16
         run: node server/ai-tests/checkout-recovery.mjs
         env:

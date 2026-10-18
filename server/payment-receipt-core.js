@@ -1,3 +1,4 @@
+import {lineDiscount} from './sale-discount.js';
 import crypto from "node:crypto";
 export function createPaymentReceiptHandler(pool,PDFDocument,QRCode,receiptUrl) {
 function send(res, status, payload) {
@@ -33,7 +34,7 @@ return async function handlePaymentReceipt(req, res) {
   if(match[2]==='invoice'&&!['owner','admin','manager'].includes(user.role)){send(res,403,{error:'Kein Verwaltungszugang'});return true;}
   const receiptId = match[1];
   const q = await pool.query(
-    "SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.fiscal_status,rc.merchant_snapshot,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.id=$1 AND c.id=$2",
+    "SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.id=$1 AND c.id=$2",
     [receiptId, user.company_id]
   );
   if (!q.rowCount) {
@@ -74,7 +75,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   }
 
   const [itemsResult, paymentsResult] = await Promise.all([
-    pool.query("SELECT product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity FROM order_items WHERE order_id=$1 ORDER BY id", [receipt.order_id]),
+    pool.query("SELECT product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity FROM order_items WHERE order_id=$1 ORDER BY id", [receipt.order_id]),
     pool.query("SELECT method,amount_cents,created_at FROM payments WHERE order_id=$1 ORDER BY created_at,id", [receipt.order_id]),
   ]);
   const items = itemsResult.rows;
@@ -121,7 +122,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   const vat = new Map();
   let itemsTotal = 0;
   for (const item of items) {
-    const gross = Math.round(Number(item.unit_price_cents) * Number(item.quantity));
+    const gross = Math.round(Number(item.unit_price_cents) * Number(item.quantity))-lineDiscount(receipt.sale_adjustment,item.product_id);
     const rate = Number(item.tax_rate_snapshot);
     const tax = gross - Math.round(gross / (1 + rate / 100));
     itemsTotal += gross;
@@ -133,6 +134,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
     doc.font("Helvetica").text(Number(item.quantity).toLocaleString("de-DE") + " x " + euro(item.unit_price_cents) + "    " + euro(gross), { align: "right" });
   }
 
+  if(receipt.sale_adjustment)doc.moveDown().font('Helvetica').text('Zwischensumme: '+euro(receipt.sale_adjustment.subtotalCents)).text('Rabatt: -'+euro(receipt.sale_adjustment.discountCents));
   doc.moveDown().font("Helvetica-Bold").text("Gesamt: " + euro(receipt.total_cents), { align: "right" });
   doc.font("Helvetica").text("Zahlung:");
   for (const payment of payments) {

@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import {JSDOM} from 'jsdom';
+const rid=crypto.randomUUID(),pid=crypto.randomUUID();
+const dom=new JSDOM('<section class="basket"><select id="restaurant"><option value="'+rid+'">Test</option></select><select id="paymentMethod"><option value="cash">Cash</option></select><div id="cart"></div><strong id="total"></strong><button id="pay">Pay</button><p id="saleMsg"></p></section>',{runScripts:'outside-only',url:'https://pos.test/pos/'}),w=dom.window;
+Object.defineProperty(w,'crypto',{value:crypto.webcrypto});w.eval('var cart='+JSON.stringify([{id:pid,restaurantId:rid,qty:2,price:1,name:'Product'}])+';var data={products:cart};var renderCart=()=>{document.getElementById("total").textContent=String(cart.reduce((s,i)=>s+i.qty*i.price,0))};');
+const calls=[];let fail=true;w.api=async(path,opt)=>{const body=JSON.parse(opt.body);calls.push(body);if(fail)throw Error('lost ack');return {requestKey:body.requestKey,restaurantId:rid,id:crypto.randomUUID(),status:'paid',receiptNumber:'BN-1',totalCents:body.payments[0].amountCents}};
+w.eval(await fs.readFile(new URL('../../apps/web/public/pos/sale-tools.js',import.meta.url),'utf8'));w.eval(await fs.readFile(new URL('../../apps/web/public/pos/payment-flow.js',import.meta.url),'utf8'));
+if(w.document.readyState==='loading')await new Promise(resolve=>w.document.addEventListener('DOMContentLoaded',resolve,{once:true}));
+try{const d=w.document;d.querySelector('[data-kind]').value='percent';d.querySelector('[data-value]').value='10';d.querySelector('[data-apply]').click();assert.match(d.getElementById('total').textContent,/1,80/);await d.getElementById('pay').onclick();assert.equal(calls[0].discount.value,1000);assert.equal(calls[0].payments[0].amountCents,180);assert(d.querySelector('[data-apply]').disabled);fail=false;await d.getElementById('pay').onclick();assert.deepEqual(calls[0],calls[1]);assert.equal(w.bnRetailSales.extras().discount,undefined);assert.equal(w.eval('cart.length'),0);assert.equal(w.localStorage.getItem('bringness.checkout.pending.v1:'+rid),null);console.log('Discount checkout client passed: displayed total, exact server request, locked discount during unknown result, immutable retry and reset after acknowledgement.');}finally{w.close()}

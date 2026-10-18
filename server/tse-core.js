@@ -59,7 +59,8 @@ export function groupVat(items=[]){
     const quantity = Number(item.quantity ?? item.qty ?? 1);
     const unitPriceCents = Number(item.unit_price_cents ?? item.unitPriceCents ?? 0);
     const rate = Number(item.tax_rate_snapshot ?? item.taxRate ?? 0);
-    const grossCents = Math.round(unitPriceCents * quantity);
+    const discountCents=Number(item.discountCents??0);if(!Number.isSafeInteger(discountCents)||discountCents<0||discountCents>Math.round(unitPriceCents*quantity))throw Error("Ungültiger Positionsrabatt");
+    const grossCents = Math.round(unitPriceCents * quantity)-discountCents;
     const netCents = Math.round(grossCents / (1 + rate / 100));
     const taxCents = grossCents - netCents;
     const current = vat.get(rate) || {rate,grossCents:0,netCents:0,taxCents:0};
@@ -100,6 +101,8 @@ export function buildFiscalTransaction({restaurantId,order,items=[],payments=[],
       name:item.product_name_snapshot ?? item.name ?? "Artikel",
       quantity:Number(item.quantity ?? item.qty ?? 1),
       unitPriceCents:Number(item.unit_price_cents ?? item.unitPriceCents ?? 0),
+      discountCents:Number(item.discountCents??0),
+      lineTotalCents:Math.round(Number(item.unit_price_cents??item.unitPriceCents??0)*Number(item.quantity??item.qty??1))-Number(item.discountCents??0),
       taxRate:Number(item.tax_rate_snapshot ?? item.taxRate ?? 0)
     })),
     payments:payments.map(payment=>({
