@@ -1,3 +1,4 @@
+import {migrateTrade,createTradeHandler,tradeRecipient,tradePrice,tradeQuantityLimit} from './trade-pricing.js';
 import {readJsonObject} from './http-body.js';
 import {cleanMailAddress,enqueuePaidReceipt} from './transactional-mail.js';
 import crypto from "node:crypto";
@@ -10,6 +11,7 @@ const pool = new Pool({
 });
 
 export async function migratePaymentCheckout(db=pool){
+ await migrateTrade(db);
  await db.query(`CREATE TABLE IF NOT EXISTS pos_checkout_requests(
   company_id uuid NOT NULL REFERENCES companies(id),request_key uuid NOT NULL,
   fingerprint text NOT NULL,order_id uuid NOT NULL UNIQUE REFERENCES orders(id),
@@ -36,7 +38,9 @@ async function currentUser(req,db=pool,lock=false) {
   return q.rows[0] || null;
 }
 
+const tradeHandler=createTradeHandler(pool,currentUser);
 return async function handlePaymentCheckout(req, res) {
+  if(await tradeHandler(req,res))return true;
   const pathname = new URL(req.url, "http://localhost").pathname;
   if (pathname !== "/api/v1/orders/checkout" || req.method !== "POST") return false;
 
@@ -59,6 +63,9 @@ return async function handlePaymentCheckout(req, res) {
 
   if (!body || typeof body !== "object" || Array.isArray(body)) { send(res, 400, { error: "Ungültige Anfrage" }); return true; }
   let receiptEmail='';try{if(body.receiptEmail)receiptEmail=cleanMailAddress(body.receiptEmail);}catch{send(res,400,{error:'Gültige Beleg-E-Mail erforderlich'});return true;}
+  const trade=body.salesMode==='trade';let recipient=null;
+  if(body.salesMode!=null&&!['retail','trade'].includes(body.salesMode)){send(res,400,{error:'Ungültiger Verkaufsmodus'});return true;}
+  if(trade){try{recipient=tradeRecipient(body.recipient)}catch(e){send(res,400,{error:e.message});return true;}}
   const items = Array.isArray(body.items) ? body.items : [];
   if (items.length > 100) { send(res, 400, { error: "Zu viele Warenkorbpositionen" }); return true; }
   const payments = Array.isArray(body.payments) ? body.payments : [];
@@ -94,14 +101,14 @@ return async function handlePaymentCheckout(req, res) {
   if(typeof body.requestKey!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestKey)){
     send(res,400,{error:'Eindeutige Zahlungskennung erforderlich. Bitte Kasse aktualisieren.'});return true;
   }
-  if(items.some(item=>!Number.isSafeInteger(item.qty)||item.qty<=0||item.qty>999)){
+  if(items.some(item=>!Number.isSafeInteger(item.qty)||item.qty<=0||item.qty>(trade?tradeQuantityLimit:999))){
     send(res,400,{error:'Ungültige Menge'});return true;
   }
   const requestKey=body.requestKey.toLowerCase();
   const canonicalItems=items.map(item=>({productId:item.productId.toLowerCase(),qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId));
   if(new Set(canonicalItems.map(item=>item.productId)).size!==canonicalItems.length){send(res,400,{error:'Doppelte Artikelkennung'});return true;}
   const canonicalPayments=payments.map(p=>({method:p.method,amountCents:p.amountCents}));
-  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail})).digest('hex');
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail,...(trade?{salesMode:'trade',recipient}: {})})).digest('hex');
   const client=await pool.connect();
   const reject=(status,message)=>{throw Object.assign(Error(message),{status});};
   try{
@@ -120,24 +127,33 @@ return async function handlePaymentCheckout(req, res) {
       [canonicalItems.map(i=>i.productId),restaurantId,actor.company_id]
     );
     if(products.rows.length!==canonicalItems.length)reject(400,'Ein oder mehrere Artikel sind nicht verfügbar');
+    let tradeTiers=[];
+    if(trade){
+      tradeTiers=(await client.query('SELECT product_id,min_qty,price_cents FROM pos_trade_prices WHERE product_id=ANY($1::uuid[]) ORDER BY product_id,min_qty FOR SHARE',[canonicalItems.map(i=>i.productId)])).rows;
+      const seller=(await client.query('SELECT company_name,street,postal_code,city,vat_id FROM company_billing_profiles WHERE company_id=$1 FOR SHARE',[actor.company_id])).rows[0];
+      if(!seller||['company_name','street','postal_code','city','vat_id'].some(k=>!String(seller[k]||'').trim()))reject(400,'Für Händlerrechnungen bitte zuerst vollständige Firmendaten und USt-IdNr. im Rechnungsprofil hinterlegen');
+    }
     const productMap=new Map(products.rows.map(p=>[p.id,p]));
     const cleanItems=[];let totalCents=0;
     for(const item of canonicalItems){
-      const product=productMap.get(item.productId),priceCents=Number(product?.price_cents),taxRate=Number(product?.tax_rate);
+      const product=productMap.get(item.productId),priceCents=Number(trade?tradePrice(tradeTiers.filter(t=>t.product_id===item.productId).map(t=>({minQty:t.min_qty,priceCents:t.price_cents})),item.qty):product?.price_cents),taxRate=Number(product?.tax_rate);
+      if(trade&&!priceCents)reject(400,'Kein Händlerpreis für diese Artikelmenge hinterlegt');
       if(!product||!Number.isSafeInteger(priceCents)||priceCents<0||priceCents>2147483647||!Number.isFinite(taxRate)||taxRate<0||taxRate>100)reject(400,'Ungültiger Artikelpreis oder Steuersatz');
-      totalCents+=priceCents*item.qty;cleanItems.push({product,qty:item.qty});
+      totalCents+=priceCents*item.qty;cleanItems.push({product:{...product,price_cents:priceCents},qty:item.qty});
     }
     if(!Number.isSafeInteger(totalCents)||totalCents<=0||totalCents>2147483647)reject(400,'Ungültiger Gesamtbetrag');
     const paymentTotal=canonicalPayments.reduce((sum,p)=>sum+p.amountCents,0);
     if(!Number.isSafeInteger(paymentTotal)||paymentTotal!==totalCents)reject(400,'Zahlungsaufteilung stimmt nicht mit dem Gesamtbetrag überein');
     const order=(await client.query("INSERT INTO orders(restaurant_id,status,total_cents,closed_at) VALUES($1,'paid',$2,now()) RETURNING id,created_at",[restaurantId,totalCents])).rows[0];
     for(const item of cleanItems)await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,item.product.id,item.product.name,item.product.price_cents,item.product.tax_rate,item.qty]);
+    if(trade)await client.query('INSERT INTO pos_trade_sales(order_id,recipient) VALUES($1,$2::jsonb)',[order.id,JSON.stringify(recipient)]);
     for(const payment of canonicalPayments)await client.query('INSERT INTO payments(order_id,method,amount_cents) VALUES($1,$2,$3)',[order.id,payment.method,payment.amountCents]);
     const receiptNumber='BN-'+new Date().getUTCFullYear()+'-'+String((await client.query("SELECT nextval('receipt_number_seq') n")).rows[0].n).padStart(6,'0');
     await client.query('INSERT INTO receipts(order_id,receipt_number) VALUES($1,$2)',[order.id,receiptNumber]);
     await client.query("UPDATE receipts rc SET merchant_snapshot=(SELECT jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),co.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) FROM orders ord JOIN restaurants r ON r.id=ord.restaurant_id JOIN companies co ON co.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE ord.id=rc.order_id) WHERE rc.order_id=$1",[order.id]);
+    const tradeReceipt=trade?(await client.query('SELECT id FROM receipts WHERE order_id=$1',[order.id])).rows[0]:null;
     await enqueuePaidReceipt(client,order.id,receiptEmail);
-    const response={requestKey,id:order.id,restaurantId:restaurantId.toLowerCase(),totalCents,status:'paid',createdAt:order.created_at,receiptNumber,emailStatus:receiptEmail?'queued':null,payments:canonicalPayments};
+    const response={requestKey,id:order.id,restaurantId:restaurantId.toLowerCase(),totalCents,status:'paid',createdAt:order.created_at,receiptNumber,...(trade?{salesMode:'trade',receiptId:tradeReceipt.id}:{}),emailStatus:receiptEmail?'queued':null,payments:canonicalPayments};
     await client.query('INSERT INTO pos_checkout_requests(company_id,request_key,fingerprint,order_id,response) VALUES($1,$2,$3,$4,$5::jsonb)',[actor.company_id,requestKey,fingerprint,order.id,JSON.stringify(response)]);
     await client.query('COMMIT');send(res,201,response);return true;
   }catch(error){

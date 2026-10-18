@@ -144,3 +144,7 @@ Continue authorized development autonomously and preserve established behavior a
 ## Formal email address confirmed 2026-10-17
 - Owner confirmed successful receipt and flow of the owner/module approval email. This is delivery feedback for that test, not proof of all recipients or purchases.
 - Always address recipients formally with Sie/Ihr in Bringness POS and AI emails, including subject, HTML and plain text. Preserve links, expiry, approval and payment behavior.
+
+## Free Händler option approved 2026-10-18
+- Under Mehr → Händler, freely switchable without a paid addon. Operator-defined independent wholesale gross unit prices and quantity tiers, large quantities, recipient-bound DIN-A4 invoices with the existing receipt identity and QR. Preserve ordinary POS prices/cart, paid modules and provider safeguards.
+- The eight uploaded retail POS photos are functional references, not an instruction to copy their old visual design. Modern dedicated trade view is authorized; unrelated POS/waiter design remains frozen. First accepted block: wholesale prices/tiers and A4 invoice; remaining photo functions require explicit status tracking.

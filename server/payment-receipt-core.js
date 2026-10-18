@@ -20,7 +20,7 @@ const euro = cents => (Number(cents || 0) / 100).toLocaleString("de-DE", { minim
 
 return async function handlePaymentReceipt(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
-  const match = pathname.match(/^\/api\/v1\/receipts\/([0-9a-f-]{36})\/pdf$/);
+  const match = pathname.match(/^\/api\/v1\/receipts\/([0-9a-f-]{36})\/(pdf|invoice)$/);
   if (!match || req.method !== "GET") return false;
 
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(match[1])){send(res,404,{error:'Beleg nicht gefunden'});return true;}
@@ -30,6 +30,7 @@ return async function handlePaymentReceipt(req, res) {
     return true;
   }
 
+  if(match[2]==='invoice'&&!['owner','admin','manager'].includes(user.role)){send(res,403,{error:'Kein Verwaltungszugang'});return true;}
   const receiptId = match[1];
   const q = await pool.query(
     "SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.fiscal_status,rc.merchant_snapshot,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.id=$1 AND c.id=$2",
@@ -41,12 +42,17 @@ return async function handlePaymentReceipt(req, res) {
   }
 
   const receipt = q.rows[0];
+  if(match[2]==='invoice'){
+    const trade=await pool.query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[receipt.order_id]);
+    if(!trade.rows[0]){send(res,404,{error:'Keine Händlerrechnung zu diesem Beleg'});return true;}
+    receipt.formatA4=true;receipt.recipient=trade.rows[0].recipient;
+  }
   let pdf;
   try{pdf=await renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,req,q.rows[0]);}
   catch{send(res,503,{error:'Der Beleg konnte noch nicht als PDF erstellt werden. Bitte später erneut versuchen.'});return true;}
   res.writeHead(200,{
     "content-type":"application/pdf",
-    "content-disposition":"attachment; filename=Beleg-"+receipt.receipt_number+".pdf",
+    "content-disposition":"attachment; filename="+(receipt.formatA4?"Rechnung-":"Beleg-")+receipt.receipt_number+".pdf",
     "cache-control":"private, no-store"
   });
   res.end(pdf);
@@ -84,7 +90,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   let pdf;
   try {
     pdf=await new Promise((resolve,reject)=>{
-      const doc=new PDFDocument({size:[226.77,height],margin:18});
+      const doc=new PDFDocument(receipt.formatA4?{size:"A4",margin:48}:{size:[226.77,height],margin:18});
       const chunks=[];let size=0,settled=false;
       const fail=error=>{if(settled)return;settled=true;reject(error);doc.destroy?.();};
       doc.on('error',fail);
@@ -100,7 +106,15 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   if (receipt.street) doc.text(receipt.street);
   if (receipt.postal_code || receipt.city) doc.text([receipt.postal_code, receipt.city].filter(Boolean).join(" "));
   if (receipt.vat_id) doc.text("USt-IdNr.: " + receipt.vat_id);
-  doc.moveDown().text("Beleg: " + receipt.receipt_number);
+  if(receipt.formatA4){
+    doc.moveDown().fontSize(18).font('Helvetica-Bold').text('Rechnung '+receipt.receipt_number);
+    doc.moveDown().fontSize(10).font('Helvetica').text('Rechnungsempfänger');
+    for(const key of ['name','street'])doc.text(receipt.recipient[key]);
+    doc.text(receipt.recipient.postalCode+' '+receipt.recipient.city).text(receipt.recipient.country);
+    if(receipt.recipient.vatId)doc.text('USt-IdNr.: '+receipt.recipient.vatId);
+    doc.moveDown().text('Lieferdatum: '+new Date(receipt.issued_at).toLocaleDateString('de-DE',{timeZone:'Europe/Berlin'}));
+    doc.text('Alle Einzelpreise sind Bruttopreise. Steueraufschlüsselung siehe unten.');
+  }else doc.moveDown().text("Beleg: " + receipt.receipt_number);
   doc.text("Datum: " + new Date(receipt.issued_at).toLocaleString("de-DE", { timeZone: "Europe/Berlin" }) + " Uhr");
   doc.moveDown();
 

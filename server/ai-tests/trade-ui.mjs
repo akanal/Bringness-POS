@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import {JSDOM} from 'jsdom';
+const script=await fs.readFile(new URL('../../apps/web/public/pos/trade.js',import.meta.url),'utf8');
+const rid=crypto.randomUUID(),pid=crypto.randomUUID(),key='bringness.trade.pending.v1:'+rid;
+const tiers=[{product_id:pid,min_qty:1,price_cents:250},{product_id:pid,min_qty:1000,price_cents:200}];
+function fixture(pending){const dom=new JSDOM('<select id="restaurant"><option value="'+rid+'">Retail</option></select><div id="moduleBody"></div>',{runScripts:'outside-only',url:'https://pos.test/pos/'}),w=dom.window;
+ Object.defineProperty(w,'crypto',{value:crypto.webcrypto});w.eval('var token="fixture";var data='+JSON.stringify({products:[{id:pid,name:'Test <item>',restaurantId:rid}]})+';var $=id=>document.getElementById(id);var esc=x=>String(x).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(\'"\',"&quot;");');
+ w.ensurePersonnelAccess=async()=>true;if(pending)w.localStorage.setItem(key,pending);w.eval(script);return w;
+}
+let attempts=[],lose=true;
+const w=fixture();w.api=async(path,opt)=>{if(path.startsWith('/trade/prices?'))return {tiers};if(path==='/orders/checkout'){const b=JSON.parse(opt.body);attempts.push(b);if(lose)throw Error('connection lost');return {receiptNumber:'BN-1',receiptId:crypto.randomUUID(),requestKey:b.requestKey,restaurantId:b.restaurantId,status:'paid',totalCents:b.payments[0].amountCents};}throw Error(path)};
+try{await w.renderTradeModule();const d=w.document;assert.equal(d.querySelectorAll('#tradeProducts script').length,0);d.querySelector('[data-addqty]').value='1500';d.querySelector('[data-add]').click();assert.match(d.getElementById('tradeTotal').textContent,/3.000,00/);for(const [k,v]of Object.entries({name:'Customer',street:'Street 1',postalCode:'10115',city:'Berlin'}))d.getElementById('trade-'+k).value=v;
+ await d.getElementById('tradePay').onclick();assert.equal(attempts.length,1);assert.equal(attempts[0].payments[0].amountCents,300000);const stored=w.localStorage.getItem(key);assert(stored);assert.equal(d.getElementById('tradePay').disabled,true);assert.equal(d.getElementById('tradeResume').hidden,false);
+ const resumed=fixture(stored);resumed.api=w.api;try{await resumed.renderTradeModule();lose=false;await resumed.document.getElementById('tradeResume').onclick();assert.deepEqual(attempts[0],attempts[1]);assert.equal(resumed.localStorage.getItem(key),null);assert.match(resumed.document.getElementById('tradeStatus').textContent,/gespeichert/);assert.match(resumed.document.getElementById('tradeDocuments').textContent,/DIN-A4/)}finally{resumed.close()}
+ const blocked=fixture('{invalid');blocked.api=w.api;try{await blocked.renderTradeModule();assert.equal(blocked.document.getElementById('tradePay').disabled,true);assert.match(blocked.document.getElementById('tradeStatus').textContent,/beschädigt/)}finally{blocked.close()}
+ const incomplete=fixture();incomplete.api=async(path)=>path.startsWith('/trade/prices?')?{tiers}:{};try{await incomplete.renderTradeModule();const d=incomplete.document;d.querySelector('[data-add]').click();for(const [k,v]of Object.entries({name:'Customer',street:'Street',postalCode:'10115',city:'Berlin'}))d.getElementById('trade-'+k).value=v;await d.getElementById('tradePay').onclick();assert(incomplete.localStorage.getItem(key));assert.match(d.getElementById('tradeStatus').textContent,/nicht eindeutig/);assert(d.getElementById('tradePay').disabled)}finally{incomplete.close()}
+ console.log('Trade UI passed: large-quantity tier total, escaped product text, explicit cash confirmation, persistent uncertain sale, exact replay after browser restart and corrupt-storage refusal.');
+}finally{w.close()}
