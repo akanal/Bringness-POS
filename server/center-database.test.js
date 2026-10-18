@@ -1,3 +1,4 @@
+import {tseTriggerSql} from './tse-trigger-sql.js';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 import {createPublicReceiptHandler} from './public-receipt-core.js';
 import {exportCenterTableQr} from './center-table-qr.js';
@@ -265,8 +266,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  const missing={...digital};await publicReceipt({url:'/beleg/'+crypto.randomUUID(),method:'GET'},missing);assert.equal(missing.status,404);
  assert.equal(await publicReceipt({url:'/beleg/not-a-uuid',method:'GET'},digital),false);
  await ensureTseSchema({query:sql=>db.exec(sql)});
- const tseSource=await readFile(new URL('./tse-integration.js',import.meta.url),'utf8');
- const trigger=tseSource.match(/await pool.query\(`([\s\S]*?)`\)/)[1];await db.exec(trigger);
+ await db.exec(tseTriggerSql);
  const fiscalOrder=crypto.randomUUID();await db.query("INSERT INTO orders(id,restaurant_id,total_cents,status) VALUES($1,$2,1250,'payment_pending')",[fiscalOrder,restaurant]);
  await db.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,'Gericht',1250,19,1)",[fiscalOrder,product]);
  await db.query("INSERT INTO center_order_payments(payment_id,order_id,center_id,restaurant_id,merchant_reference,amount_cents,currency) VALUES('tr_fiscal',$1,$2,$3,'org_restaurant',1250,'EUR')",[fiscalOrder,created.data.center.id,restaurant]);
