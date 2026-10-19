@@ -74,7 +74,7 @@ try{
  assert.equal((await send('/orders/checkout','POST',{...request,salesMode:'retail'})).status,400); // retail remains limited to 999
  assert.equal((await send('/orders/checkout','POST',{...request,payments:[{method:'card',amountCents:300000}]})).status,409);
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),0);
- const sale=await send('/orders/checkout','POST',request);assert.equal(sale.status,201);assert.equal(sale.body.totalCents,300000);assert(sale.body.receiptId);
+ const sale=await send('/orders/checkout','POST',request);assert.equal(sale.status,201);assert.equal(sale.body.totalCents,300000);assert(sale.body.receiptId);assert.match(sale.body.receiptNumber,/^HR-\d{4}-000001$/);assert.equal((await query('SELECT is_called FROM receipt_number_seq')).rows[0].is_called,false);
  assert.equal((await query('SELECT unit_price_cents FROM order_items WHERE order_id=$1',[sale.body.id])).rows[0].unit_price_cents,200);
  const invoice=await send('/receipts/'+sale.body.receiptId+'/invoice');if(process.env.TRADE_PDF_PREVIEW)await fs.writeFile(process.env.TRADE_PDF_PREVIEW,invoice.body);assert.equal(invoice.status,200);assert(invoice.body.subarray(0,4).toString()==='%PDF');assert.match(invoice.body.toString('latin1'),/MediaBox \[0 0 595\.28 841\.89\]/);
  const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');const loading=getDocument({data:new Uint8Array(invoice.body),useSystemFonts:true}),doc=await loading.promise;
@@ -92,7 +92,7 @@ try{
  const original=(await query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[sale.body.id])).rows[0].recipient;assert.equal(original.name,recipient.name);
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),1);
  await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock);
- const retail=await send('/orders/checkout','POST',{requestKey:uuid(),restaurantId:restaurant,items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:9999}]});assert.equal(retail.status,201);
+ const retail=await send('/orders/checkout','POST',{requestKey:uuid(),restaurantId:restaurant,items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:9999}]});assert.equal(retail.status,201);assert.match(retail.body.receiptNumber,/^BN-\d{4}-000001$/);
  const cashAction=(action,amountCents,reason='')=>({restaurantId:restaurant,requestKey:uuid(),sessionId:cashId,action,amountCents,reason});
  assert.equal((await send('/cash-sessions','POST',cashAction('deposit',500,'Change float'))).status,200);
  assert.equal((await send('/cash-sessions','POST',cashAction('withdraw',200,'Bank deposit'))).status,200);
@@ -103,6 +103,7 @@ try{
  assert.equal((await send('/orders/checkout','POST',request)).body.replayed,true);
  assert.equal((await send('/cash-sessions?restaurantId='+restaurant)).body.sessions[0].expectedCents,311299);
  assert.equal((await send('/receipts/'+sale.body.receiptId+'/invoice')).status,200);
+ const nextTrade=await send('/orders/checkout','POST',{...request,requestKey:uuid(),items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:500}]});assert.equal(nextTrade.status,201);assert.match(nextTrade.body.receiptNumber,/^HR-\d{4}-000002$/);assert.equal((await send('/orders/checkout','POST',request)).body.receiptNumber,sale.body.receiptNumber);
  console.log('Full HTTP flow passed: saved customer selection, unpaid delivery retry, wholesale A4 invoice, retail bon sale, separate totals, movements, exact closing and replay without duplicate cash.');
  if(postgresUrl){const concurrent={...request,requestKey:uuid(),payments:[{method:'cash',amountCents:750000}]};const replies=await Promise.all(Array.from({length:5},()=>send('/orders/checkout','POST',concurrent)));assert.equal(replies.filter(r=>r.status===201).length,1);assert.equal(replies.filter(r=>r.status===200).length,4);assert.equal(new Set(replies.map(r=>r.body.id)).size,1);}
  const other=uuid();await query("INSERT INTO companies(id,name) VALUES($1,'Other')",[other]);await query('UPDATE users SET company_id=$1 WHERE id=$2',[other,owner]);
