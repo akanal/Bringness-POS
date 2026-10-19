@@ -1,0 +1,23 @@
+(()=>{
+ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const money=c=>(Number(c)/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
+ window.renderCashClosing=async()=>{
+ const rid=document.getElementById('restaurant').value,host=document.getElementById('moduleBody'),key='bringness.cash.pending.v1:'+rid;
+ const data=await api('/cash-sessions?restaurantId='+encodeURIComponent(rid)),active=data.sessions.find(s=>!s.closed_at);
+ host.innerHTML='<div class="modulecard"><h3>Schicht & Kassenbuch</h3><p>Erfasst werden Zahlungen, die während einer geöffneten Kassenschicht am Server eingehen. Offline-Nachmeldungen zählen zur beim Eingang offenen Schicht. Verkäufe ohne offene Schicht sind nicht enthalten.</p>'+(active?'<p>Anfangsbestand: '+money(active.opening_cents)+' · Rechnerischer Bargeldbestand: '+money(active.expectedCents)+'</p>':'<p>Keine Kassenschicht geöffnet.</p>')+'<label>Betrag in Euro<input data-amount inputmode="decimal" placeholder="0,00"></label><label>Begründung<input data-reason maxlength="500"></label><div data-actions></div><button data-retry hidden>Unterbrochene Buchung abgleichen</button><p data-status role="status"></p></div><div data-reports></div>';
+ const el=k=>host.querySelector('[data-'+k+']');let busy=false;
+ const post=async draft=>{await api('/cash-sessions',{method:'POST',body:JSON.stringify(draft)});localStorage.removeItem(key);await window.renderCashClosing();};
+ const run=fn=>async()=>{if(busy)return;busy=true;try{await fn();}catch(e){el('status').textContent=e.message;}finally{busy=false;}};
+ const pending=localStorage.getItem(key);el('retry').hidden=!pending;el('retry').onclick=run(()=>post(JSON.parse(localStorage.getItem(key))));
+ for(const [action,label] of active?[['deposit','Einlage buchen'],['withdraw','Entnahme buchen'],['close','Gezählten Bestand übernehmen und abschließen']]:[['open','Mit Anfangsbestand öffnen']]){
+ const button=document.createElement('button');button.textContent=label;button.disabled=!!pending;el('actions').append(button);button.onclick=run(async()=>{
+ const amount=el('amount').value.trim();if(!/^\d{1,7}([,.]\d{1,2})?$/.test(amount))throw Error('Bitte Betrag mit maximal zwei Nachkommastellen eingeben.');
+ const [euros,cents='']=amount.replace(',','.').split('.');const draft={restaurantId:rid,requestKey:crypto.randomUUID(),action,amountCents:Number(euros)*100+Number(cents.padEnd(2,'0')),reason:el('reason').value,...(active?{sessionId:active.id}:{})};
+ if(action==='close'&&!confirm('Kassenschicht mit '+money(draft.amountCents)+' gezähltem Bargeld endgültig abschließen?'))return;
+ localStorage.setItem(key,JSON.stringify(draft));el('retry').hidden=false;host.querySelectorAll('[data-actions] button').forEach(b=>b.disabled=true);
+ try{await post(draft);}catch(e){if(e.status&&e.status<500){localStorage.removeItem(key);el('retry').hidden=true;host.querySelectorAll('[data-actions] button').forEach(b=>b.disabled=false);}throw e;}
+ });}
+ for(const s of data.sessions){const card=document.createElement('div');card.className='modulecard';card.innerHTML='<h3>'+esc(s.closed_at?'Kassenabschluss':'Offene Schicht')+'</h3><p>'+esc(new Date(s.opened_at).toLocaleString('de-DE'))+' · '+esc(s.id)+'</p><p>Anfang '+money(s.opening_cents)+' · Soll '+money(s.expectedCents)+(s.closed_at?' · Gezählt '+money(s.countedCents)+' · Differenz '+money(s.differenceCents):'')+'</p><table><thead><tr><th>Betriebsart</th><th>Zahlungsart</th><th>Betrag</th></tr></thead><tbody>'+s.payments.map(p=>'<tr><td>'+esc(p.mode==='trade'?'Händler':'Normaler Betrieb')+'</td><td>'+esc(p.method)+'</td><td>'+money(p.amount_cents)+'</td></tr>').join('')+'</tbody></table><p>'+esc(s.reason||'')+'</p>'+s.movements.map(m=>'<p>'+esc(m.action==='deposit'?'Einlage':'Entnahme')+' '+money(m.amount_cents)+' · '+esc(m.reason)+'</p>').join('');
+ if(s.closed_at){const button=document.createElement('button');button.textContent='Abschluss drucken';button.onclick=()=>{const frame=document.createElement('iframe');frame.style.cssText='position:fixed;width:1px;height:1px;border:0';frame.onload=()=>frame.contentWindow.print();frame.srcdoc='<!doctype html><html lang="de"><meta charset="utf-8"><title>Kassenabschluss</title><style>body{font:14px Arial;margin:20mm}td,th{padding:8px;text-align:left}</style>'+card.innerHTML+'</html>';frame.dataset.cashPrint='true';document.querySelectorAll('iframe[data-cash-print]').forEach(f=>f.remove());document.body.append(frame);};card.append(button);}el('reports').append(card);}
+ };
+})();

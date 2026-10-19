@@ -1,3 +1,5 @@
+import {migrateCashClosing,createCashClosing} from './cash-closing.js';
+import {migrateCustomerDelivery,createCustomerDelivery} from './customer-delivery.js';
 import {normalizeDiscount,discountedSale} from './sale-discount.js';
 import {migrateParkedBons,createParkedBons} from './parked-bons.js';
 import {migrateTrade,createTradeHandler,tradeRecipient,tradePrice,tradeQuantityLimit} from './trade-pricing.js';
@@ -13,7 +15,7 @@ const pool = new Pool({
 });
 
 export async function migratePaymentCheckout(db=pool){
- await migrateTrade(db);await migrateParkedBons(db);
+ await migrateTrade(db);await migrateParkedBons(db);await migrateCustomerDelivery(db);await migrateCashClosing(db);
  await db.query(`CREATE TABLE IF NOT EXISTS pos_checkout_requests(
   company_id uuid NOT NULL REFERENCES companies(id),request_key uuid NOT NULL,
   fingerprint text NOT NULL,order_id uuid NOT NULL UNIQUE REFERENCES orders(id),
@@ -40,8 +42,11 @@ async function currentUser(req,db=pool,lock=false) {
   return q.rows[0] || null;
 }
 
-const tradeHandler=createTradeHandler(pool,currentUser),parkedHandler=createParkedBons(pool,currentUser);
+const cashHandler=createCashClosing(pool,currentUser);
+const tradeHandler=createTradeHandler(pool,currentUser),parkedHandler=createParkedBons(pool,currentUser),customerDeliveryHandler=createCustomerDelivery(pool,currentUser);
 return async function handlePaymentCheckout(req, res) {
+  if(await cashHandler(req,res))return true;
+  if(await customerDeliveryHandler(req,res))return true;
   if(await parkedHandler(req,res))return true;
   if(await tradeHandler(req,res))return true;
   const pathname = new URL(req.url, "http://localhost").pathname;
@@ -157,7 +162,7 @@ return async function handlePaymentCheckout(req, res) {
     for(const item of cleanItems)await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,item.product.id,item.product.name,item.product.price_cents,item.product.tax_rate,item.qty]);
     if(trade)await client.query('INSERT INTO pos_trade_sales(order_id,recipient) VALUES($1,$2::jsonb)',[order.id,JSON.stringify(recipient)]);
     for(const payment of canonicalPayments)await client.query('INSERT INTO payments(order_id,method,amount_cents) VALUES($1,$2,$3)',[order.id,payment.method,payment.amountCents]);
-    const receiptNumber='BN-'+new Date().getUTCFullYear()+'-'+String((await client.query("SELECT nextval('receipt_number_seq') n")).rows[0].n).padStart(6,'0');
+    const receiptNumber=(trade?'HR-':'BN-')+new Date().getUTCFullYear()+'-'+String((await client.query(trade?"SELECT nextval('trade_invoice_number_seq') n":"SELECT nextval('receipt_number_seq') n")).rows[0].n).padStart(6,'0');
     if(adjustment)await client.query('INSERT INTO receipts(order_id,receipt_number,sale_adjustment) VALUES($1,$2,$3::jsonb)',[order.id,receiptNumber,JSON.stringify(adjustment)]);
     else await client.query('INSERT INTO receipts(order_id,receipt_number) VALUES($1,$2)',[order.id,receiptNumber]);
     await client.query("UPDATE receipts rc SET merchant_snapshot=(SELECT jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),co.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) FROM orders ord JOIN restaurants r ON r.id=ord.restaurant_id JOIN companies co ON co.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=co.id WHERE ord.id=rc.order_id) WHERE rc.order_id=$1",[order.id]);

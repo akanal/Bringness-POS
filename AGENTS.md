@@ -158,3 +158,17 @@ Continue authorized development autonomously and preserve established behavior a
 - Free Händler option is optional and defaults off per restaurant. Owner/admin enables it in protected Settings using the existing administrative PIN; no paid addon, email purchase or charge. Only enabled restaurants show Händler under Mehr. Server checkout rejects new trade sales while disabled; already committed request replays remain valid. Disable never erases tiers, drafts, orders or receipts.
 - Pfand/Leergut belongs in ordinary retail (including newsagents selling drinks) AND wholesale; wholesale additionally needs large quantities/crates. It is still an open development item, not implemented by this toggle. Retail discounts and parked bons remain independent of trade activation.
 - Eight reference photos were re-inspected against main 19051bc; see docs/retail-trade-gap-20261018.md for explicit implemented/partial/missing status. Do not label photo functions complete based on menu entries. Next blocks: customer master records/outgoing delivery notes, deposit/returns in both modes, full cash opening/closing and reporting.
+
+## Customer/delivery block authorized 2026-10-18
+- Preserve the agreed order: customer master records and outgoing delivery notes precede deposit/returns and cash closing. Customer administration/delivery notes are independent of the optional free trade toggle; wholesale can reuse saved recipients.
+- Delivery notes are unpaid quantity documents, not invoices, sales or stock dispatches. Retain immutable sender/recipient/product snapshots and durable request identities. Preserve ordinary receipt versus trade A4 invoice behavior.
+- Owner deferred deployment after the trade-toggle SSH timeout. Do not merge/deploy this new block without release authorization. See docs/customers-delivery-20261018.md for verified status and limits.
+
+## Cash closing block authorized 2026-10-18
+- Owner authorized cash opening/closing, deposits/withdrawals, counted cash and differences for retail and trade; live publication remains deferred.
+- See docs/cash-closing-20261018.md for server-arrival assignment, offline/unassigned-payment limits and verification. Do not describe this as a complete fiscal Z report.
+- Current cash branch depends on unmerged customer/delivery PR #90. Owner subsequently explicitly authorized GitHub storage of the cash and invoice work; remote head 5260050 contains both. GitHub saves of agreed development are authorized without repeated routine permission. Production merging/deployment remains separately deferred.
+
+## Wholesale corrections confirmed 2026-10-19
+- Owner requires an independent running invoice series for wholesale versus ordinary POS. New trade sales use HR-year-counter from trade_invoice_number_seq; retail retains BN and receipt_number_seq. Existing receipts and replayed requests keep their original number, no retrospective renumbering. The counter is global like the existing retail sequence and does not reset annually; PostgreSQL sequence gaps after rollback are possible.
+- Unconfigured wholesale articles must provide an active route to PIN-protected price setup, never silently inherit retail prices or book a zero-price sale. Keep stored trade recipients reusable through customer records in a compact collapsed panel. New changes require separate production release authorization.

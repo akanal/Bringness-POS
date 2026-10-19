@@ -14,7 +14,7 @@ export function normalizeTradeTiers(tiers){
  if(result.some((t,i)=>i&&t.minQty===result[i-1].minQty))throw Error('Mengenstufen müssen eindeutig sein');return result;
 }
 export function tradePrice(tiers,quantity){return [...tiers].filter(t=>t.minQty<=quantity).sort((a,b)=>b.minQty-a.minQty)[0]?.priceCents??null;}
-export async function migrateTrade(db){await db.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS pos_trade_enabled boolean NOT NULL DEFAULT false;CREATE TABLE IF NOT EXISTS pos_trade_prices(product_id uuid NOT NULL REFERENCES products(id),min_qty int NOT NULL CHECK(min_qty BETWEEN 1 AND 999999),price_cents int NOT NULL CHECK(price_cents>0),PRIMARY KEY(product_id,min_qty));CREATE TABLE IF NOT EXISTS pos_trade_sales(order_id uuid PRIMARY KEY REFERENCES orders(id),recipient jsonb NOT NULL);`)}
+export async function migrateTrade(db){await db.query(`CREATE SEQUENCE IF NOT EXISTS trade_invoice_number_seq;ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS pos_trade_enabled boolean NOT NULL DEFAULT false;CREATE TABLE IF NOT EXISTS pos_trade_prices(product_id uuid NOT NULL REFERENCES products(id),min_qty int NOT NULL CHECK(min_qty BETWEEN 1 AND 999999),price_cents int NOT NULL CHECK(price_cents>0),PRIMARY KEY(product_id,min_qty));CREATE TABLE IF NOT EXISTS pos_trade_sales(order_id uuid PRIMARY KEY REFERENCES orders(id),recipient jsonb NOT NULL);`)}
 export function createTradeHandler(pool,authenticate){return async(req,res)=>{
  const url=new URL(req.url,'http://local');if(!['/api/v1/trade/prices','/api/v1/trade/invoices','/api/v1/trade/settings'].includes(url.pathname))return false;
  const send=(status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};

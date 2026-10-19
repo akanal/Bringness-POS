@@ -59,12 +59,22 @@ try{
  for(const bad of [[{minQty:0,priceCents:100}],[{minQty:1,priceCents:0}],[{minQty:1,priceCents:100},{minQty:1,priceCents:50}]])assert.equal((await send('/trade/prices','PUT',{...prices,tiers:bad},token,unlock)).status,400);
  assert.equal((await send('/orders/checkout','POST',request)).status,400); // seller missing
  await query("INSERT INTO company_billing_profiles VALUES($1,'Seller GmbH','Street 2','10115','Berlin','DE456')",[company]);
+ // One actual HTTP flow across customer records, unpaid delivery, sale, invoice and cash closure.
+ const savedCustomer=await send('/customers','POST',{restaurantId:restaurant,customer:recipient});assert.equal(savedCustomer.status,200);
+ const foundCustomers=await send('/customers?restaurantId='+restaurant+'&q=Wholesale');assert.equal(foundCustomers.body.customers.length,1);
+ request.recipient=foundCustomers.body.customers[0].data;
+ const openCash={restaurantId:restaurant,requestKey:uuid(),action:'open',amountCents:1000};
+ const cashOpened=await send('/cash-sessions','POST',openCash);assert.equal(cashOpened.status,200);const cashId=cashOpened.body.session.id;
+ const deliveryRequest={restaurantId:restaurant,requestKey:uuid(),recipient:request.recipient,items:request.items,note:'Synthetic full-flow delivery'};
+ const delivery=await send('/delivery-notes','POST',deliveryRequest);assert.equal(delivery.status,200);assert.equal(delivery.body.deliveryNote.recipient.name,recipient.name);
+ assert.equal((await send('/delivery-notes','POST',deliveryRequest)).body.deliveryNote.id,delivery.body.deliveryNote.id);
+ assert.equal(Number((await query('SELECT count(*) n FROM payments')).rows[0].n),0);
  assert.equal((await send('/orders/checkout','POST',{...request,payments:[{method:'cash',amountCents:1}]})).status,400);
  assert.equal((await send('/orders/checkout','POST',{...request,recipient:{name:'Incomplete'}})).status,400);
  assert.equal((await send('/orders/checkout','POST',{...request,salesMode:'retail'})).status,400); // retail remains limited to 999
  assert.equal((await send('/orders/checkout','POST',{...request,payments:[{method:'card',amountCents:300000}]})).status,409);
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),0);
- const sale=await send('/orders/checkout','POST',request);assert.equal(sale.status,201);assert.equal(sale.body.totalCents,300000);assert(sale.body.receiptId);
+ const sale=await send('/orders/checkout','POST',request);assert.equal(sale.status,201);assert.equal(sale.body.totalCents,300000);assert(sale.body.receiptId);assert.match(sale.body.receiptNumber,/^HR-\d{4}-000001$/);assert.equal((await query('SELECT is_called FROM receipt_number_seq')).rows[0].is_called,false);
  assert.equal((await query('SELECT unit_price_cents FROM order_items WHERE order_id=$1',[sale.body.id])).rows[0].unit_price_cents,200);
  const invoice=await send('/receipts/'+sale.body.receiptId+'/invoice');if(process.env.TRADE_PDF_PREVIEW)await fs.writeFile(process.env.TRADE_PDF_PREVIEW,invoice.body);assert.equal(invoice.status,200);assert(invoice.body.subarray(0,4).toString()==='%PDF');assert.match(invoice.body.toString('latin1'),/MediaBox \[0 0 595\.28 841\.89\]/);
  const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');const loading=getDocument({data:new Uint8Array(invoice.body),useSystemFonts:true}),doc=await loading.promise;
@@ -82,6 +92,19 @@ try{
  const original=(await query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[sale.body.id])).rows[0].recipient;assert.equal(original.name,recipient.name);
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),1);
  await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock);
+ const retail=await send('/orders/checkout','POST',{requestKey:uuid(),restaurantId:restaurant,items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:9999}]});assert.equal(retail.status,201);assert.match(retail.body.receiptNumber,/^BN-\d{4}-000001$/);
+ const cashAction=(action,amountCents,reason='')=>({restaurantId:restaurant,requestKey:uuid(),sessionId:cashId,action,amountCents,reason});
+ assert.equal((await send('/cash-sessions','POST',cashAction('deposit',500,'Change float'))).status,200);
+ assert.equal((await send('/cash-sessions','POST',cashAction('withdraw',200,'Bank deposit'))).status,200);
+ const cashState=(await send('/cash-sessions?restaurantId='+restaurant)).body.sessions[0];assert.equal(cashState.expectedCents,311299);
+ assert.equal(cashState.payments.find(p=>p.mode==='trade').amount_cents,300000);assert.equal(cashState.payments.find(p=>p.mode==='retail').amount_cents,9999);
+ const cashClose=cashAction('close',311299);const closedCash=await send('/cash-sessions','POST',cashClose);assert.equal(closedCash.status,200);assert.equal(closedCash.body.session.differenceCents,0);
+ assert.deepEqual((await send('/cash-sessions','POST',cashClose)).body,closedCash.body);
+ assert.equal((await send('/orders/checkout','POST',request)).body.replayed,true);
+ assert.equal((await send('/cash-sessions?restaurantId='+restaurant)).body.sessions[0].expectedCents,311299);
+ assert.equal((await send('/receipts/'+sale.body.receiptId+'/invoice')).status,200);
+ const nextTrade=await send('/orders/checkout','POST',{...request,requestKey:uuid(),items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:500}]});assert.equal(nextTrade.status,201);assert.match(nextTrade.body.receiptNumber,/^HR-\d{4}-000002$/);assert.equal((await send('/orders/checkout','POST',request)).body.receiptNumber,sale.body.receiptNumber);
+ console.log('Full HTTP flow passed: saved customer selection, unpaid delivery retry, wholesale A4 invoice, retail bon sale, separate totals, movements, exact closing and replay without duplicate cash.');
  if(postgresUrl){const concurrent={...request,requestKey:uuid(),payments:[{method:'cash',amountCents:750000}]};const replies=await Promise.all(Array.from({length:5},()=>send('/orders/checkout','POST',concurrent)));assert.equal(replies.filter(r=>r.status===201).length,1);assert.equal(replies.filter(r=>r.status===200).length,4);assert.equal(new Set(replies.map(r=>r.body.id)).size,1);}
  const other=uuid();await query("INSERT INTO companies(id,name) VALUES($1,'Other')",[other]);await query('UPDATE users SET company_id=$1 WHERE id=$2',[other,owner]);
  assert.equal((await send('/trade/settings?restaurantId='+restaurant)).status,404);assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).status,404);

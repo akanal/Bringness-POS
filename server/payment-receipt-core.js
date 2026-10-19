@@ -1,3 +1,4 @@
+import {renderTradeInvoice} from './trade-invoice-pdf.js';
 import {lineDiscount} from './sale-discount.js';
 import crypto from "node:crypto";
 export function createPaymentReceiptHandler(pool,PDFDocument,QRCode,receiptUrl) {
@@ -102,6 +103,11 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
       });
       doc.once('end',()=>{if(settled)return;settled=true;resolve(Buffer.concat(chunks));});
       try{
+  if(receipt.formatA4){
+    renderTradeInvoice(doc,receipt,items,payments,qrBuffer);
+    doc.end();
+    return;
+  }
   doc.fontSize(13).font("Helvetica-Bold").text(receipt.restaurant_name);
   doc.fontSize(9).font("Helvetica").text(receipt.billing_name || receipt.company_name);
   if (receipt.street) doc.text(receipt.street);
