@@ -13,10 +13,10 @@ if(postgresUrl){
  db=new pg.Pool({connectionString:postgresUrl,options:'-c search_path='+schema});db.exec=sql=>db.query(sql);db.close=()=>db.end();
 }else{db=new PGlite();await db.waitReady;}
 const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0};}const r=await db.query(sql,args);return {...r,rowCount:r.rowCount??r.affectedRows??r.rows.length};};
-let failRecord=false,revokeAfterRead=false;
+let failRecord=false,revokeAfterRead=false,failRefundRecord=false;
 const pool={query:async(sql,args)=>{const result=await query(sql,args);if(revokeAfterRead&&sql.includes('FROM sessions')&&!sql.includes('FOR SHARE')){revokeAfterRead=false;await query("UPDATE users SET role='waiter' WHERE id=$1",[owner]);}return result;},connect:async()=>{
  const client=postgresUrl?await db.connect():{query,release(){}};
- return {query:async(sql,args)=>{if(failRecord&&sql.startsWith('INSERT INTO pos_checkout_requests'))throw Error('simulated request ledger failure');return client.query(sql,args);},release:()=>client.release()};
+ return {query:async(sql,args)=>{if(failRefundRecord&&sql.startsWith('INSERT INTO pos_deposit_returns'))throw Error('simulated refund ledger failure');if(failRecord&&sql.startsWith('INSERT INTO pos_checkout_requests'))throw Error('simulated request ledger failure');return client.query(sql,args);},release:()=>client.release()};
 }};
 await db.exec((await fs.readFile(new URL('../../db/schema.sql',import.meta.url),'utf8')).replace('CREATE EXTENSION IF NOT EXISTS pgcrypto;',''));
 await db.exec(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner';ALTER TABLE users ADD COLUMN must_change_password boolean DEFAULT false;
@@ -106,7 +106,9 @@ try{
  const nextTrade=await send('/orders/checkout','POST',{...request,requestKey:uuid(),items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:500}]});assert.equal(nextTrade.status,201);assert.match(nextTrade.body.receiptNumber,/^HR-\d{4}-000002$/);assert.equal((await send('/orders/checkout','POST',request)).body.receiptNumber,sale.body.receiptNumber);
  console.log('Full HTTP flow passed: saved customer selection, unpaid delivery retry, wholesale A4 invoice, retail bon sale, separate totals, movements, exact closing and replay without duplicate cash.');
  if(postgresUrl){const concurrent={...request,requestKey:uuid(),payments:[{method:'cash',amountCents:750000}]};const replies=await Promise.all(Array.from({length:5},()=>send('/orders/checkout','POST',concurrent)));assert.equal(replies.filter(r=>r.status===201).length,1);assert.equal(replies.filter(r=>r.status===200).length,4);assert.equal(new Set(replies.map(r=>r.body.id)).size,1);}
+ await (await import('./deposit-flow.mjs')).verifyDepositFlow({send,query,restaurant,product,token,unlock,request,setFail:v=>failRefundRecord=v});
  const other=uuid();await query("INSERT INTO companies(id,name) VALUES($1,'Other')",[other]);await query('UPDATE users SET company_id=$1 WHERE id=$2',[other,owner]);
+ assert.equal((await send('/deposit/returns?restaurantId='+restaurant)).status,404);
  assert.equal((await send('/trade/settings?restaurantId='+restaurant)).status,404);assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).status,404);
  assert.equal((await send('/receipts/'+sale.body.receiptId+'/invoice')).status,404);assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,0);assert.equal((await send('/trade/prices','PUT',prices,token,unlock)).status,404);
  await query('UPDATE users SET company_id=$1,role=$3 WHERE id=$2',[company,owner,'waiter']);assert.equal((await send('/trade/prices?restaurantId='+restaurant)).status,403);

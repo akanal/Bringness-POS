@@ -66,6 +66,8 @@ jobs:
           CASH_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/cash-closing-ui.mjs
       - run: node server/ai-tests/customer-delivery-ui.mjs
+      - run: node server/ai-tests/deposit-ui.mjs
+      - run: node server/ai-tests/deposit-journal-ui.mjs
       - run: node server/ai-tests/trade-ui.mjs
       - run: node server/ai-tests/trade-toggle-ui.mjs
       - run: node server/ai-tests/discount-parking.mjs
