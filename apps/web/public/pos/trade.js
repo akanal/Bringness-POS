@@ -29,7 +29,7 @@
   function draw(){
    $('tradeLines').innerHTML=lines.map(l=>'<div class="trade-line"><span>'+esc(l.name)+'<small>'+money(price(l.id,l.qty)||0)+' pro Stück brutto</small></span><input data-qty="'+l.id+'" aria-label="Menge '+esc(l.name)+'" type="number" min="1" max="999999" step="1" value="'+l.qty+'"><strong>'+money((price(l.id,l.qty)||0)*l.qty)+'</strong><button data-remove="'+l.id+'" aria-label="Entfernen">×</button></div>').join('')||'<p>Artikel mit Händlerpreis auswählen.</p>';
    const total=lines.reduce((s,l)=>s+(price(l.id,l.qty)||0)*l.qty,0);try{$('tradeTotal').textContent=money(tools?tools.total(total):total)}catch{$('tradeTotal').textContent='Rabatt prüfen'}tools?.refresh();
-   $('tradePay').disabled=!setting.enabled||busy||!!pending||!storageOK||!lines.length||lines.some(l=>!price(l.id,l.qty))||total>2147483647;
+   $('tradePay').disabled=!!window.bnDepositLocked?.(rid)||!setting.enabled||busy||!!pending||!storageOK||!lines.length||lines.some(l=>!price(l.id,l.qty))||total>2147483647;
    $('tradeResume').hidden=!pending;$('tradeResume').disabled=busy;
    host.querySelectorAll('[data-qty]').forEach(el=>{el.disabled=busy||!!pending;el.onchange=()=>{const l=lines.find(l=>l.id===el.dataset.qty),n=Number(el.value);if(Number.isSafeInteger(n)&&n>=1&&n<=999999)l.qty=n;draw()}});
    host.querySelectorAll('[data-remove]').forEach(el=>{el.disabled=busy||!!pending;el.onclick=()=>{lines=lines.filter(l=>l.id!==el.dataset.remove);draw()}});

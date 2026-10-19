@@ -6,7 +6,7 @@ export async function processOfflineStock(pos,ai,kitchenAction,ingestSale){
   const link=(await ai.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.pos_restaurant_id=$1 AND c.pos_company_id=$2 AND c.kind='pos' AND c.active AND a.status='active'",[row.restaurant_id,row.company_id])).rows[0];
   if(!link){await c.query("UPDATE pos_offline_sales SET stock_state='not_linked' WHERE id=$1",[row.id]);await c.query('COMMIT');continue}
   if(!(await c.query("SELECT 1 FROM users WHERE id=$1 AND company_id=$2 AND status='active' AND role IN ('owner','admin') AND NOT coalesce(must_change_password,false)",[link.pos_user_id,row.company_id])).rowCount)throw Error('Inhaberfreigabe der Kasse prüfen');
-  const items=(await c.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 ORDER BY product_id',[row.order_id])).rows.map(i=>({productCode:String(i.product_id),quantity:Number(i.quantity)}));
+  const items=(await c.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 AND product_id IS NOT NULL ORDER BY product_id',[row.order_id])).rows.map(i=>({productCode:String(i.product_id),quantity:Number(i.quantity)}));
   if(link.consumption_mode==='lifecycle'){
    await kitchenAction(ai,{id:link.account_id,role:'restaurant'},{requestKey:key(row.id,'accept'),orderId:'pos:'+row.order_id,action:'accept',occurredAt:new Date(row.paid_time).toISOString(),items,reason:''},link);
    await kitchenAction(ai,{id:link.account_id,role:'restaurant'},{requestKey:key(row.id,'start'),orderId:'pos:'+row.order_id,action:'start',occurredAt:new Date(row.paid_time).toISOString(),reason:''},link);

@@ -8,7 +8,7 @@ export async function applyCenterStock(client,orderId,restaurantId,action,depend
  WHERE c.id=$1 AND c.account_id=$2 AND c.pos_restaurant_id=$3 AND c.active AND c.kind='pos'
  AND c.consumption_mode='lifecycle' AND a.status='active'`,[link.connector_id,link.account_id,restaurantId])).rows[0];if(!connector)throw Error('STOCK_CONNECTOR_NOT_READY');
  const owner=(await client.query("SELECT id FROM users WHERE id=$1 AND company_id=$2 AND status='active' AND role IN ('owner','admin') AND NOT coalesce(must_change_password,false)",[connector.pos_user_id,connector.pos_company_id])).rows[0];if(!owner)throw Error('STOCK_OWNER_NOT_AUTHORIZED');
- const items=(await client.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 AND quantity>0 ORDER BY product_id',[orderId])).rows.map(i=>({productCode:String(i.product_id||''),quantity:Number(i.quantity)}));
+ const items=(await client.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 AND product_id IS NOT NULL AND quantity>0 ORDER BY product_id',[orderId])).rows.map(i=>({productCode:String(i.product_id||''),quantity:Number(i.quantity)}));
  const id=commandId(orderId,action),target=action==='accept'?'kitchen':'preparing';
  // Stable UUID survives a POS rollback after AI committed. Replaying it is safe.
  await runtime.kitchenAction(runtime.stockPool,{id:link.account_id,role:'restaurant'},{requestKey:id,orderId:'pos:'+orderId,action,...(action==='accept'?{items}:{})},connector);

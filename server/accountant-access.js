@@ -27,16 +27,21 @@ export function accountantHandler(db){return async(req,res)=>{
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   const owner=(await db.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[hash(token)])).rows[0];
   const admin=owner&&['owner','admin'].includes(owner.role);
-  if(p==='/api/v1/accountant/receipts'&&req.method==='GET'){
+  if(['/api/v1/accountant/receipts','/api/v1/accountant/deposit-returns'].includes(p)&&req.method==='GET'){
    let scope;
    if(admin){scope={company_id:owner.company_id,restaurant_id:url.searchParams.get('restaurantId'),from_day:url.searchParams.get('from'),to_day:url.searchParams.get('to')};}
    else scope=(await db.query('SELECT * FROM accountant_grants WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()',[hash(token)])).rows[0];
    if(!scope)return send(401,{error:'Zugang fehlt, wurde widerrufen oder ist abgelaufen'});
    const day=v=>v instanceof Date?v.toISOString().slice(0,10):String(v).slice(0,10);scope.from_day=day(scope.from_day);scope.to_day=day(scope.to_day);
    if(!offlineUuid.test(scope.restaurant_id||'')||!validDay(scope.from_day)||!validDay(scope.to_day)||scope.from_day>scope.to_day)fail('Betrieb und gültiger Zeitraum erforderlich');
-   const binding=hash(JSON.stringify([scope.company_id,scope.restaurant_id,scope.from_day,scope.to_day,scope.id||'owner']));
+   const binding=hash(JSON.stringify([scope.company_id,scope.restaurant_id,scope.from_day,scope.to_day,scope.id||'owner',...(p.endsWith('/deposit-returns')?['deposit-returns']:[])]));
    const rawCursor=url.searchParams.get('cursor'),cursor=rawCursor?decodeAccountantCursor(rawCursor,binding):null;
    const asOf=cursor?.asOf||(await db.query(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS as_of`)).rows[0].as_of;
+   if(p.endsWith('/deposit-returns')){
+    if(!(await db.query("SELECT to_regclass('pos_deposit_returns') present")).rows[0]?.present)return send(200,{returns:[],asOf,nextCursor:null,officialDsfinvk:false});
+    const rows=(await db.query(`SELECT d.*,to_char(d.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') cursor_created_at FROM pos_deposit_returns d JOIN restaurants r ON r.id=d.restaurant_id WHERE r.company_id=$1 AND r.id=$2 AND (d.created_at AT TIME ZONE 'Europe/Berlin')::date BETWEEN $3::date AND $4::date AND d.created_at<=$5::timestamptz AND ($6::timestamptz IS NULL OR (d.created_at,d.id)>($6::timestamptz,$7::uuid)) ORDER BY d.created_at,d.id LIMIT 101`,[scope.company_id,scope.restaurant_id,scope.from_day,scope.to_day,asOf,cursor?.date||null,cursor?.id||null])).rows;
+    const more=rows.length>100,page=rows.slice(0,100),last=page.at(-1);return send(200,{returns:page,asOf,officialDsfinvk:false,nextCursor:more?Buffer.from(JSON.stringify({binding,asOf,date:last.cursor_created_at,id:last.id})).toString('base64url'):null});
+   }
    const rows=(await db.query(`SELECT rc.id,rc.receipt_number,rc.issued_at,to_char(rc.issued_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_issued_at,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,o.source,
     COALESCE((SELECT jsonb_agg(jsonb_build_object('productId',i.product_id,'name',i.product_name_snapshot,'quantity',i.quantity,'unitPriceCents',i.unit_price_cents,'taxRate',i.tax_rate_snapshot) ORDER BY i.id) FROM order_items i WHERE i.order_id=o.id),'[]') items,
     COALESCE((SELECT jsonb_agg(jsonb_build_object('method',pm.method,'amountCents',pm.amount_cents) ORDER BY pm.id) FROM payments pm WHERE pm.order_id=o.id),'[]') payments

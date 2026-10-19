@@ -15,16 +15,18 @@ async function requireOfflineActor(db,user){
 function requireDeviceKey(deviceKey){if(typeof deviceKey!=='string'||!/^[a-f0-9]{64}$/.test(deviceKey))fail('Ungültige Gerätekennung');}
 export async function issueOfflineCatalog(db,user,deviceKey){
  requireDeviceKey(deviceKey);
- const c=await db.connect();try{await c.query('BEGIN');await requireOfflineActor(c,user);
+ const c=await db.connect();try{await c.query('BEGIN');await requireOfflineActor(c,user);await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[user.company_id+':deposit-config']);
  const device=(await c.query(`SELECT d.id,d.license_valid_until FROM devices d JOIN company_entitlements ce ON ce.id=d.entitlement_id JOIN billing_plans bp ON bp.id=ce.plan_id WHERE d.company_id=$1 AND d.device_key=$2 AND d.status='active' AND d.activation_status='active' AND d.license_valid_until>now() AND ce.status='active' AND bp.code='download_license' FOR SHARE OF d,ce,bp`,[user.company_id,deviceKey])).rows[0];
  if(!device)fail('Aktive Download-Lizenz und Gerätefreigabe erforderlich',403);
  const restaurants=(await c.query('SELECT id,name FROM restaurants WHERE company_id=$1 ORDER BY id',[user.company_id])).rows;
- const products=(await c.query('SELECT p.id,p.restaurant_id "restaurantId",p.name,p.price_cents "priceCents",p.tax_rate::float "taxRate" FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE r.company_id=$1 AND p.active AND p.ai_stock_available ORDER BY p.id',[user.company_id])).rows;
+ let products=(await c.query('SELECT p.id,p.restaurant_id "restaurantId",p.name,p.price_cents "priceCents",p.tax_rate::float "taxRate" FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE r.company_id=$1 AND p.active AND p.ai_stock_available ORDER BY p.id',[user.company_id])).rows;
+ if((await c.query("SELECT to_regclass('pos_deposit_rules') present")).rows[0]?.present){const excluded=new Set((await c.query('SELECT d.product_id FROM pos_deposit_rules d JOIN products p ON p.id=d.product_id JOIN restaurants r ON r.id=p.restaurant_id WHERE r.company_id=$1',[user.company_id])).rows.map(r=>r.product_id));products=products.filter(p=>!excluded.has(p.id));}
  const sellers=(await c.query(`SELECT r.id,jsonb_build_object('businessName',COALESCE(NULLIF(b.company_name,''),c.name),'restaurantName',r.name,'street',COALESCE(b.street,''),'postalCode',COALESCE(b.postal_code,''),'city',COALESCE(b.city,''),'vatId',COALESCE(b.vat_id,'')) seller FROM restaurants r JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE r.company_id=$1`,[user.company_id])).rows;
  const issuedAt=new Date();
  const snapshot={id:crypto.randomUUID(),companyId:user.company_id,deviceKey,createdAt:issuedAt.toISOString(),validUntil:offlineCatalogValidUntil(device.license_valid_until,issuedAt),restaurants,products,merchant:Object.fromEntries(sellers.map(s=>[s.id,s.seller]))};
  const eanFeature=(await c.query("SELECT ends_at,grace_until FROM company_features WHERE company_id=$1 AND feature_code='ean_scanner' AND status='active' AND ((ends_at IS NULL OR ends_at>now()) OR grace_until>now()) FOR SHARE",[user.company_id])).rows[0];
  if(eanFeature){const until=eanFeature.ends_at?Math.max(Date.parse(eanFeature.ends_at),eanFeature.grace_until?Date.parse(eanFeature.grace_until):0):Date.parse(snapshot.validUntil);snapshot.ean={validUntil:new Date(Math.min(Date.parse(snapshot.validUntil),until)).toISOString(),barcodes:(await c.query('SELECT b.restaurant_id "restaurantId",b.product_id "productId",b.code FROM pos_product_barcodes b JOIN restaurants r ON r.id=b.restaurant_id JOIN products p ON p.id=b.product_id AND p.restaurant_id=b.restaurant_id WHERE r.company_id=$1 AND p.active AND p.ai_stock_available',[user.company_id])).rows};}
+ if(snapshot.ean)snapshot.ean.barcodes=snapshot.ean.barcodes.filter(b=>snapshot.products.some(p=>p.id===b.productId&&p.restaurantId===b.restaurantId));
  await c.query('INSERT INTO pos_offline_catalogs(id,company_id,device_id,actor_id,payload) VALUES($1,$2,$3,$4,$5)',[snapshot.id,user.company_id,device.id,user.id,JSON.stringify(snapshot)]);await c.query('COMMIT');return snapshot;
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
@@ -42,6 +44,7 @@ export async function importOfflineSale(db,user,deviceKey,request){
  // Import historical completed sales, never re-open a payment or kitchen ticket.
  // The database stock guard recognizes this transaction-local trusted import.
  await c.query("SELECT set_config('bringness.offline_import','true',true)");
+ await c.query("SELECT set_config('bringness.deposit_checkout','yes',true)");
  const order=(await c.query("INSERT INTO orders(restaurant_id,source,status,total_cents,created_at,closed_at) VALUES($1,'offline','paid',$2,$3,$3) RETURNING id",[receipt.restaurantId,receipt.totalCents,receipt.createdAt])).rows[0];
  for(const i of receipt.items)await c.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,i.productId,i.name,i.unitPriceCents,i.taxRate,i.quantity]);
  await c.query("INSERT INTO payments(order_id,method,amount_cents,created_at) VALUES($1,'cash',$2,$3)",[order.id,receipt.totalCents,receipt.createdAt]);

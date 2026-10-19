@@ -20,7 +20,7 @@ let checks=0;
 await assert.rejects(pos.query("INSERT INTO orders(restaurant_id,source,status) VALUES($1,'offline','paid')",[restaurant]),/zuerst anlegen/);checks++;
 
 const getStock=async()=>(await ai.query('SELECT quantity,reserved_quantity FROM ai_stock WHERE id=$1',[stock])).rows[0];const status=async oid=>(await pos.query('SELECT status FROM orders WHERE id=$1',[oid])).rows[0].status;
-const order=async qty=>{const oid=crypto.randomUUID();await pos.query('INSERT INTO orders(id,restaurant_id) VALUES($1,$2)',[oid,restaurant]);await pos.query('INSERT INTO order_items VALUES($1,$2,$3)',[oid,product,qty]);return oid};
+const order=async qty=>{const oid=crypto.randomUUID();await pos.query('INSERT INTO orders(id,restaurant_id) VALUES($1,$2)',[oid,restaurant]);await pos.query('INSERT INTO order_items VALUES($1,$2,$3)',[oid,product,qty]);await pos.query('INSERT INTO order_items VALUES($1,NULL,24)',[oid]);return oid};
 const run=()=>processPosStockCommands(pos,ai,kitchenAction);
 const a=await order(2);const accept=await requestPosStockAction(pos,user,a,{status:'kitchen'});assert(accept.pending);assert.equal(await status(a),'open');assert.equal(Number((await getStock()).reserved_quantity),0);checks++;
 assert.equal((await requestPosStockAction(pos,user,a,{status:'kitchen'})).commandId,accept.commandId);await assert.rejects(requestPosStockAction(pos,user,a,{status:'preparing'}),/läuft/);checks++;
@@ -69,7 +69,7 @@ await doc.querySelector('[data-stock-status="cancelled"]').onclick();assert.equa
 await ai.query('UPDATE ai_stock SET quantity=3,reserved_quantity=0 WHERE id=$1',[stock]);
 await ai.query('UPDATE ai_recipes SET stock_blocked=false WHERE id=$1',[recipe]);
 const centerOrder=(await pos.query("INSERT INTO orders(restaurant_id,source,status) VALUES($1,'center','payment_pending') RETURNING id",[restaurant])).rows[0].id;
-await pos.query('INSERT INTO order_items VALUES($1,$2,2)',[centerOrder,product]);
+await pos.query('INSERT INTO order_items VALUES($1,$2,2)',[centerOrder,product]);await pos.query('INSERT INTO order_items VALUES($1,NULL,24)',[centerOrder]);
 const centerDependencies={stockPool:ai,kitchenAction};
 async function centerAction(action,statusTarget,rollback=false){const c=await pos.connect();try{await c.query('BEGIN');await applyCenterStock(c,centerOrder,restaurant,action,centerDependencies);await c.query('UPDATE orders SET status=$2 WHERE id=$1',[centerOrder,statusTarget]);await c.query(rollback?'ROLLBACK':'COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
 await centerAction('accept','kitchen',true);assert.equal(await status(centerOrder),'payment_pending');assert.equal(Number((await getStock()).reserved_quantity),0.3);checks++;
@@ -85,7 +85,7 @@ assert.equal(await status(stockFailure),'payment_pending');assert.equal((await p
 // Historical cash sales remain paid while stock reconciliation recovers a lost acknowledgement.
 await pos.query(`CREATE TABLE pos_offline_catalogs(id uuid PRIMARY KEY,company_id uuid);CREATE TABLE pos_offline_sales(id uuid PRIMARY KEY,catalog_id uuid,order_id uuid,stock_state text,stock_error text,created_at timestamptz DEFAULT now());`);
 const offlineId=crypto.randomUUID(),catalogId=crypto.randomUUID(),offlineOrder=crypto.randomUUID();await pos.query('INSERT INTO pos_offline_catalogs VALUES($1,$2)',[catalogId,company]);
-const offlineClient=await pos.connect();try{await offlineClient.query('BEGIN');await offlineClient.query("SELECT set_config('bringness.offline_import','true',true)");await offlineClient.query("INSERT INTO orders(id,restaurant_id,source,status) VALUES($1,$2,'offline','paid')",[offlineOrder,restaurant]);await offlineClient.query('INSERT INTO order_items VALUES($1,$2,2)',[offlineOrder,product]);await offlineClient.query('COMMIT');}finally{offlineClient.release()}
+const offlineClient=await pos.connect();try{await offlineClient.query('BEGIN');await offlineClient.query("SELECT set_config('bringness.offline_import','true',true)");await offlineClient.query("INSERT INTO orders(id,restaurant_id,source,status) VALUES($1,$2,'offline','paid')",[offlineOrder,restaurant]);await offlineClient.query('INSERT INTO order_items VALUES($1,$2,2)',[offlineOrder,product]);await offlineClient.query('INSERT INTO order_items VALUES($1,NULL,24)',[offlineOrder]);await offlineClient.query('COMMIT');}finally{offlineClient.release()}
 await pos.query("INSERT INTO pos_offline_sales(id,catalog_id,order_id,stock_state) VALUES($1,$2,$3,'pending')",[offlineId,catalogId,offlineOrder]);
 const offlineSourceTime=new Date(Date.now()-10*86400000).toISOString();await pos.query('UPDATE orders SET closed_at=$2 WHERE id=$1',[offlineOrder,offlineSourceTime]);
 let failAck=true;const failedAck={query:pos.query,connect:async()=>{const c=await pos.connect();return {...c,query:async(sql,args)=>{if(failAck&&sql.startsWith("UPDATE pos_offline_sales SET stock_state='applied'")){failAck=false;throw Error('lost acknowledgement')}return c.query(sql,args)}}}};

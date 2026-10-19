@@ -1,3 +1,4 @@
+import {migrateDeposit,createDepositHandler,depositQuote,reserveDepositCredit} from './pos-deposit.js';
 import {migrateCashClosing,createCashClosing} from './cash-closing.js';
 import {migrateCustomerDelivery,createCustomerDelivery} from './customer-delivery.js';
 import {normalizeDiscount,discountedSale} from './sale-discount.js';
@@ -15,7 +16,7 @@ const pool = new Pool({
 });
 
 export async function migratePaymentCheckout(db=pool){
- await migrateTrade(db);await migrateParkedBons(db);await migrateCustomerDelivery(db);await migrateCashClosing(db);
+ await migrateTrade(db);await migrateParkedBons(db);await migrateCustomerDelivery(db);await migrateCashClosing(db);await migrateDeposit(db);
  await db.query(`CREATE TABLE IF NOT EXISTS pos_checkout_requests(
   company_id uuid NOT NULL REFERENCES companies(id),request_key uuid NOT NULL,
   fingerprint text NOT NULL,order_id uuid NOT NULL UNIQUE REFERENCES orders(id),
@@ -42,9 +43,10 @@ async function currentUser(req,db=pool,lock=false) {
   return q.rows[0] || null;
 }
 
-const cashHandler=createCashClosing(pool,currentUser);
+const cashHandler=createCashClosing(pool,currentUser),depositHandler=createDepositHandler(pool,currentUser);
 const tradeHandler=createTradeHandler(pool,currentUser),parkedHandler=createParkedBons(pool,currentUser),customerDeliveryHandler=createCustomerDelivery(pool,currentUser);
 return async function handlePaymentCheckout(req, res) {
+  if(await depositHandler(req,res))return true;
   if(await cashHandler(req,res))return true;
   if(await customerDeliveryHandler(req,res))return true;
   if(await parkedHandler(req,res))return true;
@@ -75,6 +77,7 @@ return async function handlePaymentCheckout(req, res) {
   if(body.salesMode!=null&&!['retail','trade'].includes(body.salesMode)){send(res,400,{error:'Ungültiger Verkaufsmodus'});return true;}
   if(trade){try{recipient=tradeRecipient(body.recipient)}catch(e){send(res,400,{error:e.message});return true;}}
   let discount;try{discount=normalizeDiscount(body.discount)}catch(e){send(res,400,{error:e.message});return true;}
+  let depositReturns=[];if(body.depositReturns!=null){if(!Array.isArray(body.depositReturns)||!body.depositReturns.length||body.depositReturns.length>100||body.depositReturns.some(i=>!i||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(i.lineId||'')||!Number.isSafeInteger(i.qty)||i.qty<1||i.qty>9999999)||new Set(body.depositReturns.map(i=>i.lineId)).size!==body.depositReturns.length||typeof body.depositReturnReason!=='string'||!body.depositReturnReason.trim()||body.depositReturnReason.length>300||/[\x00-\x1f\x7f]/.test(body.depositReturnReason)||!Number.isSafeInteger(body.depositCreditCents)||body.depositCreditCents<=0){send(res,400,{error:'Ungültige Pfandverrechnung'});return true;}depositReturns=body.depositReturns.map(i=>({lineId:i.lineId,qty:i.qty})).sort((a,b)=>a.lineId.localeCompare(b.lineId));}
   const parked=body.parkedBonId!=null;
   if(parked&&(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.parkedBonId)||!Number.isSafeInteger(body.parkedBonVersion)||body.parkedBonVersion<1)){send(res,400,{error:'Ungültiger geparkter Bon'});return true;}
   const items = Array.isArray(body.items) ? body.items : [];
@@ -119,7 +122,7 @@ return async function handlePaymentCheckout(req, res) {
   const canonicalItems=items.map(item=>({productId:item.productId.toLowerCase(),qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId));
   if(new Set(canonicalItems.map(item=>item.productId)).size!==canonicalItems.length){send(res,400,{error:'Doppelte Artikelkennung'});return true;}
   const canonicalPayments=payments.map(p=>({method:p.method,amountCents:p.amountCents}));
-  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail,...(trade?{salesMode:'trade',recipient}: {}),...(discount?{discount}:{}),...(parked?{parkedBonId:body.parkedBonId,parkedBonVersion:body.parkedBonVersion}:{})})).digest('hex');
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail,...(trade?{salesMode:'trade',recipient}: {}),...(discount?{discount}:{}),...(depositReturns.length?{depositReturns,depositReturnReason:body.depositReturnReason.trim(),depositCreditCents:body.depositCreditCents}:{}),...(parked?{parkedBonId:body.parkedBonId,parkedBonVersion:body.parkedBonVersion}:{})})).digest('hex');
   const client=await pool.connect();
   const reject=(status,message)=>{throw Object.assign(Error(message),{status});};
   try{
@@ -156,10 +159,18 @@ return async function handlePaymentCheckout(req, res) {
     }
     if(!Number.isSafeInteger(totalCents)||totalCents<=0||totalCents>2147483647)reject(400,'Ungültiger Gesamtbetrag');
     let adjustment=null;if(discount){try{adjustment={...discountedSale(cleanItems.map(i=>({id:i.product.id,grossCents:i.product.price_cents*i.qty})),discount),actorId:actor.id};totalCents=adjustment.totalCents}catch(e){reject(400,e.message)}}
+    const depositRules=(await client.query('SELECT * FROM pos_deposit_rules WHERE product_id=ANY($1::uuid[]) ORDER BY product_id FOR SHARE',[canonicalItems.map(i=>i.productId)])).rows;
+    const depositLines=depositQuote(depositRules,canonicalItems),depositCents=depositLines.reduce((sum,l)=>sum+l.totalCents,0);
+    totalCents+=depositCents;if(!Number.isSafeInteger(totalCents)||totalCents>2147483647)reject(400,'Gesamtbetrag einschließlich Pfand zu groß');
+    let depositCredit=null;if(depositReturns.length){try{depositCredit=await reserveDepositCredit(client,restaurantId,depositReturns)}catch(e){if(e.status===409)reject(400,e.message);throw e;}}
+    if(depositCredit){if(depositCredit.total!==body.depositCreditCents)reject(400,'Pfandrücknahmepreis wurde geändert. Bitte Beleg neu laden.');totalCents-=depositCredit.total;if(totalCents<=0)reject(400,'Bei vollständiger Auszahlung separate Pfandrücknahme verwenden');}
     const paymentTotal=canonicalPayments.reduce((sum,p)=>sum+p.amountCents,0);
     if(!Number.isSafeInteger(paymentTotal)||paymentTotal!==totalCents)reject(400,'Zahlungsaufteilung stimmt nicht mit dem Gesamtbetrag überein');
+    await client.query("SELECT set_config('bringness.deposit_checkout','yes',true)");
     const order=(await client.query("INSERT INTO orders(restaurant_id,status,total_cents,closed_at) VALUES($1,'paid',$2,now()) RETURNING id,created_at",[restaurantId,totalCents])).rows[0];
     for(const item of cleanItems)await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,item.product.id,item.product.name,item.product.price_cents,item.product.tax_rate,item.qty]);
+    for(const l of depositLines){await client.query('INSERT INTO pos_deposit_lines(order_id,product_id,label,unit_cents,tax_rate,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,l.productId,l.label,l.unitCents,l.taxRate,l.qty]);await client.query('INSERT INTO order_items(order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5)',[order.id,'Pfand: '+l.label,l.unitCents,l.taxRate,l.qty]);}
+    if(depositCredit){for(const l of depositCredit.lines)await client.query('INSERT INTO order_items(order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5)',[order.id,'Pfandrücknahme: '+l.label,-l.unitCents,l.taxRate,l.qty]);const number='PF-R-'+String((await client.query("SELECT nextval('deposit_return_number_seq') n")).rows[0].n).padStart(8,'0');await client.query('INSERT INTO pos_deposit_returns(id,restaurant_id,request_key,fingerprint,number,amount_cents,lines,reason,actor_id,credited_order_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[crypto.randomUUID(),restaurantId,requestKey,fingerprint,number,depositCredit.total,JSON.stringify(depositCredit.lines),body.depositReturnReason.trim(),actor.id,order.id]);}
     if(trade)await client.query('INSERT INTO pos_trade_sales(order_id,recipient) VALUES($1,$2::jsonb)',[order.id,JSON.stringify(recipient)]);
     for(const payment of canonicalPayments)await client.query('INSERT INTO payments(order_id,method,amount_cents) VALUES($1,$2,$3)',[order.id,payment.method,payment.amountCents]);
     const receiptNumber=(trade?'HR-':'BN-')+new Date().getUTCFullYear()+'-'+String((await client.query(trade?"SELECT nextval('trade_invoice_number_seq') n":"SELECT nextval('receipt_number_seq') n")).rows[0].n).padStart(6,'0');

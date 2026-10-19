@@ -63,7 +63,7 @@ export async function requestPosStockAction(pool,actor,orderId,b){
  if(!link||(action==='cancel'&&o.status==='open')){
   await c.query("UPDATE orders SET status=$2,closed_at=CASE WHEN $2='cancelled' THEN now() ELSE closed_at END WHERE id=$1",[o.id,b.status]);await c.query('COMMIT');return {id:o.id,status:b.status};
  }
- const items=(await c.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 AND quantity>0 ORDER BY product_id',[o.id])).rows.map(i=>({productCode:String(i.product_id||''),quantity:Number(i.quantity)}));if(!items.length)fail('Keine Bestellpositionen');
+ const items=(await c.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 AND product_id IS NOT NULL AND quantity>0 ORDER BY product_id',[o.id])).rows.map(i=>({productCode:String(i.product_id||''),quantity:Number(i.quantity)}));if(!items.length)fail('Keine Bestellpositionen');
  const command=(await c.query('INSERT INTO pos_stock_commands(order_id,connector_id,account_id,actor_id,action,target_status,items,reason) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8) RETURNING id',[o.id,link.connector_id,link.account_id,actor.id,action,b.status,JSON.stringify(items),reason])).rows[0];await c.query('COMMIT');return {pending:true,commandId:command.id};
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
