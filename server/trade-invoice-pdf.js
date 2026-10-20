@@ -58,6 +58,8 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     doc.font('Helvetica-Bold').fontSize(10);
     const rowHeight=Math.max(27,doc.heightOfString(name,{width:220})+12);
     if(y+rowHeight>bottom){y=next();y=header(y);}
+    // Paint the entire row in the PDF itself, including printed output.
+    doc.save().fillColor(index%2===0?'#ffffff':'#eeeeee').rect(left,y-5,width,rowHeight).fill().restore();
     text(index+1,52,y,28,10);text(name,85,y,220,10,true);
     text(quantity.toLocaleString('de-DE'),315,y,50,10,false,'right');
     // Extra unit precision avoids silently rounding a net unit price to whole cents.
