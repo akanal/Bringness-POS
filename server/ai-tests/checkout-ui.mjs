@@ -34,3 +34,12 @@ await correction.pay();correction.w.eval('cart[0].price=3');await correction.pay
 // An incomplete response cannot clear durable recovery state.
 const incomplete=fixture();incomplete.w.api=async()=>({receiptNumber:'fake'});await incomplete.pay();assert(incomplete.w.localStorage.getItem(key));incomplete.w.close();
 console.log('Checkout UI passed: durable immutable retry across reload, empty-cart recovery, double-submit guard, unsent-cart preservation, storage failure, card guard, same-key correction and incomplete-ack retention.');
+
+// Async readiness must re-enable payment; an in-flight write must remain locked.
+{
+ const f=fixture();let locked=true;f.w.bnDepositLocked=()=>locked;f.w.bnDepositStatus=()=> 'Pfanddaten werden geladen. Bitte kurz warten.';
+ f.w.bnRefreshPaymentState();assert(f.w.document.getElementById('pay').disabled);locked=false;f.w.bnRefreshPaymentState();assert.equal(f.w.document.getElementById('pay').disabled,false);
+ let finish;f.w.api=async(path,opt)=>new Promise(resolve=>{finish=()=>resolve(response(JSON.parse(opt.body)))});
+ const request=f.pay();await new Promise(r=>setImmediate(r));f.w.bnRefreshPaymentState();assert(f.w.document.getElementById('pay').disabled);finish();await request;assert.equal(f.w.localStorage.getItem(key),null);assert(f.w.document.getElementById('pay').disabled);f.w.close();
+ console.log('Payment readiness passed: async deposit recovery enables payment; busy and empty basket stay disabled.');
+}

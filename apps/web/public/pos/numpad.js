@@ -8,7 +8,6 @@
     .bn-keypad-panel.open{display:block}
     .bn-keypad{display:grid;grid-template-columns:repeat(3,minmax(52px,1fr));gap:7px;margin-top:8px;max-width:260px}
     .bn-keypad button{min-height:46px;border:1px solid #cfd9e3;border-radius:10px;background:#f8fafc;font-size:18px;font-weight:900;cursor:pointer}
-    .bn-keypad button.bn-ok{background:#102235;color:#fff}
     .bn-keypad-display{display:flex;align-items:center;justify-content:space-between;gap:8px;max-width:260px}
     .bn-keypad-value{font-variant-numeric:tabular-nums;font-size:20px;font-weight:900;min-width:90px;text-align:right}
     .bn-cart-selected{outline:2px solid #102235;outline-offset:2px;border-radius:8px}
@@ -22,13 +21,15 @@
   let selected=-1;
   let buffer='';
   let wrapping=false;
+  let replaceOnDigit=false;
 
   const originalRenderCart=typeof renderCart==='function'?renderCart:null;
 
   function choose(index){
     selected=selected===index?-1:index;
     document.querySelectorAll('#cart .basketline').forEach((el,i)=>el.classList.toggle('bn-cart-selected',i===selected));
-    buffer='';
+    buffer=selected>=0&&cart[selected]?String(cart[selected].qty):String(window.bnCashTenderValue||'');
+    replaceOnDigit=selected>=0;
     updateCaption();
     updateDisplay();
   }
@@ -47,7 +48,7 @@
     summary.querySelector('[data-given]').textContent=given.toLocaleString('de-DE',{style:'currency',currency:'EUR'});
     summary.querySelector('[data-change]').textContent=Math.max(0,given-total).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
   }
-  window.bnResetTender=()=>{window.bnCashTenderValue='';updateTender()};
+  window.bnResetTender=()=>{window.bnCashTenderValue='';if(selected<0)buffer='';updateDisplay();updateTender()};
 
   function updateDisplay(){
     const out=document.querySelector('.bn-keypad-value');
@@ -66,26 +67,17 @@
     updateTender();
   }
 
-  function applyQuantity(){
-    const hint=document.querySelector('.bn-cart-hint');
-    if(!buffer){if(hint)hint.textContent='Bitte zuerst eine Zahl eingeben.';return}
+  function applyEntry(){
+    const hint=document.querySelector('.bn-cart-hint');if(hint)hint.textContent='';
     if(selected<0){
-      if(!/^\d+(,\d{1,2})?$/.test(buffer))return;
-      window.bnCashTenderValue=buffer;
-      updateTender();
-      if(hint) hint.textContent='Gegeben: '+Number(buffer.replace(',','.')).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
-      return;
+      window.bnCashTenderValue=buffer;updateTender();window.bnRefreshPaymentState?.();return;
     }
-    if(buffer.includes(',')){if(hint)hint.textContent='Mengen bitte als ganze Zahl eingeben.';return}
-    if(typeof cart==='undefined'||!cart.length){if(hint)hint.textContent='Bitte zuerst eine Speise zur Bestellung hinzufügen.';return}
-    if(!cart[selected]){if(hint)hint.textContent='Bitte eine Position auswählen.';return}
-    const qty=Math.max(0,Math.floor(Number(buffer||0)));
-    if(qty<=0) cart.splice(selected,1);
+    if(typeof cart==='undefined'||!cart[selected]){selected=-1;buffer='';return;}
+    const qty=buffer?Number(buffer):0;
+    if(!Number.isSafeInteger(qty)||qty<0||qty>9999999){if(hint)hint.textContent='Ungültige Menge.';return;}
+    if(qty===0){cart.splice(selected,1);selected=-1;buffer='';replaceOnDigit=false;}
     else cart[selected].qty=qty;
-    if(selected>=cart.length) selected=cart.length-1;
-    buffer=selected>=0&&cart[selected]?String(cart[selected].qty):'';
-    redraw();
-    if(hint) hint.textContent=selected>=0?'Menge übernommen: '+cart[selected].qty:'Artikel entfernt.';
+    redraw();updateCaption();updateDisplay();
   }
 
   function setKeypadOpen(tools,open){
@@ -97,13 +89,15 @@
     toggle.setAttribute('aria-checked',String(open));
     toggle.textContent=open?'Zahlenfeld: Ein':'Zahlenfeld: Aus';
     if(open){
-      buffer='';
+      buffer=selected>=0&&cart[selected]?String(cart[selected].qty):String(window.bnCashTenderValue||'');
+      replaceOnDigit=selected>=0;
       updateCaption();
       updateDisplay();
     }
   }
 
   function decorate(){
+    if(typeof cart!=='undefined'&&selected>=cart.length){selected=-1;buffer=String(window.bnCashTenderValue||'');replaceOnDigit=false;}
     const cartEl=document.getElementById('cart');
     if(!cartEl) return;
     const basket=cartEl.closest('.basket')||cartEl.parentElement;
@@ -130,7 +124,6 @@
             <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
             <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button>
             <button type="button" data-key=",">,</button><button type="button" data-key="0">0</button><button type="button" data-key="back">⌫</button>
-            <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
           </div>
         </div>
         <div class="bn-cart-hint" role="status" aria-live="polite"></div>`;
@@ -147,17 +140,17 @@
       tools.querySelectorAll('[data-key]').forEach(btn=>btn.onclick=()=>{
         const key=btn.dataset.key;
         let value=buffer;
-        if(key==='back'){value=value.slice(0,-1);if(!value&&selected<0)window.bnResetTender()}
-        else if(key==='ok') return applyQuantity();
-        else if(key===',') {if(!value.includes(',')) value=(value||'0')+','}
-        else if(!value.includes(',')||value.split(',')[1].length<2) value=(value==='0'?'':value)+key;
-        buffer=value;
-        updateDisplay();
+        if(key==='back'){value=value.slice(0,-1);replaceOnDigit=false;}
+        else if(key===',') {if(selected>=0){const hint=document.querySelector('.bn-cart-hint');if(hint)hint.textContent='Mengen bitte als ganze Zahl eingeben.';return;}if(!value.includes(','))value=(value||'0')+',';}
+        else {if(replaceOnDigit){value='';replaceOnDigit=false;}if(!value.includes(',')||value.split(',')[1].length<2)value=(value==='0'?'':value)+key;}
+        if(value.length>12||(selected>=0&&Number(value)>9999999))return;
+        buffer=value;applyEntry();updateDisplay();
       });
       setKeypadOpen(tools,false);
     }
     updateDisplay();
     updateTender();
+    window.bnRefreshPaymentState?.();
   }
 
   if(originalRenderCart){

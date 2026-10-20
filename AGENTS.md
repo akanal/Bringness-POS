@@ -197,3 +197,8 @@ Continue authorized development autonomously and preserve established behavior a
 ## Basket deposit display and compactness approved 2026-10-20
 - Owner screenshot has 3 drinks at 2.99 = 8.97 plus 0.75 deposit already in 9.72 total. Show deposit separately in the basket with quantity, unit and line total; do not charge it a second time or change historical documents. Keep deposit display rows separate from clickable merchandise rows/numpad quantities.
 - Remove the two lower sales-tool panels from the basket; retain their functionality under Mehr > Kassenoptionen. Remove the initial keypad instruction but retain actual validation/status messages. Reduce internal basket spacing.
+
+## Aggregated deposit and direct keypad approved 2026-10-20
+- Retail basket shows one total line labelled Pfand, independent of product names or tax groups. Underlying immutable charge/tax records and receipt positions remain unchanged.
+- Keypad applies every digit/backspace immediately. Remove its Übernehmen action. Clearing cash tender clears the stored amount; clearing a selected quantity removes only that article. Quantity edits recalculate deposit and total.
+- Payment button availability must recover after async deposit load and basket edits, while retaining busy-state, uncertain-payment replay and pending-refund protections. Card payments still require the established verified terminal integration.
