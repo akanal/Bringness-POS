@@ -33,7 +33,6 @@ export function createPosEan(pool){return async(req,res)=>{
  await c.query('COMMIT');return send(200,{product:product?{id:product.id,name:product.name}:null});
  }
  if(!['owner','admin'].includes(u.role))fail('Nur die Betriebsverwaltung darf Barcodes zuordnen.',403);
- const unlock=String(req.headers['x-personnel-unlock']||'');if(!unlock||!(await c.query('SELECT 1 FROM personnel_unlocks WHERE token_hash=$1 AND session_hash=$2 AND user_id=$3 AND expires_at>now() FOR SHARE',[digest(unlock),u.session_hash,u.id])).rowCount)fail('Verwaltungs-PIN erforderlich',403);
  const old=(await c.query('SELECT product_id FROM pos_product_barcodes WHERE restaurant_id=$1 AND code=$2',[b.restaurantId,b.code])).rows[0];
  if(old){if(b.productId!==old.product_id)fail('Dieser Code ist bereits einem Artikel zugeordnet.',409);await c.query('COMMIT');return send(200,{productId:old.product_id,replayed:true})}
  let productId=b.productId;

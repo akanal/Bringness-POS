@@ -24,3 +24,22 @@ recovery.fetch=async(url)=>{assert.equal(url,'/api/v1/auth/forgot-password');mai
 recovery.eval(read('apps/web/public/pos/app.js'));recovery.document.getElementById('email').value='owner@example.org';
 const resetButton=recovery.document.getElementById('forgotPassword');resetButton.click();resetButton.click();assert.equal(mailRequests,1);assert(resetButton.disabled);assert(timeouts.includes(60000));assert.match(recovery.document.getElementById('authMsg').textContent,/Bitte kurz warten/);
 resolveMail();await new Promise(resolve=>setTimeout(resolve,0));assert(!resetButton.disabled);assert.equal(recovery.document.getElementById('authMsg').textContent,'Reset-Link angefordert.');recovery.close();console.log('POS recovery UI: one request while mail pending, 60-second timeout, visible progress and confirmation passed.');
+
+// Startup ignores old view URLs; first-click article navigation beats late responses.
+for(const suffix of ['?view=lizenz','?view=einstellungen','?payment=return']){
+ const d=new JSDOM(read('apps/web/public/pos/index.html'),{runScripts:'outside-only',url:'https://pos.test/pos/'+suffix}),v=d.window;
+ v.Headers=Headers;v.AbortController=AbortController;v.alert=()=>{};v.HTMLElement.prototype.scrollIntoView=function(){this.dataset.scrolled='yes'};v.localStorage.setItem('bringness-pos-token','fixture');
+ const features={pos_base:true,personnel:true,table_management:true,kitchen:true};
+ v.fetch=async url=>({ok:true,status:200,json:async()=>String(url).includes('/bootstrap')?{user:{name:'Owner'},restaurants:[{id:'r1',name:'Shop',mode:'restaurant'}],categories:[],products:[],orders:[]}:String(url).includes('/billing/status')?{features}:String(url).endsWith('/personnel/access')?{configured:true,canManage:true}:{}});
+ v.eval(read('apps/web/public/pos/app.js'));v.eval(read('apps/web/public/pos/personnel.js'));
+ const wait=async condition=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(r=>setTimeout(r,10))}throw Error('Navigation fixture timeout')};
+ try{
+  await wait(()=>v.document.getElementById('who').textContent==='Owner');await new Promise(r=>setTimeout(r,0));assert.equal(v.document.body.dataset.posView,'kasse');assert.equal(v.document.querySelector('.personnel-overlay'),null);
+  v.document.querySelector('[data-view=artikel]').click();assert.equal(v.document.body.dataset.posView,'artikel');assert.equal(v.document.querySelector('.artikelmanage').style.display,'block');assert.equal(v.document.querySelector('.artikelmanage').dataset.scrolled,'yes');assert(!v.document.getElementById('moduleView').classList.contains('show'));
+  await v.showModule('personalmanagement');assert.equal(v.document.querySelector('.personnel-overlay'),null);
+  const settings=v.showModule('einstellungen');await wait(()=>v.document.querySelector('.personnel-overlay'));v.document.querySelector('.personnel-overlay [data-close]').click();await settings;assert.equal(v.document.body.dataset.posView,'personalmanagement');
+  let finish;const fetch=v.fetch;v.fetch=(url,opt)=>String(url).endsWith('/billing/status')?new Promise(resolve=>finish=()=>resolve({ok:true,status:200,json:async()=>({features})})):fetch(url,opt);
+  const stale=v.showModule('tische');await wait(()=>finish);await v.showModule('artikel');finish();await stale;assert.equal(v.document.body.dataset.posView,'artikel');
+ }finally{v.close()}
+}
+console.log('POS navigation passed: Kasse startup for stale URLs/payment returns, first-click article form, PIN only for Settings navigation and stale table response cannot replace Article.');

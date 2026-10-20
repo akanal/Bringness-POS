@@ -45,12 +45,12 @@ try{
  assert.equal((await send('/trade/settings?restaurantId='+restaurant)).body.enabled,false);
  assert.equal((await send('/orders/checkout','POST',request)).status,409);
  assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true})).status,403);
- assert.equal((await send('/trade/prices','PUT',prices)).status,403);
+ assert.equal((await send('/trade/prices','PUT',prices)).status,200);
  const unlock='synthetic-unlock',digest=s=>crypto.createHash('sha256').update(s).digest('hex');
  await query("INSERT INTO personnel_unlocks VALUES($1,$2,$3,now()+interval '1 hour')",[digest(unlock),digest(token),owner]);
  assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:'true'},token,unlock)).status,400);
  await query("UPDATE users SET role='manager' WHERE id=$1",[owner]);
- assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).status,403);
+ assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).status,403);assert.equal((await send('/trade/prices','PUT',prices,token,unlock)).status,403);
  await query("UPDATE users SET role='owner' WHERE id=$1",[owner]);
  assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,'wrong-unlock')).status,403);
  assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock)).body.enabled,true);
