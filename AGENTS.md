@@ -185,3 +185,7 @@ Continue authorized development autonomously and preserve established behavior a
 ## POS colour coding approved 2026-10-20
 - Owner approved consistent POS colour coding: orange primary actions, soft blue selection/management, green confirmed states, red errors/destructive actions. Preserve table/connection status meanings and plain document/print styles. Keep labels alongside colours.
 - Customers and delivery notes belong inside Händler; remove the duplicate Mehr menu entry. Existing bookmarked customer route remains compatible. Owner authorizes publication after successful checks without another routine confirmation.
+
+## Simple drinks deposit approved 2026-10-20
+- Configure beverage deposit in the product three-dot menu: enable, gross amount with presets, explicit tax selection. Remove the old multi-field settings card. No name/category heuristic restricts products; the owner selects which drink carries deposit.
+- Preserve recorded charges, original-price returns, audits, PIN, uncertain-payment protection and existing multi-unit rules. New rules use one unit, existing units/labels/tax persist. No automatic tax assumption or live payment test.

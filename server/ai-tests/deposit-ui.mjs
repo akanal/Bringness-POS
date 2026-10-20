@@ -10,3 +10,21 @@ try{await w.renderTradeModule();await new Promise(r=>setImmediate(r));const d=w.
  const box=[...d.querySelectorAll('details')].find(e=>e.querySelector('[data-deposit-total]'));box.querySelector('[data-receipt]').value='HR-2026-000001';await box.querySelector('[data-find]').onclick();box.querySelector('[data-return-line]').value='24';box.querySelector('[data-credit]').click();assert.equal(w.bnDepositExtras(rid).depositCreditCents,600);d.querySelector('[data-addqty]').value='1';d.querySelector('[data-add]').click();assert.match(d.getElementById('tradeTotal').textContent,/5,00/);await d.getElementById('tradePay').onclick();assert.equal(sale.payments[0].amountCents,500);assert.equal(sale.depositCreditCents,600);assert.equal(w.bnDepositExtras(rid).depositReturns,undefined);await box.querySelector('[data-return]').onclick();assert(w.localStorage.getItem('bringness.deposit.return.v1:'+rid));assert.throws(()=>w.bnDepositTotal(rid,[]),/abgleichen/);lose=false;await box.querySelector('[data-retry]').onclick();assert.deepEqual(refunds[0],refunds[1]);assert.equal(w.localStorage.getItem('bringness.deposit.return.v1:'+rid),null);assert.match(box.querySelector('[data-status]').textContent,/6,00/);
  console.log('Deposit UI passed: crate totals, merchandise-only discount, exact payment payload, durable uncertain return, same-key retry and settlement lock.');
 }finally{w.close()}
+
+// The simple product dialog uses the same audited rule API and preserves old crates.
+{
+ const dom=new JSDOM('<div id="moduleBody"></div>',{url:'https://pos.test/',runScripts:'outside-only'}),v=dom.window;
+ v.HTMLDialogElement.prototype.showModal=function(){this.open=true};v.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new v.Event('close'))};
+ v.eval('var data='+JSON.stringify({products:[{id:pid,restaurantId:rid,name:'Cola <img src=x>'}]})+';');let rules=[],writes=[],unlocked=true;
+ v.ensurePersonnelAccess=async()=>unlocked;v.api=async(path,opt)=>{if(path.includes('?'))return {rules};const b=JSON.parse(opt.body);writes.push(b);rules=b.amountCents?[{product_id:pid,amount_cents:b.amountCents,units:b.units,label:b.label,tax_rate:b.taxRate}]:[];return {ok:true}};
+ v.eval(await fs.readFile('apps/web/public/pos/deposit.js','utf8'));
+ const q=k=>v.document.querySelector('[data-'+k+']');const submit=()=>v.document.querySelector('form').onsubmit({preventDefault(){}});
+ try{
+  await v.manageProductDeposit(pid);assert.equal(q('enabled').checked,false);assert(q('options').hidden);assert.equal(v.document.querySelector('img'),null);
+  q('enabled').checked=true;q('enabled').onchange();await submit();assert.equal(writes.length,0);assert.match(v.document.querySelector('[role=status]').textContent,/Steuersatz/);
+  q('tax').value='19';q('amount').value='0,25';unlocked=false;await submit();assert.equal(writes.length,0);unlocked=true;await submit();assert.equal(writes.length,1);assert.equal(writes[0].units,1);assert.equal(writes[0].amountCents,25);assert.equal(v.document.querySelector('dialog'),null);assert.equal(v.bnDepositTotal(rid,[{productId:pid,qty:2}]),50);
+  rules=[{product_id:pid,amount_cents:15,units:24,label:'Flasche',tax_rate:7}];await v.manageProductDeposit(pid);assert.equal(q('tax').value,'7');assert.match(q('existing').textContent,/24/);q('amount').value='0,25';await submit();assert.equal(writes[1].units,24);assert.equal(writes[1].label,'Flasche');assert.equal(writes[1].taxRate,7);
+  await v.manageProductDeposit(pid);q('enabled').checked=false;q('enabled').onchange();await submit();assert.equal(writes[2].amountCents,0);assert.equal(v.bnDepositTotal(rid,[{productId:pid,qty:1}]),0);
+  console.log('Simple drink deposit passed: explicit tax, PIN refusal, safe product name, immediate totals, existing crate/tax retained and disable without deleting records.');
+ }finally{v.close()}
+}
