@@ -1,0 +1,39 @@
+/* POS colour roles: orange action, blue selection, green success, red danger.
+   Document previews and printed documents keep their independent paper styles. */
+:root{--bn-action:#ad4100;--bn-action-hover:#883200;--bn-action-soft:#fff0df;--bn-blue:#174e85;--bn-blue-soft:#edf5ff;--bn-green:#12633b;--bn-green-soft:#eaf8ef;--bn-danger:#ab2530;--bn-focus:#1769aa}
+.posapp{background:linear-gradient(135deg,#edf5fc,#f8fbff 60%,#fff7ed)}
+.posapp .modulepage,.posapp .manage{border-color:#ccdeed}
+.posapp .modulecard{border-color:#cfdfef;background:linear-gradient(120deg,#f1f7ff,#fff)}
+.posapp .modulecard h3,.posapp .manage h3{color:var(--bn-blue)}
+.posapp .setup{background:#edf5ff;border-color:#cfdfef}
+.posapp .cats{background:#edf5ff}
+.posapp .basket{background:#fff9f1;border-color:#f1d4b3}
+.posapp .total{color:var(--bn-action)}
+/* Use existing semantic roles; never recolour destructive actions as primary. */
+.posapp button.primary,.posapp a.primary,.posapp button.pay,.posapp #pay,
+.posapp #tradePay,.posapp #tradeSavePrices,.posapp [data-issue],
+.posapp #catForm>button,.posapp #productForm>button,.posapp #employeeForm>button{
+ background:var(--bn-action);border-color:var(--bn-action);color:#fff;font-weight:750}
+.posapp button.primary:hover:not(:disabled),.posapp button.pay:hover:not(:disabled),.posapp #tradePay:hover:not(:disabled){background:var(--bn-action-hover)}
+.posapp button.danger,.posapp button[data-danger]{background:#fff0f0;color:var(--bn-danger);border-color:#e5a8ae}
+.posapp button:disabled{opacity:.48;cursor:not-allowed}
+.posapp :is(button,input,select,textarea,a):focus-visible{outline:3px solid var(--bn-focus);outline-offset:3px}
+.posapp .cats button.active{background:var(--bn-blue);border-color:var(--bn-blue);color:#fff}
+.posapp .bn-sale-tools{background:#eef5ff;border:1px solid #cadff2;border-radius:10px;padding:10px 12px}
+.posapp .bn-sale-tools summary{color:var(--bn-blue)}
+.posapp .bn-sale-tools button{background:#fff;border-color:#bbd1e6;color:var(--bn-blue)}
+.posapp .trade-layout{gap:12px}
+.posapp .trade-layout>.trade-panel:first-child{background:#f0f6ff;border-color:#c3d9ee}
+.posapp .trade-layout>.trade-panel:nth-child(2){background:#fff8ee;border-color:#edcda5}
+.posapp .trade-panel h3{color:var(--bn-blue)}
+.posapp .trade-product{background:#fff;border:1px solid #d5e2ef;border-left:3px solid #6d9fcf;border-radius:9px;padding:9px;margin:6px 0}
+.posapp .trade-product button{background:#e9f2ff;color:#174e85;border-color:#a9c9e9;font-weight:700}
+.posapp .trade-total{background:#fff0d9;color:#853600;padding:12px;border:1px solid #edc48d;border-radius:9px}
+.posapp .trade-recipient{padding:10px;background:#eef5ff;border:1px solid #cbdef0;border-radius:9px}
+.posapp .trade-recipient summary{color:var(--bn-blue);font-weight:700}
+.posapp details.trade-panel{background:#eff8f3;border-color:#b9daca}
+.posapp details.trade-panel>summary{color:#20593e;font-weight:750;cursor:pointer}
+.posapp .trade-panel input,.posapp .trade-panel select,.posapp .trade-panel textarea{background:#fff;color:#18334c;border-color:#bccfe0}
+/* Table and connection status colours retain their established meanings. */
+@media(prefers-reduced-motion:no-preference){.posapp button{transition:background-color .12s,border-color .12s}}
+@media print{.posapp{background:#fff}}

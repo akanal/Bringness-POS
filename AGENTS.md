@@ -181,3 +181,7 @@ Continue authorized development autonomously and preserve established behavior a
 - Separate return journal for owner and scoped read-only accountant grants marks credit already included in a sales receipt to avoid double deductions. No productive TSE activation, full fiscal Z or official DSFinV-K claim. Returns without an original Bringness deposit record remain unsupported. See docs/deposit-20261019.md.
 
 - Deposit release also requires the backward-compatible AI sales/forecast readers that exclude null-product financial lines. Deploy the AI reader update before enabling deposit configuration; preserve existing supplier/provider/runtime settings. No new AI feature activation or external procurement.
+
+## POS colour coding approved 2026-10-20
+- Owner approved consistent POS colour coding: orange primary actions, soft blue selection/management, green confirmed states, red errors/destructive actions. Preserve table/connection status meanings and plain document/print styles. Keep labels alongside colours.
+- Customers and delivery notes belong inside Händler; remove the duplicate Mehr menu entry. Existing bookmarked customer route remains compatible. Owner authorizes publication after successful checks without another routine confirmation.
