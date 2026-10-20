@@ -133,7 +133,7 @@
             <button type="button" data-key="ok" class="bn-ok" style="grid-column:1/-1">Übernehmen</button>
           </div>
         </div>
-        <div class="bn-cart-hint">Betrag eingeben. Für eine Mengenänderung zuerst die Position antippen.</div>`;
+        <div class="bn-cart-hint" role="status" aria-live="polite"></div>`;
       basket.insertBefore(tools,cartEl);
       const summary=document.createElement('div');
       summary.className='bn-tender-summary';

@@ -193,3 +193,7 @@ Continue authorized development autonomously and preserve established behavior a
 ## Native modal administrative PIN fix 2026-10-20
 - Native dialog.showModal makes body siblings inert regardless of z-index. Mount the existing personnel overlay inside an open native dialog when present so administrative PIN entry remains visible and interactive. Escape cancels only the PIN gate; a cancelled/incorrect PIN never writes a deposit rule.
 - Browser regression must exercise actual personnel.js (not an always-true unlock stub), cancelling then retrying with wrong and correct fixture PIN and checking the session-bound unlock header on exactly one write.
+
+## Basket deposit display and compactness approved 2026-10-20
+- Owner screenshot has 3 drinks at 2.99 = 8.97 plus 0.75 deposit already in 9.72 total. Show deposit separately in the basket with quantity, unit and line total; do not charge it a second time or change historical documents. Keep deposit display rows separate from clickable merchandise rows/numpad quantities.
+- Remove the two lower sales-tool panels from the basket; retain their functionality under Mehr > Kassenoptionen. Remove the initial keypad instruction but retain actual validation/status messages. Reduce internal basket spacing.
