@@ -12,3 +12,10 @@
 .trade-sheet [data-sheet-address] input:not([aria-invalid="true"]){border:0;background:transparent;box-shadow:none}
 .trade-sheet [data-sheet-address] input[data-address-field="postalCode"]{grid-column:1}
 .trade-sheet [data-sheet-address] input[data-address-field="city"]{grid-column:2}
+
+/* Smaller delivery preview that fits the viewport without an artificial paper height. */
+.trade-sheet-dialog{box-sizing:border-box;padding:10px;max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px)}
+.trade-sheet{box-sizing:border-box;padding:16px 20px;margin-top:8px;min-height:0;font-size:13px;line-height:1.25;max-height:calc(100vh - 90px);max-height:calc(100dvh - 90px);overflow:auto}
+.trade-sheet-top{gap:16px;margin:8px 0 12px}.trade-sheet h3{font-size:15px;margin:8px 0}.trade-sheet small{font-size:11px}.trade-sheet input{font-size:13px}.trade-sheet table{margin-top:6px;table-layout:fixed}.trade-sheet td,.trade-sheet th{padding:5px 7px;font-size:13px;line-height:1.25;overflow-wrap:anywhere}.trade-sheet td:first-child,.trade-sheet th:first-child{width:34px}.trade-sheet td:last-child,.trade-sheet th:last-child{width:70px}
+.trade-sheet tbody tr:nth-child(odd){background:#f0f0f0}.trade-sheet tbody tr:nth-child(even){background:#fff}
+@media(max-width:560px){.trade-sheet{padding:12px}.trade-sheet-top{gap:8px;margin:6px 0 10px}}
