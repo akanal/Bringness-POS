@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 export async function verifyDepositFlow({send,query,restaurant,product,token,unlock,request,setFail}){
  const rid=restaurant,rules={restaurantId:rid,productId:product,amountCents:25,units:24,label:'Flasche im Kasten',taxRate:19};
- assert.equal((await send('/deposit/rules','PUT',rules)).status,403);
- assert.equal((await send('/deposit/rules','PUT',rules,token,unlock)).status,200);
+ assert.equal((await send('/deposit/rules','PUT',rules)).status,200);assert.equal((await send('/deposit/rules','PUT',rules,'invalid-session')).status,401);
+ assert.equal((await send('/deposit/rules','PUT',rules,token,unlock)).status,200);const actor=(await query('SELECT user_id FROM sessions WHERE token_hash=$1',[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];await query("UPDATE users SET role='manager' WHERE id=$1",[actor.user_id]);assert.equal((await send('/deposit/rules','PUT',rules,token)).status,403);await query("UPDATE users SET role='owner' WHERE id=$1",[actor.user_id]);
  await query('CREATE TABLE IF NOT EXISTS pos_offline_catalogs(company_id uuid,payload jsonb)');
  await query("INSERT INTO pos_offline_catalogs SELECT company_id,jsonb_build_object('validUntil',(now()+interval '1 hour')::text,'products',jsonb_build_array(jsonb_build_object('id',$2::text))) FROM restaurants WHERE id=$1",[rid,product]);
  assert.equal((await send('/deposit/rules','PUT',{...rules,amountCents:30},token,unlock)).status,409);await query('DELETE FROM pos_offline_catalogs');

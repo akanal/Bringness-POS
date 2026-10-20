@@ -206,3 +206,8 @@ Continue authorized development autonomously and preserve established behavior a
 ## Deposit pieces and cash difference approved 2026-10-20
 - Keep one Pfand total, additionally show the charged piece count across all configured products (including their configured unit multipliers). Counts do not alter amounts or historical charge/return records.
 - Keypad tender summary shows Noch zu zahlen for underpayment and Rückgeld for overpayment, calculated in integer cents against the total including deposit/discount. A typed zero shows the full amount due; clearing the field hides the summary. Never accept an underpayment or create another payment to display the difference.
+
+## Navigation, PIN scope and deposit grouping approved 2026-10-20
+- Always start at Kasse, ignoring stale view URLs and payment-return auto-navigation; billing state still comes from the server. Subsequent bootstrap refresh preserves the current view. Artikel opens its permanent product form directly on the first click; late billing/PIN responses cannot supersede newer navigation.
+- Additional administrative PIN protects Einstellungen, not ordinary module navigation, authenticated owner/admin personnel operations, barcode/deposit assignment or wholesale price edits. Keep session validation, owner/admin roles, tenant isolation and audit. Restaurant branding/mode/QR settings, billing-profile changes and contractual module approval retain their established extra authorization. Personal employee stamping PINs remain unchanged.
+- Group basket deposit lines by charged unit amount across products. Different amounts get different lines with count and unit price; preserve immutable tax-specific backend records. Credits remain separately identified.

@@ -40,7 +40,7 @@
   let busy=false;const close=()=>{if(!busy)dialog.close()};q('close').onclick=close;dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault()});dialog.addEventListener('close',()=>dialog.remove(),{once:true});
   dialog.querySelector('form').onsubmit=async e=>{e.preventDefault();if(busy)return;const button=dialog.querySelector('[type="submit"]'),message=dialog.querySelector('[role="status"]');try{
    const enabled=q('enabled').checked,amount=enabled?euro(q('amount').value.trim()):0;if(enabled&&amount<=0)throw Error('Pfandbetrag größer als 0 eingeben');if(enabled&&!q('tax').value)throw Error('Pfand-Steuersatz auswählen');
-   busy=true;button.disabled=true;if(!await window.ensurePersonnelAccess?.())return;
+   busy=true;button.disabled=true;
    await api('/deposit/rules',{method:'PUT',body:JSON.stringify({restaurantId:rid,productId,label:old?.label||'Getränkepfand',amountCents:amount,units:old?.units||1,taxRate:enabled?Number(q('tax').value):Number(old?.tax_rate||0)})});
    await load(rid);window.bnRefreshSaleTotal?.();busy=false;dialog.close();
   }catch(e){message.textContent=e.message}finally{busy=false;button.disabled=false}};

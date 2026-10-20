@@ -31,7 +31,7 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
   if(path.endsWith('/personnel/unlock')){const body=route.request().postDataJSON();return route.fulfill(body.pin==='1234'?{json:{unlockToken:'fixture-only-unlock'}}:{status:403,json:{error:'PIN falsch'}});}
   if(path.endsWith('/orders/checkout')){const body=route.request().postDataJSON();checkoutCalls++;checkoutAmount=body.payments[0].amountCents;return route.fulfill({json:{id:'fixture-order',requestKey:body.requestKey,restaurantId:body.restaurantId,status:'paid',receiptNumber:'BN-FIXTURE',totalCents:checkoutAmount}});}
   if(path.endsWith('/deposit/rules')){
-   if(route.request().method()==='PUT'){assert.equal(route.request().headers()['x-personnel-unlock'],'fixture-only-unlock');savedRule=route.request().postDataJSON();depositWrites++;return route.fulfill({json:{ok:true}});}
+   if(route.request().method()==='PUT'){savedRule=route.request().postDataJSON();depositWrites++;return route.fulfill({json:{ok:true}});}
    return route.fulfill({json:{rules:savedRule?[{product_id:savedRule.productId,amount_cents:savedRule.amountCents,units:savedRule.units,label:savedRule.label,tax_rate:savedRule.taxRate},...(extraRule?[extraRule]:[])]:[]}});
   }
   return route.fulfill({json:{ok:true}});
@@ -42,17 +42,17 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
  await page.locator('#products>div').first().locator('summary').click();
  await page.locator('[data-deposit-product]').first().click();
  await page.locator('dialog [data-enabled]').check();await page.locator('dialog [data-amount]').fill('0,15');await page.locator('dialog [data-tax]').selectOption('0');
- await page.locator('dialog>form>button[type=submit]').click();
+ await page.locator('dialog>form>button[type=submit]').click();await page.locator('dialog.bn-drink-deposit').waitFor({state:'detached'});assert.equal(depositWrites,1);assert.equal(await page.locator('.personnel-overlay').count(),0);await page.evaluate(()=>manageProductDeposit('p0'));await page.evaluate(()=>{window.fixtureSettingsGate=ensurePersonnelAccess()});
  const gate=page.locator('dialog .personnel-overlay');await gate.locator('input[name=pin]').fill('0000');
  assert(await gate.locator('input[name=pin]').evaluate(e=>document.activeElement===e),'PIN must receive focus inside native modal');
  await gate.locator('[data-close]').click();await gate.waitFor({state:'detached'});
- await page.waitForFunction(()=>!document.querySelector('dialog>form>button[type=submit]').disabled);assert.equal(depositWrites,0);
- await page.locator('dialog>form>button[type=submit]').click();await gate.locator('input[name=pin]').waitFor();await page.keyboard.press('Escape');await gate.waitFor({state:'detached'});assert(await page.locator('dialog.bn-drink-deposit').isVisible());
+ await page.waitForFunction(()=>!document.querySelector('dialog>form>button[type=submit]').disabled);assert.equal(depositWrites,1);
+ await page.evaluate(()=>{window.fixtureSettingsGate=ensurePersonnelAccess()});await gate.locator('input[name=pin]').waitFor();await page.keyboard.press('Escape');await gate.waitFor({state:'detached'});assert(await page.locator('dialog.bn-drink-deposit').isVisible());
  await page.waitForFunction(()=>!document.querySelector('dialog>form>button[type=submit]').disabled);
- await page.locator('dialog>form>button[type=submit]').click();await gate.locator('input[name=pin]').fill('0000');await gate.locator('form button').click();
- await page.waitForFunction(()=>document.querySelector('.personnel-overlay [data-message]').textContent.includes('PIN falsch'));assert.equal(depositWrites,0);
- await gate.locator('input[name=pin]').fill('1234');await gate.locator('form button').click();
- await page.locator('dialog.bn-drink-deposit').waitFor({state:'detached'});
+ await page.evaluate(()=>{window.fixtureSettingsGate=ensurePersonnelAccess()});await gate.locator('input[name=pin]').fill('0000');await gate.locator('form button').click();
+ await page.waitForFunction(()=>document.querySelector('.personnel-overlay [data-message]').textContent.includes('PIN falsch'));assert.equal(depositWrites,1);
+ await gate.locator('input[name=pin]').fill('1234');await gate.locator('form button').click();await gate.waitFor({state:'detached'});
+ await page.locator('dialog [data-close]').click();await page.locator('dialog.bn-drink-deposit').waitFor({state:'detached'});
  assert.equal(depositWrites,1);assert.equal(savedRule.amountCents,15);assert.equal(savedRule.taxRate,0);
  // Match the owner's basket: 3 x 2.99 plus 3 x .25, separately itemised.
  savedRule.amountCents=25;
@@ -65,7 +65,7 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
  assert.equal(await page.locator('#cart .basketline').count(),1);
  assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),1);
  assert.equal(await page.locator('[data-deposit-breakdown] span').textContent(),'Pfand');
- assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/0,75/);assert.equal(await page.locator('[data-deposit-count]').textContent(),'3 Stück');
+ assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/0,75/);assert.match(await page.locator('[data-deposit-count]').textContent(),/3 × 0,25/);
  assert.equal(await page.locator('.bn-cart-hint').textContent(),'');
  await page.addScriptTag({content:app.split('\n').find(line=>line.startsWith('$('+'"moreBtn"'+').onclick='))});
  await page.locator('#moreBtn').click();await page.locator('#retailToolsBtn').click();
@@ -79,14 +79,16 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
  extraRule={product_id:'p1',amount_cents:15,units:1,label:'Flasche',tax_rate:19};
  await page.evaluate(()=>manageProductDeposit('p0'));await page.locator('dialog [data-close]').click();await page.locator('dialog').waitFor({state:'detached'});
  await page.evaluate(()=>{cart.push({...data.products[1],qty:2,price:1.5});renderCart();});
- assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),1);assert.equal(await page.locator('[data-deposit-breakdown] span').textContent(),'Pfand');assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/1,05/);assert.equal(await page.locator('[data-deposit-count]').textContent(),'5 Stück');assert.match(await page.locator('#total').textContent(),/13,02/);
+ assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),2);assert.deepEqual(await page.locator('[data-deposit-breakdown] span').allTextContents(),['Pfand','Pfand']);assert.match(await page.locator('[data-deposit-count]').nth(0).textContent(),/3 × 0,25/);assert.match(await page.locator('[data-deposit-count]').nth(1).textContent(),/2 × 0,15/);assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/0,75/);assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/0,30/);assert.match(await page.locator('#total').textContent(),/13,02/);
+ extraRule.amount_cents=25;await page.evaluate(()=>manageProductDeposit('p0'));await page.locator('dialog [data-close]').click();await page.locator('dialog').waitFor({state:'detached'});await page.evaluate(()=>renderCart());assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),1);assert.match(await page.locator('[data-deposit-count]').textContent(),/5 × 0,25/);assert.match(await page.locator('#total').textContent(),/13,22/);
+ extraRule.amount_cents=15;await page.evaluate(()=>manageProductDeposit('p0'));await page.locator('dialog [data-close]').click();await page.locator('dialog').waitFor({state:'detached'});await page.evaluate(()=>renderCart());assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),2);
  await page.locator('[data-keypad-toggle]').click();assert.equal(await page.locator('[data-key="ok"]').count(),0);
  const key=async k=>page.locator('[data-key="'+k+'"]').click();
  await key('2');assert.equal(await page.locator('[data-change-label]').textContent(),'Noch zu zahlen');assert.match(await page.locator('[data-change]').textContent(),/11,02/);await key('0');assert.equal(await page.evaluate(()=>bnCashTenderValue),'20');assert.equal(await page.locator('[data-change-label]').textContent(),'Rückgeld');assert.match(await page.locator('[data-change]').textContent(),/6,98/);
  await key('back');assert.equal(await page.evaluate(()=>bnCashTenderValue),'2');await key('back');assert.equal(await page.evaluate(()=>bnCashTenderValue),'');assert.equal(await page.locator('.bn-tender-summary').evaluate(e=>e.classList.contains('show')),false);await key('0');assert.equal(await page.locator('[data-change-label]').textContent(),'Noch zu zahlen');assert.match(await page.locator('[data-change]').textContent(),/13,02/);await key('back');
  await key('1');await key(',');await key('5');await key('0');assert.equal(await page.evaluate(()=>bnCashTenderValue),'1,50');assert.equal(await page.locator('[data-change-label]').textContent(),'Noch zu zahlen');assert.match(await page.locator('[data-change]').textContent(),/11,52/);for(let i=0;i<4;i++)await key('back');assert.equal(await page.evaluate(()=>bnCashTenderValue),'');
  await key('1');await key('3');await key(',');await key('0');await key('2');assert.equal(await page.locator('[data-change-label]').textContent(),'Rückgeld');assert.match(await page.locator('[data-change]').textContent(),/0,00/);for(let i=0;i<5;i++)await key('back');
- await page.locator('#cart .basketline').first().click();await key('1');assert.equal(await page.evaluate(()=>cart[0].qty),1);await key('2');assert.equal(await page.evaluate(()=>cart[0].qty),12);await key('back');assert.equal(await page.evaluate(()=>cart[0].qty),1);await key('back');assert.equal(await page.evaluate(()=>cart.length),1);assert.equal(await page.evaluate(()=>cart[0].id),'p1');assert.equal(await page.evaluate(()=>cart[0].qty),2);assert.match(await page.locator('#total').textContent(),/3,30/);assert.equal(await page.locator('[data-deposit-count]').textContent(),'2 Stück');
+ await page.locator('#cart .basketline').first().click();await key('1');assert.equal(await page.evaluate(()=>cart[0].qty),1);await key('2');assert.equal(await page.evaluate(()=>cart[0].qty),12);await key('back');assert.equal(await page.evaluate(()=>cart[0].qty),1);await key('back');assert.equal(await page.evaluate(()=>cart.length),1);assert.equal(await page.evaluate(()=>cart[0].id),'p1');assert.equal(await page.evaluate(()=>cart[0].qty),2);assert.match(await page.locator('#total').textContent(),/3,30/);assert.match(await page.locator('[data-deposit-count]').textContent(),/2 × 0,15/);
  await page.evaluate(()=>{cart.unshift({...data.products[0],qty:3,price:2.99});renderCart();});assert.match(await page.locator('#total').textContent(),/13,02/);
  await page.locator('#paymentMethod').selectOption('card');await page.locator('#pay').click();assert.equal(checkoutCalls,0);assert.match(await page.locator('#saleMsg').textContent(),/Terminalanbindung/);
  await page.locator('#paymentMethod').selectOption('cash');await page.locator('#pay').click();await page.waitForFunction(()=>document.querySelector('#saleMsg').textContent.includes('Verkauf gespeichert'));assert.equal(checkoutCalls,1);assert.equal(checkoutAmount,1302);assert.equal(await page.evaluate(()=>cart.length),0);assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),0);
