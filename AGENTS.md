@@ -223,3 +223,6 @@ Continue authorized development autonomously and preserve established behavior a
 
 ## Compact delivery address approved 2026-10-20
 - Delivery-note preview recipient inputs have no ordinary underline, tight line spacing and PLZ/Ort on one row. Keep direct editing, accessible focus outlines and the red invalid-address borders/text. Scope this styling to the preview address, not product search or ordinary recipient forms.
+
+## Smaller delivery window approved 2026-10-20
+- Reduce delivery preview text to 13px with compact padding/headings and remove the artificial minimum paper height. Keep the window within the viewport; long documents scroll without discarding rows. Article rows alternate light gray/white in preview and printed delivery notes. Preserve editing and red address warnings.
