@@ -24,14 +24,15 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
   assert.equal(await page.locator('dialog').count(),0);
  }
  // Use the actual administrative PIN gate while the native deposit modal is open.
- let savedRule=null,depositWrites=0;
+ let savedRule=null,depositWrites=0,extraRule=null,checkoutCalls=0,checkoutAmount=0;
  await page.route('**/api/v1/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/personnel/access'))return route.fulfill({json:{canManage:true,configured:true}});
   if(path.endsWith('/personnel/unlock')){const body=route.request().postDataJSON();return route.fulfill(body.pin==='1234'?{json:{unlockToken:'fixture-only-unlock'}}:{status:403,json:{error:'PIN falsch'}});}
+  if(path.endsWith('/orders/checkout')){const body=route.request().postDataJSON();checkoutCalls++;checkoutAmount=body.payments[0].amountCents;return route.fulfill({json:{id:'fixture-order',requestKey:body.requestKey,restaurantId:body.restaurantId,status:'paid',receiptNumber:'BN-FIXTURE',totalCents:checkoutAmount}});}
   if(path.endsWith('/deposit/rules')){
    if(route.request().method()==='PUT'){assert.equal(route.request().headers()['x-personnel-unlock'],'fixture-only-unlock');savedRule=route.request().postDataJSON();depositWrites++;return route.fulfill({json:{ok:true}});}
-   return route.fulfill({json:{rules:savedRule?[{product_id:savedRule.productId,amount_cents:savedRule.amountCents,units:savedRule.units,label:savedRule.label,tax_rate:savedRule.taxRate}]:[]}});
+   return route.fulfill({json:{rules:savedRule?[{product_id:savedRule.productId,amount_cents:savedRule.amountCents,units:savedRule.units,label:savedRule.label,tax_rate:savedRule.taxRate},...(extraRule?[extraRule]:[])]:[]}});
   }
   return route.fulfill({json:{ok:true}});
  });
@@ -63,7 +64,7 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
  assert.equal(await page.locator('.basket .bn-sale-tools').count(),0);
  assert.equal(await page.locator('#cart .basketline').count(),1);
  assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),1);
- assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/3 × Pfand/);
+ assert.equal(await page.locator('[data-deposit-breakdown] span').textContent(),'Pfand');
  assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/0,75/);
  assert.equal(await page.locator('.bn-cart-hint').textContent(),'');
  await page.addScriptTag({content:app.split('\n').find(line=>line.startsWith('$('+'"moreBtn"'+').onclick='))});
@@ -72,7 +73,24 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
  assert.equal(await page.locator('dialog.bn-retail-options .bn-sale-tools').count(),2);
  await page.locator('dialog.bn-retail-options>button').click();await page.locator('dialog.bn-retail-options').waitFor({state:'detached'});
  assert.match(await page.locator('#total').textContent(),/9,72/);assert.equal(depositWrites,1);
- console.log('Basket passed: 8.97 merchandise + .75 separately itemised deposit = 9.72, no duplicate charge, sales tools available in More, initial keypad text removed.');
+ await page.addScriptTag({url:'/pos/payment-flow.js'});
+ await page.evaluate(()=>{document.getElementById('pay').disabled=true;bnRefreshSaleTotal();});
+ assert.equal(await page.locator('#pay').isDisabled(),false,'deposit refresh must restore payment availability');
+ extraRule={product_id:'p1',amount_cents:15,units:1,label:'Flasche',tax_rate:19};
+ await page.evaluate(()=>manageProductDeposit('p0'));await page.locator('dialog [data-close]').click();await page.locator('dialog').waitFor({state:'detached'});
+ await page.evaluate(()=>{cart.push({...data.products[1],qty:2,price:1.5});renderCart();});
+ assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),1);assert.equal(await page.locator('[data-deposit-breakdown] span').textContent(),'Pfand');assert.match(await page.locator('[data-deposit-breakdown]').textContent(),/1,05/);assert.match(await page.locator('#total').textContent(),/13,02/);
+ await page.locator('[data-keypad-toggle]').click();assert.equal(await page.locator('[data-key="ok"]').count(),0);
+ const key=async k=>page.locator('[data-key="'+k+'"]').click();
+ await key('2');await key('0');assert.equal(await page.evaluate(()=>bnCashTenderValue),'20');
+ await key('back');assert.equal(await page.evaluate(()=>bnCashTenderValue),'2');await key('back');assert.equal(await page.evaluate(()=>bnCashTenderValue),'');assert.equal(await page.locator('.bn-tender-summary').evaluate(e=>e.classList.contains('show')),false);
+ await key('1');await key(',');await key('5');await key('0');assert.equal(await page.evaluate(()=>bnCashTenderValue),'1,50');for(let i=0;i<4;i++)await key('back');assert.equal(await page.evaluate(()=>bnCashTenderValue),'');
+ await page.locator('#cart .basketline').first().click();await key('1');assert.equal(await page.evaluate(()=>cart[0].qty),1);await key('2');assert.equal(await page.evaluate(()=>cart[0].qty),12);await key('back');assert.equal(await page.evaluate(()=>cart[0].qty),1);await key('back');assert.equal(await page.evaluate(()=>cart.length),1);assert.equal(await page.evaluate(()=>cart[0].id),'p1');assert.equal(await page.evaluate(()=>cart[0].qty),2);assert.match(await page.locator('#total').textContent(),/3,30/);
+ await page.evaluate(()=>{cart.unshift({...data.products[0],qty:3,price:2.99});renderCart();});assert.match(await page.locator('#total').textContent(),/13,02/);
+ await page.locator('#paymentMethod').selectOption('card');await page.locator('#pay').click();assert.equal(checkoutCalls,0);assert.match(await page.locator('#saleMsg').textContent(),/Terminalanbindung/);
+ await page.locator('#paymentMethod').selectOption('cash');await page.locator('#pay').click();await page.waitForFunction(()=>document.querySelector('#saleMsg').textContent.includes('Verkauf gespeichert'));assert.equal(checkoutCalls,1);assert.equal(checkoutAmount,1302);assert.equal(await page.evaluate(()=>cart.length),0);assert.equal(await page.locator('[data-deposit-breakdown] .bn-deposit-line').count(),0);
+ console.log('Direct keypad and payment passed: aggregate mixed deposit, immediate tender/quantity, deletion clears stored values, no apply button, card guard and one cash checkout for 13.02.');
+  console.log('Basket passed: 8.97 merchandise + .75 separately itemised deposit = 9.72, no duplicate charge, sales tools available in More, initial keypad text removed.');
   console.log('Real PIN modal save passed: PIN editable, cancel unlocks save, wrong PIN writes nothing, correct PIN saves exactly once with unlock header.');
   console.log('Real product-menu click opens drink deposit at 1366/820/390 widths.');
  console.log('Actual POS HTML + trade renderer: 1366/820/390 widths, no trade panel overflow, orange primary, duplicate menu absent.');}finally{await browser.close();server.close()}})().catch(e=>{console.error(e);server.close();process.exitCode=1});

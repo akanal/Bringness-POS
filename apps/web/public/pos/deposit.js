@@ -4,6 +4,7 @@
  const state=rid=>{if(!states.has(rid))states.set(rid,{ready:false,rules:[]});return states.get(rid)};
  const load=async rid=>{const s=state(rid);try{s.rules=(await api('/deposit/rules?restaurantId='+encodeURIComponent(rid))).rules;s.ready=true;s.error=null;return s.rules}catch(e){s.ready=false;s.error=e.message;throw e}};
  window.bnDepositLocked=rid=>!state(rid).ready||!!localStorage.getItem(key(rid));
+ window.bnDepositStatus=rid=>localStorage.getItem(key(rid))?'Unterbrochene Pfandrücknahme unter Mehr → Kassenoptionen abgleichen.':state(rid).error||(!state(rid).ready?'Pfanddaten werden geladen. Bitte kurz warten.':'');
  window.bnDepositTotal=(rid,items)=>{const s=state(rid);if(!s.ready)throw Error(s.error||'Pfanddaten werden geladen. Bitte kurz warten.');if(localStorage.getItem(key(rid)))throw Error('Unterbrochene Pfandrücknahme zuerst abgleichen.');return s.rules.reduce((sum,r)=>sum+(items.find(i=>i.productId===r.product_id)?.qty||0)*r.units*r.amount_cents,0)-(s.credit?.depositCreditCents||0)};
  window.bnDepositBreakdown=(rid,items)=>{const s=state(rid);if(!s.ready)return [];const lines=s.rules.flatMap(r=>{const qty=(items.find(i=>i.productId===r.product_id)?.qty||0)*r.units;return qty?[{label:'Pfand · '+(data.products.find(p=>p.id===r.product_id)?.name||r.label),qty,unitCents:r.amount_cents,totalCents:qty*r.amount_cents}]:[]});if(s.credit)lines.push({label:'Pfandrückgabe verrechnet',qty:1,unitCents:-s.credit.depositCreditCents,totalCents:-s.credit.depositCreditCents});return lines};
  window.bnDepositExtras=rid=>state(rid).credit||{};

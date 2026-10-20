@@ -5,6 +5,21 @@
   const signature=(items,restaurantId)=>JSON.stringify({restaurantId,items:items.map(item=>({productId:item.id,qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId)),...(window.bnRetailSales?.extras()||{})});
   let busy=false;
 
+  // Recompute availability after async deposit loading and every basket change.
+  window.bnRefreshPaymentState=()=>{
+    const button=document.getElementById('pay'),status=document.getElementById('saleMsg'),rid=document.getElementById('restaurant')?.value;if(!button)return;
+    if(busy){button.disabled=true;return;}
+    try{
+      const raw=localStorage.getItem(storageKey(rid));let pending;try{pending=raw?JSON.parse(raw):null}catch{button.disabled=false;return;}
+      if(pending&&!(pending.correctable&&cart.length)){button.disabled=false;return;}
+      if(!cart.length){button.disabled=true;return;}
+      if(window.bnDepositLocked?.(rid)){button.disabled=true;if(status)status.textContent=window.bnDepositStatus?.(rid)||'Pfanddaten werden geladen. Bitte kurz warten.';return;}
+      const subtotal=Math.round(cart.reduce((sum,item)=>sum+Number(item.qty)*Number(item.price),0)*100),total=window.bnRetailSales?window.bnRetailSales.total(subtotal):subtotal;
+      button.disabled=!Number.isSafeInteger(total)||total<=0;
+      if(status&&/^Pfanddaten werden geladen/.test(status.textContent))status.textContent='';
+    }catch(error){button.disabled=true;if(status)status.textContent=error.message;}
+  };
+
   async function completeSale(){
     if(busy)return;
     const button=document.getElementById('pay'),status=document.getElementById('saleMsg');
@@ -49,7 +64,7 @@
       // Validation fixes may change the payload, but must never replace the request key.
       if(error.status===400){pending.correctable=true;try{localStorage.setItem(storageKey(restaurantId),JSON.stringify(pending));}catch{}}
       status.textContent='Zahlungsstatus ungeklärt oder abgelehnt: '+error.message+' Erneut mit derselben Kennung abgleichen; Bargeld nicht nochmals kassieren.';
-    }finally{busy=false;button.disabled=false;window.bnRetailSales?.refresh();}
+    }finally{busy=false;window.bnRetailSales?.refresh();window.bnRefreshPaymentState();}
   }
 
   function bind(){
@@ -57,7 +72,7 @@
     if(!button||!method)return;
     method.hidden=false;
     const basket=button.closest('.basket');if(basket)basket.hidden=false;
-    button.onclick=completeSale;
+    button.onclick=completeSale;method.addEventListener('change',window.bnRefreshPaymentState);window.bnRefreshPaymentState();
   }
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',bind):bind();
 })();
