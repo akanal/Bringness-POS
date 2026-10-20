@@ -189,3 +189,7 @@ Continue authorized development autonomously and preserve established behavior a
 ## Simple drinks deposit approved 2026-10-20
 - Configure beverage deposit in the product three-dot menu: enable, gross amount with presets, explicit tax selection. Remove the old multi-field settings card. No name/category heuristic restricts products; the owner selects which drink carries deposit.
 - Preserve recorded charges, original-price returns, audits, PIN, uncertain-payment protection and existing multi-unit rules. New rules use one unit, existing units/labels/tax persist. No automatic tax assumption or live payment test.
+
+## Native modal administrative PIN fix 2026-10-20
+- Native dialog.showModal makes body siblings inert regardless of z-index. Mount the existing personnel overlay inside an open native dialog when present so administrative PIN entry remains visible and interactive. Escape cancels only the PIN gate; a cancelled/incorrect PIN never writes a deposit rule.
+- Browser regression must exercise actual personnel.js (not an always-true unlock stub), cancelling then retrying with wrong and correct fixture PIN and checking the session-bound unlock header on exactly one write.

@@ -23,5 +23,36 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
   await page.locator('dialog.bn-drink-deposit').waitFor({state:'detached'});
   assert.equal(await page.locator('dialog').count(),0);
  }
- console.log('Real product-menu click opens drink deposit at 1366/820/390 widths.');
+ // Use the actual administrative PIN gate while the native deposit modal is open.
+ let savedRule=null,depositWrites=0;
+ await page.route('**/api/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/personnel/access'))return route.fulfill({json:{canManage:true,configured:true}});
+  if(path.endsWith('/personnel/unlock')){const body=route.request().postDataJSON();return route.fulfill(body.pin==='1234'?{json:{unlockToken:'fixture-only-unlock'}}:{status:403,json:{error:'PIN falsch'}});}
+  if(path.endsWith('/deposit/rules')){
+   if(route.request().method()==='PUT'){assert.equal(route.request().headers()['x-personnel-unlock'],'fixture-only-unlock');savedRule=route.request().postDataJSON();depositWrites++;return route.fulfill({json:{ok:true}});}
+   return route.fulfill({json:{rules:savedRule?[{product_id:savedRule.productId,amount_cents:savedRule.amountCents,units:savedRule.units,label:savedRule.label,tax_rate:savedRule.taxRate}]:[]}});
+  }
+  return route.fulfill({json:{ok:true}});
+ });
+ await page.evaluate(()=>{localStorage.setItem('bringness-pos-token','fixture-only');window.api=async(path,options={})=>{const res=await fetch('/api/v1'+path,{...options,headers:{'content-type':'application/json',authorization:'Bearer fixture-only'}});const body=await res.json();if(!res.ok)throw Error(body.error);return body;};});
+ await page.addScriptTag({url:'/pos/personnel.js'});
+ await page.setViewportSize({width:820,height:1000});
+ await page.locator('#products>div').first().locator('summary').click();
+ await page.locator('[data-deposit-product]').first().click();
+ await page.locator('dialog [data-enabled]').check();await page.locator('dialog [data-amount]').fill('0,15');await page.locator('dialog [data-tax]').selectOption('0');
+ await page.locator('dialog>form>button[type=submit]').click();
+ const gate=page.locator('dialog .personnel-overlay');await gate.locator('input[name=pin]').fill('0000');
+ assert(await gate.locator('input[name=pin]').evaluate(e=>document.activeElement===e),'PIN must receive focus inside native modal');
+ await gate.locator('[data-close]').click();await gate.waitFor({state:'detached'});
+ await page.waitForFunction(()=>!document.querySelector('dialog>form>button[type=submit]').disabled);assert.equal(depositWrites,0);
+ await page.locator('dialog>form>button[type=submit]').click();await gate.locator('input[name=pin]').waitFor();await page.keyboard.press('Escape');await gate.waitFor({state:'detached'});assert(await page.locator('dialog.bn-drink-deposit').isVisible());
+ await page.waitForFunction(()=>!document.querySelector('dialog>form>button[type=submit]').disabled);
+ await page.locator('dialog>form>button[type=submit]').click();await gate.locator('input[name=pin]').fill('0000');await gate.locator('form button').click();
+ await page.waitForFunction(()=>document.querySelector('.personnel-overlay [data-message]').textContent.includes('PIN falsch'));assert.equal(depositWrites,0);
+ await gate.locator('input[name=pin]').fill('1234');await gate.locator('form button').click();
+ await page.locator('dialog.bn-drink-deposit').waitFor({state:'detached'});
+ assert.equal(depositWrites,1);assert.equal(savedRule.amountCents,15);assert.equal(savedRule.taxRate,0);
+ console.log('Real PIN modal save passed: PIN editable, cancel unlocks save, wrong PIN writes nothing, correct PIN saves exactly once with unlock header.');
+  console.log('Real product-menu click opens drink deposit at 1366/820/390 widths.');
  console.log('Actual POS HTML + trade renderer: 1366/820/390 widths, no trade panel overflow, orange primary, duplicate menu absent.');}finally{await browser.close();server.close()}})().catch(e=>{console.error(e);server.close();process.exitCode=1});
