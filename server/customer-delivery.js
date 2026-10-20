@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {checkAddress} from './address-check.js';
 import {readJsonObject} from './http-body.js';
 import {tradeRecipient} from './trade-pricing.js';
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -24,9 +25,14 @@ export async function migrateCustomerDelivery(db){await db.query(`
  CREATE INDEX IF NOT EXISTS pos_delivery_notes_restaurant ON pos_delivery_notes(restaurant_id,issued_at);
  `);}
 export function createCustomerDelivery(pool,authenticate){return async(req,res)=>{
- const url=new URL(req.url,'http://local'),path=url.pathname;if(!['/api/v1/customers','/api/v1/delivery-notes'].includes(path))return false;
+ const url=new URL(req.url,'http://local'),path=url.pathname;if(!['/api/v1/customers','/api/v1/delivery-notes','/api/v1/address-check'].includes(path))return false;
  const send=(status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true;};
  const user=await authenticate(req);if(!user)return send(401,{error:'Nicht angemeldet'});if(!['owner','admin','manager'].includes(user.role))return send(403,{error:'Kein Verwaltungszugang'});
+ if(path==='/api/v1/address-check'){
+  if(req.method!=='POST')return send(405,{error:'Methode nicht erlaubt'});
+  try{const body=await readJsonObject(req,{maxBytes:2048});if(body.complete!=null&&typeof body.complete!=='boolean')throw Error('Ungültige Prüfung');return send(200,checkAddress(body.address,{complete:body.complete===true}));}
+  catch(e){return send(e.status===413?413:400,{error:e.status===413?'Anfrage zu groß':e.message});}
+ }
  if(!['GET','POST','PUT'].includes(req.method)||path.endsWith('delivery-notes')&&req.method==='PUT')return send(405,{error:'Methode nicht erlaubt'});
  let body;try{body=req.method==='GET'?{restaurantId:url.searchParams.get('restaurantId')}:await readJsonObject(req,{maxBytes:65536});if(!uuid(body.restaurantId))throw Error('Betrieb erforderlich');}catch(e){return send(e.status===413?413:400,{error:e.status===413?'Anfrage zu groß':e.message});}
  const client=await pool.connect();try{

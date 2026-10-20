@@ -215,3 +215,8 @@ Continue authorized development autonomously and preserve established behavior a
 ## Receipt deposit grouping approved 2026-10-20
 - Group receipt/PDF/QR display deposit rows by charged unit amount across products and put them after all merchandise, before totals. Different amounts remain separate; return credits remain distinct. Labels are Pfand and Pfandrücknahme.
 - This is presentation only: preserve original order items, charge/return identities, payments, discounts and per-line VAT rounding. A4 net rows sum original net amounts; a mixed-tax deposit group explicitly marks its unit price as gross. Previously downloaded PDFs remain unchanged; a newly rendered document uses the updated layout.
+
+## Recipient address plausibility approved 2026-10-20
+- Red field/text warnings compare German postal codes and city against a bundled GeoNames reference in customer, delivery and trade recipient forms and delivery preview. Missing street/house-number components are flagged. This is not street/house-number existence or deliverability verification; state that limitation in the UI.
+- No customer address/name/email is sent to an external provider. `/api/v1/address-check` is authenticated owner/admin/manager-only, bounded, read-only and returns no customer records. Unsupported countries, missing reference data and network failures are unverified, never successful validation.
+- Warnings are advisory because aliases, special postcodes and source gaps exist; do not change recipient values automatically or gate a cash sale on lookup availability. Keep uncertain delivery/payment replays immutable. Source, date, license and regeneration instructions are in server/data/README.md.
