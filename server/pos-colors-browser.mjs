@@ -20,6 +20,7 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
   await page.locator('dialog.bn-drink-deposit').waitFor({state:'visible'});
   assert(await page.locator('dialog [data-enabled]').isVisible());
   await page.locator('dialog [data-close]').click();
+  await page.locator('dialog.bn-drink-deposit').waitFor({state:'detached'});
   assert.equal(await page.locator('dialog').count(),0);
  }
  console.log('Real product-menu click opens drink deposit at 1366/820/390 widths.');
