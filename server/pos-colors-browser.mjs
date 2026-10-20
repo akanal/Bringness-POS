@@ -46,6 +46,8 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
  assert(await gate.locator('input[name=pin]').evaluate(e=>document.activeElement===e),'PIN must receive focus inside native modal');
  await gate.locator('[data-close]').click();await gate.waitFor({state:'detached'});
  await page.waitForFunction(()=>!document.querySelector('dialog>form>button[type=submit]').disabled);assert.equal(depositWrites,0);
+ await page.locator('dialog>form>button[type=submit]').click();await gate.locator('input[name=pin]').waitFor();await page.keyboard.press('Escape');await gate.waitFor({state:'detached'});assert(await page.locator('dialog.bn-drink-deposit').isVisible());
+ await page.waitForFunction(()=>!document.querySelector('dialog>form>button[type=submit]').disabled);
  await page.locator('dialog>form>button[type=submit]').click();await gate.locator('input[name=pin]').fill('0000');await gate.locator('form button').click();
  await page.waitForFunction(()=>document.querySelector('.personnel-overlay [data-message]').textContent.includes('PIN falsch'));assert.equal(depositWrites,0);
  await gate.locator('input[name=pin]').fill('1234');await gate.locator('form button').click();
