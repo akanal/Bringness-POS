@@ -1,4 +1,5 @@
 import {lineDiscount} from './sale-discount.js';
+import {receiptLines} from './receipt-lines.js';
 
 // Dedicated A4 layout; thermal receipts keep their existing renderer.
 export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
@@ -49,6 +50,10 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     const gross=Math.round(Number(item.unit_price_cents)*quantity)-lineDiscount(receipt.sale_adjustment,item.product_id);
     const net=Math.round(gross/(1+rate/100)),tax=gross-net;
     netTotal+=net;grossTotal+=gross;vat.set(rate,(vat.get(rate)||0)+tax);
+  });
+  const displayItems=receiptLines(items,receipt.sale_adjustment);
+  displayItems.forEach((item,index)=>{
+    const quantity=Number(item.quantity),rate=Number(item.tax_rate_snapshot),net=item.netCents;
     const name=String(item.product_name_snapshot||'');
     doc.font('Helvetica-Bold').fontSize(10);
     const rowHeight=Math.max(27,doc.heightOfString(name,{width:220})+12);
@@ -56,7 +61,7 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     text(index+1,52,y,28,10);text(name,85,y,220,10,true);
     text(quantity.toLocaleString('de-DE'),315,y,50,10,false,'right');
     // Extra unit precision avoids silently rounding a net unit price to whole cents.
-    text((Number(item.unit_price_cents)/100/(1+rate/100)).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:4})+' EUR',370,y,80,9,false,'right');
+    text((Number(item.unit_price_cents)/100/(item.mixedTax?1:1+rate/100)).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:4})+(item.mixedTax?' EUR²':' EUR'),370,y,80,9,false,'right');
     text(money(net),455,y,87,9,false,'right');
     y+=rowHeight;
   });
@@ -69,7 +74,7 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     text(money(tax),390,y+5,149,10,false,'right');y+=24;
   }
   y=band(y,'Gesamtbetrag brutto',receipt.total_cents,true);
-  y=text('¹ Preise netto; Positionssummen nach Rabatt auf Cent gerundet.',left,y+3,width,8)+8;
+  y=text('¹ Preise netto; Positionssummen nach Rabatt auf Cent gerundet.'+(displayItems.some(item=>item.mixedTax)?' ² Bei gemischten Steuersätzen: Pfand-Einzelpreis brutto.':''),left,y+3,width,8)+8;
   if(receipt.sale_adjustment)y=text('Enthaltener Rabatt: '+money(receipt.sale_adjustment.discountCents),left,y,width,9)+8;
   if(grossTotal!==Number(receipt.total_cents))y=text('Hinweis: Positionssumme weicht vom Zahlbetrag ab.',left,y,width,9)+8;
   if(y+payments.length*18+145>bottom)y=next();
