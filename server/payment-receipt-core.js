@@ -1,5 +1,6 @@
 import {renderTradeInvoice} from './trade-invoice-pdf.js';
 import {lineDiscount} from './sale-discount.js';
+import {receiptLines} from './receipt-lines.js';
 import crypto from "node:crypto";
 export function createPaymentReceiptHandler(pool,PDFDocument,QRCode,receiptUrl) {
 function send(res, status, payload) {
@@ -136,8 +137,10 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
     group.gross += gross;
     group.tax += tax;
     vat.set(rate, group);
+  }
+  for (const item of receiptLines(items,receipt.sale_adjustment)) {
     doc.font("Helvetica-Bold").text(item.product_name_snapshot);
-    doc.font("Helvetica").text(Number(item.quantity).toLocaleString("de-DE") + " x " + euro(item.unit_price_cents) + "    " + euro(gross), { align: "right" });
+    doc.font("Helvetica").text(Number(item.quantity).toLocaleString("de-DE") + " x " + euro(item.unit_price_cents) + "    " + euro(item.grossCents), { align: "right" });
   }
 
   if(receipt.sale_adjustment)doc.moveDown().font('Helvetica').text('Zwischensumme: '+euro(receipt.sale_adjustment.subtotalCents)).text('Rabatt: -'+euro(receipt.sale_adjustment.discountCents));

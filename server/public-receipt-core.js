@@ -1,4 +1,5 @@
 import {lineDiscount} from './sale-discount.js';
+import {receiptLines} from './receipt-lines.js';
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const euro = cents => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 
@@ -20,12 +21,14 @@ return async function handlePublicReceipt(req, res) {
     pool.query("SELECT method,amount_cents FROM payments WHERE order_id=$1 ORDER BY created_at,id", [receipt.order_id]),
   ]);
   const taxes = new Map();
-  const items = itemRows.rows.map(item => {
+  for (const item of itemRows.rows) {
     const gross = Math.round(Number(item.unit_price_cents) * Number(item.quantity))-lineDiscount(receipt.sale_adjustment,item.product_id);
     const rate = Number(item.tax_rate_snapshot), vat = gross - Math.round(gross / (1 + rate / 100));
     const group = taxes.get(rate) || { gross: 0, vat: 0 };
     group.gross += gross; group.vat += vat; taxes.set(rate, group);
-    return `<div class="row"><span>${esc(item.product_name_snapshot)}<small>${esc(Number(item.quantity).toLocaleString("de-DE"))} × ${euro(item.unit_price_cents)}</small></span><b>${euro(gross)}</b></div>`;
+  }
+  const items = receiptLines(itemRows.rows,receipt.sale_adjustment).map(item => {
+    return `<div class="row"><span>${esc(item.product_name_snapshot)}<small>${esc(Number(item.quantity).toLocaleString("de-DE"))} × ${euro(item.unit_price_cents)}</small></span><b>${euro(item.grossCents)}</b></div>`;
   }).join("");
   const taxRows = [...taxes].sort((a,b) => a[0]-b[0]).map(([rate,g]) => `<div class="row"><span>MwSt. ${esc(rate.toLocaleString("de-DE"))} %<small>Netto ${euro(g.gross-g.vat)} · Brutto ${euro(g.gross)}</small></span><b>${euro(g.vat)}</b></div>`).join("");
   const payments = paymentRows.rows.map(p => `<div class="row"><span>${esc(({cash:"Bar",card:"Karte",mollie_center:"Online-Zahlung"})[p.method] || p.method)}</span><b>${euro(p.amount_cents)}</b></div>`).join("");
