@@ -47,3 +47,5 @@
 .product-options-menu{min-width:210px}.product-options-menu button{min-height:42px}
 
 .cash>.basket{padding:12px 14px}.cash>.basket>h3{margin:0 0 10px}.cash>.basket .total{margin:10px 0}.cash>.basket .bn-cart-tools{margin-top:4px;padding-top:6px}.bn-cart-hint:empty{display:none}.bn-deposit-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;color:#174e85;font-size:13px;border-bottom:1px solid #dce7f2}.bn-deposit-line b{white-space:nowrap}.bn-retail-options{box-sizing:border-box;width:min(520px,calc(100vw - 24px));max-height:85vh;overflow:auto;border:1px solid #c3d8ed;border-radius:14px;background:#f5f9ff;color:#18334c;padding:18px}.bn-retail-options::backdrop{background:#10263d66}.bn-retail-options>h3{margin:0 0 10px}.bn-retail-options button{padding:9px 12px;border:1px solid #bccfe0;border-radius:8px;background:#fff;color:#174e85;cursor:pointer}
+
+.bn-deposit-line [data-deposit-count]{font-size:12px;white-space:nowrap}.bn-tender-summary[data-balance=due] [data-change]{color:#ad4100}.bn-tender-summary[data-balance=change] [data-change]{color:#12633b}

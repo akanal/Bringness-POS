@@ -202,3 +202,7 @@ Continue authorized development autonomously and preserve established behavior a
 - Retail basket shows one total line labelled Pfand, independent of product names or tax groups. Underlying immutable charge/tax records and receipt positions remain unchanged.
 - Keypad applies every digit/backspace immediately. Remove its Übernehmen action. Clearing cash tender clears the stored amount; clearing a selected quantity removes only that article. Quantity edits recalculate deposit and total.
 - Payment button availability must recover after async deposit load and basket edits, while retaining busy-state, uncertain-payment replay and pending-refund protections. Card payments still require the established verified terminal integration.
+
+## Deposit pieces and cash difference approved 2026-10-20
+- Keep one Pfand total, additionally show the charged piece count across all configured products (including their configured unit multipliers). Counts do not alter amounts or historical charge/return records.
+- Keypad tender summary shows Noch zu zahlen for underpayment and Rückgeld for overpayment, calculated in integer cents against the total including deposit/discount. A typed zero shows the full amount due; clearing the field hides the summary. Never accept an underpayment or create another payment to display the difference.

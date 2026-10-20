@@ -40,13 +40,16 @@
   }
 
   function updateTender(){
-    const summary=document.querySelector('.bn-tender-summary');
-    if(!summary)return;
-    const given=Number(String(window.bnCashTenderValue||'').replace(',','.'));
-    let total=typeof cart==='undefined'?0:cart.reduce((sum,item)=>sum+item.qty*item.price,0);try{if(window.bnRetailSales)total=window.bnRetailSales.total(Math.round(total*100))/100}catch{total=0}
-    summary.classList.toggle('show',Number.isFinite(given)&&given>0);
-    summary.querySelector('[data-given]').textContent=given.toLocaleString('de-DE',{style:'currency',currency:'EUR'});
-    summary.querySelector('[data-change]').textContent=Math.max(0,given-total).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
+    const summary=document.querySelector('.bn-tender-summary');if(!summary)return;
+    const raw=String(window.bnCashTenderValue??'').trim(),given=Math.round(Number(raw.replace(',','.'))*100);
+    let total=typeof cart==='undefined'?0:Math.round(cart.reduce((sum,item)=>sum+item.qty*item.price,0)*100);
+    try{if(window.bnRetailSales)total=window.bnRetailSales.total(total)}catch{summary.classList.remove('show');return;}
+    const valid=raw!==''&&Number.isSafeInteger(given)&&given>=0&&Number.isSafeInteger(total);
+    summary.classList.toggle('show',valid);
+    const money=c=>(c/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'}),due=Math.max(0,total-given);
+    summary.dataset.balance=due?'due':'change';summary.querySelector('[data-given]').textContent=money(given);
+    summary.querySelector('[data-change-label]').textContent=due?'Noch zu zahlen':'Rückgeld';
+    summary.querySelector('[data-change]').textContent=money(due||Math.max(0,given-total));
   }
   window.bnResetTender=()=>{window.bnCashTenderValue='';if(selected<0)buffer='';updateDisplay();updateTender()};
 
@@ -129,8 +132,8 @@
         <div class="bn-cart-hint" role="status" aria-live="polite"></div>`;
       basket.insertBefore(tools,cartEl);
       const summary=document.createElement('div');
-      summary.className='bn-tender-summary';
-      summary.innerHTML='<span>Gegeben</span><strong data-given>0,00 €</strong><span>Rückgeld</span><strong data-change>0,00 €</strong>';
+      summary.className='bn-tender-summary';summary.setAttribute('role','status');summary.setAttribute('aria-live','polite');
+      summary.innerHTML='<span>Gegeben</span><strong data-given>0,00 €</strong><span data-change-label>Rückgeld</span><strong data-change>0,00 €</strong>';
       basket.insertBefore(summary,document.getElementById('paymentMethod'));
 
       tools.querySelector('[data-keypad-toggle]').onclick=()=>{
