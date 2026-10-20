@@ -1,0 +1,25 @@
+name: Offline sync regression
+on:
+  pull_request:
+    paths:
+      - "tests/offline-sync-failure-recovery.test.js"
+      - "apps/desktop/offline-sync.mjs"
+      - ".github/workflows/offline-sync-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/offline-sync-failure-recovery.test.js"
+      - "apps/desktop/offline-sync.mjs"
+      - ".github/workflows/offline-sync-tests.yml"
+permissions:
+  contents: read
+jobs:
+  offline-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test tests/offline-sync-failure-recovery.test.js
