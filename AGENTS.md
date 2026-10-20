@@ -220,3 +220,6 @@ Continue authorized development autonomously and preserve established behavior a
 - Red field/text warnings compare German postal codes and city against a bundled GeoNames reference in customer, delivery and trade recipient forms and delivery preview. Missing street/house-number components are flagged. This is not street/house-number existence or deliverability verification; state that limitation in the UI.
 - No customer address/name/email is sent to an external provider. `/api/v1/address-check` is authenticated owner/admin/manager-only, bounded, read-only and returns no customer records. Unsupported countries, missing reference data and network failures are unverified, never successful validation.
 - Warnings are advisory because aliases, special postcodes and source gaps exist; do not change recipient values automatically or gate a cash sale on lookup availability. Keep uncertain delivery/payment replays immutable. Source, date, license and regeneration instructions are in server/data/README.md.
+
+## Compact delivery address approved 2026-10-20
+- Delivery-note preview recipient inputs have no ordinary underline, tight line spacing and PLZ/Ort on one row. Keep direct editing, accessible focus outlines and the red invalid-address borders/text. Scope this styling to the preview address, not product search or ordinary recipient forms.
