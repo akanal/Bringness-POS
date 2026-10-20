@@ -17,6 +17,11 @@ const w=fixture();
 try{
  await w.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=w.document,e=k=>d.querySelector('[data-'+k+']');assert.equal(d.querySelectorAll('script').length,0);e('customers').value=cid;await e('use').onclick();assert.equal(d.getElementById('trade-name').value,address.name);
  await e('update').onclick();assert.equal(updates[0].version,2);assert.equal(updates[0].customer.email,address.email);
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
+ d.querySelector('[data-delivery-qty]').value='5';await e('preview').onclick();
+ assert(d.querySelector('dialog').open);assert.equal(d.querySelectorAll('dialog script').length,0);
+ const nameField=d.querySelector('dialog input[aria-label="Name / Firma"]');nameField.value='Updated customer';nameField.dispatchEvent(new w.Event('input'));assert.equal(d.getElementById('trade-name').value,'Updated customer');
+ assert.match(d.querySelector('dialog table').textContent,/Article/);d.querySelector('dialog button').click();assert.equal(d.querySelector('dialog'),null);
  d.querySelector('[data-delivery-qty]').value='5';await e('issue').onclick();assert.equal(requests.length,1);const stored=w.localStorage.getItem(key);assert(stored);assert.equal(e('retry').hidden,false);
  await e('issue').onclick();assert.equal(requests.length,1); // no new identity after uncertain save
  const resumed=fixture(stored);try{lost=false;await resumed.renderCustomerDeliveryModule();await resumed.document.querySelector('[data-retry]').onclick();assert.deepEqual(requests[1],requests[0]);assert.equal(resumed.localStorage.getItem(key),null);assert.match(resumed.document.querySelector('[data-status]').textContent,/Keine Zahlung/);
