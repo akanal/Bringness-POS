@@ -6,6 +6,9 @@ const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.en
 export async function migrateOfflineSales(db=pool){await db.query(`
  CREATE TABLE IF NOT EXISTS pos_offline_catalogs(id uuid PRIMARY KEY,company_id uuid NOT NULL REFERENCES companies(id),device_id uuid NOT NULL REFERENCES devices(id),actor_id uuid NOT NULL REFERENCES users(id),payload jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
  CREATE TABLE IF NOT EXISTS pos_offline_sales(id uuid PRIMARY KEY,catalog_id uuid NOT NULL REFERENCES pos_offline_catalogs(id),order_id uuid NOT NULL UNIQUE REFERENCES orders(id),fingerprint text NOT NULL,stock_state text NOT NULL DEFAULT 'pending',stock_error text,created_at timestamptz NOT NULL DEFAULT now());
+ ALTER TABLE pos_offline_sales ADD COLUMN IF NOT EXISTS stock_attempts integer NOT NULL DEFAULT 0;
+ ALTER TABLE pos_offline_sales ADD COLUMN IF NOT EXISTS stock_retry_after timestamptz;
+ CREATE INDEX IF NOT EXISTS pos_offline_stock_retry_queue ON pos_offline_sales(stock_retry_after,created_at,id) WHERE stock_state='pending';
 `);}
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status})};
 async function requireOfflineActor(db,user){
@@ -66,11 +69,13 @@ export async function handleOfflineSales(req,res,{db=pool}={}){
    const restaurantId=new URL(req.url,'http://local').searchParams.get('restaurantId');
    if(restaurantId!==null&&!offlineUuid.test(restaurantId))fail('Ungültige Betriebskennung');
    const rows=(await db.query(
-    "SELECT s.stock_state, count(*)::integer AS count FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::uuid IS NULL OR o.restaurant_id=$2) GROUP BY s.stock_state ORDER BY s.stock_state",
+    "SELECT s.stock_state, count(*)::integer AS count,count(*) FILTER (WHERE s.stock_state='pending' AND (s.stock_retry_after IS NULL OR s.stock_retry_after<=now()))::integer AS due,count(*) FILTER (WHERE s.stock_state='pending' AND s.stock_retry_after>now())::integer AS waiting,count(*) FILTER (WHERE s.stock_state='pending' AND s.stock_attempts>0)::integer AS attempted,min(s.stock_retry_after) FILTER (WHERE s.stock_state='pending' AND s.stock_retry_after>now()) AS next_retry_after FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::uuid IS NULL OR o.restaurant_id=$2) GROUP BY s.stock_state ORDER BY s.stock_state",
     [user.company_id,restaurantId])).rows;
    const counts={pending:0,applied:0,conflict:0,not_linked:0};
    for(const row of rows)counts[row.stock_state]=row.count;
-   return send(200,{counts,total:rows.reduce((sum,row)=>sum+row.count,0),restaurantId});
+   const retry={due:0,waiting:0,attempted:0,nextRetryAfter:null};
+   for(const row of rows){retry.due+=Number(row.due||0);retry.waiting+=Number(row.waiting||0);retry.attempted+=Number(row.attempted||0);if(row.next_retry_after&&(!retry.nextRetryAfter||new Date(row.next_retry_after)<new Date(retry.nextRetryAfter)))retry.nextRetryAfter=row.next_retry_after;}
+   return send(200,{counts,total:rows.reduce((sum,row)=>sum+row.count,0),restaurantId,retry});
   }
   if(path.endsWith('/status')){
    const params=new URL(req.url,'http://local').searchParams;
@@ -82,7 +87,7 @@ export async function handleOfflineSales(req,res,{db=pool}={}){
    const restaurantId=params.get('restaurantId');
    if(restaurantId!==null&&!offlineUuid.test(restaurantId))fail('Ungültige Betriebskennung');
    const sales=(await db.query(
-    'SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::text IS NULL OR s.stock_state=$2) AND ($4::uuid IS NULL OR o.restaurant_id=$4) ORDER BY s.created_at DESC,s.id DESC LIMIT $3',
+    'SELECT s.id,s.order_id,s.stock_state,s.stock_error,s.stock_attempts,s.stock_retry_after,s.created_at,r.receipt_number FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN receipts r ON r.order_id=s.order_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::text IS NULL OR s.stock_state=$2) AND ($4::uuid IS NULL OR o.restaurant_id=$4) ORDER BY s.created_at DESC,s.id DESC LIMIT $3',
     [user.company_id,state,limit,restaurantId])).rows;
    return send(200,{sales,filters:{state,limit,restaurantId}});
   }
@@ -102,7 +107,7 @@ export async function handleOfflineSales(req,res,{db=pool}={}){
    }
    return send(200,{results,succeeded:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length});
   }
-  if(path.endsWith('/retry')){if(!b||typeof b!=='object'||!offlineUuid.test(b.id||''))fail('Ungültige Verkaufskennung');const result=await db.query("UPDATE pos_offline_sales s SET stock_state='pending',stock_error=NULL FROM pos_offline_catalogs c WHERE s.catalog_id=c.id AND c.company_id=$1 AND s.id=$2 AND s.stock_state='conflict'",[user.company_id,b.id]);if(!result.rowCount)fail('Kein zugänglicher Lagerkonflikt',404);return send(200,{ok:true})}
+  if(path.endsWith('/retry')){if(!b||typeof b!=='object'||!offlineUuid.test(b.id||''))fail('Ungültige Verkaufskennung');const result=await db.query("UPDATE pos_offline_sales s SET stock_state='pending',stock_error=NULL,stock_attempts=0,stock_retry_after=NULL FROM pos_offline_catalogs c WHERE s.catalog_id=c.id AND c.company_id=$1 AND s.id=$2 AND s.stock_state='conflict' AND EXISTS(SELECT 1 FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=s.order_id AND r.company_id=$1)",[user.company_id,b.id]);if(!result.rowCount)fail('Kein zugänglicher Lagerkonflikt',404);return send(200,{ok:true})}
   if(!b||typeof b!=='object'||!/^[a-f0-9]{64}$/.test(b.deviceKey||''))fail('Ungültige Gerätekennung');
   return send(200,path.endsWith('/catalog')?{snapshot:await issueOfflineCatalog(db,user,b.deviceKey)}:await importOfflineSale(db,user,b.deviceKey,b.sale));
  }catch(e){return send(e.status||503,{error:e.status?e.message:'Offline-Synchronisierung momentan nicht verfügbar'});}
