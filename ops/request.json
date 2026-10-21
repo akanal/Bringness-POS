@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "",
-  "requestId": "dwd-postcode-assignment-20261021"
+  "revision": "55e7e4d686262568eab0744b3a3dc46239d0b85d",
+  "requestId": "dwd-postcode-explicit-release-20261021"
 }
