@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "7130057b5095bfeeb851512a4a069d243f88473e",
-  "requestId": "deposit-reader-approved-20261019"
+  "revision": "",
+  "requestId": "ocr-rows-approved-20261021"
 }

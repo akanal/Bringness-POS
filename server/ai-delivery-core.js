@@ -21,14 +21,15 @@ export function parseDeliveryLine(raw){
  if(!m)description=raw.replace(/(?:Positionswert|Positionspreis|Gesamt(?:preis)?)\s*netto.*$/i,'').trim();
  return {description:description.slice(0,200),quantity,unit,unitKnown,stockId:'',packQuantity,netCents:price?Math.round(Number(price[1].replace(',','.'))*100):null,reviewed:false,source:raw.slice(0,500),uncertain:!m};
 }
-export function textDraft(text,confidence=null){
+export function textDraft(text,confidence=null,originalText=''){
  text=String(text||'').slice(0,80000);const readable=(text.match(/[\p{L}\p{N}]/gu)||[]).length>=30&&(confidence==null||confidence>=45);
  const supplierMatch=text.match(/^(?:Lieferant|Absender)\s*[:=]\s*(.+)$/im);
  const referenceMatch=text.match(/^(?:Lieferscheinnummer|Lieferschein(?:\s*[- ]?(?:Nr\.?|Nummer))?|LS[- ]?Nr\.?)\s*[:#=]?\s*([A-Z0-9][A-Z0-9/_-]*\d[A-Z0-9/_-]*|\d+)\s*$/im);
- const dateMatch=text.match(/^(?:Lieferdatum|Lieferscheindatum|Datum)\s*[:=]?\s*(\d{2}[./]\d{2}[./]\d{4}|\d{4}-\d{2}-\d{2})\s*$/im);
- const metadata={supplier:supplierMatch?.[1].trim().slice(0,200)||'',reference:referenceMatch?.[1]||'',deliveryDate:dateValue(dateMatch?.[1])};
- const rawLines=text.split(/\r?\n/).filter(s=>s.trim());const lines=rawLines.slice(0,100).map((raw,index)=>({...parseDeliveryLine(raw),sourceIndex:index,header:raw===supplierMatch?.[0]||raw===referenceMatch?.[0]||raw===dateMatch?.[0]||/^--- Seite \d+ ---$/.test(raw)||/^Lieferschein\s*$/i.test(raw)||/^(?:Pos\.?|Artikel(?:nummer)?)\s+.*(?:Menge|Bezeichnung)/i.test(raw)}));
- return {text,readable,confidence,metadata,warning:!readable?unreadable:rawLines.length>100?'Mehr als 100 Textzeilen: Dokument bitte aufteilen und alle Positionen prüfen.':'Vorausgefüllte Vorschläge mit dem Original vergleichen. Nur Abweichungen korrigieren, dann bestätigen.',lines};
+ const datePattern=/(?:\b(?:Lieferdatum|Lieferscheindatum)|^Datum)\s*[:=]?\s*(\d{2}[./]\d{2}[./]\d{4}|\d{4}-\d{2}-\d{2})\s*$/gim;
+ const dateMatches=[...text.matchAll(datePattern)],dates=[...new Set(dateMatches.map(m=>dateValue(m[1])).filter(Boolean))];
+ const metadata={supplier:supplierMatch?.[1].trim().slice(0,200)||'',reference:referenceMatch?.[1]||'',deliveryDate:dates.length===1&&dateMatches.every(m=>dateValue(m[1]))?dates[0]:''};
+ const rawLines=text.split(/\r?\n/).filter(s=>s.trim());const lines=rawLines.slice(0,100).map((raw,index)=>({...parseDeliveryLine(raw),sourceIndex:index,header:raw===supplierMatch?.[0]||raw===referenceMatch?.[0]||dateMatches.some(m=>raw===m[0])||/^--- Seite \d+ ---$/.test(raw)||/^Lieferschein\s*$/i.test(raw)||/^(?:Pos\.?|Artikel(?:nummer)?)\s+.*(?:Menge|Bezeichnung)/i.test(raw)}));
+ return {text,readable,confidence,metadata,...(typeof originalText==='string'&&originalText?{originalText:originalText.slice(0,80000)}:{}),warning:!readable?unreadable:rawLines.length>100?'Mehr als 100 Textzeilen: Dokument bitte aufteilen und alle Positionen prüfen.':confidence!=null&&confidence<60?'Die Erkennung ist teilweise unsicher. Alle Seiten, Artikel, Mengen und Preise mit dem Original prüfen; fehlende Angaben manuell ergänzen.':'Vorausgefüllte Vorschläge mit dem Original vergleichen. Nur Abweichungen korrigieren, dann bestätigen.',lines};
 }
 export function suggestDelivery(draft,stocks,mappings=[],knownSuppliers=[]){
  const metadata={...draft.metadata};if(!metadata.supplier){const doc=normalizeName(draft.text),found=knownSuppliers.filter(s=>normalizeName(s)&&(' '+doc+' ').includes(' '+normalizeName(s)+' '));if(found.length===1)metadata.supplier=found[0];}

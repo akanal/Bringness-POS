@@ -20,3 +20,14 @@ test('only one previously confirmed vendor in document can fill absent supplier'
  const draft=textDraft('Frische GmbH\nLieferschein 123456\nMehl 3 kg');assert.equal(suggestDelivery(draft,[],[],['Frische GmbH']).metadata.supplier,'Frische GmbH');
  assert.equal(suggestDelivery(textDraft('Frische GmbH Andere GmbH\nMehl 3 kg'),[],[],['Frische GmbH','Andere GmbH']).metadata.supplier,'');
 });
+
+test('noisy photographed invoice row retains quantity but never guesses product, net price or approval',()=>{
+ // Anonymized structure from a real photographed invoice: OCR noise before a numbered row.
+ const draft=textDraft('Rechnung Nr. RE-TEST\nOS 1. Musterware 3,00 Stk 2,00 EUR 6,00 EUR N\nUmsatzsteuer 19% 1,14 EUR',49);
+ const result=suggestDelivery(draft,[{id:'stock',name:'Musterware',unit:'piece'}]);
+ const row=result.lines.find(line=>line.quantity!==null);
+ assert.equal(row.quantity,3);assert.equal(row.unit,'piece');
+ assert.equal(row.stockId,'');assert.equal(row.netCents,null);assert.equal(row.reviewed,false);
+ assert.match(row.description,/OS 1\./);assert.match(row.matchBasis,/prüfen/);
+ assert.equal(result.metadata.reference,''); // An invoice number is not a delivery-note number.
+});
