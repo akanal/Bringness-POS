@@ -1,5 +1,5 @@
 {
-  "operation": "status",
+  "operation": "backup",
   "target": "all",
-  "requestId": "preflight-stock-release-20261021"
+  "requestId": "backup-stock-release-20261021"
 }
