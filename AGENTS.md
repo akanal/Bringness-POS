@@ -226,3 +226,8 @@ Continue authorized development autonomously and preserve established behavior a
 
 ## Smaller delivery window approved 2026-10-20
 - Reduce delivery preview text to 13px with compact padding/headings and remove the artificial minimum paper height. Keep the window within the viewport; long documents scroll without discarding rows. Article rows alternate light gray/white in preview and printed delivery notes. Preserve editing and red address warnings.
+
+## Weak photographed-document OCR follow-up approved 2026-10-21
+- For low-confidence OCR, a bounded sparse second pass may reconstruct observed horizontal fragments only if confidence improves and every already recognized quantity/unit occurrence survives. Preserve the previous OCR text across draft reloads and show it in the existing original-text disclosure. No image crop or external OCR service.
+- Labelled delivery dates in joined columns may be proposed; conflicting or invalid dates remain empty. Invoice references are not delivery-note references. Keep exact-name matching, unknown net prices, manual review, tenant/stock/payment guards and immutable completed imports.
+- Real-photo evidence and remaining practical limits are in docs/real-document-check-20261021.md. Languages, Windows signing and simplified deposit returns remain paused; owner confirmed Mollie test/activation success, not productive payments.

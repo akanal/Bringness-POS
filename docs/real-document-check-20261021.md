@@ -33,3 +33,13 @@ Command: `node --test server/ai-delivery-core.test.js server/ai-delivery-suggest
 - Simplified deposit returns remain an idea only; do not implement yet. Existing sale/deposit behavior stays.
 - DWD live account test still needs the restaurant account; the supplier account is not a substitute.
 - TSE provider access/hardware/terms and physical scanner/Windows acceptance remain external/physical prerequisites. Do not describe them as completed based on source tests.
+
+## Implemented follow-up
+
+A bounded second sparse-OCR pass is attempted for weak image text. Observed page coordinates reassemble fragments on the same row. The alternative is selected only with at least five additional confidence points, within existing text/line limits, and while preserving every previously recognized quantity/unit occurrence. Otherwise the first pass remains authoritative. Worker timeout and single-recognition guard remain in force.
+
+The previous OCR text is retained with the draft and visible in the existing original-text disclosure, including after reopening/duplicate upload. Labelled delivery dates can be recovered from a joined multi-column row; conflicting/invalid dates remain empty. Weak-confidence text explicitly warns that recognition is partial.
+
+Real-photo rerun: confidence increased from 49 to 59; clean merchandise name, correct original quantity and delivery date recovered. Matching was tested against a synthetic exact-name stock fixture only; no real account mapping or stock write was performed. Supplier and invoice-as-delivery reference were not guessed, net price remained unknown, reviewed stayed false. Original OCR text was retained.
+
+Verification: 531 unit tests passed; full AI HTTP/database/DOM integration passed. This improves the demonstrated defect; it does not close physical-device/operational acceptance or promise universal supplier-layout recognition.
