@@ -1,4 +1,5 @@
 (()=>{
+  const t=source=>window.BringnessGuestLanguage?.t(source)||source;
   const params=new URLSearchParams(location.search);
   const code=params.get("code")||params.get("collection");
   if(!code)return;
@@ -22,8 +23,8 @@
     const language=document.getElementById("language");if(language?.parentElement)language.parentElement.hidden=true;
     const email=document.getElementById("guestReceiptEmail");if(email?.parentElement)email.parentElement.hidden=true;
     const heading=document.getElementById("heading");
-    if(heading&&heading.textContent!=="Bestellung übermittelt")heading.textContent="Bestellung übermittelt";
-    const status=document.getElementById("status"),message="Für eine neue Bestellung bitte den QR-Code erneut scannen.";
+    if(heading&&heading.textContent!==t("Bestellung übermittelt"))heading.textContent=t("Bestellung übermittelt");
+    const status=document.getElementById("status"),message=t("Für eine neue Bestellung bitte den QR-Code erneut scannen.");
     if(status&&status.textContent!==message)status.textContent=message;
   }
 
@@ -45,7 +46,7 @@
     if(!extras.length){originalAdd();return}
     const overlay=document.createElement("div");overlay.style.cssText="position:fixed;inset:0;background:#07182c99;z-index:12000;display:grid;place-items:center;padding:16px";
     const current=new Set(chosen.get(productId)||[]);
-    overlay.innerHTML='<div style="background:#fff;border-radius:18px;padding:22px;width:min(480px,100%);max-height:85vh;overflow:auto"><h2 style="margin-top:0">'+esc(productName)+'</h2><p>Beilagen & Extras auswählen</p><div>'+extras.map(x=>'<label style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eee"><span><input type="checkbox" value="'+esc(x.id)+'" '+(current.has(x.id)?'checked':'')+'> '+esc(x.name)+'</span><b>+'+euro(x.price_cents)+'</b></label>').join("")+'</div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button data-cancel type="button">Abbrechen</button><button data-add type="button" style="background:#ff7628;color:#fff;border:0;border-radius:10px;padding:11px 15px;font-weight:800">Hinzufügen</button></div></div>';
+    overlay.innerHTML='<div style="background:#fff;border-radius:18px;padding:22px;width:min(480px,100%);max-height:85vh;overflow:auto"><h2 style="margin-top:0">'+esc(productName)+'</h2><p>'+esc(t('Beilagen & Extras auswählen'))+'</p><div>'+extras.map(x=>'<label style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eee"><span><input type="checkbox" value="'+esc(x.id)+'" '+(current.has(x.id)?'checked':'')+'> '+esc(x.name)+'</span><b>+'+euro(x.price_cents)+'</b></label>').join("")+'</div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button data-cancel type="button">'+esc(t('Abbrechen'))+'</button><button data-add type="button" style="background:#ff7628;color:#fff;border:0;border-radius:10px;padding:11px 15px;font-weight:800">'+esc(t('Hinzufügen'))+'</button></div></div>';
     overlay.querySelector("[data-cancel]").onclick=()=>overlay.remove();
     overlay.querySelector("[data-add]").onclick=()=>{chosen.set(productId,[...overlay.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value));overlay.remove();originalAdd()};
     overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
@@ -57,7 +58,7 @@
       btn.dataset.extrasReady="1";
       const productId=btn.dataset.add,original=btn.onclick;
       if(typeof original!=="function")return;
-      btn.onclick=e=>{e.preventDefault();e.stopPropagation();chooseExtras(productId,btn.getAttribute("aria-label")?.replace(" hinzufügen","")||"Speise",()=>original.call(btn,e))};
+      btn.onclick=e=>{e.preventDefault();e.stopPropagation();chooseExtras(productId,btn.closest(".item")?.querySelector(".food-copy b")?.textContent||"Speise",()=>original.call(btn,e))};
     });
   }
 
