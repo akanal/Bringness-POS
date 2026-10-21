@@ -30,16 +30,23 @@ Bereits bestätigt: Mollie-Testzahlung und Aktivierung durch den Inhaber; DWD-Li
 
 Für jeden späteren Durchlauf Datum/Gerät, bestanden/fehlgeschlagen/blockiert, Ursache und nächsten Fix ergänzen. Testdaten und produktive Verkäufe klar auseinanderhalten. Neue Produktivzahlungen, Beschaffungen oder destruktive Wiederherstellungen erfordern den konkret freigegebenen Ablauf.
 
-Ergänzung zu T02: Ungültiges Kalenderdatum, 24:00 als Zeitpunkt, Sommerzeit-Lücke (z. B. Europe/Berlin 29.03.2026 02:30), Herbst-Doppelstunde, Ende vor/gleich Beginn und Schicht über Mitternacht prüfen. Fehler dürfen keine API-Schreibanfrage auslösen; Werbeformular muss den Fehler anzeigen. Gerätezeitzone für diese Fälle ausdrücklich dokumentieren.
+## Detailfälle innerhalb der bestehenden Testpunkte
 
-T02 umfasst auch die nachgeladene Vertretungsübersicht, den persönlichen Kellner-Dienstplan und lokale AI-Termine; Anzeige nach Aktualisieren und erneuter Anmeldung prüfen.
+Diese Fälle gehören zu den oben genannten IDs; sie sind keine zusätzlichen oder doppelt durchzuführenden Testblöcke.
 
-T02: Bestehenden Termin und Werbezeitraum mit zweiter 02:30-Stunde am 25.10.2026 in Europe/Berlin laden, ausschließlich Titel/Hinweis ändern und speichern; ursprünglicher UTC-Zeitpunkt muss einschließlich Sekunden erhalten bleiben. Danach Uhrzeit bewusst ändern und UTC-Konvertierung prüfen.
+### T02 – Zeitformat und Zeitumstellung
 
-T02 Anzeigeabschluss: Belegliste und Steuerberater-CSV, Kassenabschluss, Küche/Bestellungen, Center-Status, Medienübersicht, Fernhilfe/Admin-Protokoll sowie Service-Präsenzansicht auf h23 prüfen. Mitternacht muss 00:xx anzeigen; Mengen/Geldbeträge unverändert. Browsergebiet und manuelle 12-Stunden-Voreinstellung variieren; neue Asset-Versionen nach Neuladen prüfen.
+- Alle Zeitformulare einschließlich lokaler AI-Termine und Werbezeiträume: ungültiges Kalenderdatum, 24:00 als Zeitpunkt, Sommerzeit-Lücke (Europe/Berlin, 29.03.2026 02:30), Ende vor/gleich Beginn und Schicht über Mitternacht. Fehler verhindern eine API-Schreibanfrage und bleiben im Formular sichtbar.
+- Bestehenden Termin/Werbezeitraum aus der zweiten 02:30-Stunde am 25.10.2026 laden und nur Titel/Hinweis ändern. Ursprünglicher UTC-Zeitpunkt einschließlich Sekunden bleibt erhalten. Anschließend bewusst andere Uhrzeit wählen und Konvertierung prüfen.
+- Nachgeladene Vertretungsübersicht, persönlicher Kellner-Dienstplan, Service-Präsenzansicht, Belegliste/Steuerberater-CSV, Kassenabschluss, Bestellungen/Küche, Center-Status, Medienübersicht und Fernhilfe/Admin-Protokoll prüfen: h23, Mitternacht 00:xx, unveränderte Mengen/Geldbeträge.
+- Browsergebiet und manuelle 12-Stunden-Voreinstellung variieren. Gerätezeitzone dokumentieren; nach Neuladen und erneuter Anmeldung auch aktuelle Asset-Versionen prüfen.
 
-T12 Wiederherstellung nach Katalogwechsel: verlorene lokale Verkaufsantwort, Hintergrund-Katalogaktualisierung und App-Neustart kombinieren; ursprünglichen Vorgang genau einmal mit Originalpreisen bestätigen. Fremde/fehlende Kataloge bleiben gesperrt; verspätete Anzeigeantwort darf neueren Zustand nicht überschreiben. Details: offline-interrupted-payment-recovery.md.
+### T12 – Wiederanlauf, Katalogwechsel und Mandantentrennung
 
-T12/T14 gemeinsamer Mandantenfall: Firma A vollständig übertragen, zu Firma B wechseln; Verlauf, Zähler und Export dürfen keine A-Belege enthalten. Direkter Wiederholungsaufruf mit A-Verkaufs-ID unter B wird abgewiesen. Nach gültigem Wechsel zurück zu A bleiben die unveränderten Originalbelege zugänglich. Keine doppelte Testdurchführung nötig.
+- Verlorene lokale Verkaufsantwort nach Commit, Hintergrund-Katalogaktualisierung und App-Neustart kombinieren. Vorgang unter ursprünglicher Verkaufs-ID genau einmal mit Originalpreisen bestätigen; danach wieder frischen Katalog verwenden.
+- Abgelaufenen ursprünglichen Katalog mit bereits gespeichertem Verkauf sowie separat einen noch nicht gespeicherten Vorgang prüfen. Wiederholung darf keine neue abgelaufene Buchung oder verlängerte Lizenz erzeugen. Fremde/fehlende Kataloge bleiben gesperrt.
+- Während einer Anzeigeabfrage einen Katalog-/Firmenwechsel oder neuen Bezahlvorgang auslösen. Katalog, Verlauf und Zähler bleiben konsistent; verspätete Antwort darf neueren Zustand nicht überschreiben.
+- Kurze gültige Gerätefreigabe später serverseitig verlängern: bei bestehender Anmeldung rechtzeitig automatisch aktualisieren. Ohne Verlängerung keine neuen Offline-Buchungen nach Ablauf.
+- Firma A vollständig übertragen und zu B wechseln: Verlauf, Zähler und Export enthalten keine A-Belege; alte Warenkorb-/Druckanzeige wird geleert. Direkte Wiederholung einer A-Verkaufs-ID unter B wird abgewiesen. Nach legitimem Wechsel zurück zu A bleiben Originalbelege unverändert zugänglich. Dieser gemeinsame Mandantenfall deckt auch T14 ab und wird nur einmal durchgeführt.
 
-T12 Katalogfrist: kurze gültige Gerätefreigabe, spätere serverseitige Verlängerung und bestehende Anmeldung; Aktualisierung vor Ablauf ohne manuelles Eingreifen. Ohne Verlängerung keine neue Offline-Buchung nach Ablauf. Firmenwechsel mit altem Warenkorb/ausgewähltem Druckbeleg leert nur diese Anzeige, nicht gespeicherte Verkäufe.
+Details zum Entwicklungsstand: offline-interrupted-payment-recovery.md. Funktions- und Geräteprüfung weiterhin ausstehend.

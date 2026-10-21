@@ -22,22 +22,22 @@ export async function createOfflineLedger(db,quote) {
     await tx.query('INSERT INTO offline_catalog VALUES($1,$2,true) ON CONFLICT(id) DO UPDATE SET current=true',[snapshot.id,JSON.stringify(snapshot)]);
    });
   },
-  async view({snapshotId}={}){
+  async view({snapshotId}={}){return db.transaction(async tx=>{
    if(snapshotId!==undefined&&(typeof snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(snapshotId)))throw Error('Ungültiger Wiederherstellungskatalog.');
    // An interrupted payment retains its original prices even after background catalog refresh.
    // Never expose an archived catalog belonging to another company or device.
-   const snapshot=snapshotId?(await db.query(`SELECT saved.payload FROM offline_catalog saved
+   const snapshot=snapshotId?(await tx.query(`SELECT saved.payload FROM offline_catalog saved
     JOIN offline_catalog active ON active.current=true
     AND saved.payload->>'companyId'=active.payload->>'companyId'
     AND saved.payload->>'deviceKey'=active.payload->>'deviceKey'
     WHERE saved.id=$1`,[snapshotId])).rows[0]?.payload:
-    (await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
+    (await tx.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
    if(snapshotId&&!snapshot)throw Error('Der ursprüngliche Katalog des unterbrochenen Verkaufs ist für diesen Betrieb und dieses Gerät nicht verfügbar. Bitte Support kontaktieren.');
    // Always show every unresolved sale before historical synced receipts.
-   const sales=(await db.query(`SELECT s.receipt,s.synced_at,s.cloud_receipt,s.error FROM offline_sales s JOIN offline_catalog catalog ON catalog.id=s.snapshot_id WHERE ${activeScope} ORDER BY (s.synced_at IS NULL) DESC,s.created_at DESC,s.id DESC LIMIT 100`)).rows;
-   const counts=(await db.query(`SELECT count(*) FILTER (WHERE s.synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE s.synced_at IS NULL AND s.error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE s.synced_at IS NOT NULL)::bigint AS synced FROM offline_sales s JOIN offline_catalog catalog ON catalog.id=s.snapshot_id WHERE ${activeScope}`)).rows[0];
+   const sales=(await tx.query(`SELECT s.receipt,s.synced_at,s.cloud_receipt,s.error FROM offline_sales s JOIN offline_catalog catalog ON catalog.id=s.snapshot_id WHERE ${activeScope} ORDER BY (s.synced_at IS NULL) DESC,s.created_at DESC,s.id DESC LIMIT 100`)).rows;
+   const counts=(await tx.query(`SELECT count(*) FILTER (WHERE s.synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE s.synced_at IS NULL AND s.error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE s.synced_at IS NOT NULL)::bigint AS synced FROM offline_sales s JOIN offline_catalog catalog ON catalog.id=s.snapshot_id WHERE ${activeScope}`)).rows[0];
    return {snapshot,sales,counts:{pending:Number(counts.pending),errors:Number(counts.errors),synced:Number(counts.synced)}};
-  },
+  });},
   async sale(request,expectedDeviceKey){return db.transaction(async tx=>{
    if(!request||typeof request!=='object'||Array.isArray(request)||typeof request.id!=='string'||typeof request.snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id)||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.snapshotId))throw Error('Ungültige Offline-Verkaufskennung.');
    if(expectedDeviceKey){
