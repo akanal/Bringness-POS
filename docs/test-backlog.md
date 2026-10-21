@@ -60,3 +60,21 @@ Details zum Entwicklungsstand: offline-interrupted-payment-recovery.md. Die besc
 T04/T12 POS-AI-Fortschritt: mehr als 200 Abschlüsse mit Mikrosekunden innerhalb derselben Millisekunde, Worker-Neustart und zwei unterschiedlich schnelle Worker prüfen. Fehlendes Rezept korrigieren und verspäteten Offline-Import mit verlorener AI-Bestätigung wiederholen; richtige Standortbindung und genau eine Lagerwirkung. Weitere Fälle/Abgrenzung: pos-ai-sync-cursor-20261021.md. Zusätzliche Tests auf erneuten Inhaberwunsch vorerst zurückgestellt.
 
 Zum selben T04/T12-Durchlauf gehört der bereits in PR115 gespeicherte Worker-Schutz: gesperrten Offline-Verkauf überspringen, unabhängige Verkäufe weiterbearbeiten und nach Rollback von A/Commit von B verhindern, dass As spätere Fehlerprotokollierung applied/not_linked/conflict überschreibt. Kein zusätzlicher doppelter Testblock.
+
+T04/T12 Standortbindung ergänzen: abweichende POS-Firma bei wartendem Lagerauftrag darf keine AI-Buchung auslösen; abweichendes Konto/Firma bei Verfügbarkeitsabgleich darf keine Artikel ändern. Zwischen Auswahl und Verkaufsimport geänderte Connector-Konto-/Standort-/Betriebsbindung muss vor Lagerwirkung mit Konflikt abbrechen. Unveränderte Wiederholungen behalten die bestehenden Ereigniskennungen. Nur Syntax geprüft, Funktionsabnahme zurückgestellt.
+
+T04/T12 gleiche Standortbindungsabnahme: Offline-Katalog einer abweichenden Firma führt zu stock_state=conflict ohne AI-Aufruf; unveränderte Firmenbindung verarbeitet weiterhin dieselben stabilen Ereigniskennungen. Funktionsprüfung zurückgestellt.
+
+T04/T12 Zuordnungsschutz ebenfalls bei accept/start/cancel/return abnehmen: nach Auswahl geänderte POS-Firma, Betrieb oder freigebender Inhaber führt vor jeder Lagerwirkung zum Konflikt. Connector bleibt während der Lagertransaktion gesperrt; unveränderte Wiederholung behält bestehende Idempotenz. Keine zusätzlichen Funktionstests ausgeführt.
+
+T04/T12 Wiederanlauf ergänzen: verlorene AI-Bestätigung und anschließendes 401/403/408/429 lassen denselben POS-Lagerauftrag beziehungsweise Offline-Verkauf pending (Fehler sichtbar). Nach Wiederherstellung mit unveränderten Buchungskennungen fortsetzen, keine zweite Reservierung/Verbrauchsbuchung/Rückbuchung. Fachliche Konflikte bleiben rejected/conflict. Syntaxprüfung erfolgt; zusätzliche Funktionstests zurückgestellt.
+
+T04/T12: von anderem Worker gesperrte POS-Bestellung überspringen und unabhängige Lageraufträge weiterverarbeiten; danach dieselbe Kennung erneut abgleichen. Funktionsprüfung zurückgestellt.
+
+T04: Rezept mit fehlender oder fremdem Konto/Standort zugehöriger Zutat als nicht verfügbar behandeln und sperren; vollständig gültige Rezeptzuordnung behält bestehende Mengenprüfung. Funktionsprüfung zurückgestellt.
+
+T04 Rezeptfreigabe: jede konfigurierte Zutat muss im eigenen Standort vorhanden sein; teilweise durch Standortfilter ausgeblendete Zutaten dürfen eine Freigabe nicht ermöglichen. Funktionsprüfung zurückgestellt.
+
+T12 Offline-Diagnose: not_linked ist als Statusfilter abrufbar und mit Null im Summary vorhanden; Übergang nach vorübergehendem Fehler zu not_linked entfernt veraltete Fehlermeldung. Keine automatische Nachbuchung historischer unverbundener Verkäufe. Funktionsprüfung zurückgestellt.
+
+T04 Verkaufsimport: Austausch des freigebenden POS-Inhabers zwischen Auswahl und Transaktion führt vor Lagerwirkung zum Konflikt, wie beim Lifecycle-Abgleich. Bestehende Ereigniskennungen und Rückbuchungseffekte bleiben unverändert. Funktionsprüfung zurückgestellt.

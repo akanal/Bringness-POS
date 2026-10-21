@@ -68,14 +68,14 @@ export async function handleOfflineSales(req,res,{db=pool}={}){
    const rows=(await db.query(
     "SELECT s.stock_state, count(*)::integer AS count FROM pos_offline_sales s JOIN pos_offline_catalogs c ON c.id=s.catalog_id JOIN orders o ON o.id=s.order_id WHERE c.company_id=$1 AND ($2::uuid IS NULL OR o.restaurant_id=$2) GROUP BY s.stock_state ORDER BY s.stock_state",
     [user.company_id,restaurantId])).rows;
-   const counts={pending:0,applied:0,conflict:0};
+   const counts={pending:0,applied:0,conflict:0,not_linked:0};
    for(const row of rows)counts[row.stock_state]=row.count;
    return send(200,{counts,total:rows.reduce((sum,row)=>sum+row.count,0),restaurantId});
   }
   if(path.endsWith('/status')){
    const params=new URL(req.url,'http://local').searchParams;
    const state=params.get('state');
-   if(state!==null&&!['pending','applied','conflict'].includes(state))fail('Ungültiger Lagerstatus');
+   if(state!==null&&!['pending','applied','conflict','not_linked'].includes(state))fail('Ungültiger Lagerstatus');
    const limitText=params.get('limit')||'100';
    if(!/^[1-9][0-9]{0,2}$/.test(limitText)||Number(limitText)>100)fail('Limit muss zwischen 1 und 100 liegen');
    const limit=Number(limitText);
