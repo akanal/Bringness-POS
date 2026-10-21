@@ -50,3 +50,7 @@ Diese Fälle gehören zu den oben genannten IDs; sie sind keine zusätzlichen od
 - Firma A vollständig übertragen und zu B wechseln: Verlauf, Zähler und Export enthalten keine A-Belege; alte Warenkorb-/Druckanzeige wird geleert. Direkte Wiederholung einer A-Verkaufs-ID unter B wird abgewiesen. Nach legitimem Wechsel zurück zu A bleiben Originalbelege unverändert zugänglich. Dieser gemeinsame Mandantenfall deckt auch T14 ab und wird nur einmal durchgeführt.
 
 Details zum Entwicklungsstand: offline-interrupted-payment-recovery.md. Die beschriebenen Offline- und Werbeformular-Randfälle sind automatisiert bestanden; echte Geräteprüfung und übrige praktische Zeitformularabnahme stehen aus.
+
+### T04 / T12 – Konkurrierende POS-AI-Abgleichsprozesse
+
+- Zwei Worker wählen denselben Offline-Verkauf: gesperrter Vorgang wird übersprungen; unabhängige Verkäufe können weiterlaufen. Nach Rollback von A schließt B erfolgreich ab; anschließende Fehlerprotokollierung von A darf applied/not_linked/conflict nicht überschreiben. Stabile Ereigniskennungen und Originalzeitpunkt bleiben erhalten. Nur Syntax-/Diffprüfung ausgeführt, Funktionsprüfung auf Wunsch zurückgestellt.
