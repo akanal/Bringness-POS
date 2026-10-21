@@ -33,3 +33,5 @@ Für jeden späteren Durchlauf Datum/Gerät, bestanden/fehlgeschlagen/blockiert,
 Ergänzung zu T02: Ungültiges Kalenderdatum, 24:00 als Zeitpunkt, Sommerzeit-Lücke (z. B. Europe/Berlin 29.03.2026 02:30), Herbst-Doppelstunde, Ende vor/gleich Beginn und Schicht über Mitternacht prüfen. Fehler dürfen keine API-Schreibanfrage auslösen; Werbeformular muss den Fehler anzeigen. Gerätezeitzone für diese Fälle ausdrücklich dokumentieren.
 
 T02 umfasst auch die nachgeladene Vertretungsübersicht, den persönlichen Kellner-Dienstplan und lokale AI-Termine; Anzeige nach Aktualisieren und erneuter Anmeldung prüfen.
+
+T02: Bestehenden Termin und Werbezeitraum mit zweiter 02:30-Stunde am 25.10.2026 in Europe/Berlin laden, ausschließlich Titel/Hinweis ändern und speichern; ursprünglicher UTC-Zeitpunkt muss einschließlich Sekunden erhalten bleiben. Danach Uhrzeit bewusst ändern und UTC-Konvertierung prüfen.
