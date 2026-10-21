@@ -934,6 +934,14 @@ assert.equal(stationWindow.document.getElementById('weatherStation').value,'1038
 assert.equal(stationWindow.document.querySelector('[name="weatherAutomatic"]').checked,false);
 assert.ok(stationWindow.document.getElementById('weatherPostalCode'));
 assert.match(stationWindow.document.getElementById('notice').textContent,/Einstellungen speichern/);
+const openingTime=stationWindow.document.getElementById('open-0');assert.equal(openingTime.type,'text');assert.equal(openingTime.value,'10:00');
+for(const value of ['00:00','09:05','23:59']){openingTime.value=value;assert.equal(openingTime.checkValidity(),true,value)}
+for(const value of ['24:00','12:60','9:05','10:00 AM']){openingTime.value=value;assert.equal(openingTime.checkValidity(),false,value)}
+assert.equal(stationWindow.document.querySelectorAll('input[type="time"],input[type="datetime-local"]').length,0);
+const eventDate=stationWindow.document.getElementById('startsAtDate'),eventTime=stationWindow.document.getElementById('startsAtTime');assert.equal(eventDate.type,'date');assert.equal(eventTime.type,'text');
+const newEvent=stationWindow.document.querySelector('[data-form="local-event"]');newEvent.elements.title.value='24-hour DOM test';newEvent.elements.place.value='Local test';newEvent.elements.startsAtDate.value='2026-11-01';newEvent.elements.startsAtTime.value='19:30';newEvent.elements.endsAtDate.value='2026-11-01';newEvent.elements.endsAtTime.value='22:00';newEvent.dispatchEvent(new stationWindow.Event('submit',{bubbles:true,cancelable:true}));
+await until(()=>stationWindow.document.getElementById('notice').textContent==='Termin gespeichert.');
+const timeEvent=(await query("SELECT starts_at,ends_at FROM ai_local_events WHERE title='24-hour DOM test' AND account_id=$1",[invAccount])).rows[0];assert.equal(new Date(timeEvent.starts_at).getTime(),new Date('2026-11-01T19:30').getTime());assert.equal(new Date(timeEvent.ends_at).getTime(),new Date('2026-11-01T22:00').getTime());
 stationWindow.close();console.log('Nationwide DWD station search DOM and postcode assignment persistence/validation/roles passed.');
 
 
