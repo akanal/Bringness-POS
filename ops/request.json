@@ -1,5 +1,6 @@
 {
-  "operation": "backup",
-  "target": "all",
-  "requestId": "backup-stock-release-20261021"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "712ff0846849f5b33f640fc20b3b88cbd409d81c",
+  "requestId": "deploy-stock-ai-20261021"
 }
