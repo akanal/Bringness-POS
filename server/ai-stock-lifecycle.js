@@ -40,7 +40,7 @@ export async function kitchenAction(pool,u,b,connector=null){
    // Lock the binding for the full reservation/debit/reversal transaction.
    const current=(await c.query("SELECT * FROM ai_connectors WHERE id=$1 AND account_id=$2 AND location_id=$3 AND active AND consumption_mode='lifecycle' FOR UPDATE",[connector.id,u.id,locationId])).rows[0];
    if(!current)fail('Anbindung nicht aktiv',403);
-   if(connector.account_id!==u.id||current.kind!==connector.kind||current.kind==='pos'&&['pos_company_id','pos_restaurant_id','pos_user_id'].some(field=>(current[field]??null)!==(connector[field]??null)))fail('Lagerzuordnung hat sich geändert; Abgleich erneut starten',409);
+   if(connector.account_id!==u.id||(current.kind??null)!==(connector.kind??null)||current.kind==='pos'&&['pos_company_id','pos_restaurant_id','pos_user_id'].some(field=>(current[field]??null)!==(connector[field]??null)))fail('Lagerzuordnung hat sich geändert; Abgleich erneut starten',409);
   }
   const previous=(await c.query('SELECT * FROM ai_kitchen_requests WHERE account_id=$1 AND request_key=$2',[u.id,requestKey])).rows[0];if(previous){if(previous.fingerprint!==fingerprint||(occurredAt&&previous.occurred_at&&new Date(previous.occurred_at).toISOString()!==occurredAt))fail('Buchungskennung bereits anders verwendet',409);await c.query('COMMIT');return {...previous.response,replayed:true}}
   if(!(await c.query('SELECT 1 FROM ai_locations WHERE id=$1 AND account_id=$2',[locationId,u.id])).rowCount)fail('Standort nicht gefunden',404);
