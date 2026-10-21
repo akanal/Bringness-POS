@@ -268,6 +268,16 @@ assert.equal((await call('planning-context?locationId='+loc.id,null,tokens.other
 assert.equal((await call('planning-settings',planSettings,tokens.supplier)).status,403);
 assert.equal((await call('planning-settings',{...planSettings,latitude:100},tokens.buyer)).status,400);
 assert.equal((await call('planning-settings',planSettings,tokens.buyer)).status,200);
+assert.equal((await call('weather-stations?q=Berlin',null,tokens.supplier)).status,403);
+assert.ok((await call('weather-stations?q=Berlin',null,tokens.buyer)).stations.some(s=>s.id==='10384'));
+assert.equal((await call('weather-stations?postcode=00000',null,tokens.buyer)).status,400);
+assert.equal((await call('planning-settings',{...planSettings,weatherPostalCode:'10115',weatherAutomatic:true},tokens.buyer)).status,200);
+const assignedWeather=(await query('SELECT weather_station,weather_postal_code,weather_automatic FROM ai_plan_settings WHERE location_id=$1',[loc.id])).rows[0];
+assert.ok(assignedWeather.weather_station);assert.equal(assignedWeather.weather_postal_code,'10115');assert.equal(assignedWeather.weather_automatic,true);
+assert.equal((await call('planning-settings',{...planSettings,weatherPostalCode:'00000',weatherAutomatic:true},tokens.buyer)).status,400);
+assert.equal((await query('SELECT weather_station FROM ai_plan_settings WHERE location_id=$1',[loc.id])).rows[0].weather_station,assignedWeather.weather_station);
+assert.equal((await call('planning-settings',planSettings,tokens.buyer)).status,200);
+
 assert.equal((await call('planning-settings',{...planSettings,locationId:regionalLoc.id,latitude:52.51},tokens.other)).status,200);
 const eventBody={locationId:loc.id,title:'Regional feast',place:'Town square',startsAt:new Date(Date.now()+3600000).toISOString(),endsAt:new Date(Date.now()+7200000).toISOString(),latitude:52.5,longitude:13.4,shared:false};
 const privateEvent=(await call('local-events',eventBody,tokens.buyer)).event;assert(privateEvent);
@@ -911,4 +921,20 @@ managedWindow.localStorage.setItem('bringness-pos-token','admin-token');managedW
 await until(()=>managedWindow.document.querySelector('[data-view="account-inspection"]'));managedWindow.document.querySelector('[data-view="account-inspection"]').click();await until(()=>managedWindow.document.getElementById('inspectAccount'));
 const inspectSelect=managedWindow.document.getElementById('inspectAccount');inspectSelect.value=autoAccount;inspectSelect.dispatchEvent(new managedWindow.Event('change'));await until(()=>managedWindow.document.getElementById('inspectDetail').textContent.includes('Beschaffungsläufe'));assert.match(managedWindow.document.getElementById('inspectDetail').textContent,/ausgeschaltet/);managedWindow.close();
 console.log('Platform AI inspection, tenant denial, idempotent audited procurement disablement and shared POS-session UI passed.');
+const stationWindow=new JSDOM(markup,{url:'https://example.org/ai-workspace.html',runScripts:'outside-only'}).window;
+stationWindow.HTMLElement.prototype.scrollIntoView=function(){};stationWindow.fetch=w.fetch;stationWindow.sessionStorage.setItem('bringness-ai-session',invToken);
+stationWindow.eval(fs.readFileSync(root+'/apps/web/public/ai-ads.js','utf8'));stationWindow.eval(script);
+await until(()=>stationWindow.document.querySelector('[data-view="planning"]'));
+stationWindow.document.querySelector('[data-view="planning"]').click();
+await until(()=>stationWindow.document.querySelector('[data-form="weather-station-search"]'));
+const stationSearch=stationWindow.document.querySelector('[data-form="weather-station-search"]');stationSearch.elements.stationQuery.value='Berlin';stationSearch.dispatchEvent(new stationWindow.Event('submit',{bubbles:true,cancelable:true}));
+await until(()=>stationWindow.document.querySelector('[data-weather-station="10384"]'));
+stationWindow.document.querySelector('[name="weatherAutomatic"]').checked=true;stationWindow.document.querySelector('[data-weather-station="10384"]').click();
+assert.equal(stationWindow.document.getElementById('weatherStation').value,'10384');
+assert.equal(stationWindow.document.querySelector('[name="weatherAutomatic"]').checked,false);
+assert.ok(stationWindow.document.getElementById('weatherPostalCode'));
+assert.match(stationWindow.document.getElementById('notice').textContent,/Einstellungen speichern/);
+stationWindow.close();console.log('Nationwide DWD station search DOM and postcode assignment persistence/validation/roles passed.');
+
+
 await db.close();
