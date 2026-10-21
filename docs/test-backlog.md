@@ -54,3 +54,5 @@ Details zum Entwicklungsstand: offline-interrupted-payment-recovery.md. Die besc
 ### T12 – Manueller Abgleich während Hintergrundlauf
 
 - Während eines automatischen Abgleichs mehrfach manuell aktualisieren: genau ein nachfolgender erzwungener Durchlauf, keine parallele Übertragung. Alle Aufrufer warten bis zu dessen Ergebnis. Während des erzwungenen Laufs keine weitere Wiederholung aufbauen. Verbindungs-/Anmeldefehler sichtbar halten, offene Verkäufe erhalten. Umsetzung auf fix/offline-explicit-refresh-20261021; Funktionsprüfung auf Wunsch zurückgestellt.
+
+- T12 Desktop-Wiederanlauf: Fehler im Hauptdokument von bringness.de öffnet Offline-Kasse; Unterrahmenfehler, abgebrochene Navigation und fremde Origins nicht. Fensterwechsel/-schließen oder Navigation während der Sitzungsauslesung beendet diesen Verbindungsversuch; regulärer Wiederanlauf bleibt erhalten. Funktions-/Geräteprüfung zurückgestellt; nur Syntaxprüfung ausgeführt.
