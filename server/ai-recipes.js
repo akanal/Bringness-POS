@@ -1,3 +1,4 @@
+import {stockFailureMessage} from './stock-retry-policy.js';
 import {processOfflineStock} from './offline-stock.js';
 import {configurePosStockLink,processPosStockCommands,syncPosStockAvailability} from './pos-stock-bridge-core.js';
 import {kitchenAction,recipeAvailability} from './ai-stock-lifecycle.js';
@@ -98,13 +99,13 @@ export async function syncPosSales(){if(running)return;running=true;try{
   const orders=(await platformPool.query("SELECT id,COALESCE(closed_at,created_at) paid_time,to_char(COALESCE(closed_at,created_at) AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') sync_cursor_time FROM orders WHERE restaurant_id=$1 AND status='paid' AND (COALESCE(closed_at,created_at)>$2 OR (COALESCE(closed_at,created_at)=$2 AND id>COALESCE($3::uuid,'00000000-0000-0000-0000-000000000000'::uuid))) ORDER BY COALESCE(closed_at,created_at),id LIMIT 200",[link.pos_restaurant_id,link.sync_cursor_time,link.cursor_id])).rows;
   for(const o of orders){const items=(await platformPool.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 AND product_id IS NOT NULL',[o.id])).rows;await ingestSale(link,{eventId:'pos:'+o.id,type:'sale',occurredAt:new Date(o.paid_time).toISOString(),items:items.map(i=>({productCode:String(i.product_id||''),quantity:Number(i.quantity)}))});await aiPool().query("UPDATE ai_connectors SET cursor_time=$2::timestamptz,cursor_id=$3::uuid WHERE id=$1 AND (cursor_time<$2::timestamptz OR (cursor_time=$2::timestamptz AND COALESCE(cursor_id,'00000000-0000-0000-0000-000000000000'::uuid)<$3::uuid))",[link.id,o.sync_cursor_time,o.id])}
   await aiPool().query('UPDATE ai_connectors SET last_error=NULL WHERE id=$1',[link.id]);
- }catch(e){await aiPool().query('UPDATE ai_connectors SET last_error=$2 WHERE id=$1',[link.id,clean(e.message)])}}
- }catch(e){console.error('AI sales sync failed:',e.code||e.name)}finally{running=false}}
+ }catch(e){try{await aiPool().query('UPDATE ai_connectors SET last_error=$2 WHERE id=$1',[link.id,clean(stockFailureMessage(e))])}catch(reportError){console.error('AI sales diagnostics failed:',reportError?.code||reportError?.name||'UnknownError')}}}
+ }catch(e){console.error('AI sales sync failed:',e?.code||e?.name||'UnknownError')}finally{running=false}}
 
 
 
 let kitchenSyncRunning=false;
-export async function syncPosKitchen(){if(kitchenSyncRunning)return;kitchenSyncRunning=true;try{await processPosStockCommands(platformPool,aiPool(),kitchenAction);
- await processOfflineStock(platformPool,aiPool(),kitchenAction,ingestSale);
- await syncPosStockAvailability(platformPool,aiPool(),recipeAvailability);
-}catch(e){console.error('AI kitchen sync failed:',e.code||e.name)}finally{kitchenSyncRunning=false}}
+export async function syncPosKitchen(){if(kitchenSyncRunning)return;kitchenSyncRunning=true;try{
+ const stages=[['commands',()=>processPosStockCommands(platformPool,aiPool(),kitchenAction)],['offline',()=>processOfflineStock(platformPool,aiPool(),kitchenAction,ingestSale)],['availability',()=>syncPosStockAvailability(platformPool,aiPool(),recipeAvailability)]];
+ for(const [name,run] of stages){try{await run()}catch(e){console.error('AI kitchen sync stage failed:',name,e?.code||e?.name||'UnknownError')}}
+}finally{kitchenSyncRunning=false}}
