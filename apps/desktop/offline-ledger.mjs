@@ -19,8 +19,17 @@ export async function createOfflineLedger(db,quote) {
     await tx.query('INSERT INTO offline_catalog VALUES($1,$2,true) ON CONFLICT(id) DO UPDATE SET current=true',[snapshot.id,JSON.stringify(snapshot)]);
    });
   },
-  async view(){
-   const snapshot=(await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
+  async view({snapshotId}={}){
+   if(snapshotId!==undefined&&(typeof snapshotId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(snapshotId)))throw Error('Ungültiger Wiederherstellungskatalog.');
+   // An interrupted payment retains its original prices even after background catalog refresh.
+   // Never expose an archived catalog belonging to another company or device.
+   const snapshot=snapshotId?(await db.query(`SELECT saved.payload FROM offline_catalog saved
+    JOIN offline_catalog active ON active.current=true
+    AND saved.payload->>'companyId'=active.payload->>'companyId'
+    AND saved.payload->>'deviceKey'=active.payload->>'deviceKey'
+    WHERE saved.id=$1`,[snapshotId])).rows[0]?.payload:
+    (await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
+   if(snapshotId&&!snapshot)throw Error('Der ursprüngliche Katalog des unterbrochenen Verkaufs ist für diesen Betrieb und dieses Gerät nicht verfügbar. Bitte Support kontaktieren.');
    // Always show every unresolved sale before historical synced receipts.
    const sales=(await db.query('SELECT receipt,synced_at,cloud_receipt,error FROM offline_sales ORDER BY (synced_at IS NULL) DESC,created_at DESC,id DESC LIMIT 100')).rows;
    const counts=(await db.query('SELECT count(*) FILTER (WHERE synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE synced_at IS NULL AND error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE synced_at IS NOT NULL)::bigint AS synced FROM offline_sales')).rows[0];
