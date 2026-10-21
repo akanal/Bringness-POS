@@ -236,3 +236,7 @@ Continue authorized development autonomously and preserve established behavior a
 - Keep one deduplicated practical acceptance checklist at docs/test-backlog.md. Further functional/device acceptance is deferred by the owner while development continues. Do not describe already implemented Offline/Admin/Accountant/AI functions as missing development.
 - Time input and display use explicit 24-hour HH:MM without AM/PM, independent of browser locale. Preserve the existing device-timezone-to-UTC conversion for dated events and shifts. Further form changes stay on a development branch until their deferred acceptance is complete; no untested live publication.
 - Mollie test/activation is owner-confirmed. Windows signing and productive TSE remain dependent on their separately deferred external prerequisites.
+
+## Automated verification resumed 2026-10-21
+- After the owner requested execution, automated development checks were resumed for PR112 and stacked draft PR113. Preserve the current evidence in docs/development-validation-20261021.md and practical-only rest points in docs/test-backlog.md; do not describe all functional tests as still deferred.
+- PR113 branch fix/offline-payment-recovery-20261021 contains original-catalog payment recovery, active-company/device history/export/replay boundaries, short-lease refresh and atomic local view reads. Source/test checkpoint is 88c32b17d684f436769517b54ad917f9b341f70e. No productive deployment or public installer release is implied.

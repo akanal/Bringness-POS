@@ -1,10 +1,10 @@
 name: POS and AI completion validation
 on:
   pull_request:
-    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/pos/settlement-flow.js", "apps/web/public/pos/app.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/pos/settlement-flow.js", "apps/web/public/pos/app.js", "apps/web/public/ai-workspace.js", "apps/web/public/ai-ads.js", "apps/web/public/pos/personnel.js", "apps/web/public/pos/restaurant-owner.js", "apps/web/public/pos/availability.js", "apps/web/public/service/duty-planning.js", "apps/web/public/service/presence.js", "apps/web/public/pos/duty-planning.js", ".github/workflows/pos-ai-completion.yml"]
   push:
     branches: [main, 'finish/**', 'staging/preview-20261016']
-    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/pos/settlement-flow.js", "apps/web/public/pos/app.js", "apps/web/public/ai-workspace.js", ".github/workflows/pos-ai-completion.yml"]
+    paths: ["server/**", "apps/desktop/**", "apps/web/public/accountant*", "apps/web/public/pos/tax-export.js", "apps/web/public/pos/payment-flow.js", "apps/web/public/pos/settlement-flow.js", "apps/web/public/pos/app.js", "apps/web/public/ai-workspace.js", "apps/web/public/ai-ads.js", "apps/web/public/pos/personnel.js", "apps/web/public/pos/restaurant-owner.js", "apps/web/public/pos/availability.js", "apps/web/public/service/duty-planning.js", "apps/web/public/service/presence.js", "apps/web/public/pos/duty-planning.js", ".github/workflows/pos-ai-completion.yml"]
 permissions:
   contents: read
 jobs:
@@ -96,6 +96,7 @@ jobs:
         env:
           DEVICE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/offline-ui.mjs
+      - run: node server/ai-tests/time24-forms.mjs
       - run: node server/ai-tests/accountant-ui.mjs
       - run: node server/ai-tests/offline-accountant.mjs
       - name: Verify accountant microsecond pagination and revocation on PostgreSQL 16

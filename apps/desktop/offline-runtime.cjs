@@ -55,7 +55,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // may be written shortly after load, so retry on the regular timer as well.
  let startupRecoveryTimer;
  const recoverOnStartup=()=>{if(closed)return;clearTimeout(startupRecoveryTimer);startupRecoveryTimer=setTimeout(()=>{if(!closed)sync().catch(()=>{});},2500);};
- for(const [channel,run] of Object.entries({'offline:view':async()=>({...await ledger.view(),sync:coordinator.status()}),'offline:sync':()=>sync(true),'offline:export':async()=>{
+ for(const [channel,run] of Object.entries({'offline:view':async(_,selection)=>{if(selection!==undefined&&(!selection||typeof selection!=='object'||Array.isArray(selection)||Object.keys(selection).some(key=>key!=='snapshotId')))throw Error('Ungültige Wiederherstellungsauswahl');return {...await ledger.view(selection),sync:coordinator.status()}},'offline:sync':()=>sync(true),'offline:export':async()=>{
   const report=await ledger.reconciliation({limit:500});
   const selected=await dialog.showSaveDialog(offlineWindow,{title:'Offline-Verkäufe exportieren',defaultPath:'bringness-offline-abgleich-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'JSON',extensions:['json']}]});
   if(selected.canceled||!selected.filePath)return {saved:false};
