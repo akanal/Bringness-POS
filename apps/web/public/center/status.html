@@ -38,7 +38,7 @@ async function load(){
   nextOrder=['ready','payment_failed','payment_canceled','payment_expired'].includes(data.order.status)&&typeof url==='string'&&/^\/center\/index.html\?code=[a-f0-9]{48}$/.test(url)&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id||'')?{url,id}:null;
   nextButton.hidden=!nextOrder;
   renderHistory(data.order);
-  connection.textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE');
+  connection.textContent='Zuletzt aktualisiert: '+new Date().toLocaleTimeString('de-DE',{hourCycle:'h23'});
   finished=['ready','cancelled','payment_failed','payment_canceled','payment_expired'].includes(data.order.status);
  }catch(e){connection.textContent=finished?e.message:'Verbindung unterbrochen. Der angezeigte Status kann veraltet sein. Wir versuchen es automatisch erneut.';}
  finally{loading=false;if(!finished&&!document.hidden)timer=setTimeout(load,10000);}

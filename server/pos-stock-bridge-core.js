@@ -72,13 +72,16 @@ export async function requestPosStockAction(pool,actor,orderId,b){
 export async function processPosStockCommands(posPool,stockPool,kitchenAction,{limit=100}={}){
  const commands=(await posPool.query("SELECT id,order_id FROM pos_stock_commands WHERE state='pending' ORDER BY created_at,id LIMIT $1",[limit])).rows;
  for(const candidate of commands){const c=await posPool.connect();try{await c.query('BEGIN');
- const o=(await c.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE',[candidate.order_id])).rows[0];
+ const o=(await c.query('SELECT o.*,r.company_id FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=$1 FOR UPDATE OF o SKIP LOCKED',[candidate.order_id])).rows[0];
+ if(!o){await c.query('ROLLBACK');continue}
  const cmd=(await c.query("SELECT * FROM pos_stock_commands WHERE id=$1 AND state='pending' FOR UPDATE",[candidate.id])).rows[0];if(!cmd){await c.query('ROLLBACK');continue}
- const link=(await stockPool.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.id=$1 AND c.account_id=$2 AND c.pos_restaurant_id=$3 AND c.kind='pos' AND c.consumption_mode='lifecycle' AND c.active AND a.status='active'",[cmd.connector_id,cmd.account_id,o.restaurant_id])).rows[0];
+ const link=(await stockPool.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.id=$1 AND c.account_id=$2 AND c.pos_restaurant_id=$3 AND c.pos_company_id=$4 AND c.kind='pos' AND c.consumption_mode='lifecycle' AND c.active AND a.status='active'",[cmd.connector_id,cmd.account_id,o.restaurant_id,o.company_id])).rows[0];
  if(!link)fail('Lageranbindung nicht aktiv',503);
  if(!(await c.query("SELECT 1 FROM users u WHERE u.id=$1 AND u.company_id=$2 AND u.status='active' AND u.role IN ('owner','admin') AND NOT coalesce(u.must_change_password,false)",[link.pos_user_id,link.pos_company_id])).rowCount)fail('Inhaberfreigabe der Kasse nicht mehr gültig',503);
  try{await kitchenAction(stockPool,{id:link.account_id,role:'restaurant'},{requestKey:cmd.id,orderId:'pos:'+o.id,action:cmd.action,occurredAt:new Date(cmd.created_at).toISOString(),...(cmd.action==='accept'?{items:cmd.items}:{}),reason:cmd.reason},link)}catch(e){
-  if(e.status>=400&&e.status<500){await c.query("UPDATE pos_stock_commands SET state='rejected',error=$2,attempts=attempts+1 WHERE id=$1",[cmd.id,String(e.message).slice(0,500)]);await c.query('COMMIT');continue}throw e;
+  // Authentication may change after AI committed but before POS received its acknowledgement.
+  // Keep the original command UUID pending so renewed access can replay the ledger result.
+  if(e.status>=400&&e.status<500&&![401,403,408,429].includes(e.status)){await c.query("UPDATE pos_stock_commands SET state='rejected',error=$2,attempts=attempts+1 WHERE id=$1",[cmd.id,String(e.message).slice(0,500)]);await c.query('COMMIT');continue}throw e;
  }
  await c.query("UPDATE pos_stock_commands SET state='applied',error=NULL,attempts=attempts+1,applied_at=now() WHERE id=$1",[cmd.id]);
  await c.query("UPDATE orders SET status=$2,closed_at=CASE WHEN $2='cancelled' THEN now() ELSE closed_at END WHERE id=$1",[o.id,cmd.target_status]);await c.query('COMMIT');
@@ -87,7 +90,7 @@ export async function processPosStockCommands(posPool,stockPool,kitchenAction,{l
 }
 export async function syncPosStockAvailability(posPool,stockPool,recipeAvailability){
  const links=(await stockPool.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.kind='pos' AND c.consumption_mode='lifecycle' AND c.active AND a.status='active'")).rows;
- for(const link of links){const available=(await recipeAvailability(stockPool,link.account_id,link.location_id)).filter(r=>r.available).map(r=>r.external_code);await posPool.query('UPDATE products p SET ai_stock_available=(p.id::text=ANY($2::text[])) WHERE p.restaurant_id=$1 AND EXISTS(SELECT 1 FROM pos_stock_links l WHERE l.restaurant_id=p.restaurant_id AND l.connector_id=$3 AND l.active)',[link.pos_restaurant_id,available,link.id])}
+ for(const link of links){const available=(await recipeAvailability(stockPool,link.account_id,link.location_id)).filter(r=>r.available).map(r=>r.external_code);await posPool.query('UPDATE products p SET ai_stock_available=(p.id::text=ANY($2::text[])) WHERE p.restaurant_id=$1 AND EXISTS(SELECT 1 FROM pos_stock_links l WHERE l.restaurant_id=p.restaurant_id AND l.connector_id=$3 AND l.account_id=$4 AND l.company_id=$5 AND l.active AND EXISTS(SELECT 1 FROM restaurants r WHERE r.id=p.restaurant_id AND r.company_id=$5))',[link.pos_restaurant_id,available,link.id,link.account_id,link.pos_company_id])}
 }
 export function createPosStockHandler(pool){
  const send=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value));return true};

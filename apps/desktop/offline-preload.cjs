@@ -1,2 +1,2 @@
 const {contextBridge,ipcRenderer}=require('electron');
-contextBridge.exposeInMainWorld('offlinePOS',{sync:()=>ipcRenderer.invoke('offline:sync'),view:()=>ipcRenderer.invoke('offline:view'),export:()=>ipcRenderer.invoke('offline:export'),sale:sale=>ipcRenderer.invoke('offline:sale',sale),online:()=>ipcRenderer.invoke('offline:online'),updated:callback=>ipcRenderer.on('offline:updated',()=>callback())});
+contextBridge.exposeInMainWorld('offlinePOS',{sync:()=>ipcRenderer.invoke('offline:sync'),view:selection=>ipcRenderer.invoke('offline:view',selection),export:()=>ipcRenderer.invoke('offline:export'),sale:sale=>ipcRenderer.invoke('offline:sale',sale),online:()=>ipcRenderer.invoke('offline:online'),updated:callback=>ipcRenderer.on('offline:updated',()=>callback())});

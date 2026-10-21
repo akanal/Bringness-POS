@@ -1,4 +1,14 @@
 (() => {
+function localDateTime(date,time,original){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))throw Error('Bitte Datum und Uhrzeit im 24-Stunden-Format HH:MM eingeben.');
+ const value=new Date(date+'T'+time),[year,month,day]=date.split('-').map(Number),[hour,minute]=time.split(':').map(Number);
+ if(!Number.isFinite(value.getTime())||value.getFullYear()!==year||value.getMonth()!==month-1||value.getDate()!==day||value.getHours()!==hour||value.getMinutes()!==minute)throw Error('Diese Ortszeit ist ungültig oder existiert wegen der Zeitumstellung nicht. Bitte korrigieren Sie Datum oder Uhrzeit.');
+ // Keep the original UTC instant when editing other fields in the repeated autumn hour.
+ const previous=original?new Date(original):null;
+ if(previous&&Number.isFinite(previous.getTime())&&previous.getFullYear()===year&&previous.getMonth()===month-1&&previous.getDate()===day&&previous.getHours()===hour&&previous.getMinutes()===minute)return previous;
+ return value;
+}
+
  const $=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const euro=x=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(Number(x)/100);
  const amount=x=>Number(x).toLocaleString('de-DE',{maximumFractionDigits:3});
@@ -254,7 +264,7 @@
   if(kind==='planning-location'){planningLocation=b.locationId;eventEdit=null;await renderPlanning();return}
   if(kind==='weather-station-search'){const result=await api('weather-stations?q='+encodeURIComponent(b.stationQuery));if(!f.isConnected)return;$('weather-station-results').innerHTML=result.stations.map(s=>`<p><button type="button" data-weather-station="${esc(s.id)}">${esc(s.name)} · ${esc(s.id)}</button></p>`).join('')||'<p>Keine passende Station gefunden. Anderen Ortsnamen oder Kennung versuchen.</p>';notice(result.total>result.stations.length?'Erste '+result.stations.length+' von '+result.total+' Treffern. Bitte Suche eingrenzen.':'Stationssuche abgeschlossen.');return}
   if(kind==='planning-settings'){const hours=b.hoursEnabled==='on'?weekdays.map((_,i)=>b['closed-'+i]==='on'?null:{open:b['open-'+i],close:b['close-'+i]}):null;await api('planning-settings',{locationId:planningLocation,latitude:b.latitude,longitude:b.longitude,radiusKm:Number(b.radiusKm),weatherStation:b.weatherStation,weatherPostalCode:b.weatherPostalCode,weatherAutomatic:b.weatherAutomatic==='on',demandRules:{enabled:b.demandEnabled==='on',warmC:Number(b.warmC),rainMm:Number(b.rainMm),warmPercent:Number(b.warmPercent),rainPercent:Number(b.rainPercent),eventPercent:Number(b.eventPercent)},hours,closedDates:b.closedDates.split(',').map(x=>x.trim()).filter(Boolean)});await renderPlanning();notice('Planungseinstellungen gespeichert.');return}
-  if(kind==='local-event'){await api('local-events',{...b,locationId:planningLocation,startsAt:new Date(b.startsAtDate+'T'+b.startsAtTime).toISOString(),endsAt:new Date(b.endsAtDate+'T'+b.endsAtTime).toISOString(),shared:b.shared==='on',...(eventEdit?{id:eventEdit.id,version:eventEdit.version}:{})});eventEdit=null;await renderPlanning();notice('Termin gespeichert.');return}
+  if(kind==='local-event'){const startsAt=localDateTime(b.startsAtDate,b.startsAtTime,eventEdit?.starts_at).toISOString(),endsAt=localDateTime(b.endsAtDate,b.endsAtTime,eventEdit?.ends_at).toISOString();if(endsAt<=startsAt)throw Error('Das Ende muss nach dem Beginn liegen.');await api('local-events',{...b,locationId:planningLocation,startsAt,endsAt,shared:b.shared==='on',...(eventEdit?{id:eventEdit.id,version:eventEdit.version}:{})});eventEdit=null;await renderPlanning();notice('Termin gespeichert.');return}
   if(kind==='purchase-delegate'){await api('purchase-delegates',{...b,active:b.active==='on'});await renderApprovals();notice('Standortberechtigung gespeichert.');return}
   if(kind==='purchase-request'){const lines=approvalData.stock.filter(x=>x.location_id===b.locationId&&Number(b['qty-'+x.id])>0).map(x=>({stockId:x.id,quantity:Number(b['qty-'+x.id])}));await api('purchase-requests',{locationId:b.locationId,deliveryDate:b.deliveryDate,note:b.note,requestKey:requestDraftKey,lines});requestDraftKey='';await renderApprovals();notice('Bedarf eingereicht. Noch keine Bestellung.');return}
   if(kind==='purchase-decision'){await api('purchase-requests/decide',{...b,confirmed:b.confirmed==='on'});await renderApprovals();notice('Entscheidung gespeichert. Keine Bestellung ausgelöst.');return}

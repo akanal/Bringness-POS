@@ -154,12 +154,12 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=checkout-recovery-20261017"></script></body>');
         if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js?v=checkout-recovery-20261017"></script></body>');
-        if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js"></script></body>');
-        if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js"></script></body>');
-        if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js"></script></body>');
+        if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js?v=time24-complete-20261021"></script></body>');
+        if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js?v=time24-development-20261021"></script></body>');
+        if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js?v=time24-development-20261021"></script></body>');
         if (!html.includes('/personnel-report.js')) html = html.replace("</body>", '<script src="/personnel-report.js?v=20261012"></script></body>');
         if (!html.includes('/pos/ean-scanner.js')) html = html.replace('</body>', '<script src="/pos/ean-scanner.js?v=nav-pin-20261020"></script></body>');
-        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=dismiss-notice-20261017"></script></body>');
+        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=time24-validation-20261021"></script></body>');
         if (!html.includes('/pos/personnel.js')) html = html.replace("</body>", '<script src="/pos/personnel.js"></script></body>');
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
       }
@@ -169,14 +169,14 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {
-        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js"></script></body>');
-        if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
+        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js?v=time24-validation-20261021"></script></body>');
+        if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js?v=time24-complete-20261021"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
-        if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js"></script></body>');
-        if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js"></script></body>');
+        if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js?v=time24-complete-20261021"></script></body>');
+        if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js?v=time24-complete-20261021"></script></body>');
         if (!html.includes('/admin/platform-hub.js')) html = html.replace("</body>", '<script src="/admin/platform-hub.js"></script></body>');
-        if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js"></script></body>');
+        if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js?v=time24-complete-20261021"></script></body>');
       }
       return Readable.from([Buffer.from(html, "utf8")]);
     } catch (error) {

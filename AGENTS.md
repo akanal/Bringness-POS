@@ -231,3 +231,12 @@ Continue authorized development autonomously and preserve established behavior a
 - For low-confidence OCR, a bounded sparse second pass may reconstruct observed horizontal fragments only if confidence improves and every already recognized quantity/unit occurrence survives. Preserve the previous OCR text across draft reloads and show it in the existing original-text disclosure. No image crop or external OCR service.
 - Labelled delivery dates in joined columns may be proposed; conflicting or invalid dates remain empty. Invoice references are not delivery-note references. Keep exact-name matching, unknown net prices, manual review, tenant/stock/payment guards and immutable completed imports.
 - Real-photo evidence and remaining practical limits are in docs/real-document-check-20261021.md. Languages, Windows signing and simplified deposit returns remain paused; owner confirmed Mollie test/activation success, not productive payments.
+
+## Owner continuation confirmed 2026-10-21: development now, acceptance later
+- Keep one deduplicated practical acceptance checklist at docs/test-backlog.md. Further functional/device acceptance is deferred by the owner while development continues. Do not describe already implemented Offline/Admin/Accountant/AI functions as missing development.
+- Time input and display use explicit 24-hour HH:MM without AM/PM, independent of browser locale. Preserve the existing device-timezone-to-UTC conversion for dated events and shifts. Further form changes stay on a development branch until their deferred acceptance is complete; no untested live publication.
+- Mollie test/activation is owner-confirmed. Windows signing and productive TSE remain dependent on their separately deferred external prerequisites.
+
+## Automated verification resumed 2026-10-21
+- After the owner requested execution, automated development checks were resumed for PR112 and stacked draft PR113. Preserve the current evidence in docs/development-validation-20261021.md and practical-only rest points in docs/test-backlog.md; do not describe all functional tests as still deferred.
+- PR113 branch fix/offline-payment-recovery-20261021 contains original-catalog payment recovery, active-company/device history/export/replay boundaries, short-lease refresh and atomic local view reads. Source/test checkpoint is 88c32b17d684f436769517b54ad917f9b341f70e. No productive deployment or public installer release is implied.
