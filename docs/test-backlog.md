@@ -78,3 +78,30 @@ T04 Rezeptfreigabe: jede konfigurierte Zutat muss im eigenen Standort vorhanden 
 T12 Offline-Diagnose: not_linked ist als Statusfilter abrufbar und mit Null im Summary vorhanden; Übergang nach vorübergehendem Fehler zu not_linked entfernt veraltete Fehlermeldung. Keine automatische Nachbuchung historischer unverbundener Verkäufe. Funktionsprüfung zurückgestellt.
 
 T04 Verkaufsimport: Austausch des freigebenden POS-Inhabers zwischen Auswahl und Transaktion führt vor Lagerwirkung zum Konflikt, wie beim Lifecycle-Abgleich. Bestehende Ereigniskennungen und Rückbuchungseffekte bleiben unverändert. Funktionsprüfung zurückgestellt.
+
+T04/T12 Warteschlangen: 401/403/408/425/429 behalten pending und ursprüngliche Buchungskennungen. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: POS-Fehler erhalten begrenzte Wartezeit von 5 bis 300 Sekunden; frische Aufträge bleiben erreichbar. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Wiederholungszähler und Fälligkeit über Neustart erhalten; bestehende Verkäufe bleiben unverändert gültig. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Offline-Fehler mit begrenzter Wartezeit und stabiler Reihenfolge; applied/not_linked entfernen Fälligkeit. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Berechtigte Verwaltung sieht Anzahl Fehlversuche und nächste Fälligkeit; keine neuen öffentlichen Daten. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Manuelle Konfliktfreigabe setzt Fälligkeit zurück und prüft aktuelle Betriebsfirma zusätzlich zum Katalog. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Lagerauftrag-Polling enthält Versuche/Fälligkeit unter bestehenden Zugriffsregeln; Erfolg räumt Fälligkeit auf. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Beide Worker akzeptieren ausschließlich ganze Batchgrößen 1–500; Standard bleibt 100. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Fehler bei Lageraufträgen verhindern Offline-Abgleich/Verfügbarkeit nicht; Stufen bleiben sequenziell und Einzelinstanzschutz erhalten. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Ein fehlerhafter Standort verhindert Aktualisierung anderer Standorte nicht; Gesamtfehler bleibt erkennbar, alte Werte bei Fehler erhalten. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Parallelität: Fälligkeit nach Zeilensperre erneut prüfen, damit alte Worker-Auswahl die inzwischen gesetzte Wartezeit nicht umgeht. Bestehende isolierte Fixtures auf neue Spalten/Wartezeiten vorbereitet; nicht ausgeführt.
+
+
+### T04 / T12 – Nächster lokal gesammelter Wiederanlaufblock
+
+Ein gemeinsamer Durchlauf deckt die zehn Ergänzungen in local-stock-next-ten-20261021.md ab: Poolgröße eins; Verbindungs-/Rollback-/Diagnosefehler; bereits bestätigter Auftrag mit nachgelagertem Diagnosefehler; fremd gesperrte Auftragszeile; permanente Ablehnung ohne neue Fälligkeit; ältere Fehlermeldung nach neuerer Wiederholungsplanung; Zählergrenzen; unübliche Fehlerwerte; Firmen-/Betriebsfilter der fälligen/wartenden Zusammenfassung; Zeitlimit, Anfragestillstand, fremde/unvollständige Bestätigung und Wiederholungsfrist beim POS-Statusabruf. Keine erneute Buchung aus einer Statusabfrage. Funktionstests ausdrücklich zurückgestellt; bisherige Testnachweise gelten nicht automatisch für diese Ergänzungen.
