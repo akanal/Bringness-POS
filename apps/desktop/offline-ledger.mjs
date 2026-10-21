@@ -7,6 +7,9 @@ export async function createOfflineLedger(db,quote) {
  CREATE INDEX IF NOT EXISTS offline_sales_recent_idx ON offline_sales(created_at DESC,id DESC);
  UPDATE offline_catalog SET current=false WHERE current=true AND id<>(SELECT id FROM offline_catalog WHERE current=true ORDER BY (payload->>'createdAt')::timestamptz DESC NULLS LAST,id DESC LIMIT 1);
  CREATE UNIQUE INDEX IF NOT EXISTS offline_catalog_one_current_idx ON offline_catalog(current) WHERE current=true;`);
+ // Company switches must not expose historical receipts from the previous company.
+ const activeScope=`catalog.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current)
+  AND catalog.payload->>'deviceKey'=(SELECT payload->>'deviceKey' FROM offline_catalog WHERE current)`;
  return {
   async catalog(snapshot){
    return db.transaction(async tx=>{
@@ -31,8 +34,8 @@ export async function createOfflineLedger(db,quote) {
     (await db.query('SELECT payload FROM offline_catalog WHERE current')).rows[0]?.payload;
    if(snapshotId&&!snapshot)throw Error('Der ursprüngliche Katalog des unterbrochenen Verkaufs ist für diesen Betrieb und dieses Gerät nicht verfügbar. Bitte Support kontaktieren.');
    // Always show every unresolved sale before historical synced receipts.
-   const sales=(await db.query('SELECT receipt,synced_at,cloud_receipt,error FROM offline_sales ORDER BY (synced_at IS NULL) DESC,created_at DESC,id DESC LIMIT 100')).rows;
-   const counts=(await db.query('SELECT count(*) FILTER (WHERE synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE synced_at IS NULL AND error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE synced_at IS NOT NULL)::bigint AS synced FROM offline_sales')).rows[0];
+   const sales=(await db.query(`SELECT s.receipt,s.synced_at,s.cloud_receipt,s.error FROM offline_sales s JOIN offline_catalog catalog ON catalog.id=s.snapshot_id WHERE ${activeScope} ORDER BY (s.synced_at IS NULL) DESC,s.created_at DESC,s.id DESC LIMIT 100`)).rows;
+   const counts=(await db.query(`SELECT count(*) FILTER (WHERE s.synced_at IS NULL)::bigint AS pending,count(*) FILTER (WHERE s.synced_at IS NULL AND s.error IS NOT NULL)::bigint AS errors,count(*) FILTER (WHERE s.synced_at IS NOT NULL)::bigint AS synced FROM offline_sales s JOIN offline_catalog catalog ON catalog.id=s.snapshot_id WHERE ${activeScope}`)).rows[0];
    return {snapshot,sales,counts:{pending:Number(counts.pending),errors:Number(counts.errors),synced:Number(counts.synced)}};
   },
   async sale(request,expectedDeviceKey){return db.transaction(async tx=>{
@@ -41,8 +44,8 @@ export async function createOfflineLedger(db,quote) {
     const current=(await tx.query('SELECT payload->>\'deviceKey\' AS device_key FROM offline_catalog WHERE current')).rows[0];
     if(current?.device_key!==expectedDeviceKey)throw Error('Offline-Katalog gehört nicht zu diesem Gerät.');
    }
-   const old=(await tx.query("SELECT s.receipt,s.request=$2::jsonb AS matches,c.payload->>'deviceKey' AS sale_device_key FROM offline_sales s JOIN offline_catalog c ON c.id=s.snapshot_id WHERE s.id=$1",[request.id,JSON.stringify(request)])).rows[0];
-   if(old){if(!old.matches)throw Error('Verkaufskennung bereits verwendet');if(expectedDeviceKey&&old.sale_device_key!==expectedDeviceKey)throw Error('Offline-Katalog gehört nicht zu diesem Gerät.');return old.receipt;}
+   const old=(await tx.query("SELECT s.receipt,s.request=$2::jsonb AS matches,c.payload->>'deviceKey' AS sale_device_key,c.payload->>'companyId' AS sale_company_id,(SELECT payload->>'companyId' FROM offline_catalog WHERE current) AS active_company_id,(SELECT payload->>'deviceKey' FROM offline_catalog WHERE current) AS active_device_key FROM offline_sales s JOIN offline_catalog c ON c.id=s.snapshot_id WHERE s.id=$1",[request.id,JSON.stringify(request)])).rows[0];
+   if(old){if(old.sale_company_id!==old.active_company_id||old.sale_device_key!==old.active_device_key)throw Error('Offline-Verkauf gehört nicht zum aktuellen Betrieb oder Gerät.');if(!old.matches)throw Error('Verkaufskennung bereits verwendet');if(expectedDeviceKey&&old.sale_device_key!==expectedDeviceKey)throw Error('Offline-Katalog gehört nicht zu diesem Gerät.');return old.receipt;}
    const snapshot=(await tx.query("SELECT c.payload FROM offline_catalog c WHERE c.id=$1 AND c.payload->>'companyId'=(SELECT payload->>'companyId' FROM offline_catalog WHERE current) AND c.payload->>'deviceKey'=(SELECT payload->>'deviceKey' FROM offline_catalog WHERE current)",[request.snapshotId])).rows[0]?.payload;
    if(!snapshot||typeof snapshot.validUntil!=='string'||!Number.isFinite(Date.parse(snapshot.validUntil))||Date.now()>Date.parse(snapshot.validUntil))throw Error('Offline-Freigabe abgelaufen. Bitte online anmelden.');
    const receipt=quote(snapshot,request);if(!receipt||receipt.id!==request.id||!Array.isArray(receipt.items)||receipt.items.length===0||!Number.isSafeInteger(receipt.totalCents)||receipt.totalCents<=0||receipt.items.some(item=>!item||!Number.isSafeInteger(item.lineCents)||item.lineCents<0)||receipt.items.reduce((sum,item)=>sum+item.lineCents,0)!==receipt.totalCents)throw Error('Ungültiger Offline-Beleg');
@@ -54,7 +57,7 @@ export async function createOfflineLedger(db,quote) {
   async reconciliation({limit=100,onlyPending=false}={}){
    if(!Number.isSafeInteger(limit)||limit<1||limit>500||typeof onlyPending!=='boolean')throw Error('Ungültige Exportauswahl');
    const rows=(await db.query(`SELECT s.id,s.created_at,s.synced_at,s.error,s.receipt,s.cloud_receipt
-    FROM offline_sales s WHERE ($1::boolean=false OR s.synced_at IS NULL)
+    FROM offline_sales s JOIN offline_catalog catalog ON catalog.id=s.snapshot_id WHERE ${activeScope} AND ($1::boolean=false OR s.synced_at IS NULL)
     ORDER BY s.created_at DESC,s.id DESC LIMIT $2`,[onlyPending,limit+1])).rows;
    if(rows.length>limit)throw Error('Der Abgleich enthält mehr als '+limit+' Verkäufe. Kein unvollständiger Export wird gespeichert.');
    return {exportedAt:new Date().toISOString(),onlyPending,total:rows.length,sales:rows.map(row=>({
