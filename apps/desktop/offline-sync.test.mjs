@@ -61,12 +61,14 @@ test('lost server response preserves pending sales',async()=>{
  assert.equal(f.pending.size,1);
 });
 
-test('concurrent synchronization requests share one in-flight operation',async()=>{
+test('concurrent synchronization shares one upload and queues the requested manual refresh',async()=>{
  const f=fixture(['a']);let release;const gate=new Promise(resolve=>{release=resolve});let connects=0;
  const sync=createOfflineSync({...f,connect:async()=>{connects++;await gate;return f.connect()}});
  const first=sync.sync(),second=sync.sync(true);
  assert.equal(first,second);release();await first;
- assert.equal(connects,1);
+ // The queued forced pass reconnects for catalog refresh, without re-uploading sales.
+ assert.equal(connects,2);
+ assert.deepEqual(f.calls,[['a']]);
  assert.equal(f.pending.size,0);
 });
 
