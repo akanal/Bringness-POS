@@ -28,6 +28,9 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   let token;
   try{token=await window.webContents.executeJavaScript('localStorage.getItem("bringness-pos-token")');}
   catch{return null;}
+  // Navigation or window replacement may have occurred while reading the session.
+  if(closed||window.isDestroyed()||onlineWindow()!==window)return null;
+  try{if(new URL(window.webContents.getURL()).origin!=='https://bringness.de')return null;}catch{return null;}
   if(typeof token!=='string'||!token.trim())return null;
   return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(typeof data?.error==='string'?data.error:'Synchronisierung nicht verfügbar');return data;};
  }});
@@ -78,7 +81,17 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  // Recheck connectivity every 30 seconds, including after long outages.
  // Single-flight synchronization prevents overlapping requests during slow recovery.
  recoverOnStartup();const timer=setInterval(sync,30000);timer.unref();
- const showOfflineOnFailure=(_,code)=>{if(!closed&&code!==-3)open()};
+ // Subframe/resource failures do not mean the online register is unavailable.
+ // Ignore cancelled navigation and failures outside the trusted POS origin.
+ const showOfflineOnFailure=(_,code,_description,validatedURL,isMainFrame)=>{
+  if(closed||code===-3||isMainFrame===false)return;
+  let failedURL;
+  try{failedURL=new URL(validatedURL);}catch{return;}
+  if(failedURL.origin!=='https://bringness.de')return;
+  const window=onlineWindow();
+  if(!window||window.isDestroyed())return;
+  open();
+ };
  // Electron can resume after sleep without a new page-load event. Promptly
  // retry the durable queue when the application becomes active again.
  const resumeOnFocus=()=>{if(!closed)recoverOnStartup();};

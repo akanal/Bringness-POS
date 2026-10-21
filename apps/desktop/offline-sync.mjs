@@ -1,6 +1,6 @@
 // Keep synchronization single-flight and acknowledge only accepted sales.
 export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
- let running=null,lastCatalog=0,catalogValidUntil=0;
+ let running=null,lastCatalog=0,catalogValidUntil=0,forceQueued=false,activeForce=false;
  let status={state:'idle',message:'Noch keine Synchronisierung',lastSuccess:null};
  // UI windows may close while a transfer is in flight. Observer failures
  // must never abort durable acknowledgements or the background recovery loop.
@@ -117,7 +117,20 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
   return {...status};
  };
  return {status:()=>({...status}),sync(force=false){
-  if(running)return running;
-  running=run(force).finally(()=>{running=null;});return running;
+  if(running){
+   // A manual refresh during automatic synchronization must not disappear.
+   // Coalesce repeated clicks; a running forced pass already covers them.
+   if(force&&!activeForce)forceQueued=true;
+   return running;
+  }
+  activeForce=!!force;
+  running=(async()=>{
+   let result=await run(activeForce);
+   if(forceQueued){
+    forceQueued=false;activeForce=true;
+    result=await run(true);
+   }
+   return result;
+  })().finally(()=>{running=null;activeForce=false;forceQueued=false;});return running;
  }};
 }
