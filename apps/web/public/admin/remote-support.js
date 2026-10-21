@@ -28,7 +28,7 @@
  async function refresh(){
   if(polling||!selected||!document.getElementById('remoteHelp')?.classList.contains('active'))return;polling=true;const id=selected,current=++sequence;
   try{const result=await api('sessions/'+id);if(id!==selected||current!==sequence)return;snapshot=result.session;const box=document.getElementById('remoteSession');
-   box.querySelector('#remoteState').textContent=(stateNames[snapshot.state]||snapshot.state)+' · '+(snapshot.controlAllowed?'Bedienung erlaubt':'Nur Bildschirmansicht')+' · Ende '+new Date(snapshot.expiresAt).toLocaleTimeString('de-DE');
+   box.querySelector('#remoteState').textContent=(stateNames[snapshot.state]||snapshot.state)+' · '+(snapshot.controlAllowed?'Bedienung erlaubt':'Nur Bildschirmansicht')+' · Ende '+new Date(snapshot.expiresAt).toLocaleTimeString('de-DE',{hourCycle:'h23'});
    const fresh=snapshot.frameAt&&Date.now()-Date.parse(snapshot.frameAt)<10000,active=snapshot.state==='active',img=box.querySelector('#remoteScreen');img.hidden=!active||!snapshot.frame||!fresh;
    box.querySelector('#remoteInputs').hidden=true;if(!img.hidden){const next=snapshot;img.onload=()=>{if(selected!==id||snapshot?.frameSequence!==next.frameSequence)return;rendered=next;box.querySelector('#remoteInputs').hidden=!next.controlAllowed};img.src='data:image/jpeg;base64,'+snapshot.frame}else{rendered=null;img.removeAttribute('src')};box.querySelector('#remoteStop').disabled=['ended','declined'].includes(snapshot.state);
    box.querySelector('#remoteHistory').innerHTML='<h4>Letzte Kassenaktionen</h4>'+result.inputs.map(i=>'<p>'+esc(i.input.type)+' · '+esc(stateNames[i.state]||i.state)+(i.error?' · '+esc(i.error):'')+'</p>').join('');

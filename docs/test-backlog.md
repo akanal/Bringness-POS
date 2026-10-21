@@ -35,3 +35,5 @@ Ergänzung zu T02: Ungültiges Kalenderdatum, 24:00 als Zeitpunkt, Sommerzeit-L�
 T02 umfasst auch die nachgeladene Vertretungsübersicht, den persönlichen Kellner-Dienstplan und lokale AI-Termine; Anzeige nach Aktualisieren und erneuter Anmeldung prüfen.
 
 T02: Bestehenden Termin und Werbezeitraum mit zweiter 02:30-Stunde am 25.10.2026 in Europe/Berlin laden, ausschließlich Titel/Hinweis ändern und speichern; ursprünglicher UTC-Zeitpunkt muss einschließlich Sekunden erhalten bleiben. Danach Uhrzeit bewusst ändern und UTC-Konvertierung prüfen.
+
+T02 Anzeigeabschluss: Belegliste und Steuerberater-CSV, Kassenabschluss, Küche/Bestellungen, Center-Status, Medienübersicht, Fernhilfe/Admin-Protokoll sowie Service-Präsenzansicht auf h23 prüfen. Mitternacht muss 00:xx anzeigen; Mengen/Geldbeträge unverändert. Browsergebiet und manuelle 12-Stunden-Voreinstellung variieren; neue Asset-Versionen nach Neuladen prüfen.
