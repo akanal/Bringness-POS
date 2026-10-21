@@ -31,3 +31,5 @@ Bereits bestätigt: Mollie-Testzahlung und Aktivierung durch den Inhaber; DWD-Li
 Für jeden späteren Durchlauf Datum/Gerät, bestanden/fehlgeschlagen/blockiert, Ursache und nächsten Fix ergänzen. Testdaten und produktive Verkäufe klar auseinanderhalten. Neue Produktivzahlungen, Beschaffungen oder destruktive Wiederherstellungen erfordern den konkret freigegebenen Ablauf.
 
 Ergänzung zu T02: Ungültiges Kalenderdatum, 24:00 als Zeitpunkt, Sommerzeit-Lücke (z. B. Europe/Berlin 29.03.2026 02:30), Herbst-Doppelstunde, Ende vor/gleich Beginn und Schicht über Mitternacht prüfen. Fehler dürfen keine API-Schreibanfrage auslösen; Werbeformular muss den Fehler anzeigen. Gerätezeitzone für diese Fälle ausdrücklich dokumentieren.
+
+T02 umfasst auch die nachgeladene Vertretungsübersicht, den persönlichen Kellner-Dienstplan und lokale AI-Termine; Anzeige nach Aktualisieren und erneuter Anmeldung prüfen.

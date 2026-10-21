@@ -159,7 +159,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js?v=time24-development-20261021"></script></body>');
         if (!html.includes('/personnel-report.js')) html = html.replace("</body>", '<script src="/personnel-report.js?v=20261012"></script></body>');
         if (!html.includes('/pos/ean-scanner.js')) html = html.replace('</body>', '<script src="/pos/ean-scanner.js?v=nav-pin-20261020"></script></body>');
-        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=dismiss-notice-20261017"></script></body>');
+        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=time24-validation-20261021"></script></body>');
         if (!html.includes('/pos/personnel.js')) html = html.replace("</body>", '<script src="/pos/personnel.js"></script></body>');
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
       }
@@ -169,7 +169,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {
-        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js"></script></body>');
+        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js?v=time24-validation-20261021"></script></body>');
         if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
