@@ -43,3 +43,28 @@ The previous OCR text is retained with the draft and visible in the existing ori
 Real-photo rerun: confidence increased from 49 to 59; clean merchandise name, correct original quantity and delivery date recovered. Matching was tested against a synthetic exact-name stock fixture only; no real account mapping or stock write was performed. Supplier and invoice-as-delivery reference were not guessed, net price remained unknown, reviewed stayed false. Original OCR text was retained.
 
 Verification: 531 unit tests passed; full AI HTTP/database/DOM integration passed. This improves the demonstrated defect; it does not close physical-device/operational acceptance or promise universal supplier-layout recognition.
+
+## Complete isolated restaurant-account flow — 2026-10-21
+
+The supplied photo was additionally exercised through the actual upload form/FileReader, the actual OCR worker and authenticated AI request handlers against a disposable embedded PostgreSQL restaurant account. The UI portion uses JSDOM, not a physical device or a live customer browser. It replaces no production account.
+
+| End-to-end check | Result |
+| --- | --- |
+| Real-photo upload creates a restaurant-scoped draft | Passed |
+| Upload/recognition does not create inventory movements | Passed |
+| Same bytes uploaded again reuse the same draft | Passed |
+| Another account cannot read/confirm the document | Passed |
+| Reopening retains prior OCR text and exact-name stock suggestion | Passed |
+| Manually corrected accepted quantity is used instead of the photographed quantity | Passed |
+| Missing overall approval prevents stock mutation | Passed |
+| Simulated lost acknowledgement after commit can be retried with the same reviewed payload | Passed; one movement only |
+| Missing net price stays unknown in purchase-cost sources | Passed |
+| Uploading the same photo after confirmation does not book stock again | Passed |
+
+Both runs completed successfully: the private supplied photo locally and a generated non-private photo for repeatable CI. The private document and extracted business/customer data are not committed. The explicit test entry is `verifyDeliveryDocumentFlow` in `server/ai-tests/delivery-document-flow.mjs`, invoked by the existing integration suite.
+
+Repeatable CI command: `node server/ai-tests/integration.mjs`. An authorized local private-photo run may set `REAL_DELIVERY_PHOTO` to its local path. The test's database, account, credentials and stock are disposable fixtures; never point this harness at production.
+
+The previous harness had never exercised upload worker construction from its data-URL module wrapper. The wrapper now builds an actual file URL object for Node Worker, allowing the real OCR path to run instead of replacing recognition with prepared extraction data. This is a test-harness correction, not a production worker change.
+
+Real restaurant/customer-device acceptance remains distinct and requires the user's restaurant account. No productive inventory, payment, account, mail or deployment was changed for this test-only follow-up.
