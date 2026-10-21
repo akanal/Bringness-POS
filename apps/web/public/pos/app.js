@@ -3,7 +3,30 @@ let initialViewSelected=false;
 let mode="login",token=null,data={restaurants:[],categories:[],products:[],orders:[]},cart=[],cat="all";
 try{token=localStorage.getItem("bringness-pos-token")}catch(e){console.warn("Session-Speicher nicht verfügbar",e)}
 const $=x=>document.getElementById(x),money=n=>Number(n).toLocaleString("de-DE",{style:"currency",currency:"EUR"}),euro=c=>money(Number(c||0)/100),esc=s=>String(s??"").replace(/[&<>"\']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[m]));
-async function api(path,opt={}){opt.headers={...(opt.headers||{}),"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})};let r,j;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),path==="/auth/forgot-password"?60000:20000);try{r=await fetch("/api/v1"+path,{...opt,...((path.startsWith("/auth/")||path==="/bootstrap")?{signal:controller.signal}:{})});j=await r.json()}catch(e){throw Error(e.name==="AbortError"?"Die Verbindung dauert zu lange. Bitte erneut versuchen.":"Verbindung zum Server fehlgeschlagen. Bitte erneut versuchen.")}finally{clearTimeout(timer)}if(!r.ok){const error=Error(j.error||"Fehler");error.status=r.status;error.code=j.code;error.retryAfter=j.retryAfter;throw error}if(r.status===202&&j.commandId){for(let attempt=0;attempt<20;attempt++){await new Promise(resolve=>setTimeout(resolve,1000));const poll=await fetch("/api/v1/stock-commands/"+encodeURIComponent(j.commandId),{headers:opt.headers,cache:"no-store"});j=await poll.json();if(!poll.ok)throw Error(j.error||"Lagerbuchung fehlgeschlagen");if(poll.status!==202)return j}throw Error("Lagerbuchung wird noch geprüft. Die Ansicht aktualisiert sich automatisch; kein neuer Auftrag nötig.")}return j}
+async function waitForStockCommand(initial,headers){
+ const commandId=initial.commandId,deadline=Date.now()+20000;
+ const pendingMessage="Lagerbuchung wird noch geprüft. Die Ansicht aktualisiert sich automatisch; kein neuer Auftrag nötig.";
+ let state=initial;
+ const pendingError=message=>Object.assign(Error(message||pendingMessage),{commandId,pending:true});
+ for(let attempt=0;attempt<20&&Date.now()<deadline;attempt++){
+  const due=Date.parse(state.retryAfter),remaining=deadline-Date.now();
+  if(Number.isFinite(due)&&due>=deadline)throw pendingError();
+  const delay=Math.max(1000,Math.min(5000,Number.isFinite(due)?due-Date.now():1000));
+  if(delay>=remaining)break;
+  await new Promise(resolve=>setTimeout(resolve,delay));
+  const budget=Math.min(5000,deadline-Date.now());if(budget<=0)break;
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
+  let response;
+  try{response=await fetch("/api/v1/stock-commands/"+encodeURIComponent(commandId),{headers,cache:"no-store",signal:controller.signal});state=await response.json();}
+  catch(error){throw pendingError(error?.name==="AbortError"?pendingMessage:"Verbindung zur Lagerbestätigung unterbrochen. Der Auftrag bleibt gespeichert; kein neuer Auftrag nötig.");}
+  finally{clearTimeout(timer)}
+  if(!response.ok){const error=Error(state?.error||"Lagerbuchung konnte noch nicht bestätigt werden.");error.status=response.status;error.commandId=commandId;throw error;}
+  if(!state||typeof state!=="object"||state.commandId!==commandId||!([200,202].includes(response.status))||state.pending!==(response.status===202))throw pendingError("Lagerbestätigung ist unvollständig. Der gespeicherte Auftrag wird weiter geprüft; kein neuer Auftrag nötig.");
+  if(response.status===200)return state;
+ }
+ throw pendingError();
+}
+async function api(path,opt={}){opt.headers={...(opt.headers||{}),"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})};let r,j;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),path==="/auth/forgot-password"?60000:20000);try{r=await fetch("/api/v1"+path,{...opt,...((path.startsWith("/auth/")||path==="/bootstrap")?{signal:controller.signal}:{})});j=await r.json()}catch(e){throw Error(e.name==="AbortError"?"Die Verbindung dauert zu lange. Bitte erneut versuchen.":"Verbindung zum Server fehlgeschlagen. Bitte erneut versuchen.")}finally{clearTimeout(timer)}if(!r.ok){const error=Error(j.error||"Fehler");error.status=r.status;error.code=j.code;error.retryAfter=j.retryAfter;throw error}if(r.status===202&&j.commandId)return await waitForStockCommand(j,opt.headers);return j}
 function authMode(m){if(authBusy)return;mode=m;$("authSubmit").textContent=m==="register"?"Konto erstellen":"Anmelden";$("authTitle").textContent=m==="register"?"Dein Einstieg.":"Willkommen zurück.";$("authMsg").textContent="";$("name").required=m==="register";$("nameField").style.display=m==="register"?"grid":"none";$("loginTab").classList.toggle("active",m==="login");$("registerTab").classList.toggle("active",m==="register");const password=$("password"),isNew=m==="register";password.autocomplete=isNew?"new-password":"current-password";if(isNew){password.minLength=6;password.pattern="(?=.*\\p{Lu})(?=.*\\p{Ll})(?=.*\\p{Nd})(?=.*[^\\p{L}\\p{N}\\s]).{6,128}";password.title="Mindestens 6 Zeichen, ein Gro\u00dfbuchstabe, ein Kleinbuchstabe, eine Zahl und ein Sonderzeichen (maximal 128 Zeichen)."}else{password.removeAttribute("minlength");password.removeAttribute("pattern");password.removeAttribute("title")}$("passwordRules").hidden=!isNew}
 let authBusy=false;
 function setAuthBusy(busy){authBusy=busy;$("authForm").setAttribute("aria-busy",String(busy));for(const id of ["authSubmit","loginTab","registerTab","forgotPassword"])$(id).disabled=busy;$("authSubmit").textContent=busy?"Wird geladen…":mode==="register"?"Konto erstellen":"Anmelden"}
