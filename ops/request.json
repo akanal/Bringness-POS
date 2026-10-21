@@ -1,6 +1,5 @@
 {
-  "operation": "deploy",
-  "target": "ai",
-  "revision": "",
-  "requestId": "ai-time24-20261021"
+  "operation": "status",
+  "target": "all",
+  "requestId": "preflight-stock-release-20261021"
 }
