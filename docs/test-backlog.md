@@ -41,3 +41,5 @@ T02 Anzeigeabschluss: Belegliste und Steuerberater-CSV, Kassenabschluss, Küche/
 T12 Wiederherstellung nach Katalogwechsel: verlorene lokale Verkaufsantwort, Hintergrund-Katalogaktualisierung und App-Neustart kombinieren; ursprünglichen Vorgang genau einmal mit Originalpreisen bestätigen. Fremde/fehlende Kataloge bleiben gesperrt; verspätete Anzeigeantwort darf neueren Zustand nicht überschreiben. Details: offline-interrupted-payment-recovery.md.
 
 T12/T14 gemeinsamer Mandantenfall: Firma A vollständig übertragen, zu Firma B wechseln; Verlauf, Zähler und Export dürfen keine A-Belege enthalten. Direkter Wiederholungsaufruf mit A-Verkaufs-ID unter B wird abgewiesen. Nach gültigem Wechsel zurück zu A bleiben die unveränderten Originalbelege zugänglich. Keine doppelte Testdurchführung nötig.
+
+T12 Katalogfrist: kurze gültige Gerätefreigabe, spätere serverseitige Verlängerung und bestehende Anmeldung; Aktualisierung vor Ablauf ohne manuelles Eingreifen. Ohne Verlängerung keine neue Offline-Buchung nach Ablauf. Firmenwechsel mit altem Warenkorb/ausgewähltem Druckbeleg leert nur diese Anzeige, nicht gespeicherte Verkäufe.

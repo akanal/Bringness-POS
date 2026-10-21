@@ -1,6 +1,6 @@
 // Keep synchronization single-flight and acknowledge only accepted sales.
 export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
- let running=null,lastCatalog=0;
+ let running=null,lastCatalog=0,catalogValidUntil=0;
  let status={state:'idle',message:'Noch keine Synchronisierung',lastSuccess:null};
  // UI windows may close while a transfer is in flight. Observer failures
  // must never abort durable acknowledgements or the background recovery loop.
@@ -99,11 +99,14 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     if(pending.length===0&&skipped.size)publish({state:'syncing',message:skipped.size+' Verkäufe benötigen eine Prüfung; übrige Übertragungen sind abgeschlossen.'});
    }
    let catalogError=null;
-   if(force||!lastCatalog||now()-lastCatalog>6*3600000){
+   // A short remaining device lease must not wait for the six-hour refresh interval.
+   // Successful near-expiry refreshes are a minute apart; failed requests keep retrying.
+   // Only the server can extend the lease.
+   if(force||!lastCatalog||now()-lastCatalog>6*3600000||(catalogValidUntil&&catalogValidUntil-now()<=5*60000&&now()-lastCatalog>=60000)){
     try{
      const catalogResponse=await request('catalog',{});const snapshot=catalogResponse?.snapshot;
      if(!snapshot||typeof snapshot!=='object'||Array.isArray(snapshot)||typeof snapshot.id!=='string'||typeof snapshot.validUntil!=='string'||!Number.isFinite(Date.parse(snapshot.validUntil))||Date.parse(snapshot.validUntil)<=now())throw Error('Ungültiger Offline-Katalog');
-     await ledger.catalog(snapshot);lastCatalog=now();
+     await ledger.catalog(snapshot);lastCatalog=now();catalogValidUntil=Date.parse(snapshot.validUntil);
     }catch(error){catalogError=error;}
    }
    const remaining=await ledger.pendingCount();
