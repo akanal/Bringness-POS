@@ -70,6 +70,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
     const snapshot = receipt.merchant_snapshot;
     receipt.restaurant_name = snapshot.restaurantName;
     receipt.billing_name = snapshot.businessName;
+    receipt.contact_name = snapshot.contactName || '';
     receipt.street = snapshot.street;
     receipt.postal_code = snapshot.postalCode;
     receipt.city = snapshot.city;

@@ -9,7 +9,7 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
   const money = cents => (Number(cents) / 100).toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' EUR';
   const date = new Date(receipt.issued_at).toLocaleDateString('de-DE', {timeZone:'Europe/Berlin'});
   const left=48, right=547, width=499, bottom=735;
-  const seller=receipt.billing_name || receipt.company_name || receipt.restaurant_name || '';
+  const seller=String(receipt.contact_name || receipt.billing_name || receipt.company_name || receipt.restaurant_name || '').replace(/^([\p{L}]+)\.([\p{L}]+)$/u,'$1 $2');
   const address=[receipt.street,[receipt.postal_code,receipt.city].filter(Boolean).join(' ')].filter(Boolean);
   const text=(value,x,y,w=width,size=10,bold=false,align='left')=>{
     doc.font(bold?'TradeBold':'TradeRegular').fontSize(size).fillColor('#222222').text(String(value??''),x,y,{width:w,align});
@@ -34,7 +34,6 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     for(const [label,x,w,align] of [['Pos.',52,28,'left'],['Beschreibung',85,225,'left'],['Menge',315,50,'right'],['Einzelpreis¹',370,80,'right'],['Gesamtpreis',455,87,'right']])text(label,x,y+7,w,9,true,align);
     return y+30;
   };
-  text(receipt.restaurant_name||seller,310,48,237,16,true,'right');
   text([seller,...address].join(' · '),57,120,250,7);
   // Folding marks: address stays in the window after folding an A4 sheet.
   doc.save().strokeColor('#bbbbbb').lineWidth(0.4);for(const fy of [297.64,595.28])doc.moveTo(10,fy).lineTo(20,fy).stroke();doc.restore();
@@ -88,8 +87,8 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
   if(grossTotal!==Number(receipt.total_cents))y=text('Hinweis: Positionssumme weicht vom Zahlbetrag ab.',left,y,width,9)+8;
   if(y+payments.length*18+145>bottom)y=next();
   for(const payment of payments){
-    const label=({cash:'BAR',card:'Karte',mollie_center:'Online-Zahlung'})[payment.method]||payment.method;
-    y=text('Zahlung: '+label+' · '+money(payment.amount_cents),left,y,width,10)+5;
+    const label=({cash:'Barzahlung',card:'Karte',mollie_center:'Online-Zahlung'})[payment.method]||payment.method;
+    y=text('Zahlungsart: '+label+' · '+money(payment.amount_cents),left,y,width,10)+5;
   }
   doc.image(qrBuffer,(doc.page.width-70)/2,y+10,{width:70,height:70});
   y=text('QR: Digitalen Beleg öffnen',left,y+84,width,8,false,'center')+10;
