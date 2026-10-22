@@ -25,7 +25,7 @@ export function createPreviewAccess(policy,{clock=Date.now}={}){
  const sign=expiry=>crypto.createHmac('sha256',policy.sessionSecret).update('preview:'+expiry).digest('hex');
  const basicExpected=policy.accessUser+':'+policy.accessPassword;
  return (req,res)=>{
-  res.setHeader('content-security-policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'");
+  res.setHeader('content-security-policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'; frame-src 'self' blob:; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'");
   res.setHeader('x-robots-tag','noindex, nofollow, noarchive');res.setHeader('cache-control','no-store');res.setHeader('referrer-policy','no-referrer');res.setHeader('x-frame-options','SAMEORIGIN');
   const authorization=String(req.headers.authorization||'');let basic=false;
   if(/^Basic\s+/i.test(authorization)){

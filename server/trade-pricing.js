@@ -6,7 +6,9 @@ export function tradeRecipient(value){
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Rechnungsempfänger erforderlich');
  const r={};for(const [key,max]of Object.entries({name:160,street:160,postalCode:20,city:100,country:80,vatId:40})){
   if(value[key]!=null&&typeof value[key]!=='string')throw Error('Ungültiger Rechnungsempfänger');r[key]=(value[key]||'').trim();if(r[key].length>max||/[\x00-\x1f\x7f]/.test(r[key]))throw Error('Ungültiger Rechnungsempfänger');
- }if(['name','street','postalCode','city','country'].some(k=>!r[k]))throw Error('Name und vollständige Rechnungsadresse erforderlich');return r;
+ }
+ for(const [key,max] of Object.entries({taxNumber:80,email:254,phone:60})){if(value[key]!=null&&typeof value[key]!=='string')throw Error('Ungültige Kontaktdaten');const text=(value[key]||'').trim();if(text.length>max||/[\x00-\x1f\x7f]/.test(text)||key==='email'&&text&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text))throw Error('Ungültige Kontaktdaten');if(text)r[key]=text;}
+ if(['name','street','postalCode','city','country'].some(k=>!r[k]))throw Error('Name und vollständige Rechnungsadresse erforderlich');return r;
 }
 export function normalizeTradeTiers(tiers){
  if(!Array.isArray(tiers)||tiers.length>20)throw Error('Maximal 20 Preisstaffeln möglich');

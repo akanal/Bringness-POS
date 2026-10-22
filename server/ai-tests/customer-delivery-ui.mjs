@@ -6,7 +6,7 @@ import {checkAddress} from '../address-check.js';
 const addressScript=await fs.readFile(new URL('../../apps/web/public/pos/address-check.js',import.meta.url),'utf8');
 const script=await fs.readFile(new URL('../../apps/web/public/pos/customer-delivery.js',import.meta.url),'utf8');
 const rid=crypto.randomUUID(),pid=crypto.randomUUID(),cid=crypto.randomUUID(),key='bringness.delivery.pending.v1:'+rid;
-const address={name:'Customer <script>bad</script>',street:'Street 1',postalCode:'10115',city:'Berlin',country:'Deutschland',vatId:'',email:'buyer@example.test',phone:'123'};
+const address={name:'Customer <script>bad</script>',street:'Street 1',postalCode:'10115',city:'Berlin',country:'Deutschland',vatId:'',taxNumber:'12/345',email:'buyer@example.test',phone:'123'};
 let lost=true,requests=[],updates=[];
 const api=async(path,opt)=>{
  if(path==='/address-check'){const b=JSON.parse(opt.body);assert.deepEqual(Object.keys(b.address).sort(),['city','country','postalCode','street']);return checkAddress(b.address,{complete:b.complete});}
