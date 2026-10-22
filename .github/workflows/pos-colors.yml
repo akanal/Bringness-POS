@@ -24,3 +24,9 @@ jobs:
         env:
           CENTER_TEST_BROWSER: ${{ matrix.browser }}
           CENTER_TEST_PLAYWRIGHT: ${{ runner.temp }}/colour-deps/node_modules/playwright/index.mjs
+          INVOICE_PAPER_SCREENSHOT: ${{ runner.temp }}/invoice-paper-${{ matrix.browser }}.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: invoice-paper-${{ matrix.browser }}
+          path: ${{ runner.temp }}/invoice-paper-${{ matrix.browser }}.png
+          retention-days: 3
