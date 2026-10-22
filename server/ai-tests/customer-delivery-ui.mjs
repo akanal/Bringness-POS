@@ -18,12 +18,12 @@ const api=async(path,opt)=>{
 function fixture(stored){const dom=new JSDOM('<select id="restaurant"><option value="'+rid+'">Shop</option></select><div id="moduleBody"></div>',{runScripts:'outside-only',url:'https://test.example/pos/'});const w=dom.window;Object.defineProperty(w,'crypto',{value:crypto.webcrypto});w.eval('var data='+JSON.stringify({products:[{id:pid,restaurantId:rid,name:'Article <script>x</script>'}]})+';');w.api=api;if(stored)w.localStorage.setItem(key,stored);w.eval(addressScript);w.eval(script);return w;}
 const w=fixture();
 try{
- await w.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=w.document,e=k=>d.querySelector('[data-'+k+']');assert.equal(d.querySelectorAll('script').length,0);e('customers').value=cid;await e('use').onclick();assert.equal(d.getElementById('trade-name').value,address.name);
+ await w.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=w.document,e=k=>d.querySelector('[data-'+k+']');assert.equal(d.querySelectorAll('script').length,0);e('customers').value=cid;await e('customers').onchange();for(const k of ['name','street','postalCode','city','country','vatId'])assert.equal(d.getElementById('trade-'+k).value,address[k]);assert.equal(e('email').value,address.email);assert.equal(e('phone').value,address.phone);assert.match(e('customers').selectedOptions[0].textContent,/Street 1 · 10115 Berlin · Deutschland/);
  // Actual address checker marks both fields, removes stale errors on edit and supports preview fields.
  d.getElementById('trade-city').value='Hamburg';d.getElementById('trade-city').dispatchEvent(new w.Event('blur'));await new Promise(r=>setTimeout(r,0));
  assert.equal(d.getElementById('trade-city').getAttribute('aria-invalid'),'true');assert.equal(d.getElementById('trade-postalCode').getAttribute('aria-invalid'),'true');assert.match(d.querySelector('.address-check').textContent,/Berlin/);
  d.getElementById('trade-city').value='Berlin';d.getElementById('trade-city').dispatchEvent(new w.Event('input'));assert.equal(d.getElementById('trade-postalCode').hasAttribute('aria-invalid'),false);
- await e('update').onclick();assert.equal(updates[0].version,2);assert.equal(updates[0].customer.email,address.email);
+ await e('update').onclick();assert.equal(updates[0].version,2);assert.deepEqual(updates[0].customer,address);e('search').value='old search';await e('save').onclick();assert.equal(e('search').value,'');assert.equal(e('customers').value,cid);assert.deepEqual(updates[1].customer,address);
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
  d.querySelector('[data-delivery-qty]').value='5';await e('preview').onclick();
  assert(d.querySelector('dialog').open);assert.equal(d.querySelectorAll('dialog script').length,0);
