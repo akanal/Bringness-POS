@@ -48,3 +48,17 @@ const race=fixture();try{
  const pending=ctrl.check();inputs.city.value='Hamburg';inputs.city.dispatchEvent(new race.Event('input'));resolve({issues:[{fields:['city'],message:'stale'}]});await pending;assert.equal(inputs.city.hasAttribute('aria-invalid'),false);assert(!d.body.textContent.includes('stale'));
  race.api=async()=>{throw Error('unavailable');};await ctrl.check();assert.equal(inputs.city.hasAttribute('aria-invalid'),false);assert.match(d.body.textContent,/Adressprüfung derzeit nicht verfügbar/);
 }finally{race.close();}
+
+// A new search typed during a slow lookup must run after the old response.
+const queued=fixture();try{
+ await queued.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=queued.document,search=d.querySelector('[data-search]'),find=d.querySelector('[data-find]');let release,lookups=[];
+ queued.api=async(path,opt)=>{if(path.startsWith('/customers?')){const q=new URL('https://fixture.test'+path).searchParams.get('q');lookups.push(q);if(q==='slow')return new Promise(resolve=>release=()=>resolve({customers:[{id:cid,version:2,data:{...address,name:'Old response'}}]}));return {customers:[{id:cid,version:2,data:{...address,name:'Latest response'}}]};}return api(path,opt);};
+ search.value='slow';const first=find.onclick();search.value='latest';await find.onclick();release();await first;for(let n=0;n<8;n++)await new Promise(r=>setTimeout(r,0));assert(lookups.includes('latest'));assert.equal(d.getElementById('trade-name').value,'Latest response');
+}finally{queued.close();}
+
+// A rejected duplicate click must not unlock the first save for a third click.
+const saves=fixture();try{
+ await saves.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=saves.document;for(const [k,v]of Object.entries(address)){const input=d.getElementById('trade-'+k);if(input)input.value=v;}let writes=0,releases=[];
+ saves.api=async(path,opt)=>{if(path==='/customers'){writes++;return new Promise(resolve=>releases.push(()=>resolve({id:cid,version:3,data:JSON.parse(opt.body).customer})));}return api(path,opt);};
+ const button=d.querySelector('[data-save]'),first=button.onclick();for(let n=0;n<8&&!writes;n++)await new Promise(r=>setTimeout(r,0));await button.onclick();const third=button.onclick();for(let n=0;n<4;n++)await new Promise(r=>setTimeout(r,0));const count=writes;releases.forEach(fn=>fn());await Promise.all([first,third]);assert.equal(count,1);
+}finally{saves.close();}
