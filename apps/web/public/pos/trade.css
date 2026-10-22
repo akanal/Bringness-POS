@@ -26,3 +26,13 @@
 .trade-tier-price legend{padding:0;font-size:inherit}.trade-tier-price label{margin:0;font-size:12px}.trade-tier-row input{min-width:0}.trade-tier-row>button{padding:8px 0;min-height:36px;margin-bottom:0}
 .trade-tier-row input[aria-invalid="true"]{border:2px solid #b42332;background:#fff1f2}
 @media(max-width:380px){.trade-tier-row{grid-template-columns:minmax(62px,1fr) minmax(110px,1.4fr) 30px;gap:5px}.trade-tier-price{grid-template-columns:minmax(50px,1fr) 46px;gap:4px}}
+
+/* Keep postcode and city on one compact line. A4 invoice preview mirrors the envelope address area. */
+.trade-sheet [data-sheet-address]{grid-template-columns:var(--postcode-width,5ch) minmax(0,1fr);column-gap:0.6ch}
+.trade-invoice-sheet{position:relative;min-height:850px;padding:20px 40px 100px;font-family:Arial,sans-serif}
+.trade-invoice-sheet .trade-sheet-seller{text-align:right;font-size:19px;font-weight:bold;min-height:75px}
+.trade-invoice-sheet .trade-sheet-top{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;min-height:145px;margin:0 0 16px;padding-top:20px}
+.trade-invoice-sheet .trade-sheet-return{font-size:8px;line-height:1.3;margin-bottom:12px}
+.trade-invoice-sheet h3{margin:0 0 12px}.trade-invoice-sheet table th:first-child{width:24px}.trade-invoice-sheet table th:nth-child(2){width:32%}.trade-invoice-sheet table th:last-child{width:auto}
+.trade-sheet-total{text-align:right;font-weight:bold}.trade-invoice-sheet .trade-sheet-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px;position:absolute;bottom:20px;left:40px;right:40px;border-top:1px solid #bbb;padding-top:10px;font-size:9px;line-height:1.5;color:#777;overflow-wrap:anywhere}
+@media(max-width:560px){.trade-invoice-sheet{padding:15px 18px 110px;min-height:760px}.trade-invoice-sheet .trade-sheet-top{gap:14px}.trade-invoice-sheet .trade-sheet-footer{left:18px;right:18px;gap:8px}.trade-invoice-sheet td,.trade-invoice-sheet th{font-size:10px;padding:4px}}

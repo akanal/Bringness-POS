@@ -1,3 +1,4 @@
+import {saveSellerDocumentDetails} from '../seller-document-details.js';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -22,7 +23,7 @@ await db.exec((await fs.readFile(new URL('../../db/schema.sql',import.meta.url),
 await db.exec(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner';ALTER TABLE users ADD COLUMN must_change_password boolean DEFAULT false;
  CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE SEQUENCE receipt_number_seq;
  ALTER TABLE receipts ADD COLUMN merchant_snapshot jsonb;
- CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text);`);
+ CREATE TABLE company_billing_profiles(company_id uuid,company_name text,street text,postal_code text,city text,vat_id text,document_details jsonb NOT NULL DEFAULT '{}',updated_at timestamptz);`);
 await migratePaymentCheckout(pool);await migratePaymentCheckout(pool);
 const company=uuid(),restaurant=uuid(),owner=uuid(),product=uuid(),token='synthetic-checkout-session';
 await query("INSERT INTO companies(id,name) VALUES($1,'Fixture')",[company]);
@@ -58,7 +59,7 @@ try{
  assert.equal((await send('/trade/prices?restaurantId='+restaurant)).body.tiers.length,2);
  for(const bad of [[{minQty:0,priceCents:100}],[{minQty:1,priceCents:0}],[{minQty:1,priceCents:100},{minQty:1,priceCents:50}]])assert.equal((await send('/trade/prices','PUT',{...prices,tiers:bad},token,unlock)).status,400);
  assert.equal((await send('/orders/checkout','POST',request)).status,400); // seller missing
- await query("INSERT INTO company_billing_profiles VALUES($1,'Seller GmbH','Street 2','10115','Berlin','DE456')",[company]);
+ await query("INSERT INTO company_billing_profiles(company_id,company_name,street,postal_code,city,vat_id) VALUES($1,'Seller GmbH','Street 2','10115','Berlin','DE456')",[company]);
  // One actual HTTP flow across customer records, unpaid delivery, sale, invoice and cash closure.
  const savedCustomer=await send('/customers','POST',{restaurantId:restaurant,customer:recipient});assert.equal(savedCustomer.status,200);
  const foundCustomers=await send('/customers?restaurantId='+restaurant+'&q=Wholesale');assert.equal(foundCustomers.body.customers.length,1);
@@ -74,6 +75,7 @@ try{
  assert.equal((await send('/orders/checkout','POST',{...request,salesMode:'retail'})).status,400); // retail remains limited to 999
  assert.equal((await send('/orders/checkout','POST',{...request,payments:[{method:'card',amountCents:300000}]})).status,409);
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),0);
+ const sellerDetails=await saveSellerDocumentDetails(pool,{id:owner,company_id:company},{taxNumber:'12/345/67890',bankName:'Musterbank',iban:'DE89370400440532013000',bic:'COBADEFFXXX'});assert.equal(sellerDetails.bankName,'Musterbank');
  const sale=await send('/orders/checkout','POST',request);assert.equal(sale.status,201);assert.equal(sale.body.totalCents,300000);assert(sale.body.receiptId);assert.match(sale.body.receiptNumber,/^HR-\d{4}-000001$/);assert.equal((await query('SELECT is_called FROM receipt_number_seq')).rows[0].is_called,false);
  assert.equal((await query('SELECT unit_price_cents FROM order_items WHERE order_id=$1',[sale.body.id])).rows[0].unit_price_cents,200);
  const invoice=await send('/receipts/'+sale.body.receiptId+'/invoice');if(process.env.TRADE_PDF_PREVIEW)await fs.writeFile(process.env.TRADE_PDF_PREVIEW,invoice.body);assert.equal(invoice.status,200);assert(invoice.body.subarray(0,4).toString()==='%PDF');assert.match(invoice.body.toString('latin1'),/MediaBox \[0 0 595\.28 841\.89\]/);
@@ -84,6 +86,7 @@ try{
  await query('UPDATE products SET price_cents=9999 WHERE id=$1',[product]);
  await send('/trade/prices','PUT',{...prices,tiers:[{minQty:1,priceCents:500}]},token,unlock);
  await query("UPDATE company_billing_profiles SET company_name='Changed' WHERE company_id=$1",[company]);
+ await saveSellerDocumentDetails(pool,{id:owner,company_id:company},{bankName:'Changed Bank'});const originalSeller=(await query('SELECT merchant_snapshot FROM receipts WHERE id=$1',[sale.body.receiptId])).rows[0].merchant_snapshot;assert.equal(originalSeller.documentDetails.bankName,'Musterbank');assert.equal(originalSeller.documentDetails.iban,'DE89370400440532013000');
  assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:false},token,unlock)).body.enabled,false);
  assert.equal((await send('/orders/checkout','POST',{...request,requestKey:uuid(),payments:[{method:'cash',amountCents:750000}]})).status,409);
  assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,1);

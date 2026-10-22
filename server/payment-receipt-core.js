@@ -74,6 +74,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
     receipt.postal_code = snapshot.postalCode;
     receipt.city = snapshot.city;
     receipt.vat_id = snapshot.vatId;
+    receipt.document_details = snapshot.documentDetails || {};
   }
 
   const [itemsResult, paymentsResult] = await Promise.all([

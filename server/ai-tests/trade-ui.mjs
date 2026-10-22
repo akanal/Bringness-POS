@@ -57,3 +57,18 @@ try{
  rows().forEach(r=>r.querySelector('[data-tier-remove]').click());await save();assert.deepEqual(tierWrites.at(-1).tiers,[]);assert.equal(rows().length,1);assert.equal(rows()[0].querySelector('[data-tier-euro]').value,'');
  console.log('Structured trade tiers passed: loaded values, digits-only euro/cent, add/remove, duplicate and cents validation, 20-row limit, failed-save preservation and explicit removal of all prices.');
 }finally{tierWindow.close()}
+
+const invoiceWindow=fixture();const invoiceCalls=[];
+invoiceWindow.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+invoiceWindow.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new invoiceWindow.Event('close'));};
+invoiceWindow.eval(await fs.readFile(new URL('../../apps/web/public/pos/customer-delivery.js',import.meta.url),'utf8'));
+invoiceWindow.api=async(path,opt)=>{invoiceCalls.push({path,method:opt?.method||'GET'});if(path.startsWith('/trade/settings?'))return {enabled:true};if(path.startsWith('/trade/prices?'))return {tiers};if(path.startsWith('/customers?'))return {customers:[]};if(path==='/billing/profile')return {profile:{company_name:'Seller GmbH',street:'Testweg 1',postal_code:'10115',city:'Berlin',vat_id:'DE123',document_details:{bankName:'Musterbank',iban:'DE89370400440532013000',taxNumber:'12/345'}}};throw Error('Unexpected request '+path);};
+try{
+ await invoiceWindow.renderTradeModule();const d=invoiceWindow.document;d.querySelector('[data-add]').click();for(const [k,v]of Object.entries({name:'Buyer',street:'Stromstraße 56',postalCode:'10551',city:'Berlin'}))d.getElementById('trade-'+k).value=v;
+ assert.equal(d.querySelector('[data-preview]').textContent,'Rechnung ansehen');await d.querySelector('[data-preview]').onclick();
+ const sheet=d.querySelector('.trade-invoice-sheet');assert(sheet);assert.match(sheet.textContent,/Rechnungsentwurf/);assert.match(sheet.textContent,/beim Ausstellen/);assert.match(sheet.textContent,/Musterbank/);assert.match(sheet.textContent,/DE89370400440532013000/);assert.match(sheet.textContent,/2,50/);
+ const address=sheet.querySelector('[data-sheet-address]');assert.equal(address.style.getPropertyValue('--postcode-width'),'5ch');assert.equal(address.querySelector('[data-address-field="postalCode"]').value,'10551');assert.equal(address.querySelector('[data-address-field="city"]').value,'Berlin');
+ address.querySelector('[data-address-field="city"]').value='Hamburg';address.querySelector('[data-address-field="city"]').dispatchEvent(new invoiceWindow.Event('input'));assert.equal(d.getElementById('trade-city').value,'Hamburg');
+ assert(!invoiceCalls.some(c=>c.method!=='GET'));assert.equal(invoiceWindow.localStorage.getItem(key),null);
+ console.log('Invoice draft UI passed: editable compact postcode/city, seller address and bank footer, tier prices and no payment, delivery issuance or number allocation.');
+}finally{invoiceWindow.close()}
