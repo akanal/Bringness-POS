@@ -11,7 +11,7 @@ let lost=true,requests=[],updates=[];
 const api=async(path,opt)=>{
  if(path==='/address-check'){const b=JSON.parse(opt.body);assert.deepEqual(Object.keys(b.address).sort(),['city','country','postalCode','street']);return checkAddress(b.address,{complete:b.complete});}
  if(path.startsWith('/customers?'))return {customers:[{id:cid,data:address,version:2}]};
- if(path==='/customers'){updates.push(JSON.parse(opt.body));return {id:cid};}
+ if(path==='/customers'){const b=JSON.parse(opt.body);updates.push(b);return {id:cid,data:b.customer,version:(b.version||0)+1};}
  if(path==='/delivery-notes'){const b=JSON.parse(opt.body);requests.push(b);if(lost)throw Error('connection lost');return {deliveryNote:{id:crypto.randomUUID(),number:'LS-TEST',recipient:b.recipient,sender:{company_name:'Seller <img src=x>',street:'Sender 1',postal_code:'10115',city:'Berlin'},items:[{name:'Item <script>x</script>',qty:5}],note:'<img onerror=x>',issued_at:new Date().toISOString()}};}
  if(path.startsWith('/delivery-notes?'))return {deliveryNotes:[]};throw Error(path);
 };
@@ -62,3 +62,28 @@ const saves=fixture();try{
  saves.api=async(path,opt)=>{if(path==='/customers'){writes++;return new Promise(resolve=>releases.push(()=>resolve({id:cid,version:3,data:JSON.parse(opt.body).customer})));}return api(path,opt);};
  const button=d.querySelector('[data-save]'),first=button.onclick();for(let n=0;n<8&&!writes;n++)await new Promise(r=>setTimeout(r,0));await button.onclick();const third=button.onclick();for(let n=0;n<4;n++)await new Promise(r=>setTimeout(r,0));const count=writes;releases.forEach(fn=>fn());await Promise.all([first,third]);assert.equal(count,1);
 }finally{saves.close();}
+
+// A confirmed customer save stays usable even when subsequent list reads fail.
+const confirmed=fixture();try{
+ await confirmed.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=confirmed.document,e=k=>d.querySelector('[data-'+k+']');
+ e('customers').value=cid;await e('use').onclick();let lookups=0,writes=[];
+ confirmed.api=async(path,opt)=>{
+  if(path.startsWith('/customers?')){lookups++;throw Error('Kundenliste nicht erreichbar');}
+  if(path==='/customers'){const body=JSON.parse(opt.body);writes.push({method:opt.method,...body});return {id:cid,version:(body.version||0)+1,data:{...body.customer,name:body.customer.name.trim()}};}
+  return api(path,opt);
+ };
+ d.getElementById('trade-street').value='Neue Straße 8';e('phone').value='030999';await e('update').onclick();
+ assert.match(e('customer-status').textContent,/Kunde aktualisiert/);assert.equal(e('customers').value,cid);assert.match(e('customers').selectedOptions[0].textContent,/Neue Straße 8/);assert.equal(lookups,0);
+ e('email').value='new@example.test';await e('save').onclick();assert.equal(writes.length,2);assert.equal(writes[0].method,'PUT');assert.equal(writes[0].version,2);assert.equal(writes[1].method,'PUT');assert.equal(writes[1].version,3);assert.equal(writes[1].customer.phone,'030999');assert.equal(writes[1].customer.email,'new@example.test');
+ // Reusing the selected customer takes the server-confirmed address and contacts.
+ d.getElementById('trade-street').value='Unsaved';await e('use').onclick();assert.equal(d.getElementById('trade-street').value,'Neue Straße 8');assert.equal(e('email').value,'new@example.test');assert.equal(e('phone').value,'030999');
+ e('customers').value='';await e('save').onclick();assert.equal(writes.at(-1).method,'POST');assert.equal(e('customers').value,cid);await e('save').onclick();assert.equal(writes.at(-1).method,'PUT');assert.equal(writes.at(-1).version,1);assert.equal(lookups,0);
+}finally{confirmed.close();}
+
+// A list opened before a save cannot later replace its confirmed customer version.
+const staleList=fixture();try{
+ let release;staleList.api=async(path,opt)=>path.startsWith('/customers?')?new Promise(resolve=>release=resolve):path==='/customers'?{id:cid,version:7,data:JSON.parse(opt.body).customer}:api(path,opt);
+ await staleList.renderCustomerDeliveryModule();const d=staleList.document;for(const [k,v]of Object.entries(address)){const input=d.getElementById('trade-'+k);if(input)input.value=v;}
+ await d.querySelector('[data-save]').onclick();release({customers:[]});await new Promise(r=>setTimeout(r,0));assert.equal(d.querySelector('[data-customers]').value,cid);
+ let updated;staleList.api=async(path,opt)=>{if(path==='/customers'){updated=JSON.parse(opt.body);return {id:cid,version:8,data:updated.customer};}return api(path,opt);};await d.querySelector('[data-update]').onclick();assert.equal(updated.version,7);
+}finally{staleList.close();}
