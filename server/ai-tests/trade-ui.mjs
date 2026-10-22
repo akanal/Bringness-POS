@@ -72,6 +72,26 @@ try{
  address.querySelector('[data-address-field="city"]').value='Hamburg';address.querySelector('[data-address-field="city"]').dispatchEvent(new invoiceWindow.Event('input'));assert.equal(d.getElementById('trade-city').value,'Hamburg');
  assert(!invoiceCalls.some(c=>c.method!=='GET'));assert.equal(invoiceWindow.localStorage.getItem(key),null);
  d.querySelector('dialog button').click();
+ // Preview reconciles merchandise, grouped deposits and return credits independently.
+ for(const credit of [0,20,100]){
+  invoiceWindow.bnDepositTotal=()=>75-credit;
+  invoiceWindow.bnDepositBreakdown=()=>[
+   {label:'Pfand Artikel A',qty:1,unitCents:25,totalCents:25},
+   {label:'Pfand Artikel B',qty:1,unitCents:25,totalCents:25},
+   {label:'Pfand Kiste',qty:1,unitCents:25,totalCents:25},
+   ...(credit?[{label:'Pfandrückgabe verrechnet',qty:1,unitCents:-credit,totalCents:-credit}]:[])
+  ];
+  await d.querySelector('[data-preview]').onclick();
+  const preview=d.querySelector('.trade-invoice-sheet'),rows=preview.querySelectorAll('tbody tr');
+  assert.equal(rows.length,credit?3:2);assert.equal(rows[1].cells[1].textContent,'Pfand');assert.equal(rows[1].cells[2].textContent,'3');assert.match(rows[1].cells[4].textContent,/0,75/);
+  assert(!preview.querySelector('.trade-sheet-total').textContent.includes('Rabatt'));
+  const expected=((325-credit)/100).toFixed(2).replace('.',',');
+  assert(preview.querySelector('.trade-sheet-total').textContent.includes(expected));assert(d.querySelector('[data-confirm-payment]').textContent.includes(expected));
+  if(credit)assert.equal(rows[2].cells[1].textContent,'Pfandrückgabe verrechnet');
+  assert(!invoiceCalls.some(c=>c.method!=='GET'));assert.equal(invoiceWindow.localStorage.getItem(key),null);
+  d.querySelector('dialog button').click();
+ }
+ delete invoiceWindow.bnDepositTotal;delete invoiceWindow.bnDepositBreakdown;
  const sellerBox=d.querySelector('.trade-seller-details');sellerBox.open=true;await sellerBox.ontoggle();
  sellerBox.querySelector('[data-seller=iban]').value='DE021234';sellerBox.querySelector('[data-seller=bic]').value='10050000';await sellerBox.querySelector('button').onclick();assert.match(sellerBox.querySelector('[data-seller-status]').textContent,/Nicht gespeichert: IBAN/);assert.equal(sellerBox.querySelector('[data-seller=iban]').getAttribute('aria-invalid'),'true');assert.equal(sellerSaved.iban,'DE89370400440532013000');
  sellerBox.querySelector('[data-seller=iban]').value='DE89370400440532013000';await sellerBox.querySelector('button').onclick();assert.match(sellerBox.querySelector('[data-seller-status]').textContent,/BIC/);assert.equal(sellerBox.querySelector('[data-seller=bic]').getAttribute('aria-invalid'),'true');
