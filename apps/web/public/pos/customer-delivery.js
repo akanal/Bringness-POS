@@ -34,7 +34,7 @@
    if(el('search').value===searchBefore)el('search').value='';
    const current={...draft().recipient,email:el('email').value.trim(),phone:el('phone').value.trim()};status(JSON.stringify(current)===JSON.stringify(customer)?(update?'Kunde aktualisiert':'Kunde gespeichert')+' – Adresse, E-Mail und Telefon sind gespeichert.':'Vorheriger Kundenstand gespeichert. Neue Änderungen sind noch nicht gespeichert.');};
   el('save').onclick=action(()=>save(!!el('customers').value));el('update').onclick=action(()=>save(true));
-  const show=note=>{const b=document.createElement('button');b.type='button';b.textContent=note.number+' · '+note.recipient.name+' · Drucken';b.onclick=()=>printNote(note);el('documents').prepend(b);};
+  const show=(note,target)=>{const b=document.createElement('button');b.type='button';b.textContent=note.number+' · '+note.recipient.name+' · Drucken';b.onclick=()=>printNote(note);if(target)target.append(b);else el('documents').prepend(b);};
   const refresh=()=>{try{el('retry').hidden=!localStorage.getItem(storageKey);}catch{el('issue').disabled=true;status('Speicher nicht verfügbar. Keine neue Lieferscheinerstellung möglich.');}};
   const issue=async retry=>{
    let request;const raw=localStorage.getItem(storageKey);
@@ -70,7 +70,18 @@
    }
    dialog.append(close);if(invoiceData&&confirmPayment){const paid=document.createElement('button');paid.type='button';paid.className='primary';paid.dataset.confirmPayment='';paid.textContent='Barzahlung erhalten · '+eur(invoiceData.totalCents);paid.onclick=()=>{dialog.close();return confirmPayment();};const info=document.createElement('p');info.textContent='Nach tatsächlich erhaltener Barzahlung bestätigen. Die gespeicherte Rechnung mit Nummer und QR-Code öffnet sich anschließend.';dialog.append(paid,info);}dialog.append(sheet);dialog.addEventListener('close',()=>dialog.remove(),{once:true});host.append(dialog);dialog.showModal();
   });
-  el('issue').onclick=action(()=>issue(false));el('retry').onclick=action(()=>issue(true));el('archive').onclick=action(async()=>{const r=await api('/delivery-notes?restaurantId='+encodeURIComponent(rid));el('documents').replaceChildren();if(invoiceArchive){const invoices=document.createElement('div');invoices.dataset.invoiceArchive='';el('documents').append(invoices);await invoiceArchive(invoices);}const heading=document.createElement('strong');heading.textContent='Lieferscheine';el('documents').append(heading);r.deliveryNotes.forEach(show);if(!r.deliveryNotes.length){const empty=document.createElement('p');empty.textContent='Keine Lieferscheine gespeichert.';el('documents').append(empty);}status('Archiv geladen.');});
+  el('issue').onclick=action(()=>issue(false));el('retry').onclick=action(()=>issue(true));el('archive').onclick=action(async()=>{
+   const documents=el('documents'),notes=document.createElement('div'),invoices=document.createElement('div');notes.dataset.deliveryArchive='';invoices.dataset.invoiceArchive='';
+   documents.replaceChildren();if(invoiceArchive)documents.append(invoices);documents.append(notes);
+   const results=await Promise.allSettled([
+    invoiceArchive?Promise.resolve().then(()=>invoiceArchive(invoices)):Promise.resolve(true),
+    (async()=>{const r=await api('/delivery-notes?restaurantId='+encodeURIComponent(rid));if(!section.isConnected)return false;const heading=document.createElement('strong');heading.textContent='Lieferscheine';notes.append(heading);r.deliveryNotes.forEach(note=>show(note,notes));if(!r.deliveryNotes.length){const empty=document.createElement('p');empty.textContent='Keine Lieferscheine gespeichert.';notes.append(empty);}return true;})()
+   ]);
+   if(!section.isConnected)return;
+   if(results[0].status==='rejected')invoices.textContent='Rechnungen konnten nicht geladen werden. Über „Archiv öffnen“ erneut versuchen.';
+   if(results[1].status==='rejected')notes.textContent='Lieferscheine konnten nicht geladen werden. Über „Archiv öffnen“ erneut versuchen.';
+   status(results.every(result=>result.status==='fulfilled'&&result.value!==false)?'Archiv geladen.':'Archiv nicht vollständig geladen. Verfügbare Dokumente können geöffnet werden. Über „Archiv öffnen“ erneut versuchen.');
+  });
   if(invoice){
    section.querySelector('summary').textContent='Kunden & Dokumente';section.querySelector(':scope > small').textContent='Rechnung öffnen und dort den erhaltenen Barbetrag bestätigen. Ein Lieferschein bucht keine Zahlung.';el('preview').textContent='Rechnung';el('issue').textContent='Lieferschein';
    const sellerBox=document.createElement('details');sellerBox.className='trade-seller-details';sellerBox.innerHTML='<summary>Verkäuferangaben für die Fußzeile</summary>'+Object.entries({taxNumber:'Steuernummer',bankName:'Bank',iban:'IBAN',bic:'BIC',phone:'Telefon',email:'E-Mail'}).map(([k,label])=>'<label>'+label+'<input data-seller="'+k+'" maxlength="'+({iban:42,bic:11,email:254,taxNumber:80,phone:60}[k]||120)+'"></label>').join('')+'<button type="button">Angaben speichern</button><p data-seller-status role="status" aria-live="polite"></p><small>Firmenname, Anschrift und USt-IdNr. werden unter Lizenz & Abo gepflegt.</small>';

@@ -107,5 +107,29 @@ try{
  await d.querySelector('[data-preview]').onclick();assert.match(d.querySelector('[data-confirm-payment]').textContent,/Barzahlung erhalten/);await d.querySelector('[data-confirm-payment]').onclick();assert.equal(paidBody.recipient.email,'buyer@example.test');assert.equal(paidBody.recipient.phone,'03012345');assert.equal(paidBody.recipient.taxNumber,'98/765');assert.equal(invoiceLoads,1);
  assert(d.querySelector('.trade-issued-invoice').open);assert.match(d.querySelector('.trade-issued-invoice strong').textContent,/HR-2026-000042/);assert.match(d.querySelector('.trade-issued-invoice iframe').title,/Gespeicherte Rechnung/);assert.equal(d.getElementById('tradeArchive'),null);assert.equal(d.getElementById('tradeInvoices'),null);assert.equal(invoiceWindow.localStorage.getItem(key),null);
  d.querySelector('.trade-issued-invoice button').click();await d.querySelector('[data-archive]').onclick();assert.match(d.querySelector('[data-invoice-archive]').textContent,/HR-2026-000042/);await d.querySelector('[data-invoice-archive] button').onclick();assert.equal(invoiceLoads,2);
+ // Archive branches remain independently usable on errors, delays and retries.
+ d.querySelector('.trade-issued-invoice button').click();
+ const archiveApi=invoiceWindow.api;let failNotes=false,failInvoices=false,releaseNotes,slowNotes=false,archiveWrites=0;
+ const notes=[2,1].map(n=>({id:crypto.randomUUID(),number:'LS-TEST-'+n,recipient:{name:'Stored <img src=x>',street:'Archivweg 8',postalCode:'10115',city:'Berlin'},sender:{company_name:'Stored seller'},items:[{name:'Stored article',qty:n}],note:'',issued_at:new Date().toISOString()}));
+ invoiceWindow.api=async(path,opt)=>{
+  if(opt?.method&&opt.method!=='GET')archiveWrites++;
+  if(path.startsWith('/delivery-notes?')){
+   if(failNotes)throw Error('Delivery archive unavailable');
+   if(slowNotes)return new Promise(resolve=>releaseNotes=()=>resolve({deliveryNotes:notes}));
+   return {deliveryNotes:notes};
+  }
+  if(path.startsWith('/trade/invoices?')&&failInvoices)throw Error('Invoice archive unavailable');
+  return archiveApi(path,opt);
+ };
+ failNotes=true;await d.querySelector('[data-archive]').onclick();
+ assert.match(d.querySelector('[data-invoice-archive]').textContent,/HR-2026-000042/);assert.match(d.querySelector('[data-delivery-archive]').textContent,/Lieferscheine konnten nicht geladen/);assert.match(d.querySelector('[data-status]').textContent,/nicht vollständig/);
+ await d.querySelector('[data-invoice-archive] button').onclick();assert.equal(invoiceLoads,3);d.querySelector('.trade-issued-invoice button').click();
+ failNotes=false;failInvoices=true;await d.querySelector('[data-archive]').onclick();
+ assert.match(d.querySelector('[data-invoice-archive]').textContent,/Rechnungen konnten nicht geladen/);assert.match(d.querySelector('[data-status]').textContent,/nicht vollständig/);
+ assert.deepEqual([...d.querySelectorAll('[data-delivery-archive] button')].map(b=>b.textContent.split(' · ')[0]),['LS-TEST-2','LS-TEST-1']);assert.equal(d.querySelector('[data-delivery-archive] img'),null);
+ d.querySelector('[data-delivery-archive] button').click();assert.match(d.querySelector('iframe[data-delivery-print]').srcdoc,/LS-TEST-2/);assert.match(d.querySelector('iframe[data-delivery-print]').srcdoc,/Archivweg 8/);
+ failNotes=true;await d.querySelector('[data-archive]').onclick();assert.match(d.querySelector('[data-delivery-archive]').textContent,/konnten nicht geladen/);assert.match(d.querySelector('[data-invoice-archive]').textContent,/konnten nicht geladen/);
+ failNotes=false;failInvoices=false;slowNotes=true;const loading=d.querySelector('[data-archive]').onclick();for(let n=0;n<8;n++)await new Promise(r=>setTimeout(r,0));assert.match(d.querySelector('[data-invoice-archive]').textContent,/HR-2026-000042/);assert(releaseNotes);releaseNotes();await loading;
+ assert.equal(d.querySelectorAll('[data-invoice-archive] button').length,1);assert.equal(d.querySelectorAll('[data-delivery-archive] button').length,2);assert.equal(d.querySelector('[data-status]').textContent,'Archiv geladen.');assert.equal(archiveWrites,0);
  console.log('Invoice draft UI passed: editable compact postcode/city, seller address and bank footer, tier prices and no payment, delivery issuance or number allocation.');
 }finally{invoiceWindow.close()}
