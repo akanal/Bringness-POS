@@ -34,7 +34,7 @@
 .posapp .trade-invoice-sheet .trade-sheet-seller{position:static;display:block;box-sizing:border-box;width:44%;max-width:none;min-height:76px;margin:0 0 0 auto;padding:0;border:0;border-radius:0;box-shadow:none;background:transparent;color:#666;text-align:right;font:11px/1.4 Arial,sans-serif}
 .posapp .trade-invoice-sheet .trade-sheet-seller strong{display:block;font-size:12px;font-weight:600;color:#444}.posapp .trade-invoice-sheet .trade-sheet-seller span{display:block}
 .posapp .trade-invoice-sheet .trade-sheet-top{flex-shrink:0;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;min-height:145px;margin:40px 0 18px;padding:0;color:#222}
-.posapp .trade-invoice-sheet .trade-sheet-return{font-size:8px;line-height:1.3;margin:0 0 12px;color:#777}
+.posapp .trade-invoice-sheet .trade-sheet-return{display:block;white-space:nowrap;font-size:8px;line-height:1.3;margin:0 0 5px;color:#777}
 .posapp .trade-invoice-sheet h3{margin:0 0 12px;color:#222;font-size:15px}.posapp .trade-invoice-sheet table{flex-shrink:0;table-layout:fixed;width:100%;margin:0;border-collapse:collapse;color:#222;font-size:12px}
 .posapp .trade-invoice-sheet th,.posapp .trade-invoice-sheet td{box-sizing:border-box;padding:6px 5px;font:12px/1.3 Arial,sans-serif;color:#222}
 .posapp .trade-invoice-sheet th:first-child,.posapp .trade-invoice-sheet td:first-child{width:7%;white-space:nowrap;overflow-wrap:normal;word-break:normal}
