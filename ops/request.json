@@ -1,6 +1,6 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "712ff0846849f5b33f640fc20b3b88cbd409d81c",
-  "requestId": "deploy-stock-ai-20261021"
+  "revision": "ec8240540cd067ebfc1911509bbe435e3ff2f7e1",
+  "requestId": "deploy-stock-sales-ai-20261022"
 }
