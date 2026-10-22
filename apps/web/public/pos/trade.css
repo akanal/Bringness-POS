@@ -29,10 +29,18 @@
 
 /* Keep postcode and city on one compact line. A4 invoice preview mirrors the envelope address area. */
 .trade-sheet [data-sheet-address]{grid-template-columns:var(--postcode-width,5ch) minmax(0,1fr);column-gap:0.6ch}
-.trade-invoice-sheet{position:relative;min-height:850px;padding:20px 40px 100px;font-family:Arial,sans-serif}
-.trade-invoice-sheet .trade-sheet-seller{text-align:right;font-size:19px;font-weight:bold;min-height:75px}
-.trade-invoice-sheet .trade-sheet-top{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;min-height:145px;margin:0 0 16px;padding-top:20px}
-.trade-invoice-sheet .trade-sheet-return{font-size:8px;line-height:1.3;margin-bottom:12px}
-.trade-invoice-sheet h3{margin:0 0 12px}.trade-invoice-sheet table th:first-child{width:24px}.trade-invoice-sheet table th:nth-child(2){width:32%}.trade-invoice-sheet table th:last-child{width:auto}
-.trade-sheet-total{text-align:right;font-weight:bold}.trade-invoice-sheet .trade-sheet-footer{display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px;position:absolute;bottom:20px;left:40px;right:40px;border-top:1px solid #bbb;padding-top:10px;font-size:9px;line-height:1.5;color:#777;overflow-wrap:anywhere}
-@media(max-width:560px){.trade-invoice-sheet{padding:15px 18px 110px;min-height:760px}.trade-invoice-sheet .trade-sheet-top{gap:14px}.trade-invoice-sheet .trade-sheet-footer{left:18px;right:18px;gap:8px}.trade-invoice-sheet td,.trade-invoice-sheet th{font-size:10px;padding:4px}}
+/* Invoice content is isolated from the website's generic header/footer theme. */
+.posapp .trade-invoice-sheet{position:relative;display:flex;flex-direction:column;box-sizing:border-box;width:100%;height:auto;min-height:0;max-height:none;aspect-ratio:210/297;overflow:visible;padding:26px 38px 24px;font:13px/1.35 Arial,sans-serif;color:#222;background:#fff}
+.posapp .trade-invoice-sheet .trade-sheet-seller{position:static;display:block;box-sizing:border-box;width:44%;max-width:none;min-height:76px;margin:0 0 0 auto;padding:0;border:0;border-radius:0;box-shadow:none;background:transparent;color:#666;text-align:right;font:11px/1.4 Arial,sans-serif}
+.posapp .trade-invoice-sheet .trade-sheet-seller strong{display:block;font-size:12px;font-weight:600;color:#444}.posapp .trade-invoice-sheet .trade-sheet-seller span{display:block}
+.posapp .trade-invoice-sheet .trade-sheet-top{flex-shrink:0;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;min-height:145px;margin:40px 0 18px;padding:0;color:#222}
+.posapp .trade-invoice-sheet .trade-sheet-return{font-size:8px;line-height:1.3;margin:0 0 12px;color:#777}
+.posapp .trade-invoice-sheet h3{margin:0 0 12px;color:#222;font-size:15px}.posapp .trade-invoice-sheet table{flex-shrink:0;table-layout:fixed;width:100%;margin:0;border-collapse:collapse;color:#222;font-size:12px}
+.posapp .trade-invoice-sheet th,.posapp .trade-invoice-sheet td{box-sizing:border-box;padding:6px 5px;font:12px/1.3 Arial,sans-serif;color:#222}
+.posapp .trade-invoice-sheet th:first-child,.posapp .trade-invoice-sheet td:first-child{width:7%;white-space:nowrap;overflow-wrap:normal;word-break:normal}
+.posapp .trade-invoice-sheet th:nth-child(2){width:35%}.posapp .trade-invoice-sheet th:nth-child(3){width:14%}.posapp .trade-invoice-sheet th:nth-child(4),.posapp .trade-invoice-sheet th:nth-child(5){width:22%}
+.posapp .trade-invoice-sheet th:nth-child(n+3),.posapp .trade-invoice-sheet td:nth-child(n+3){text-align:right}
+.posapp .trade-invoice-sheet .trade-sheet-total{text-align:right;margin:12px 0 24px;color:#222;font-weight:bold}
+.posapp .trade-invoice-sheet .trade-sheet-footer{position:static;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));flex-shrink:0;gap:16px;box-sizing:border-box;width:100%;max-width:none;height:auto;min-height:0;margin:auto 0 0;padding:10px 0 0;border:0;border-top:1px solid #c6c6c6;border-radius:0;box-shadow:none;background:transparent;color:#777;text-align:left;font:9px/1.45 Arial,sans-serif;overflow-wrap:anywhere}
+.posapp .trade-invoice-sheet .trade-sheet-footer>div{display:block;min-width:0;margin:0;padding:0;gap:0;color:inherit;background:transparent;font:inherit}
+@media(max-width:560px){.posapp .trade-invoice-sheet{padding:18px 14px 18px}.posapp .trade-invoice-sheet .trade-sheet-top{gap:12px;margin-top:22px;min-height:125px}.posapp .trade-invoice-sheet .trade-sheet-seller{font-size:10px;min-height:54px}.posapp .trade-invoice-sheet .trade-sheet-footer{gap:8px;font-size:8px}.posapp .trade-invoice-sheet td,.posapp .trade-invoice-sheet th{font-size:10px;padding:4px 3px}}
