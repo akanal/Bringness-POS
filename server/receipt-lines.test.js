@@ -19,7 +19,7 @@ test('deposit projection groups equal amounts last without changing source, roun
  assert.equal(rows[3].grossCents,-25);assert.equal(rows[4].quantity,3);
 });
 async function pdfText(formatA4=false){
- const bytes=await renderPaymentReceipt(pool,PDFDocument,QRCode,()=> 'https://example.org/beleg/test',{}, {...receipt,formatA4,recipient:{name:'Testkunde'}});
+ const bytes=await renderPaymentReceipt(pool,PDFDocument,QRCode,()=> 'https://example.org/beleg/test',{}, {...receipt,formatA4,invoice_public_token:'67b01fe7-ab2e-4ba5-8b64-710efcdd6108',recipient:{name:'Testkunde'}});
  const loading=getDocument({data:new Uint8Array(bytes),useSystemFonts:true});const pdf=await loading.promise;
  let text='';for(let i=1;i<=pdf.numPages;i++)text+=(await(await pdf.getPage(i)).getTextContent()).items.map(x=>x.str).join(' ');
  await loading.destroy();return text;

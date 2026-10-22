@@ -93,7 +93,7 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     y=text('Zahlungsart: '+label+' · '+money(payment.amount_cents),left,y,width,10)+5;
   }
   doc.image(qrBuffer,(doc.page.width-70)/2,y+10,{width:70,height:70});
-  y=text('QR: Digitalen Beleg öffnen',left,y+84,width,8,false,'center')+10;
+  y=text('QR: Diese Rechnung öffnen',left,y+84,width,8,false,'center')+10;
   if(receipt.fiscal_status!=='signed')text('Nicht TSE-signiert – kein fiskalisierter Kassenbeleg.',left,y,width,8);
   footer();
 }

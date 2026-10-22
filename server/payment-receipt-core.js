@@ -48,6 +48,10 @@ return async function handlePaymentReceipt(req, res) {
   if(match[2]==='invoice'){
     const trade=await pool.query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[receipt.order_id]);
     if(!trade.rows[0]){send(res,404,{error:'Keine Händlerrechnung zu diesem Beleg'});return true;}
+    const sessionHash=crypto.createHash('sha256').update(String(req.headers.authorization||'').replace(/^Bearer /,'')).digest('hex');
+    const access=await issueInvoiceToken(pool,receiptId,user.company_id,sessionHash);
+    if(!access){send(res,403,{error:'Verwaltungszugang nicht mehr aktiv'});return true;}
+    receipt.invoice_public_token=access;
     receipt.formatA4=true;receipt.recipient=trade.rows[0].recipient;
   }
   let pdf;
@@ -86,7 +90,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   const payments = paymentsResult.rows;
   let qrBuffer;
   try {
-    const qrPayload=receiptUrl(req,receipt.public_token);
+    const qrPayload=receipt.formatA4?tradeInvoiceUrl(req,receipt.invoice_public_token,receiptUrl):receiptUrl(req,receipt.public_token);
     qrBuffer=await QRCode.toBuffer(qrPayload,{width:120,margin:1});
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
@@ -177,4 +181,49 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
   return pdf;
+}
+
+
+async function issueInvoiceToken(pool,receiptId,companyId,sessionHash){
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const actor=await client.query(`SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id
+   WHERE s.token_hash=$1 AND s.expires_at>now() AND u.company_id=$2 AND u.status='active'
+   AND u.role IN ('owner','admin','manager') AND coalesce(u.must_change_password,false)=false FOR SHARE OF u,s`,[sessionHash,companyId]);
+  if(!actor.rows.length){await client.query('ROLLBACK');return null;}
+  const result=await client.query(`UPDATE receipts rc SET invoice_public_token=coalesce(rc.invoice_public_token,gen_random_uuid())
+   FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE rc.id=$1 AND rc.order_id=o.id AND r.company_id=$2
+   RETURNING rc.invoice_public_token`,[receiptId,companyId]);
+  await client.query('COMMIT');return result.rows[0]?.invoice_public_token||null;
+ }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+}
+
+const invoiceTokenPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function tradeInvoiceUrl(req,token,receiptUrl){
+ if(typeof token!=='string'||!invoiceTokenPattern.test(token))throw Error('INVOICE_LINK_UNAVAILABLE');
+ const base=new URL(receiptUrl(req,token));
+ if(!['http:','https:'].includes(base.protocol)||base.username||base.password)throw Error('INVOICE_LINK_UNAVAILABLE');
+ return base.origin+'/rechnung/'+token;
+}
+
+// A separate, owner-issued capability exposes exactly the invoice printed on the QR.
+// Ordinary receipt capabilities and internal receipt/order IDs are never accepted here.
+export function createPublicTradeInvoiceHandler(pool,PDFDocument,QRCode,receiptUrl){
+ return async(req,res)=>{
+  const path=new URL(req.url,'http://local').pathname;if(!path.startsWith('/rechnung/'))return false;
+  const headers={'cache-control':'private, no-store','x-robots-tag':'noindex, nofollow, noarchive','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; frame-ancestors 'none'; base-uri 'none'"};
+  const fail=(status,message)=>{res.writeHead(status,{...headers,'content-type':'text/plain; charset=utf-8',...(status===405?{allow:'GET'}:{})});res.end(message);return true;};
+  const token=path.slice('/rechnung/'.length);if(!invoiceTokenPattern.test(token))return fail(404,'Rechnung nicht gefunden');
+  if(req.method!=='GET')return fail(405,'Methode nicht erlaubt');
+  try{
+   const result=await pool.query(`SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.invoice_public_token,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id,t.recipient
+    FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN pos_trade_sales t ON t.order_id=o.id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.invoice_public_token=$1`,[token]);
+   if(!result.rows[0])return fail(404,'Rechnung nicht gefunden');
+   const receipt={...result.rows[0],formatA4:true};
+   const pdf=await renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,req,receipt);
+   const filename='Rechnung-'+String(receipt.receipt_number).replace(/[^a-z0-9_.-]/gi,'_')+'.pdf';
+   res.writeHead(200,{...headers,'content-type':'application/pdf','content-disposition':'inline; filename="'+filename+'"'});res.end(pdf);return true;
+  }catch{return fail(503,'Rechnung derzeit nicht verfügbar. Bitte erneut versuchen.');}
+ };
 }

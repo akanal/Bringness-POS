@@ -253,3 +253,11 @@ Continue authorized development autonomously and preserve established behavior a
 - Local branch work/sales-stock-ledger-next builds on 0e13528. Preserve prior packages; no upload/deployment.
 - Sales use exact ingredient accumulation followed by the existing nearest rounding (negative exact halves toward zero); kitchen keeps its separate upward rounding. Reversals use immutable saved effects, never the edited recipe. Financial refunds do not imply ingredient returns.
 - Evidence and limitations: docs/local-sales-stock-ledger-next.md; deferred acceptance remains consolidated in docs/test-backlog.md. Local automated checks passed; true parallel-session authority checks and device acceptance remain open.
+
+
+## Wholesale invoice QR continuation 2026-10-22
+- The owner requested a QR code that opens the concrete stored invoice. A4 invoices use a separate random `receipts.invoice_public_token`; never reuse the ordinary `public_token` or receipt/order IDs for access to recipient details.
+- The authenticated invoice download assigns the invoice capability once, with active owner/admin/manager session and tenant checks under shared user/session locks. Repeated/concurrent downloads reuse it. Existing receipts are not bulk-published.
+- `/rechnung/:token` is a read-only PDF capability route for exactly one stored trade invoice. It uses immutable recipient/seller snapshots and actual stored payment records, has no listing operation, and sends no-store/noindex/no-referrer headers. Ordinary `/beleg/:token` links remain unchanged. Do not log capabilities or copy them into source.
+- The nullable column and unique partial index are added by `migratePublicReceipts`. Preserve the column across releases; already downloaded PDFs retain their previous QR, while a newly rendered A4 invoice receives its dedicated link.
+- Verification: `server/trade-invoice-link.test.js`, PDF tests and `server/ai-tests/trade.mjs` cover invalid links, capability separation, retained invoice identity, concurrent reuse, revoked-role issuance and safe renderer failures. A real handset camera scan remains a device acceptance task.
