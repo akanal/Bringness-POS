@@ -42,7 +42,7 @@ export function createCustomerDelivery(pool,authenticate){return async(req,res)=
  if(path.endsWith('/customers')){
   if(req.method==='GET'){
    const q=(url.searchParams.get('q')||'').trim();if(q.length>160)throw fail(400,'Suchtext zu lang');
-   result={customers:(await client.query("SELECT id,data,version FROM pos_customers WHERE restaurant_id=$1 AND (strpos(lower(data->>'name'),lower($2))>0 OR strpos(lower(data->>'city'),lower($2))>0) ORDER BY lower(data->>'name'),id LIMIT 200",[body.restaurantId,q])).rows};
+   result={customers:(await client.query("SELECT id,data,version FROM pos_customers WHERE restaurant_id=$1 AND strpos(lower(concat_ws(' ',data->>'name',data->>'street',data->>'postalCode',data->>'city',data->>'email',data->>'phone',data->>'vatId',data->>'taxNumber')),lower($2))>0 ORDER BY lower(data->>'name'),id LIMIT 200",[body.restaurantId,q])).rows};
   }else{
    let data;try{data=customerRecord(body.customer);}catch(e){throw fail(400,e.message);}
    if(req.method==='POST'){result=(await client.query('INSERT INTO pos_customers(id,restaurant_id,data) VALUES($1,$2,$3) RETURNING id,data,version',[crypto.randomUUID(),body.restaurantId,data])).rows[0];}

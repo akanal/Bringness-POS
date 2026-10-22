@@ -19,6 +19,7 @@ function fixture(stored){const dom=new JSDOM('<select id="restaurant"><option va
 const w=fixture();
 try{
  await w.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=w.document,e=k=>d.querySelector('[data-'+k+']');assert.equal(d.querySelectorAll('script').length,0);e('customers').value=cid;await e('customers').onchange();for(const k of ['name','street','postalCode','city','country','vatId'])assert.equal(d.getElementById('trade-'+k).value,address[k]);assert.equal(e('email').value,address.email);assert.equal(e('phone').value,address.phone);assert.match(e('customers').selectedOptions[0].textContent,/Street 1 · 10115 Berlin · Deutschland/);
+ e('search').value='buyer@example.test';await e('find').onclick();assert.equal(e('customers').value,cid);assert.equal(e('email').value,address.email);assert.match(e('customer-status').textContent,/übernommen/);
  // Actual address checker marks both fields, removes stale errors on edit and supports preview fields.
  d.getElementById('trade-city').value='Hamburg';d.getElementById('trade-city').dispatchEvent(new w.Event('blur'));await new Promise(r=>setTimeout(r,0));
  assert.equal(d.getElementById('trade-city').getAttribute('aria-invalid'),'true');assert.equal(d.getElementById('trade-postalCode').getAttribute('aria-invalid'),'true');assert.match(d.querySelector('.address-check').textContent,/Berlin/);

@@ -17,16 +17,17 @@ const guardedPool={...pool,connect:async()=>{const c=postgresUrl?await db.connec
 const handler=createCustomerDelivery(guardedPool,async(req,_,lock)=>req.headers.authorization==='Bearer good'&&!(lock&&revoked)?{id:owner,company_id:company,role}:null);
 const server=http.createServer(async(req,res)=>{try{if(await handler(req,res))return;res.writeHead(404);res.end();}catch{res.writeHead(503,{'content-type':'application/json'});res.end('{}');}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const send=async(path,method='GET',body,token='good')=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/v1'+path,{method,headers:{authorization:'Bearer '+token,'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,body:await r.json()};};
-const recipient={name:'Buyer',street:'Example 1',postalCode:'10115',city:'Berlin',country:'Deutschland'};
+const recipient={name:'Buyer',street:'Example 1',postalCode:'10115',city:'Berlin',country:'Deutschland',email:'buyer@example.test',phone:'0301234567',taxNumber:'98/765'};
 try{
  assert.equal((await send('/customers?restaurantId='+restaurant,'GET',null,'bad')).status,401);
  role='waiter';assert.equal((await send('/customers?restaurantId='+restaurant)).status,403);role='owner';
  assert.equal((await send('/customers?restaurantId='+foreign)).status,404);
- const customer=(await send('/customers','POST',{restaurantId:restaurant,customer:recipient})).body;assert(customer.id);assert.equal(customer.version,1);
+ const customer=(await send('/customers','POST',{restaurantId:restaurant,customer:recipient})).body;assert(customer.id);assert.equal(customer.version,1);assert.equal(customer.data.email,recipient.email);assert.equal(customer.data.phone,recipient.phone);
  const edited=await send('/customers','PUT',{restaurantId:restaurant,id:customer.id,version:1,customer:{...recipient,name:'Edited'}});assert.equal(edited.body.version,2);
  assert.equal((await send('/customers','PUT',{restaurantId:restaurant,id:customer.id,version:1,customer:recipient})).status,409);
  assert.equal((await send('/customers?restaurantId='+restaurant+'&q=Edited')).body.customers.length,1);
  assert.equal((await send('/customers?restaurantId='+restaurant+'&q=%25')).body.customers.length,0);
+ for(const q of ['buyer@example.test','0301234567','10115','Example 1','98/765'])assert.equal((await send('/customers?restaurantId='+restaurant+'&q='+encodeURIComponent(q))).body.customers.length,1,q);
  const draft={restaurantId:restaurant,requestKey:uuid(),recipient,items:[{productId:product,qty:2500}],note:'Leave at reception'};
  const created=await send('/delivery-notes','POST',draft);assert.equal(created.status,200);const note=created.body.deliveryNote;assert.equal(note.items[0].qty,2500);assert.equal(note.items[0].name,'Original <b>article</b>');assert.equal(note.sender.company_name,'Seller GmbH');
  await query("UPDATE products SET name='Changed',active=false WHERE id=$1",[product]);await query("UPDATE company_billing_profiles SET company_name='Changed' WHERE company_id=$1",[company]);
