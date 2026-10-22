@@ -1,22 +1,26 @@
+import {fileURLToPath} from 'node:url';
 import {lineDiscount} from './sale-discount.js';
 import {receiptLines} from './receipt-lines.js';
 
 // Dedicated A4 layout; thermal receipts keep their existing renderer.
 export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
+  doc.registerFont('TradeRegular',fileURLToPath(new URL('./assets/invoice-fonts/DejaVuSans.ttf',import.meta.url)));
+  doc.registerFont('TradeBold',fileURLToPath(new URL('./assets/invoice-fonts/DejaVuSans-Bold.ttf',import.meta.url)));
   const money = cents => (Number(cents) / 100).toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' EUR';
   const date = new Date(receipt.issued_at).toLocaleDateString('de-DE', {timeZone:'Europe/Berlin'});
   const left=48, right=547, width=499, bottom=735;
   const seller=receipt.billing_name || receipt.company_name || receipt.restaurant_name || '';
   const address=[receipt.street,[receipt.postal_code,receipt.city].filter(Boolean).join(' ')].filter(Boolean);
   const text=(value,x,y,w=width,size=10,bold=false,align='left')=>{
-    doc.font(bold?'Helvetica-Bold':'Helvetica').fontSize(size).fillColor('#222222').text(String(value??''),x,y,{width:w,align});
+    doc.font(bold?'TradeBold':'TradeRegular').fontSize(size).fillColor('#222222').text(String(value??''),x,y,{width:w,align});
     return doc.y;
   };
   const footer=()=>{
     const previousBottom=doc.page.margins.bottom;doc.page.margins.bottom=20;
     doc.save().strokeColor('#b7b7b7').moveTo(left,764).lineTo(right,764).stroke().restore();
-    text([seller,...address].join('\n'),left,774,275,8);
-    if(receipt.vat_id)text('USt-IdNr.: '+receipt.vat_id,345,774,202,8);
+    const details=receipt.document_details||{};
+    const columns=[[seller,...address],[details.phone&&'Tel. '+details.phone,details.email,details.taxNumber&&'Steuer-Nr.: '+details.taxNumber,receipt.vat_id&&'USt-IdNr.: '+receipt.vat_id],[details.bankName,details.iban&&'IBAN '+details.iban,details.bic&&'BIC '+details.bic]];
+    columns.forEach((values,index)=>{doc.font('TradeRegular').fontSize(7).fillColor('#777777').text(values.filter(Boolean).join('\n'),left+index*170,774,{width:160,lineGap:2});});
     doc.page.margins.bottom=previousBottom;
   };
   const next=()=>{footer();doc.addPage();return 65;};
@@ -31,10 +35,13 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     return y+30;
   };
   text(receipt.restaurant_name||seller,310,48,237,16,true,'right');
-  text([seller,...address].join(' · '),left,120,width,8);
+  text([seller,...address].join(' · '),57,120,250,7);
+  // Folding marks: address stays in the window after folding an A4 sheet.
+  doc.save().strokeColor('#bbbbbb').lineWidth(0.4);for(const fy of [297.64,595.28])doc.moveTo(10,fy).lineTo(20,fy).stroke();doc.restore();
   const recipient=receipt.recipient||{};
-  let recipientY=151;
-  for(const value of [recipient.name,recipient.street,[recipient.postalCode,recipient.city].filter(Boolean).join(' '),recipient.country,recipient.vatId&&'USt-IdNr.: '+recipient.vatId].filter(Boolean))recipientY=text(value,left,recipientY,280,10)+2;
+  const recipientText=[recipient.name,recipient.street,[recipient.postalCode,recipient.city].filter(Boolean).join(' '),recipient.country].filter(Boolean).join('\n');
+  let addressSize=10;doc.font('TradeRegular').fontSize(addressSize);while(addressSize>8&&doc.heightOfString(recipientText,{width:240})>78){addressSize-=0.5;doc.fontSize(addressSize);}
+  const recipientY=text(recipientText,57,142,240,addressSize);
   let metaY=145;
   for(const [label,value] of [['Rechnungs-Nr.',receipt.receipt_number],['Rechnungsdatum',date],['Lieferdatum',date]]){
     text(label,355,metaY,100,9);metaY=text(value,455,metaY,92,9,false,'right')+6;
@@ -55,7 +62,7 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
   displayItems.forEach((item,index)=>{
     const quantity=Number(item.quantity),rate=Number(item.tax_rate_snapshot),net=item.netCents;
     const name=String(item.product_name_snapshot||'');
-    doc.font('Helvetica-Bold').fontSize(10);
+    doc.font('TradeBold').fontSize(10);
     const rowHeight=Math.max(27,doc.heightOfString(name,{width:220})+12);
     if(y+rowHeight>bottom){y=next();y=header(y);}
     // Paint the entire row in the PDF itself, including printed output.
