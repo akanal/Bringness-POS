@@ -22,7 +22,7 @@ try{await w.renderTradeModule();const d=w.document;assert.equal(d.querySelectorA
  const setup=fixture();let configured=[],savedCustomers=[];const customerScript=await fs.readFile(new URL('../../apps/web/public/pos/customer-delivery.js',import.meta.url),'utf8');
  const setupApi=async(path,opt)=>{if(path.startsWith('/trade/settings?'))return {enabled:true};if(path.startsWith('/trade/prices?'))return {tiers:configured};if(path==='/trade/prices'){configured=JSON.parse(opt.body).tiers.map(t=>({product_id:pid,min_qty:t.minQty,price_cents:t.priceCents}));return {ok:true}}if(path.startsWith('/customers?'))return {customers:savedCustomers};if(path==='/customers'){const body=JSON.parse(opt.body),id=crypto.randomUUID();savedCustomers.push({id,version:1,data:body.customer});return {id,version:1}}throw Error(path)};
  setup.api=setupApi;setup.eval(customerScript);
- try{await setup.renderTradeModule();const d=setup.document;assert.match(d.querySelector('[data-add]').textContent,/Preis festlegen/);assert.equal(d.querySelector('[data-add]').disabled,false);d.querySelector('[data-add]').click();assert(d.getElementById('tradeTiers').closest('details').open);assert.match(d.getElementById('tradeTotal').textContent,/0,00\s€/);d.getElementById('tradeTiers').value='1; 2,50';await d.getElementById('tradeSavePrices').onclick();d.querySelector('[data-add]').click();assert.match(d.getElementById('tradeTotal').textContent,/2,50/);
+ try{await setup.renderTradeModule();const d=setup.document;assert.match(d.querySelector('[data-add]').textContent,/Preis festlegen/);assert.equal(d.querySelector('[data-add]').disabled,false);d.querySelector('[data-add]').click();assert(d.getElementById('tradeTiers').closest('details').open);assert.match(d.getElementById('tradeTotal').textContent,/0,00\s€/);d.querySelector('[data-tier-euro]').value='2';d.querySelector('[data-tier-cent]').value='50';await d.getElementById('tradeSavePrices').onclick();d.querySelector('[data-add]').click();assert.match(d.getElementById('tradeTotal').textContent,/2,50/);
  assert.equal(d.querySelector('details.trade-panel').open,false);for(const [k,v]of Object.entries({name:'Saved wholesale buyer',street:'Street 3',postalCode:'10115',city:'Berlin'}))d.getElementById('trade-'+k).value=v;
  await d.querySelector('[data-save]').onclick();assert.equal(savedCustomers.length,1);d.getElementById('trade-name').value='Changed';await d.querySelector('[data-use]').onclick();assert.equal(d.getElementById('trade-name').value,'Saved wholesale buyer');
  const reload=fixture();reload.api=setupApi;reload.eval(customerScript);try{await reload.renderTradeModule();await new Promise(r=>setImmediate(r));reload.document.querySelector('[data-customers]').value=savedCustomers[0].id;await reload.document.querySelector('[data-use]').onclick();assert.equal(reload.document.getElementById('trade-street').value,'Street 3')}finally{reload.close()}
@@ -30,3 +30,30 @@ try{await w.renderTradeModule();const d=w.document;assert.equal(d.querySelectorA
  console.log('Trade setup passed: missing prices remain selectable, PIN-save unlocks sale, customer address persists and reloads in the actual wholesale view.');
  console.log('Trade UI passed: large-quantity tier total, escaped product text, explicit cash confirmation, persistent uncertain sale, exact replay after browser restart and corrupt-storage refusal.');
 }finally{w.close()}
+
+// Structured tier fields never require a separator or decimal punctuation.
+const tierWindow=fixture();let tierRows=tiers.map(t=>({...t})),tierWrites=[],failTierSave=false;
+tierWindow.api=async(path,opt)=>{
+ if(path.startsWith('/trade/settings?'))return {enabled:true};
+ if(path.startsWith('/trade/prices?'))return {tiers:tierRows};
+ if(path==='/trade/prices'){
+  const body=JSON.parse(opt.body);if(failTierSave)throw Error('Fixture save unavailable');
+  tierWrites.push(body);tierRows=body.tiers.map(t=>({product_id:body.productId,min_qty:t.minQty,price_cents:t.priceCents}));return {ok:true};
+ }
+ throw Error('Unexpected request '+path);
+};
+try{
+ await tierWindow.renderTradeModule();const d=tierWindow.document,rows=()=>[...d.querySelectorAll('.trade-tier-row')],save=()=>d.getElementById('tradeSavePrices').onclick();
+ assert.equal(d.querySelector('textarea'),null);assert.equal(rows().length,2);
+ assert.equal(rows()[0].querySelector('[data-tier-euro]').value,'2');assert.equal(rows()[0].querySelector('[data-tier-cent]').value,'50');
+ rows()[0].querySelector('[data-tier-euro]').value='9';rows()[0].querySelector('[data-tier-cent]').value='99';
+ await save();assert.equal(tierWrites[0].tiers[0].priceCents,999);
+ d.getElementById('tradeAddTier').click();let row=rows().at(-1);row.querySelector('[data-tier-qty]').value='2000';row.querySelector('[data-tier-euro]').value='8';row.querySelector('[data-tier-cent]').value='';
+ await save();assert.equal(tierWrites.at(-1).tiers.at(-1).priceCents,800);
+ const before=tierWrites.length;row=rows().at(-1);row.querySelector('[data-tier-qty]').value='1';await save();assert.equal(tierWrites.length,before);assert.match(d.getElementById('tradeStatus').textContent,/nur einmal/);
+ row.querySelector('[data-tier-qty]').value='2000';row.querySelector('[data-tier-cent]').value='100';await save();assert.equal(tierWrites.length,before);assert.equal(d.activeElement,row.querySelector('[data-tier-cent]'));
+ row.querySelector('[data-tier-cent]').value='05';failTierSave=true;await save();assert.equal(row.querySelector('[data-tier-cent]').value,'05');assert.match(d.getElementById('tradeStatus').textContent,/unavailable/);assert(!d.getElementById('tradeSavePrices').disabled);failTierSave=false;
+ while(rows().length<20)d.getElementById('tradeAddTier').click();assert(d.getElementById('tradeAddTier').disabled);assert.equal(rows().length,20);
+ rows().forEach(r=>r.querySelector('[data-tier-remove]').click());await save();assert.deepEqual(tierWrites.at(-1).tiers,[]);assert.equal(rows().length,1);assert.equal(rows()[0].querySelector('[data-tier-euro]').value,'');
+ console.log('Structured trade tiers passed: loaded values, digits-only euro/cent, add/remove, duplicate and cents validation, 20-row limit, failed-save preservation and explicit removal of all prices.');
+}finally{tierWindow.close()}
