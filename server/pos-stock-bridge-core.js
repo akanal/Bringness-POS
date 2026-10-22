@@ -1,3 +1,4 @@
+import {permanentStockFailure,stockBatchLimit,stockFailureMessage} from './stock-retry-policy.js';
 import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status})};
@@ -7,6 +8,8 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_ready_at timestamptz;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS ai_stock_available boolean NOT NULL DEFAULT true;
 CREATE TABLE IF NOT EXISTS pos_stock_links(restaurant_id uuid PRIMARY KEY REFERENCES restaurants(id),connector_id uuid NOT NULL UNIQUE,account_id uuid NOT NULL,company_id uuid NOT NULL,active boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS pos_stock_commands(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),order_id uuid NOT NULL REFERENCES orders(id),connector_id uuid NOT NULL,account_id uuid NOT NULL,actor_id uuid NOT NULL,action text NOT NULL CHECK(action IN ('accept','start','cancel')),target_status text NOT NULL,items jsonb NOT NULL,reason text NOT NULL DEFAULT '',state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','applied','rejected')),error text,attempts int NOT NULL DEFAULT 0,created_at timestamptz NOT NULL DEFAULT now(),applied_at timestamptz);
+ALTER TABLE pos_stock_commands ADD COLUMN IF NOT EXISTS retry_after timestamptz;
+CREATE INDEX IF NOT EXISTS pos_stock_retry_queue ON pos_stock_commands(retry_after,created_at,id) WHERE state='pending';
 CREATE UNIQUE INDEX IF NOT EXISTS pos_stock_pending ON pos_stock_commands(order_id) WHERE state='pending';
 CREATE INDEX IF NOT EXISTS pos_stock_queue ON pos_stock_commands(created_at,id) WHERE state='pending';
 CREATE OR REPLACE FUNCTION pos_stock_order_guard() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -50,9 +53,12 @@ export async function configurePosStockLink(pool,link,active){
 }
 export async function requestPosStockAction(pool,actor,orderId,b){
  if(!uuid.test(String(orderId)))fail('Bestellung nicht gefunden',404);
- const action={kitchen:'accept',preparing:'start',cancelled:'cancel'}[b.status];if(!action)fail('Ungültiger Bestellstatus',400);
+ if(!b||typeof b!=='object'||Array.isArray(b)||typeof b.status!=='string')fail('Ungültiger Bestellstatus',400);
+ const actions={kitchen:'accept',preparing:'start',cancelled:'cancel'};
+ const action=Object.hasOwn(actions,b.status)?actions[b.status]:null;if(!action)fail('Ungültiger Bestellstatus',400);
  if(!['owner','admin','manager','kitchen','waiter'].includes(actor.role))fail('Kein Zugriff auf Küchenbestellungen',403);
- const reason=String(b.reason||'').trim();if(action==='cancel'&&(!reason||reason.length>500))fail('Stornogrund erforderlich',400);
+ if(b.reason!=null&&typeof b.reason!=='string')fail('Ungültiger Stornogrund',400);
+ const reason=(b.reason??'').trim();if(reason.length>500)fail('Stornogrund zu lang',400);if(action==='cancel'&&!reason)fail('Stornogrund erforderlich',400);
  const c=await pool.connect();try{await c.query('BEGIN');
  const o=(await c.query('SELECT o.* FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=$1 AND r.company_id=$2 FOR UPDATE OF o',[orderId,actor.company_id])).rows[0];if(!o)fail('Bestellung nicht gefunden',404);
  if(actor.role==='waiter'&&!(await c.query("SELECT 1 FROM dining_tables t JOIN employees e ON (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) WHERE t.id=$1 AND e.user_id=$2 AND e.active AND e.restaurant_id=$3",[o.table_id,actor.id,o.restaurant_id])).rowCount)fail('Tisch nicht zugeordnet',403);
@@ -69,28 +75,38 @@ export async function requestPosStockAction(pool,actor,orderId,b){
 }
 // POS command remains durable if AI committed but the POS acknowledgement failed.
 // The same UUID is replayed into the AI ledger after restart, with no second debit.
-export async function processPosStockCommands(posPool,stockPool,kitchenAction,{limit=100}={}){
- const commands=(await posPool.query("SELECT id,order_id FROM pos_stock_commands WHERE state='pending' ORDER BY created_at,id LIMIT $1",[limit])).rows;
- for(const candidate of commands){const c=await posPool.connect();try{await c.query('BEGIN');
+export async function processPosStockCommands(posPool,stockPool,kitchenAction,{limit=100}={}){ limit=stockBatchLimit(limit);
+ const commands=(await posPool.query("SELECT id,order_id,attempts FROM pos_stock_commands WHERE state='pending' AND (retry_after IS NULL OR retry_after<=now()) ORDER BY retry_after NULLS FIRST,created_at,id LIMIT $1",[limit])).rows;
+ const errors=[];
+ for(const candidate of commands){let c,committed=false,expectedAttempts=candidate.attempts??0;try{c=await posPool.connect();await c.query('BEGIN');
  const o=(await c.query('SELECT o.*,r.company_id FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=$1 FOR UPDATE OF o SKIP LOCKED',[candidate.order_id])).rows[0];
  if(!o){await c.query('ROLLBACK');continue}
- const cmd=(await c.query("SELECT * FROM pos_stock_commands WHERE id=$1 AND state='pending' FOR UPDATE",[candidate.id])).rows[0];if(!cmd){await c.query('ROLLBACK');continue}
+ if(!(await c.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2 FOR SHARE',[o.restaurant_id,o.company_id])).rowCount)fail('Kassenbetrieb nicht mehr freigegeben',503);
+ const cmd=(await c.query("SELECT * FROM pos_stock_commands WHERE id=$1 AND state='pending' AND (retry_after IS NULL OR retry_after<=now()) FOR UPDATE SKIP LOCKED",[candidate.id])).rows[0];if(!cmd){await c.query('ROLLBACK');continue}expectedAttempts=cmd.attempts??expectedAttempts;
  const link=(await stockPool.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.id=$1 AND c.account_id=$2 AND c.pos_restaurant_id=$3 AND c.pos_company_id=$4 AND c.kind='pos' AND c.consumption_mode='lifecycle' AND c.active AND a.status='active'",[cmd.connector_id,cmd.account_id,o.restaurant_id,o.company_id])).rows[0];
  if(!link)fail('Lageranbindung nicht aktiv',503);
  if(!(await c.query("SELECT 1 FROM users u WHERE u.id=$1 AND u.company_id=$2 AND u.status='active' AND u.role IN ('owner','admin') AND NOT coalesce(u.must_change_password,false)",[link.pos_user_id,link.pos_company_id])).rowCount)fail('Inhaberfreigabe der Kasse nicht mehr gültig',503);
  try{await kitchenAction(stockPool,{id:link.account_id,role:'restaurant'},{requestKey:cmd.id,orderId:'pos:'+o.id,action:cmd.action,occurredAt:new Date(cmd.created_at).toISOString(),...(cmd.action==='accept'?{items:cmd.items}:{}),reason:cmd.reason},link)}catch(e){
   // Authentication may change after AI committed but before POS received its acknowledgement.
   // Keep the original command UUID pending so renewed access can replay the ledger result.
-  if(e.status>=400&&e.status<500&&![401,403,408,429].includes(e.status)){await c.query("UPDATE pos_stock_commands SET state='rejected',error=$2,attempts=attempts+1 WHERE id=$1",[cmd.id,String(e.message).slice(0,500)]);await c.query('COMMIT');continue}throw e;
+  if(permanentStockFailure(e)){await c.query("UPDATE pos_stock_commands SET state='rejected',error=$2,retry_after=NULL,attempts=LEAST(2147483646,GREATEST(0,attempts))+1 WHERE id=$1",[cmd.id,stockFailureMessage(e)]);await c.query('COMMIT');continue}throw e;
  }
- await c.query("UPDATE pos_stock_commands SET state='applied',error=NULL,attempts=attempts+1,applied_at=now() WHERE id=$1",[cmd.id]);
- await c.query("UPDATE orders SET status=$2,closed_at=CASE WHEN $2='cancelled' THEN now() ELSE closed_at END WHERE id=$1",[o.id,cmd.target_status]);await c.query('COMMIT');
+ await c.query("UPDATE pos_stock_commands SET state='applied',error=NULL,retry_after=NULL,attempts=LEAST(2147483646,GREATEST(0,attempts))+1,applied_at=now() WHERE id=$1",[cmd.id]);
+ await c.query("UPDATE orders SET status=$2,closed_at=CASE WHEN $2='cancelled' THEN now() ELSE closed_at END WHERE id=$1",[o.id,cmd.target_status]);await c.query('COMMIT');committed=true;
  await stockPool.query('UPDATE ai_connectors SET last_sync=now(),last_error=NULL WHERE id=$1',[link.id]);
- }catch(e){await c.query('ROLLBACK');await posPool.query("UPDATE pos_stock_commands SET attempts=attempts+1,error=$2 WHERE id=$1 AND state='pending'",[candidate.id,String(e.message).slice(0,500)])}finally{c.release()}}
+ }catch(e){
+  // A failed connector diagnostic after COMMIT cannot undo a completed command.
+  if(committed){errors.push(e);continue}
+  if(c){let broken;try{await c.query('ROLLBACK')}catch(rollbackError){broken=rollbackError;errors.push(rollbackError)}finally{c.release(broken);c=null}}
+  try{await posPool.query("UPDATE pos_stock_commands SET attempts=LEAST(2147483646,GREATEST(0,attempts))+1,error=$2,retry_after=now()+make_interval(secs=>LEAST(300,5*power(2,LEAST(GREATEST(attempts,0),6)))::int) WHERE id=$1 AND state='pending' AND attempts=$3 AND (retry_after IS NULL OR retry_after<=now())",[candidate.id,stockFailureMessage(e),expectedAttempts])}catch(reportError){errors.push(reportError)}
+ }finally{c?.release()}}
+ if(errors.length)throw new AggregateError(errors,'Nicht alle Lagerauftragsfehler konnten verarbeitet werden');
 }
 export async function syncPosStockAvailability(posPool,stockPool,recipeAvailability){
  const links=(await stockPool.query("SELECT c.* FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id WHERE c.kind='pos' AND c.consumption_mode='lifecycle' AND c.active AND a.status='active'")).rows;
- for(const link of links){const available=(await recipeAvailability(stockPool,link.account_id,link.location_id)).filter(r=>r.available).map(r=>r.external_code);await posPool.query('UPDATE products p SET ai_stock_available=(p.id::text=ANY($2::text[])) WHERE p.restaurant_id=$1 AND EXISTS(SELECT 1 FROM pos_stock_links l WHERE l.restaurant_id=p.restaurant_id AND l.connector_id=$3 AND l.account_id=$4 AND l.company_id=$5 AND l.active AND EXISTS(SELECT 1 FROM restaurants r WHERE r.id=p.restaurant_id AND r.company_id=$5))',[link.pos_restaurant_id,available,link.id,link.account_id,link.pos_company_id])}
+ const errors=[];
+ for(const link of links){try{const available=(await recipeAvailability(stockPool,link.account_id,link.location_id)).filter(r=>r.available).map(r=>r.external_code);await posPool.query(`UPDATE products p SET ai_stock_available=(p.id::text=ANY($2::text[])) WHERE p.restaurant_id=$1 AND EXISTS(SELECT 1 FROM pos_stock_links l WHERE l.restaurant_id=p.restaurant_id AND l.connector_id=$3 AND l.account_id=$4 AND l.company_id=$5 AND l.active AND EXISTS(SELECT 1 FROM users u WHERE u.id=$6 AND u.company_id=$5 AND u.status='active' AND u.role IN ('owner','admin') AND NOT coalesce(u.must_change_password,false)) AND EXISTS(SELECT 1 FROM restaurants r WHERE r.id=p.restaurant_id AND r.company_id=$5))`,[link.pos_restaurant_id,available,link.id,link.account_id,link.pos_company_id,link.pos_user_id])}catch(error){errors.push(error)}}
+ if(errors.length)throw new AggregateError(errors,'Nicht alle Lagerverfügbarkeiten konnten aktualisiert werden');
 }
 export function createPosStockHandler(pool){
  const send=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
@@ -101,7 +117,7 @@ export function createPosStockHandler(pool){
  if(action&&req.method!=='PATCH'||poll&&req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
  const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,''),actor=(await pool.query("SELECT u.id,u.company_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];if(!actor)return send(res,401,{error:'Nicht angemeldet'});
  try{
- if(poll){const q=await pool.query('SELECT cmd.id,cmd.state,cmd.error,o.id order_id,o.status,o.table_id,o.restaurant_id FROM pos_stock_commands cmd JOIN orders o ON o.id=cmd.order_id JOIN restaurants r ON r.id=o.restaurant_id WHERE cmd.id=$1 AND r.company_id=$2',[poll[1],actor.company_id]);if(!q.rowCount)return send(res,404,{error:'Lagerbuchung nicht gefunden'});const r=q.rows[0];if(!['owner','admin','manager','kitchen'].includes(actor.role)&&!(actor.role==='waiter'&&(await pool.query('SELECT 1 FROM dining_tables t JOIN employees e ON (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) WHERE t.id=$1 AND e.user_id=$2 AND e.active AND e.restaurant_id=$3',[r.table_id,actor.id,r.restaurant_id])).rowCount))return send(res,403,{error:'Kein Zugriff auf Lagerbuchung'});return send(res,r.state==='rejected'?409:r.state==='pending'?202:200,{id:r.order_id,status:r.status,pending:r.state==='pending',commandId:r.id,...(r.state!=='applied'&&r.error?{error:r.error}:{})})}
+ if(poll){const q=await pool.query('SELECT cmd.id,cmd.state,cmd.error,cmd.attempts,cmd.retry_after,o.id order_id,o.status,o.table_id,o.restaurant_id FROM pos_stock_commands cmd JOIN orders o ON o.id=cmd.order_id JOIN restaurants r ON r.id=o.restaurant_id WHERE cmd.id=$1 AND r.company_id=$2',[poll[1],actor.company_id]);if(!q.rowCount)return send(res,404,{error:'Lagerbuchung nicht gefunden'});const r=q.rows[0];if(!['owner','admin','manager','kitchen'].includes(actor.role)&&!(actor.role==='waiter'&&(await pool.query('SELECT 1 FROM dining_tables t JOIN employees e ON (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) WHERE t.id=$1 AND e.user_id=$2 AND e.active AND e.restaurant_id=$3',[r.table_id,actor.id,r.restaurant_id])).rowCount))return send(res,403,{error:'Kein Zugriff auf Lagerbuchung'});return send(res,r.state==='rejected'?409:r.state==='pending'?202:200,{id:r.order_id,status:r.status,pending:r.state==='pending',commandId:r.id,attempts:r.attempts,retryAfter:r.state==='pending'?r.retry_after:null,...(r.state!=='applied'&&r.error?{error:r.error}:{})})}
  const b=await readJsonObject(req,{maxBytes:4096});
  const result=await requestPosStockAction(pool,actor,action[1],b);return send(res,result.pending?202:200,result);
  }catch(e){if(e.status)return send(res,e.status,{error:e.message});if(e.code==='P0001')return send(res,409,{error:e.message});throw e}

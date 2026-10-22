@@ -1,7 +1,8 @@
 import {JSDOM} from 'jsdom';import fs from 'node:fs';import assert from 'node:assert/strict';import {Readable} from 'node:stream';import {PGlite} from '@electric-sql/pglite';import crypto from 'node:crypto';import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../../',import.meta.url)).replace(/\/$/,'');const db=new PGlite();await db.waitReady;
 function absoluteImports(source){return source.replace(/from (['"])(\.\/[^'"]+\.js)\1/g,(_,q,p)=>'from '+JSON.stringify('file://'+root+'/server/'+p.slice(2)))}
-async function query(sql,args){if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:true}],rowCount:1};if(sql.includes('pg_advisory_unlock'))return {rows:[],rowCount:0};if(sql.includes('CREATE TABLE')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}}
+let beforeLedgerNextBegin=null,failLedgerNextMovement=false;
+async function query(sql,args){if(failLedgerNextMovement&&sql.startsWith('INSERT INTO ai_stock_moves')){failLedgerNextMovement=false;throw Error('Injected sales movement failure');}if(sql==='BEGIN'&&beforeLedgerNextBegin){const run=beforeLedgerNextBegin;beforeLedgerNextBegin=null;await run();}if(sql.includes('pg_try_advisory_lock'))return {rows:[{locked:true}],rowCount:1};if(sql.includes('pg_advisory_unlock'))return {rows:[],rowCount:0};if(sql.includes('CREATE TABLE')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.rows.length||r.affectedRows||0}}
 globalThis.aiTestPg={Pool:class{query(...a){return query(...a)}async connect(){return {query,release(){}}}}};
 let subscriptionSource=fs.readFileSync(root+'/server/ai-subscriptions.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));globalThis.aiSubscriptionModule=await import('data:text/javascript;base64,'+Buffer.from(absoluteImports(subscriptionSource)).toString('base64'));
 let invoiceSource=fs.readFileSync(root+'/server/ai-invoices.js','utf8').replace("import {aiPool} from './ai-database.js';","const aiPool=()=>new globalThis.aiTestPg.Pool();").replace("'./ai-policy.js'",JSON.stringify('file://'+root+'/server/ai-policy.js'));invoiceSource=invoiceSource.replace("'./ai-billing-validation.js'",JSON.stringify('file://'+root+'/server/ai-billing-validation.js'));globalThis.aiInvoiceModule=await import('data:text/javascript;base64,'+Buffer.from(absoluteImports(invoiceSource)).toString('base64'));
@@ -222,7 +223,13 @@ assert.equal((await call('connector-key',{id:link.id},tokens.other)).status,404)
 const rotated=await call('connector-key',{id:link.id},tokens.buyer);assert.equal(rotated.status,200);await call('connector-status',{id:link.id,active:true},tokens.buyer);assert.equal((await call('v1/status',null,key.token)).status,401);assert.equal((await call('v1/status',null,rotated.token)).status,200);await call('connector-status',{id:link.id,active:false},tokens.buyer);
 
 // POS adapter needs a real owner authorization and imports only linked paid sales.
-await db.exec('ALTER TABLE users ADD COLUMN company_id uuid;ALTER TABLE users ADD COLUMN role text;CREATE TABLE restaurants(id uuid,company_id uuid,name text);CREATE TABLE products(id uuid,restaurant_id uuid,name text,active boolean);CREATE TABLE orders(id uuid,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);CREATE TABLE order_items(order_id uuid,product_id uuid,quantity numeric);CREATE TABLE pos_stock_commands(id uuid,order_id uuid,state text,created_at timestamptz);CREATE TABLE pos_stock_links(restaurant_id uuid,connector_id uuid,active boolean);CREATE TABLE pos_offline_catalogs(id uuid,company_id uuid);CREATE TABLE pos_offline_sales(id uuid,catalog_id uuid,order_id uuid,stock_state text,stock_error text,created_at timestamptz);');
+await db.exec('ALTER TABLE users ADD COLUMN company_id uuid;ALTER TABLE users ADD COLUMN role text;CREATE TABLE restaurants(id uuid,company_id uuid,name text);CREATE TABLE products(id uuid,restaurant_id uuid,name text,active boolean);CREATE TABLE orders(id uuid,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);CREATE TABLE order_items(order_id uuid,product_id uuid,quantity numeric);CREATE TABLE pos_stock_commands(id uuid,order_id uuid,state text,attempts int NOT NULL DEFAULT 0,retry_after timestamptz,created_at timestamptz);CREATE TABLE pos_stock_links(restaurant_id uuid,connector_id uuid,active boolean);CREATE TABLE pos_offline_catalogs(id uuid,company_id uuid);CREATE TABLE pos_offline_sales(id uuid,catalog_id uuid,order_id uuid,stock_state text,stock_error text,stock_attempts int NOT NULL DEFAULT 0,stock_retry_after timestamptz,created_at timestamptz);');
+// Background worker errors are intentionally isolated in production; the fixture must still expose them as test failures.
+const bridgeFixtureErrors=[],originalBridgeError=console.error;
+console.error=(...args)=>{if(args[0]==='AI kitchen sync stage failed:')bridgeFixtureErrors.push(args.slice(1));else originalBridgeError(...args);};
+try{await recipeModule.syncPosKitchen();}finally{console.error=originalBridgeError;}
+assert.deepEqual(bridgeFixtureErrors,[],'POS worker fixture must support every empty synchronization stage');
+console.log('POS worker fixture passed: command, offline and availability stages execute without hidden schema errors.');
 const company=crypto.randomUUID(),posOwner=crypto.randomUUID(),restaurant=crypto.randomUUID(),posProduct=crypto.randomUUID(),posOrder=crypto.randomUUID();
 await query("INSERT INTO users(id,status,must_change_password,company_id,role) VALUES($1,'active',false,$2,'owner')",[posOwner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[hash('pos-owner-token'),posOwner]);await query("INSERT INTO restaurants VALUES($1,$2,'Linked restaurant')",[restaurant,company]);await query("INSERT INTO products VALUES($1,$2,'POS dish',true)",[posProduct,restaurant]);
 assert.equal((await call('pos-link',{posToken:'invalid'},tokens.buyer)).status,403);
@@ -350,7 +357,7 @@ assert.equal((await call('barcodes/csv-preview',{...internationalPayload,mapping
 const {parseCsvTable,mappedProducts}=await import('file://'+root+'/apps/web/public/ai-csv-parser.js');
 const arabic=mappedProducts(parseCsvTable('\uFEFFbarcode\tname\tunit\tpackQuantity\n4006381333931\t"برغر; أصلي"\tقطع\t32'),undefined,'ar');assert.equal(arabic[0].name,'برغر; أصلي');assert.equal(arabic[0].packQuantity,32);
 assert.throws(()=>mappedProducts(parseCsvTable('barcode,name,unit,packQuantity\n4006381333931,Test,piece,32'),{barcode:0,name:1,unit:2,packQuantity:3,language:9}));
-const consumedPlan=await call('purchasing?days=30',null,tokens.buyer);assert(consumedPlan.items.find(x=>x.id===st.id).daily>0);await query('UPDATE ai_accounts SET minimum_order_cents=100000 WHERE id=$1',[ids.supplier]);const groupedPlan=(await call('purchasing',null,tokens.buyer)).items.find(x=>x.id===st.id);assert.equal(groupedPlan.offers[0].packs,Math.max(Number(groupedPlan.offers[0].minimum_packs),Math.ceil(groupedPlan.shortage/Number(groupedPlan.offers[0].pack_quantity))));await query('UPDATE ai_accounts SET minimum_order_cents=0 WHERE id=$1',[ids.supplier]);
+const consumedPlan=await call('purchasing?days=30',null,tokens.buyer);assert.equal(consumedPlan.status,200,consumedPlan.error);assert(consumedPlan.items.find(x=>x.id===st.id).daily>0);await query('UPDATE ai_accounts SET minimum_order_cents=100000 WHERE id=$1',[ids.supplier]);const groupedPlan=(await call('purchasing',null,tokens.buyer)).items.find(x=>x.id===st.id);assert.equal(groupedPlan.offers[0].packs,Math.max(Number(groupedPlan.offers[0].minimum_packs),Math.ceil(groupedPlan.shortage/Number(groupedPlan.offers[0].pack_quantity))));await query('UPDATE ai_accounts SET minimum_order_cents=0 WHERE id=$1',[ids.supplier]);
 console.log('Barcode API passed: shared 32-piece pack, CSV rollback, review rights/conflicts, 3 packs = 96, idempotency, saved mapping and private stock.');
 
 // Supplier API: isolated product imports, availability, polling and immutable 2% order snapshots.
@@ -944,5 +951,114 @@ await until(()=>stationWindow.document.getElementById('notice').textContent==='T
 const timeEvent=(await query("SELECT starts_at,ends_at FROM ai_local_events WHERE title='24-hour DOM test' AND account_id=$1",[invAccount])).rows[0];assert.equal(new Date(timeEvent.starts_at).getTime(),new Date('2026-11-01T19:30').getTime());assert.equal(new Date(timeEvent.ends_at).getTime(),new Date('2026-11-01T22:00').getTime());
 stationWindow.close();console.log('Nationwide DWD station search DOM and postcode assignment persistence/validation/roles passed.');
 
+
+// A request authenticated before suspension must recheck account authority under lock.
+const staleActor={id:ids.buyer,role:'restaurant'},recipeCountBefore=Number((await query('SELECT count(*)::int n FROM ai_recipes WHERE account_id=$1',[ids.buyer])).rows[0].n);
+await query("UPDATE ai_accounts SET status='suspended' WHERE id=$1",[ids.buyer]);
+try{
+ await assert.rejects(recipeModule.recipeRoutes('/api/ai/recipes','POST',{locationId:loc.id,name:'Suspended recipe',productCode:'suspended-code',items:[{stockId:crypto.randomUUID(),quantity:1}]},staleActor),e=>e.status===403);
+ assert.equal(Number((await query('SELECT count(*)::int n FROM ai_recipes WHERE account_id=$1',[ids.buyer])).rows[0].n),recipeCountBefore);
+}finally{await query("UPDATE ai_accounts SET status='active' WHERE id=$1",[ids.buyer]);}
+console.log('Suspended restaurant recipe write denied after earlier authentication; transaction preserved existing recipes.');
+const access=await recipeModule.recipeRoutes('/api/ai/connectors','POST',{locationId:loc.id,name:'Authority fixture'},staleActor);
+const keyBefore=(await query('SELECT token_hash FROM ai_connectors WHERE id=$1',[access.connectorId])).rows[0].token_hash;
+const connectorCountBeforeSuspension=Number((await query('SELECT count(*)::int n FROM ai_connectors WHERE account_id=$1',[ids.buyer])).rows[0].n);
+await query("UPDATE ai_accounts SET status='suspended' WHERE id=$1",[ids.buyer]);
+try{
+ await assert.rejects(recipeModule.recipeRoutes('/api/ai/connectors','POST',{locationId:loc.id,name:'Blocked access'},staleActor),e=>e.status===403);
+ await assert.rejects(recipeModule.recipeRoutes('/api/ai/connector-key','POST',{id:access.connectorId},staleActor),e=>e.status===403);
+ assert.equal((await query('SELECT token_hash FROM ai_connectors WHERE id=$1',[access.connectorId])).rows[0].token_hash,keyBefore);
+ assert.equal(Number((await query('SELECT count(*)::int n FROM ai_connectors WHERE account_id=$1',[ids.buyer])).rows[0].n),connectorCountBeforeSuspension);
+}finally{await query("UPDATE ai_accounts SET status='active' WHERE id=$1",[ids.buyer]);}
+console.log('Suspended restaurant connector creation/key rotation denied; original key hash and connector count preserved.');
+
+// Isolated complete sales ledger: precise accumulation, dry-run parity, replay and saved reversal effects.
+const ledgerNextLogin=await call('login',{email:'buyer@example.org',password:'testing-password-123'});assert.equal(ledgerNextLogin.status,200);tokens.buyer=ledgerNextLogin.token;
+const ledgerNextLocation=(await call('locations',{name:'Ledger precision fixture'},tokens.buyer)).location;
+const ledgerNextStock=(await call('stock',{locationId:ledgerNextLocation.id,name:'Precision ingredient',unit:'kg',quantity:1,minimum:0,target:0},tokens.buyer)).stock;
+const ledgerNextRecipeBody={locationId:ledgerNextLocation.id,name:'Precision recipe',productCode:'ledger-next-dish',items:[{stockId:ledgerNextStock.id,quantity:0.001}]};
+assert.equal((await call('recipes',ledgerNextRecipeBody,tokens.buyer)).status,200);
+const ledgerNextRecipe=(await query('SELECT id FROM ai_recipes WHERE account_id=$1 AND location_id=$2 AND external_code=$3',[ids.buyer,ledgerNextLocation.id,'ledger-next-dish'])).rows[0];
+const ledgerNextAccess=await call('connectors',{locationId:ledgerNextLocation.id,name:'Ledger precision API'},tokens.buyer);
+assert.equal((await call('connector-status',{id:ledgerNextAccess.connectorId,active:true},tokens.buyer)).status,200);
+const ledgerNextEvent={eventId:'ledger-next-sale',items:[{productCode:'ledger-next-dish',quantity:0.3},{productCode:'ledger-next-dish',quantity:0.3}]};
+const ledgerNextBalance=async()=>Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[ledgerNextStock.id])).rows[0].quantity);
+const ledgerNextPreview=await call('v1/sales/validate',ledgerNextEvent,ledgerNextAccess.token);assert.equal(ledgerNextPreview.status,200);assert.equal(ledgerNextPreview.effects[0].delta,-0.001);assert.equal(await ledgerNextBalance(),1);
+assert.equal((await query('SELECT count(*)::int n FROM ai_sale_events WHERE connector_id=$1',[ledgerNextAccess.connectorId])).rows[0].n,0);
+const ledgerNextCommitted=await call('v1/sales',ledgerNextEvent,ledgerNextAccess.token);assert.equal(ledgerNextCommitted.status,200);assert.equal(await ledgerNextBalance(),0.999);
+assert.equal((await call('v1/sales',ledgerNextEvent,ledgerNextAccess.token)).duplicate,true);assert.equal(await ledgerNextBalance(),0.999);
+const ledgerNextMove=(await query('SELECT delta,quantity_before,quantity_after FROM ai_stock_moves WHERE stock_id=$1 AND reason=$2',[ledgerNextStock.id,'Rezeptverbrauch: '+ledgerNextEvent.eventId])).rows;assert.equal(ledgerNextMove.length,1);assert.equal(Number(ledgerNextMove[0].quantity_before),1);assert.equal(Number(ledgerNextMove[0].quantity_after),0.999);assert.equal(Number(ledgerNextMove[0].delta),-0.001);
+assert.equal((await call('recipes',{...ledgerNextRecipeBody,id:ledgerNextRecipe.id,items:[{stockId:ledgerNextStock.id,quantity:0.1}]},tokens.buyer)).status,200);
+const ledgerNextReverse={eventId:'ledger-next-reversal',type:'reversal',reversesEventId:ledgerNextEvent.eventId};
+assert.equal((await call('v1/sales',ledgerNextReverse,ledgerNextAccess.token)).status,200);assert.equal(await ledgerNextBalance(),1);
+assert.equal((await call('v1/sales',ledgerNextReverse,ledgerNextAccess.token)).duplicate,true);assert.equal(await ledgerNextBalance(),1);
+// An excessive resulting balance is rejected equally by preview and actual import.
+const ledgerNextSecond={eventId:'ledger-next-second',items:[{productCode:'ledger-next-dish',quantity:1}]};
+const ledgerNextSecondResult=await call('v1/sales',ledgerNextSecond,ledgerNextAccess.token);assert.equal(ledgerNextSecondResult.status,200);
+await query('UPDATE ai_stock SET quantity=1000000000 WHERE id=$1',[ledgerNextStock.id]);
+const ledgerNextOverflow={eventId:'ledger-next-overflow',type:'reversal',reversesEventId:ledgerNextSecond.eventId};
+for(const route of ['v1/sales/validate','v1/sales'])assert.equal((await call(route,ledgerNextOverflow,ledgerNextAccess.token)).status,409);
+assert.equal(await ledgerNextBalance(),1000000000);assert.equal((await query('SELECT count(*)::int n FROM ai_sale_events WHERE connector_id=$1 AND external_id=$2',[ledgerNextAccess.connectorId,ledgerNextOverflow.eventId])).rows[0].n,0);
+// A corrupt positive original effect cannot become another ingredient debit.
+await query('UPDATE ai_stock SET quantity=1 WHERE id=$1',[ledgerNextStock.id]);
+await query('UPDATE ai_sale_effects SET delta=0.1 WHERE event_id=$1',[ledgerNextSecondResult.eventId]);
+assert.equal((await call('v1/sales',{...ledgerNextOverflow,eventId:'ledger-next-corrupt'},ledgerNextAccess.token)).status,409);assert.equal(await ledgerNextBalance(),1);
+await query('UPDATE ai_sale_effects SET delta=-0.1 WHERE event_id=$1',[ledgerNextSecondResult.eventId]);
+const ledgerNextBinding=(await query('SELECT * FROM ai_connectors WHERE id=$1',[ledgerNextAccess.connectorId])).rows[0];
+await query("UPDATE ai_accounts SET status='suspended' WHERE id=$1",[ids.buyer]);
+try{await assert.rejects(recipeModule.ingestSale(ledgerNextBinding,{...ledgerNextSecond,eventId:'ledger-next-stale-owner'}),e=>e.status===403);}finally{await query("UPDATE ai_accounts SET status='active' WHERE id=$1",[ids.buyer]);}
+console.log('Sales ledger precision passed: combined fractional recipes, preview without writes, once-only sale, immutable reversal after recipe edit, overflow rollback, corrupt original-effect rejection and suspended-actor denial.');
+// Suspend in the fixture between HTTP authentication and the write transaction, without parallel-session claims.
+for(const route of ['stock','stock-adjust']){
+ const ledgerNextBefore=await ledgerNextBalance(),ledgerNextMoves=Number((await query('SELECT count(*)::int n FROM ai_stock_moves WHERE stock_id=$1',[ledgerNextStock.id])).rows[0].n);
+ const ledgerNextCount=Number((await query('SELECT count(*)::int n FROM ai_stock WHERE account_id=$1',[ids.buyer])).rows[0].n);let ledgerNextHookRan=false;
+ beforeLedgerNextBegin=async()=>{ledgerNextHookRan=true;await db.query("UPDATE ai_accounts SET status='suspended' WHERE id=$1",[ids.buyer]);};
+ try{
+  const response=await call(route,route==='stock'?{locationId:ledgerNextLocation.id,name:'Blocked initial stock',unit:'kg',quantity:1,minimum:0,target:0}:{id:ledgerNextStock.id,quantity:2,minimum:0,target:0,reason:'Stale owner fixture'},tokens.buyer);
+  assert(ledgerNextHookRan);assert.equal(response.status,403);assert.equal(await ledgerNextBalance(),ledgerNextBefore);
+  assert.equal(Number((await query('SELECT count(*)::int n FROM ai_stock WHERE account_id=$1',[ids.buyer])).rows[0].n),ledgerNextCount);
+  assert.equal(Number((await query('SELECT count(*)::int n FROM ai_stock_moves WHERE stock_id=$1',[ledgerNextStock.id])).rows[0].n),ledgerNextMoves);
+ }finally{beforeLedgerNextBegin=null;await query("UPDATE ai_accounts SET status='active' WHERE id=$1",[ids.buyer]);}
+}
+await query('UPDATE ai_stock SET quantity=-0.2 WHERE id=$1',[ledgerNextStock.id]);
+assert.equal((await call('stock-adjust',{id:ledgerNextStock.id,quantity:0.1,minimum:0,target:0,reason:'Exact correction fixture'},tokens.buyer)).status,200);
+const ledgerNextAudit=(await query('SELECT delta,quantity_before,quantity_after FROM ai_stock_moves WHERE stock_id=$1 ORDER BY id DESC LIMIT 1',[ledgerNextStock.id])).rows[0];
+assert.equal(Number(ledgerNextAudit.delta),0.3);assert.equal(Number(ledgerNextAudit.quantity_before),-0.2);assert.equal(Number(ledgerNextAudit.quantity_after),0.1);
+console.log('Stock administration authority passed: suspension after authentication blocks initial stock and correction without ledger writes; negative-stock correction audit uses exact units.');
+
+// Financial-only POS orders have no recipe stock effect and must not block subsequent merchandise.
+const ledgerNextPosRestaurant=crypto.randomUUID(),ledgerNextPosProduct=crypto.randomUUID(),ledgerNextPosLink=crypto.randomUUID();
+const ledgerNextFinancialOrder=crypto.randomUUID(),ledgerNextMerchandiseOrder=crypto.randomUUID(),ledgerNextPosTime=Date.now()-2000;
+await query('INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,$3)',[ledgerNextPosRestaurant,company,'Ledger financial-only fixture']);
+await query('INSERT INTO products(id,restaurant_id,name,active) VALUES($1,$2,$3,true)',[ledgerNextPosProduct,ledgerNextPosRestaurant,'Ledger merchandise']);
+assert.equal((await call('recipes',{locationId:ledgerNextLocation.id,name:'POS ledger recipe',productCode:ledgerNextPosProduct,items:[{stockId:ledgerNextStock.id,quantity:0.1}]},tokens.buyer)).status,200);
+await query("INSERT INTO ai_connectors(id,account_id,location_id,name,kind,active,pos_restaurant_id,pos_user_id,pos_company_id,cursor_time) VALUES($1,$2,$3,'Financial-only fixture','pos',true,$4,$5,$6,$7)",[ledgerNextPosLink,ids.buyer,ledgerNextLocation.id,ledgerNextPosRestaurant,posOwner,company,new Date(ledgerNextPosTime-1).toISOString()]);
+for(const [orderId,productId,offset]of [[ledgerNextFinancialOrder,null,0],[ledgerNextMerchandiseOrder,ledgerNextPosProduct,1]]){
+ await query("INSERT INTO orders(id,restaurant_id,status,closed_at,created_at) VALUES($1,$2,'paid',$3,$3)",[orderId,ledgerNextPosRestaurant,new Date(ledgerNextPosTime+offset).toISOString()]);
+ await query('INSERT INTO order_items(order_id,product_id,quantity) VALUES($1,$2,1)',[orderId,productId]);
+}
+await recipeModule.syncPosSales();assert.equal(await ledgerNextBalance(),0);
+const ledgerNextCursor=(await query('SELECT cursor_id,last_error FROM ai_connectors WHERE id=$1',[ledgerNextPosLink])).rows[0];assert.equal(ledgerNextCursor.cursor_id,ledgerNextMerchandiseOrder);assert.equal(ledgerNextCursor.last_error,null);
+assert.equal((await query('SELECT count(*)::int n FROM ai_sale_events WHERE connector_id=$1 AND external_id=$2',[ledgerNextPosLink,'pos:'+ledgerNextFinancialOrder])).rows[0].n,0);
+assert.equal((await query('SELECT count(*)::int n FROM ai_sale_events WHERE connector_id=$1 AND external_id=$2',[ledgerNextPosLink,'pos:'+ledgerNextMerchandiseOrder])).rows[0].n,1);
+await recipeModule.syncPosSales();assert.equal(await ledgerNextBalance(),0);
+console.log('POS financial-only skip passed: no invented recipe effect and following merchandise imported once with cursor progress.');
+
+// A movement failure after the event and quantity update must roll the whole import back.
+const atomicStockResponse=await call('stock',{locationId:ledgerNextLocation.id,name:'Atomic second ingredient',unit:'kg',quantity:1,minimum:0,target:0},tokens.buyer);assert.equal(atomicStockResponse.status,201);
+const atomicStock=atomicStockResponse.stock;
+assert.equal((await call('recipes',{locationId:ledgerNextLocation.id,name:'Atomic recipe',productCode:'ledger-atomic',items:[{stockId:ledgerNextStock.id,quantity:0.1},{stockId:atomicStock.id,quantity:0.1}]},tokens.buyer)).status,200);
+const atomicEvent={eventId:'ledger-atomic-sale',items:[{productCode:'ledger-atomic',quantity:1}]};
+const atomicMovesBefore=Number((await query('SELECT count(*)::int n FROM ai_stock_moves')).rows[0].n);
+failLedgerNextMovement=true;
+try{assert.equal((await call('v1/sales',atomicEvent,ledgerNextAccess.token)).status,500);}finally{failLedgerNextMovement=false;}
+assert.equal(await ledgerNextBalance(),0);assert.equal(Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[atomicStock.id])).rows[0].quantity),1);
+assert.equal(Number((await query('SELECT count(*)::int n FROM ai_stock_moves')).rows[0].n),atomicMovesBefore);
+assert.equal((await query('SELECT count(*)::int n FROM ai_sale_events WHERE connector_id=$1 AND external_id=$2',[ledgerNextAccess.connectorId,atomicEvent.eventId])).rows[0].n,0);
+assert.equal((await call('v1/sales',atomicEvent,ledgerNextAccess.token)).status,200);
+assert.equal(await ledgerNextBalance(),-0.1);assert.equal(Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[atomicStock.id])).rows[0].quantity),0.9);
+assert.equal((await call('v1/sales',atomicEvent,ledgerNextAccess.token)).duplicate,true);
+assert.equal(Number((await query('SELECT count(*)::int n FROM ai_stock_moves')).rows[0].n),atomicMovesBefore+2);
+console.log('Multi-ingredient sales rollback passed: injected movement error rolls back event and every stock balance, then the unchanged event retries once without partial or duplicate movements.');
 
 await db.close();

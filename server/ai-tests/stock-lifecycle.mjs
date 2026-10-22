@@ -85,6 +85,21 @@ for(const kind of ['spillage','own_use','spoilage','waste']){
 assert.equal(Number((await getStock()).quantity),2.6);
 await assert.rejects(inventory.inventoryRoutes('/api/ai/inventory/loss','POST',{stockId:stock,kind:'own_use',quantity:4,reason:'Test',confirmed:true,requestKey:crypto.randomUUID()},user),/übersteigt/);assert.equal(Number((await getStock()).quantity),2.6);checks++;
 const history=await inventory.inventoryRoutes('/api/ai/inventory','GET',{},user);assert(history.moves.some(m=>m.kind==='own_use'&&m.actor_id===account&&Number(m.quantity_before)===2.9&&Number(m.quantity_after)===2.8));checks++;
+// Corrupt PostgreSQL numeric values must fail closed in availability and its latch.
+const validBalance=await getStock(),validIngredient=(await query('SELECT quantity FROM ai_recipe_items WHERE recipe_id=$1 AND stock_id=$2',[recipe,stock])).rows[0].quantity;
+for(const invalid of ['physical','reserved','recipe']){
+ await query('UPDATE ai_stock SET quantity=$2,reserved_quantity=$3 WHERE id=$1',[stock,validBalance.quantity,validBalance.reserved_quantity]);
+ await query('UPDATE ai_recipe_items SET quantity=$3 WHERE recipe_id=$1 AND stock_id=$2',[recipe,stock,validIngredient]);
+ await query('UPDATE ai_recipes SET stock_blocked=false WHERE id=$1',[recipe]);
+ if(invalid==='physical')await query("UPDATE ai_stock SET quantity='NaN' WHERE id=$1",[stock]);
+ if(invalid==='reserved')await query("UPDATE ai_stock SET reserved_quantity='NaN' WHERE id=$1",[stock]);
+ if(invalid==='recipe')await query('UPDATE ai_recipe_items SET quantity=0 WHERE recipe_id=$1 AND stock_id=$2',[recipe,stock]);
+ assert.equal((await recipeAvailability(pool,account)).find(r=>r.id===recipe).available,false);
+ await assert.rejects(kitchenRoutes(pool,'/api/ai/recipe-release','POST',{id:recipe},user),e=>e.status===409);
+ await blockUnavailableRecipes(pool,account);assert.equal((await query('SELECT stock_blocked FROM ai_recipes WHERE id=$1',[recipe])).rows[0].stock_blocked,true);checks++;
+}
+await query('UPDATE ai_stock SET quantity=$2,reserved_quantity=$3 WHERE id=$1',[stock,validBalance.quantity,validBalance.reserved_quantity]);
+await query('UPDATE ai_recipe_items SET quantity=$3 WHERE recipe_id=$1 AND stock_id=$2',[recipe,stock,validIngredient]);
 // Render the actual kitchen view and inspect its forms, escaping and quantities.
 const source=fs.readFileSync(new URL('../../apps/web/public/ai-workspace.js',import.meta.url),'utf8');
 const dom=new JSDOM('<div id="content"></div>');const document=dom.window.document;

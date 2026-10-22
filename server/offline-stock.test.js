@@ -7,6 +7,7 @@ test('historical offline sales retain the original POS timestamp across stock re
  let state='pending',loseAck=true;
  const query=async(sql)=>{
   if(sql.startsWith('SELECT s.id'))return {rows:state==='pending'?[{id:'offline',order_id:'order',restaurant_id:'restaurant',company_id:'company',paid_time:originalTime}]:[]};
+  if(sql.startsWith('SELECT o.restaurant_id'))return {rows:[{restaurant_id:'restaurant',company_id:'company',paid_time:originalTime}]};
   if(sql.startsWith('SELECT stock_state'))return {rows:[{stock_state:state}]};
   if(sql.startsWith('SELECT 1 FROM users'))return {rows:[{}],rowCount:1};
   if(sql.startsWith('SELECT product_id'))return {rows:[{product_id:'dish',quantity:'2'}]};

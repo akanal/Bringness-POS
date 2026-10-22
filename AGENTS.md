@@ -240,3 +240,16 @@ Continue authorized development autonomously and preserve established behavior a
 ## Automated verification resumed 2026-10-21
 - After the owner requested execution, automated development checks were resumed for PR112 and stacked draft PR113. Preserve the current evidence in docs/development-validation-20261021.md and practical-only rest points in docs/test-backlog.md; do not describe all functional tests as still deferred.
 - PR113 branch fix/offline-payment-recovery-20261021 contains original-catalog payment recovery, active-company/device history/export/replay boundaries, short-lease refresh and atomic local view reads. Source/test checkpoint is 88c32b17d684f436769517b54ad917f9b341f70e. No productive deployment or public installer release is implied.
+
+## Local collection resumed by owner 2026-10-21
+- Latest owner instruction: collect the next ten development blocks locally, without upload or deployment. Additional functional tests remain deferred. Syntax/patch checks are allowed and must not be described as functional acceptance.
+- Preserve previous eleven local commits at 65efc5b on fix/stock-queue-fairness-20261021. The next collection is on work/stock-recovery-next-ten-20261021, described in docs/local-stock-next-ten-20261021.md with shared deferred cases under T04/T12.
+
+## Fifth local stock development package
+- Continue local collection without GitHub upload or deployment. Latest package builds on 0191c20 in work/stock-arithmetic-fifth-ten-20261021; preserve all previous local commits.
+- docs/local-stock-fifth-ten.md records ten related arithmetic/authority changes. Physical signed stock remains supported. A financial refund still does not imply returning unused ingredients. No new module, layout, provider, or contractual change.
+
+## Local sales stock ledger continuation 2026-10-22
+- Local branch work/sales-stock-ledger-next builds on 0e13528. Preserve prior packages; no upload/deployment.
+- Sales use exact ingredient accumulation followed by the existing nearest rounding (negative exact halves toward zero); kitchen keeps its separate upward rounding. Reversals use immutable saved effects, never the edited recipe. Financial refunds do not imply ingredient returns.
+- Evidence and limitations: docs/local-sales-stock-ledger-next.md; deferred acceptance remains consolidated in docs/test-backlog.md. Local automated checks passed; true parallel-session authority checks and device acceptance remain open.

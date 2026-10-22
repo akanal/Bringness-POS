@@ -78,3 +78,41 @@ T04 Rezeptfreigabe: jede konfigurierte Zutat muss im eigenen Standort vorhanden 
 T12 Offline-Diagnose: not_linked ist als Statusfilter abrufbar und mit Null im Summary vorhanden; Übergang nach vorübergehendem Fehler zu not_linked entfernt veraltete Fehlermeldung. Keine automatische Nachbuchung historischer unverbundener Verkäufe. Funktionsprüfung zurückgestellt.
 
 T04 Verkaufsimport: Austausch des freigebenden POS-Inhabers zwischen Auswahl und Transaktion führt vor Lagerwirkung zum Konflikt, wie beim Lifecycle-Abgleich. Bestehende Ereigniskennungen und Rückbuchungseffekte bleiben unverändert. Funktionsprüfung zurückgestellt.
+
+T04/T12 Warteschlangen: 401/403/408/425/429 behalten pending und ursprüngliche Buchungskennungen. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: POS-Fehler erhalten begrenzte Wartezeit von 5 bis 300 Sekunden; frische Aufträge bleiben erreichbar. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Wiederholungszähler und Fälligkeit über Neustart erhalten; bestehende Verkäufe bleiben unverändert gültig. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Offline-Fehler mit begrenzter Wartezeit und stabiler Reihenfolge; applied/not_linked entfernen Fälligkeit. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Berechtigte Verwaltung sieht Anzahl Fehlversuche und nächste Fälligkeit; keine neuen öffentlichen Daten. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Manuelle Konfliktfreigabe setzt Fälligkeit zurück und prüft aktuelle Betriebsfirma zusätzlich zum Katalog. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Lagerauftrag-Polling enthält Versuche/Fälligkeit unter bestehenden Zugriffsregeln; Erfolg räumt Fälligkeit auf. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Beide Worker akzeptieren ausschließlich ganze Batchgrößen 1–500; Standard bleibt 100. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Fehler bei Lageraufträgen verhindern Offline-Abgleich/Verfügbarkeit nicht; Stufen bleiben sequenziell und Einzelinstanzschutz erhalten. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Warteschlangen: Ein fehlerhafter Standort verhindert Aktualisierung anderer Standorte nicht; Gesamtfehler bleibt erkennbar, alte Werte bei Fehler erhalten. Funktionsprüfung zurückgestellt; Entwicklungszweig nicht live.
+
+T04/T12 Parallelität: Fälligkeit nach Zeilensperre erneut prüfen, damit alte Worker-Auswahl die inzwischen gesetzte Wartezeit nicht umgeht. Bestehende isolierte Fixtures auf neue Spalten/Wartezeiten vorbereitet; nicht ausgeführt.
+
+
+### T04 / T12 – Nächster lokal gesammelter Wiederanlaufblock
+
+Ein gemeinsamer Durchlauf deckt die zehn Ergänzungen in local-stock-next-ten-20261021.md ab: Poolgröße eins; Verbindungs-/Rollback-/Diagnosefehler; bereits bestätigter Auftrag mit nachgelagertem Diagnosefehler; fremd gesperrte Auftragszeile; permanente Ablehnung ohne neue Fälligkeit; ältere Fehlermeldung nach neuerer Wiederholungsplanung; Zählergrenzen; unübliche Fehlerwerte; Firmen-/Betriebsfilter der fälligen/wartenden Zusammenfassung; Zeitlimit, Anfragestillstand, fremde/unvollständige Bestätigung und Wiederholungsfrist beim POS-Statusabruf. Keine erneute Buchung aus einer Statusabfrage. Funktionstests ausdrücklich zurückgestellt; bisherige Testnachweise gelten nicht automatisch für diese Ergänzungen.
+
+
+### T04 / T07 / T12 – Fünftes lokales Mengen- und Berechtigungspaket
+
+Gemeinsam prüfen: exakte Aufrundung großer und kleiner Rezeptprodukte; Reservierung bis zum letzten Tausendstel; Zubereitung/Storno mit identischen Audit-Endwerten; mehrere Teilrückgaben bis zur ursprünglichen Verbrauchsmenge; Obergrenzen und beschädigte Mengen; NaN in physischem oder reserviertem Bestand und Null-Rezeptzutat verhindern Verfügbarkeit/Freigabe. Ergänzend Betrieb zwischen Authentifizierung und Rezeptfreigabe, Rezeptänderung oder API-Schlüsselanlage/-rotation sperren. Lokale Regressions-/Integrationsnachweise und Grenzen stehen in local-stock-fifth-ten.md; neue Prüfung echter paralleler PostgreSQL-Sitzungen sowie praktische Abnahme bleiben separat offen.
+
+Zum fünften Paket gehört auch der vollständige AI-Einkaufsablauf mit nicht endlichem Tagesdurchschnitt (z. B. 1/28), exakter Tausendstelgrenze und weiterhin ungültiger manueller Überpräzision. Abgeleiteter Bedarf darf die Einkaufsliste nicht als ungültige Eingabe blockieren.
+
+### T04 / T07 / T12 – Verkaufsledger und Bestandskorrektur
+
+Verkaufsverbrauch pro Zutat vor Rundung summieren; Vorschau ohne Schreiben, Wiederholung ohne zweite Bewegung und ausdrückliche Rückbuchung nach Rezeptänderung anhand gespeicherter Originalwerte prüfen. Überlauf oder positive beschädigte Originalwirkung müssen ohne Teilbuchung scheitern. Restaurant zwischen Anmeldung und Schreibbeginn sperren: Verkaufsimport, Anfangsbestand und Korrektur dürfen nicht schreiben. Negative Altbestände müssen exakt korrigierbar bleiben; Vorher/Nachherwerte müssen stimmen. Reiner Finanzbeleg vor Warenverkauf darf dessen einmalige Synchronisierung nicht blockieren. Lokale automatisierte Nachweise: local-sales-stock-ledger-next.md. Echte parallele PostgreSQL-Sitzungen, vollständiges Produktionsschema und praktische Geräteabnahme bleiben offen; diese Fälle im vorhandenen Generaltest bündeln. Der Mehrzutaten-Rollback bei einem Schreibfehler und anschließender Wiederholung ist zusätzlich lokal automatisiert bestanden. Echte Parallelfälle sind unter server/ai-tests/sales-ledger-races.mjs und im isolierten Prüfworkflow vorbereitet, mangels lokalem PostgreSQL noch nicht ausgeführt. Die leeren Küchen-Synchronisationsstufen werden im Gesamttest jetzt ausdrücklich auf verdeckte Schemafehler geprüft.
