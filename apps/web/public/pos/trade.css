@@ -44,3 +44,9 @@
 .posapp .trade-invoice-sheet .trade-sheet-footer{position:static;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));flex-shrink:0;gap:16px;box-sizing:border-box;width:100%;max-width:none;height:auto;min-height:0;margin:auto 0 0;padding:10px 0 0;border:0;border-top:1px solid #c6c6c6;border-radius:0;box-shadow:none;background:transparent;color:#777;text-align:left;font:9px/1.45 Arial,sans-serif;overflow-wrap:anywhere}
 .posapp .trade-invoice-sheet .trade-sheet-footer>div{display:block;min-width:0;margin:0;padding:0;gap:0;color:inherit;background:transparent;font:inherit}
 @media(max-width:560px){.posapp .trade-invoice-sheet{padding:18px 14px 18px}.posapp .trade-invoice-sheet .trade-sheet-top{gap:12px;margin-top:22px;min-height:125px}.posapp .trade-invoice-sheet .trade-sheet-seller{font-size:10px;min-height:54px}.posapp .trade-invoice-sheet .trade-sheet-footer{gap:8px;font-size:8px}.posapp .trade-invoice-sheet td,.posapp .trade-invoice-sheet th{font-size:10px;padding:4px 3px}}
+
+/* Customer address starts after one blank line; invoice details occupy the right column. */
+.posapp .trade-invoice-sheet .trade-sheet-return{margin-bottom:18px}
+.posapp .trade-invoice-sheet .trade-sheet-meta small{display:block;margin-top:5px}
+.trade-issued-invoice{box-sizing:border-box;width:min(1000px,96vw);height:92vh;border:1px solid #cbd7e1;border-radius:10px;padding:12px}
+.trade-issued-invoice>strong{display:block;margin-bottom:8px}.trade-issued-invoice>a{margin-left:12px}.trade-issued-invoice>iframe{display:block;width:100%;height:calc(100% - 82px);border:0;margin-top:10px}

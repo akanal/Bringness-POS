@@ -39,7 +39,7 @@ const handler=createPaymentCheckout(pool),pdf=createPaymentReceiptHandler(pool,P
 const server=http.createServer(async(req,res)=>{try{if(await handler(req,res))return;if(await pdf(req,res))return;res.writeHead(404);res.end();}catch(e){console.error(e);res.writeHead(503,{'content-type':'application/json'});res.end(JSON.stringify({error:'test failure'}));}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base='http://127.0.0.1:'+server.address().port;
 const send=async(path,method='GET',body,auth=token,unlock='')=>{const r=await fetch(base+'/api/v1'+path,{method,headers:{authorization:'Bearer '+auth,'content-type':'application/json','x-personnel-unlock':unlock},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,body:r.headers.get('content-type')?.includes('pdf')?Buffer.from(await r.arrayBuffer()):await r.json()}};
-const recipient={name:'Wholesale Customer',street:'Example 1',postalCode:'10115',city:'Berlin',country:'Deutschland',vatId:'DE123'};
+const recipient={name:'Wholesale Customer',street:'Example 1',postalCode:'10115',city:'Berlin',country:'Deutschland',vatId:'DE123',taxNumber:'98/765',email:'buyer@example.test',phone:'03012345'};
 const request={requestKey:uuid(),restaurantId:restaurant,salesMode:'trade',recipient,items:[{productId:product,qty:1500}],payments:[{method:'cash',amountCents:300000}]};
 const prices={productId:product,tiers:[{minQty:1,priceCents:250},{minQty:1000,priceCents:200}]};
 try{
@@ -81,7 +81,7 @@ try{
  const invoice=await send('/receipts/'+sale.body.receiptId+'/invoice');if(process.env.TRADE_PDF_PREVIEW)await fs.writeFile(process.env.TRADE_PDF_PREVIEW,invoice.body);assert.equal(invoice.status,200);assert(invoice.body.subarray(0,4).toString()==='%PDF');assert.match(invoice.body.toString('latin1'),/MediaBox \[0 0 595\.28 841\.89\]/);
  const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');const loading=getDocument({data:new Uint8Array(invoice.body),useSystemFonts:true}),doc=await loading.promise;
  let content='';for(let i=1;i<=doc.numPages;i++)content+=(await (await doc.getPage(i)).getTextContent()).items.map(i=>i.str).join(' ');
- assert.match(content,/Wholesale Customer/);assert.match(content,/Rechnung/);assert.match(content,/3.000,00/);assert.match(content,/Nicht TSE-signiert/);await loading.destroy();
+ assert.match(content,/buyer@example.test/);assert.match(content,/03012345/);assert.match(content,/98\/765/);assert.match(content,/Zahlungsart: Barzahlung/);assert.match(content,/Wholesale Customer/);assert.match(content,/Rechnung/);assert.match(content,/3.000,00/);assert.match(content,/Nicht TSE-signiert/);await loading.destroy();
  assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,1);
  await query('UPDATE products SET price_cents=9999 WHERE id=$1',[product]);
  await send('/trade/prices','PUT',{...prices,tiers:[{minQty:1,priceCents:500}]},token,unlock);
@@ -92,7 +92,7 @@ try{
  assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,1);
  const replay=await send('/orders/checkout','POST',request);assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);assert.equal(replay.body.totalCents,300000);
  assert.equal((await send('/orders/checkout','POST',{...request,recipient:{...recipient,name:'Different'}})).status,409);
- const original=(await query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[sale.body.id])).rows[0].recipient;assert.equal(original.name,recipient.name);
+ const original=(await query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[sale.body.id])).rows[0].recipient;assert.equal(original.name,recipient.name);assert.equal(original.email,recipient.email);assert.equal(original.phone,recipient.phone);assert.equal(original.taxNumber,recipient.taxNumber);
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),1);
  await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock);
  const retail=await send('/orders/checkout','POST',{requestKey:uuid(),restaurantId:restaurant,items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:9999}]});assert.equal(retail.status,201);assert.match(retail.body.receiptNumber,/^BN-\d{4}-000001$/);
