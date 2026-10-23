@@ -16,7 +16,7 @@ export function receiptLines(items, adjustment) {
       existing.quantity+=Number(item.quantity);
       existing.grossCents+=grossCents;existing.netCents+=netCents;existing.taxCents+=row.taxCents;
       if(Number(existing.tax_rate_snapshot)!==Number(item.tax_rate_snapshot))existing.mixedTax=true;
-    }else deposits.set(key,{...row,quantity:Number(item.quantity),product_name_snapshot:kind==='charge'?'Pfand':'Pfandrücknahme'});
+    }else deposits.set(key,{...row,depositKind:kind,quantity:Number(item.quantity),product_name_snapshot:kind==='charge'?'Pfand':'Pfandrücknahme'});
   }
   return [...merchandise,...deposits.values()];
 }

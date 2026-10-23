@@ -23,7 +23,7 @@ test('public invoice lookup accepts only its invoice capability and returns no c
  const res=response();await handler({url:'/rechnung/'+token,method:'GET'},res);assert.equal(res.status,404);assert.equal(res.body,'Rechnung nicht gefunden');assert.equal(queries.length,1);
 });
 
-test('public QR failure remains read-only and returns a safe error before PDF output',async()=>{
+test('public PDF failure remains read-only and returns a safe error before PDF output',async()=>{
  const queries=[];const pool={query:async(sql)=>{queries.push(sql);if(sql.includes('FROM order_items'))return {rows:[]};if(sql.includes('FROM payments'))return {rows:[]};return {rows:[{invoice_public_token:token,public_token:'a6776499-ec74-44da-8324-35e0a3c46a61',receipt_number:'HR-2026-1',order_id:'order',recipient:{name:'Private customer'}}]};}};
  const handler=createPublicTradeInvoiceHandler(pool,class{constructor(){throw Error('must not construct a PDF');}},{toBuffer(){throw Error('simulated QR outage');}},()=> 'https://pos.example.test/beleg/'+token);
  const res=response();await handler({url:'/rechnung/'+token,method:'GET'},res);assert.equal(res.status,503);assert(!res.body.includes(token));assert(!res.body.includes('Private customer'));assert(queries.every(sql=>/^SELECT\b/.test(sql.trim())));assert.match(res.headers['content-type'],/text\/plain/);

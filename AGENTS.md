@@ -269,3 +269,9 @@ Continue authorized development autonomously and preserve established behavior a
 ## Seller address and payment feedback correction 2026-10-23
 - Keep a seller-company address editor in wholesale Customers & Documents using the existing billing profile endpoint and management authorization. Saving it must retain the current cart and customer; never copy customer data into seller fields.
 - Cash confirmation failures stay visible in the open invoice draft. Close the draft only after success; disabled/blocked checkout must return an explicit failure. Keep existing immutable uncertain-payment replay and server confirmation checks.
+
+## A4 barcode, address warning and compact deposit revision approved 2026-10-23
+- Owner replaced the A4 invoice QR with a linear barcode of the exact immutable invoice number, above the customer address. Use Code 128 to retain letters and hyphens; do not invent an EAN-13 number or encode a URL. Thermal/public ordinary receipt QRs remain unchanged. Existing invoice capability routes remain compatible with previously downloaded documents.
+- The inline seller company address uses the same advisory PLZ/place checks as customer addresses, including visible warnings and clearing on edit. Do not rewrite addresses from reference data or treat the plausibility reference as proof.
+- Display financial deposit/return rows with smaller regular type and reduced height on A4 and its draft; merchandise styling, grouped amounts, tax rounding and recorded payments stay unchanged.
+- Verification includes exact-number decoding of a rasterized generated PDF with independent ZXing, PDF one/multipage layout, compact-deposit totals, company PLZ/Ort warnings and historical invoice access tests. Actual printed-device scanner acceptance remains a device check.

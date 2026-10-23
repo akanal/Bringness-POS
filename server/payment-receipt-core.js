@@ -90,8 +90,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   const payments = paymentsResult.rows;
   let qrBuffer;
   try {
-    const qrPayload=receipt.formatA4?tradeInvoiceUrl(req,receipt.invoice_public_token,receiptUrl):receiptUrl(req,receipt.public_token);
-    qrBuffer=await QRCode.toBuffer(qrPayload,{width:120,margin:1});
+    if(!receipt.formatA4)qrBuffer=await QRCode.toBuffer(receiptUrl(req,receipt.public_token),{width:120,margin:1});
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
@@ -111,7 +110,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
       doc.once('end',()=>{if(settled)return;settled=true;resolve(Buffer.concat(chunks));});
       try{
   if(receipt.formatA4){
-    renderTradeInvoice(doc,receipt,items,payments,qrBuffer);
+    renderTradeInvoice(doc,receipt,items,payments);
     doc.end();
     return;
   }
