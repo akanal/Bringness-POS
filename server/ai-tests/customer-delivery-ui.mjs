@@ -19,12 +19,12 @@ function fixture(stored){const dom=new JSDOM('<select id="restaurant"><option va
 const w=fixture();
 try{
  await w.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=w.document,e=k=>d.querySelector('[data-'+k+']');assert.equal(d.querySelectorAll('script').length,0);e('customers').value=cid;await e('customers').onchange();for(const k of ['name','street','postalCode','city','country','vatId'])assert.equal(d.getElementById('trade-'+k).value,address[k]);assert.equal(e('email').value,address.email);assert.equal(e('phone').value,address.phone);assert.match(e('customers').selectedOptions[0].textContent,/Street 1 · 10115 Berlin · Deutschland/);
- e('search').value='buyer@example.test';await e('find').onclick();assert.equal(e('customers').value,cid);assert.equal(e('email').value,address.email);assert.match(e('customer-status').textContent,/übernommen/);
+ assert.equal(e('search'),null);assert.equal(e('find'),null);
  // Actual address checker marks both fields, removes stale errors on edit and supports preview fields.
  d.getElementById('trade-city').value='Hamburg';d.getElementById('trade-city').dispatchEvent(new w.Event('blur'));await new Promise(r=>setTimeout(r,0));
  assert.equal(d.getElementById('trade-city').getAttribute('aria-invalid'),'true');assert.equal(d.getElementById('trade-postalCode').getAttribute('aria-invalid'),'true');assert.match(d.querySelector('.address-check').textContent,/Berlin/);
  d.getElementById('trade-city').value='Berlin';d.getElementById('trade-city').dispatchEvent(new w.Event('input'));assert.equal(d.getElementById('trade-postalCode').hasAttribute('aria-invalid'),false);
- await e('update').onclick();assert.equal(updates[0].version,2);assert.deepEqual(updates[0].customer,address);e('search').value='old search';await e('save').onclick();assert.equal(e('search').value,'');assert.equal(e('customers').value,cid);assert.deepEqual(updates[1].customer,address);
+ await e('update').onclick();assert.equal(updates[0].version,2);assert.deepEqual(updates[0].customer,address);await e('save').onclick();assert.equal(e('customers').value,cid);assert.deepEqual(updates[1].customer,address);
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
  d.querySelector('[data-delivery-qty]').value='5';await e('preview').onclick();
  assert(d.querySelector('dialog').open);assert.equal(d.querySelectorAll('dialog script').length,0);
@@ -48,13 +48,6 @@ const race=fixture();try{
  const pending=ctrl.check();inputs.city.value='Hamburg';inputs.city.dispatchEvent(new race.Event('input'));resolve({issues:[{fields:['city'],message:'stale'}]});await pending;assert.equal(inputs.city.hasAttribute('aria-invalid'),false);assert(!d.body.textContent.includes('stale'));
  race.api=async()=>{throw Error('unavailable');};await ctrl.check();assert.equal(inputs.city.hasAttribute('aria-invalid'),false);assert.match(d.body.textContent,/Adressprüfung derzeit nicht verfügbar/);
 }finally{race.close();}
-
-// A new search typed during a slow lookup must run after the old response.
-const queued=fixture();try{
- await queued.renderCustomerDeliveryModule();await new Promise(r=>setTimeout(r,0));const d=queued.document,search=d.querySelector('[data-search]'),find=d.querySelector('[data-find]');let release,lookups=[];
- queued.api=async(path,opt)=>{if(path.startsWith('/customers?')){const q=new URL('https://fixture.test'+path).searchParams.get('q');lookups.push(q);if(q==='slow')return new Promise(resolve=>release=()=>resolve({customers:[{id:cid,version:2,data:{...address,name:'Old response'}}]}));return {customers:[{id:cid,version:2,data:{...address,name:'Latest response'}}]};}return api(path,opt);};
- search.value='slow';const first=find.onclick();search.value='latest';await find.onclick();release();await first;for(let n=0;n<8;n++)await new Promise(r=>setTimeout(r,0));assert(lookups.includes('latest'));assert.equal(d.getElementById('trade-name').value,'Latest response');
-}finally{queued.close();}
 
 // A rejected duplicate click must not unlock the first save for a third click.
 const saves=fixture();try{
