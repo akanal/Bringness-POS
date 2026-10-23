@@ -1,7 +1,7 @@
 import bwipjs from 'bwip-js';
 
 // Encode the immutable number itself, never a URL or an invented EAN product code.
-export function invoiceBarcode(doc,number,{x=57,y=76,width=240,height=24}={}){
+export function invoiceBarcode(doc,number,{x=57,y=126,width=240,height=20}={}){
  const value=String(number||'');if(!value||value.length>80||!/^[\x20-\x7e]+$/.test(value))throw Error('INVALID_INVOICE_BARCODE');
  const {sbs}=bwipjs.raw({bcid:'code128',text:value})[0];
  const units=sbs.reduce((sum,n)=>sum+n,0),module=Math.min(1,width/(units+20));
