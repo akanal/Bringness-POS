@@ -1,9 +1,10 @@
 import {fileURLToPath} from 'node:url';
 import {lineDiscount} from './sale-discount.js';
+import {invoiceBarcode} from './invoice-barcode.js';
 import {receiptLines} from './receipt-lines.js';
 
 // Dedicated A4 layout; thermal receipts keep their existing renderer.
-export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
+export function renderTradeInvoice(doc, receipt, items, payments) {
   doc.registerFont('TradeRegular',fileURLToPath(new URL('./assets/invoice-fonts/DejaVuSans.ttf',import.meta.url)));
   doc.registerFont('TradeBold',fileURLToPath(new URL('./assets/invoice-fonts/DejaVuSans-Bold.ttf',import.meta.url)));
   const money = cents => (Number(cents) / 100).toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' EUR';
@@ -35,6 +36,8 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
     return y+30;
   };
   text('Rechnung',355,48,192,16,true,'right');
+  invoiceBarcode(doc,receipt.receipt_number);
+  text(receipt.receipt_number,57,102,240,7);
   text([seller,...address].join(' · '),57,114,250,7);
   // Folding marks: address stays in the window after folding an A4 sheet.
   doc.save().strokeColor('#bbbbbb').lineWidth(0.4);for(const fy of [297.64,595.28])doc.moveTo(10,fy).lineTo(20,fy).stroke();doc.restore();
@@ -63,13 +66,14 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
   displayItems.forEach((item,index)=>{
     const quantity=Number(item.quantity),rate=Number(item.tax_rate_snapshot),net=item.netCents;
     const name=String(item.product_name_snapshot||'');
-    doc.font('TradeBold').fontSize(10);
-    const rowHeight=Math.max(27,doc.heightOfString(name,{width:220})+12);
+    const deposit=!!item.depositKind,size=deposit?8:10;
+    doc.font(deposit?'TradeRegular':'TradeBold').fontSize(size);
+    const rowHeight=Math.max(deposit?19:27,doc.heightOfString(name,{width:220})+(deposit?6:12));
     if(y+rowHeight>bottom){y=next();y=header(y);}
     // Paint the entire row in the PDF itself, including printed output.
     doc.save().fillColor(index%2===0?'#ffffff':'#eeeeee').rect(left,y-5,width,rowHeight).fill().restore();
-    text(index+1,52,y,28,10);text(name,85,y,220,10,true);
-    text(quantity.toLocaleString('de-DE'),315,y,50,10,false,'right');
+    text(index+1,52,y,28,size);text(name,85,y,220,size,!deposit);
+    text(quantity.toLocaleString('de-DE'),315,y,50,size,false,'right');
     // Extra unit precision avoids silently rounding a net unit price to whole cents.
     text((Number(item.unit_price_cents)/100/(item.mixedTax?1:1+rate/100)).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:4})+(item.mixedTax?' EUR²':' EUR'),370,y,80,9,false,'right');
     text(money(net),455,y,87,9,false,'right');
@@ -87,13 +91,11 @@ export function renderTradeInvoice(doc, receipt, items, payments, qrBuffer) {
   y=text('¹ Preise netto; Positionssummen nach Rabatt auf Cent gerundet.'+(displayItems.some(item=>item.mixedTax)?' ² Bei gemischten Steuersätzen: Pfand-Einzelpreis brutto.':''),left,y+3,width,8)+8;
   if(receipt.sale_adjustment)y=text('Enthaltener Rabatt: '+money(receipt.sale_adjustment.discountCents),left,y,width,9)+8;
   if(grossTotal!==Number(receipt.total_cents))y=text('Hinweis: Positionssumme weicht vom Zahlbetrag ab.',left,y,width,9)+8;
-  if(y+payments.length*18+145>bottom)y=next();
+  if(y+payments.length*18+30>bottom)y=next();
   for(const payment of payments){
     const label=({cash:'Barzahlung',card:'Karte',mollie_center:'Online-Zahlung'})[payment.method]||payment.method;
     y=text('Zahlungsart: '+label+' · '+money(payment.amount_cents),left,y,width,10)+5;
   }
-  doc.image(qrBuffer,(doc.page.width-70)/2,y+10,{width:70,height:70});
-  y=text('QR: Diese Rechnung öffnen',left,y+84,width,8,false,'center')+10;
   if(receipt.fiscal_status!=='signed')text('Nicht TSE-signiert – kein fiskalisierter Kassenbeleg.',left,y,width,8);
   footer();
 }

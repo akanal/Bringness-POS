@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {checkAddress} from '../address-check.js';
 import {sellerDocumentDetails} from '../seller-document-details.js';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
@@ -62,8 +63,9 @@ try{
 const invoiceWindow=fixture();const invoiceCalls=[];let companySaved={company_name:'ahmet.kanal',contact_name:'Ahmet Kanal',street:'Testweg 1',postal_code:'10115',city:'Berlin',vat_id:'DE123'};let sellerSaved={bankName:'Musterbank',iban:'DE89370400440532013000',taxNumber:'12/345'};
 invoiceWindow.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
 invoiceWindow.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new invoiceWindow.Event('close'));};
+invoiceWindow.eval(await fs.readFile(new URL('../../apps/web/public/pos/address-check.js',import.meta.url),'utf8'));
 invoiceWindow.eval(await fs.readFile(new URL('../../apps/web/public/pos/customer-delivery.js',import.meta.url),'utf8'));
-invoiceWindow.api=async(path,opt)=>{invoiceCalls.push({path,method:opt?.method||'GET'});if(path.startsWith('/trade/settings?'))return {enabled:true};if(path.startsWith('/trade/prices?'))return {tiers};if(path.startsWith('/customers?'))return {customers:[]};if(path==='/billing/document-details'){sellerSaved=sellerDocumentDetails(JSON.parse(opt.body));return {documentDetails:sellerSaved};}if(path==='/billing/profile'){if(opt?.method==='PUT')companySaved={...companySaved,...JSON.parse(opt.body)};return {profile:{...companySaved,document_details:sellerSaved}};}throw Error('Unexpected request '+path);};
+invoiceWindow.api=async(path,opt)=>{invoiceCalls.push({path,method:opt?.method||'GET'});if(path==='/address-check'){const body=JSON.parse(opt.body);return checkAddress(body.address,{complete:body.complete});}if(path.startsWith('/trade/settings?'))return {enabled:true};if(path.startsWith('/trade/prices?'))return {tiers};if(path.startsWith('/customers?'))return {customers:[]};if(path==='/billing/document-details'){sellerSaved=sellerDocumentDetails(JSON.parse(opt.body));return {documentDetails:sellerSaved};}if(path==='/billing/profile'){if(opt?.method==='PUT')companySaved={...companySaved,...JSON.parse(opt.body)};return {profile:{...companySaved,document_details:sellerSaved}};}throw Error('Unexpected request '+path);};
 try{
  await invoiceWindow.renderTradeModule();const d=invoiceWindow.document;d.querySelector('[data-add]').click();for(const [k,v]of Object.entries({name:'Buyer',street:'Stromstraße 56',postalCode:'10551',city:'Berlin'}))d.getElementById('trade-'+k).value=v;
  assert.equal(d.querySelector('[data-preview]').textContent,'Rechnung');await d.querySelector('[data-preview]').onclick();
@@ -94,6 +96,7 @@ try{
  delete invoiceWindow.bnDepositTotal;delete invoiceWindow.bnDepositBreakdown;
  // Seller address can be saved here without discarding the cart or recipient.
  const companyBox=d.querySelector('.trade-company-address');companyBox.open=true;await companyBox.ontoggle();assert.equal(companyBox.querySelector('[data-company=street]').value,'Testweg 1');
+ const sellerCity=companyBox.querySelector('[data-company=city]'),sellerZip=companyBox.querySelector('[data-company=postal_code]');sellerCity.value='Hamburg';sellerCity.dispatchEvent(new invoiceWindow.Event('blur'));await new Promise(r=>setTimeout(r,0));assert.equal(sellerCity.getAttribute('aria-invalid'),'true');assert.equal(sellerZip.getAttribute('aria-invalid'),'true');assert.match(companyBox.querySelector('.address-check').textContent,/Berlin/);sellerCity.value='Berlin';sellerCity.dispatchEvent(new invoiceWindow.Event('input'));assert(!sellerZip.hasAttribute('aria-invalid'));
  companyBox.querySelector('[data-company=street]').value='Verkäuferweg 9';invoiceWindow.ensurePersonnelAccess=async()=>false;await companyBox.querySelector('button').onclick();assert.equal(companySaved.street,'Testweg 1');assert.match(companyBox.querySelector('[data-company-status]').textContent,/Nicht gespeichert/);
  invoiceWindow.ensurePersonnelAccess=async()=>true;await companyBox.querySelector('button').onclick();assert.equal(companySaved.street,'Verkäuferweg 9');assert.match(companyBox.querySelector('[data-company-status]').textContent,/dauerhaft gespeichert/);assert.equal(d.querySelectorAll('#tradeLines [data-qty]').length,1);assert.equal(d.getElementById('trade-street').value,'Stromstraße 56');
  // A blocked checkout must explain itself instead of closing without feedback.

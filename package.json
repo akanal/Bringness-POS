@@ -22,6 +22,7 @@
   "dependencies": {
     "@napi-rs/canvas": "1.0.10",
     "@tesseract.js-data/deu": "1.0.0",
+    "bwip-js": "4.11.4",
     "nodemailer": "^10.0.0",
     "pdfjs-dist": "6.4.299",
     "pdfkit": "^0.17.2",

@@ -1,4 +1,3 @@
-import {renderTradeInvoice} from './trade-invoice-pdf.js';
 import {lineDiscount} from './sale-discount.js';
 import {receiptLines} from './receipt-lines.js';
 import crypto from "node:crypto";
@@ -90,11 +89,11 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   const payments = paymentsResult.rows;
   let qrBuffer;
   try {
-    const qrPayload=receipt.formatA4?tradeInvoiceUrl(req,receipt.invoice_public_token,receiptUrl):receiptUrl(req,receipt.public_token);
-    qrBuffer=await QRCode.toBuffer(qrPayload,{width:120,margin:1});
+    if(!receipt.formatA4)qrBuffer=await QRCode.toBuffer(receiptUrl(req,receipt.public_token),{width:120,margin:1});
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
+  const renderInvoice=receipt.formatA4?(await import('./trade-invoice-pdf.js')).renderTradeInvoice:null;
   const height = Math.max(560, 390 + items.length * 34 + payments.length * 20);
   let pdf;
   try {
@@ -111,7 +110,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
       doc.once('end',()=>{if(settled)return;settled=true;resolve(Buffer.concat(chunks));});
       try{
   if(receipt.formatA4){
-    renderTradeInvoice(doc,receipt,items,payments,qrBuffer);
+    renderInvoice(doc,receipt,items,payments);
     doc.end();
     return;
   }
