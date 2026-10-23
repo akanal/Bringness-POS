@@ -1,4 +1,3 @@
-import {renderTradeInvoice} from './trade-invoice-pdf.js';
 import {lineDiscount} from './sale-discount.js';
 import {receiptLines} from './receipt-lines.js';
 import crypto from "node:crypto";
@@ -94,6 +93,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   } catch {
     throw Error('RECEIPT_PDF_UNAVAILABLE');
   }
+  const renderInvoice=receipt.formatA4?(await import('./trade-invoice-pdf.js')).renderTradeInvoice:null;
   const height = Math.max(560, 390 + items.length * 34 + payments.length * 20);
   let pdf;
   try {
@@ -110,7 +110,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
       doc.once('end',()=>{if(settled)return;settled=true;resolve(Buffer.concat(chunks));});
       try{
   if(receipt.formatA4){
-    renderTradeInvoice(doc,receipt,items,payments);
+    renderInvoice(doc,receipt,items,payments);
     doc.end();
     return;
   }
