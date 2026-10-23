@@ -91,6 +91,10 @@ try{
  for(const wrong of [tokens.public_token,tokens.id,uuid(),'not-a-token']){const response=await fetch(base+'/rechnung/'+wrong);assert.equal(response.status,404);assert(!(await response.text()).includes(recipient.email));}
  assert.equal((await fetch(base+'/rechnung/'+tokens.invoice_public_token,{method:'POST'})).status,405);
  await Promise.all([send('/receipts/'+sale.body.receiptId+'/invoice'),send('/receipts/'+sale.body.receiptId+'/invoice')]);assert.equal((await query('SELECT invoice_public_token FROM receipts WHERE id=$1',[sale.body.receiptId])).rows[0].invoice_public_token,tokens.invoice_public_token);
+ // Search filters are bound and applied before the result limit, across saved invoices.
+ for(const q of [sale.body.receiptNumber,sale.body.receiptNumber.toLowerCase(),sale.body.receiptNumber.slice(-6)]){const found=await send('/trade/invoices?restaurantId='+restaurant+'&q='+encodeURIComponent(q));assert.equal(found.status,200);assert.equal(found.body.invoices.length,1);assert.equal(found.body.invoices[0].id,sale.body.receiptId);}
+ for(const q of ['','missing','%','_',"' OR 1=1 --"]){const found=await send('/trade/invoices?restaurantId='+restaurant+'&q='+encodeURIComponent(q));assert.equal(found.status,200);assert.equal(found.body.invoices.length,0);}
+ for(const q of ['x'.repeat(81),'bad\nnumber'])assert.equal((await send('/trade/invoices?restaurantId='+restaurant+'&q='+encodeURIComponent(q))).status,400);
  assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,1);
  await query('UPDATE products SET price_cents=9999 WHERE id=$1',[product]);
  await send('/trade/prices','PUT',{...prices,tiers:[{minQty:1,priceCents:500}]},token,unlock);
