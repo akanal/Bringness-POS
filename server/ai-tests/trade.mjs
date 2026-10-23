@@ -14,10 +14,10 @@ if(postgresUrl){
  db=new pg.Pool({connectionString:postgresUrl,options:'-c search_path='+schema});db.exec=sql=>db.query(sql);db.close=()=>db.end();
 }else{db=new PGlite();await db.waitReady;}
 const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0};}const r=await db.query(sql,args);return {...r,rowCount:r.rowCount??r.affectedRows??r.rows.length};};
-let failRecord=false,revokeAfterRead=false,failRefundRecord=false;
+let failRecord=false,revokeAfterRead=false,failRefundRecord=false,failDraftRecord=false;
 const pool={query:async(sql,args)=>{const result=await query(sql,args);if(revokeAfterRead&&sql.includes('FROM sessions')&&!sql.includes('FOR SHARE')){revokeAfterRead=false;await query("UPDATE users SET role='waiter' WHERE id=$1",[owner]);}return result;},connect:async()=>{
  const client=postgresUrl?await db.connect():{query,release(){}};
- return {query:async(sql,args)=>{if(failRefundRecord&&sql.startsWith('INSERT INTO pos_deposit_returns'))throw Error('simulated refund ledger failure');if(failRecord&&sql.startsWith('INSERT INTO pos_checkout_requests'))throw Error('simulated request ledger failure');return client.query(sql,args);},release:()=>client.release()};
+ return {query:async(sql,args)=>{if(failDraftRecord&&sql.startsWith('INSERT INTO pos_trade_cancellation_drafts'))throw Error('simulated draft storage failure');if(failRefundRecord&&sql.startsWith('INSERT INTO pos_deposit_returns'))throw Error('simulated refund ledger failure');if(failRecord&&sql.startsWith('INSERT INTO pos_checkout_requests'))throw Error('simulated request ledger failure');return client.query(sql,args);},release:()=>client.release()};
 }};
 await db.exec((await fs.readFile(new URL('../../db/schema.sql',import.meta.url),'utf8')).replace('CREATE EXTENSION IF NOT EXISTS pgcrypto;',''));
 await db.exec(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner';ALTER TABLE users ADD COLUMN must_change_password boolean DEFAULT false;
@@ -79,6 +79,35 @@ try{
  const sellerDetails=await saveSellerDocumentDetails(pool,{id:owner,company_id:company},{taxNumber:'12/345/67890',bankName:'Musterbank',iban:'DE89370400440532013000',bic:'COBADEFFXXX'});assert.equal(sellerDetails.bankName,'Musterbank');
  const sale=await send('/orders/checkout','POST',request);assert.equal(sale.status,201);assert.equal(sale.body.totalCents,300000);assert(sale.body.receiptId);assert.match(sale.body.receiptNumber,/^HR-\d{4}-000001$/);assert.equal((await query('SELECT is_called FROM receipt_number_seq')).rows[0].is_called,false);
  assert.equal((await query('SELECT unit_price_cents FROM order_items WHERE order_id=$1',[sale.body.id])).rows[0].unit_price_cents,200);
+ const reviewPath='/trade/invoices/'+sale.body.receiptId+'/cancellation-review';
+ const beforeReview=(await query('SELECT count(*) n FROM payments')).rows[0].n;
+ const reviewed=await send(reviewPath);assert.equal(reviewed.status,200);assert.equal(reviewed.body.review.original.id,sale.body.receiptId);assert.equal(reviewed.body.review.proposedReversalCents,-300000);assert.deepEqual(reviewed.body.review.issues,[]);assert.equal(reviewed.body.review.canCancel,false);
+ assert.equal((await send(reviewPath,'POST',{})).status,405);assert.equal((await send(reviewPath,'GET',null,'missing-session')).status,401);
+ assert.equal((await send('/trade/invoices/'+uuid()+'/cancellation-review')).status,404);
+ await query("UPDATE users SET role='waiter' WHERE id=$1",[owner]);assert.equal((await send(reviewPath)).status,403);await query("UPDATE users SET role='owner' WHERE id=$1",[owner]);
+ const foreignCompany=uuid(),foreignRestaurant=uuid(),foreignOrder=uuid(),foreignReceipt=uuid();
+ await query("INSERT INTO companies(id,name) VALUES($1,'Other company')",[foreignCompany]);await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Other shop')",[foreignRestaurant,foreignCompany]);
+ await query("INSERT INTO orders(id,restaurant_id,status,total_cents) VALUES($1,$2,'paid',119)",[foreignOrder,foreignRestaurant]);await query("INSERT INTO receipts(id,order_id,receipt_number) VALUES($1,$2,'FOREIGN-REVIEW')",[foreignReceipt,foreignOrder]);await query('INSERT INTO pos_trade_sales(order_id,recipient) VALUES($1,$2)',[foreignOrder,recipient]);
+ assert.equal((await send('/trade/invoices/'+foreignReceipt+'/cancellation-review')).status,404);assert.equal((await send('/trade/invoices/'+foreignReceipt+'/cancellation-draft')).status,404);assert.equal((await send('/trade/invoices/'+foreignReceipt+'/cancellation-draft','POST',{requestKey:uuid(),reason:'Foreign test'},token,unlock)).status,404);
+ await query('DELETE FROM pos_trade_sales WHERE order_id=$1',[foreignOrder]);await query('DELETE FROM receipts WHERE id=$1',[foreignReceipt]);await query('DELETE FROM orders WHERE id=$1',[foreignOrder]);await query('DELETE FROM restaurants WHERE id=$1',[foreignRestaurant]);await query('DELETE FROM companies WHERE id=$1',[foreignCompany]);
+ assert.equal((await query('SELECT count(*) n FROM payments')).rows[0].n,beforeReview);assert.equal((await query('SELECT status FROM orders WHERE id=$1',[sale.body.id])).rows[0].status,'paid');
+ const draftPath='/trade/invoices/'+sale.body.receiptId+'/cancellation-draft',draftCommand={requestKey:uuid(),reason:'Falscher Rechnungsempfänger'};
+ assert.equal((await send(draftPath)).body.draft,null);
+ assert.equal((await send(draftPath,'POST',draftCommand)).status,403);
+ assert.equal((await send(draftPath,'POST',draftCommand,token,'wrong-unlock')).status,403);
+ for(const reason of ['', 'xx', 'x'.repeat(501),'Grund\nneu'])assert.equal((await send(draftPath,'POST',{...draftCommand,reason},token,unlock)).status,400);
+ await query("UPDATE users SET role='manager' WHERE id=$1",[owner]);assert.equal((await send(draftPath,'POST',draftCommand,token,unlock)).status,403);await query("UPDATE users SET role='owner' WHERE id=$1",[owner]);
+ revokeAfterRead=true;assert.equal((await send(draftPath,'POST',draftCommand,token,unlock)).status,403);await query("UPDATE users SET role='owner' WHERE id=$1",[owner]);
+ await query('UPDATE payments SET amount_cents=1 WHERE order_id=$1',[sale.body.id]);assert.equal((await send(draftPath,'POST',draftCommand,token,unlock)).status,409);assert.equal((await send(draftPath)).body.draft,null);await query('UPDATE payments SET amount_cents=300000 WHERE order_id=$1',[sale.body.id]);
+ failDraftRecord=true;assert.equal((await send(draftPath,'POST',draftCommand,token,unlock)).status,503);failDraftRecord=false;assert.equal((await send(draftPath)).body.draft,null);
+ const drafted=await send(draftPath,'POST',draftCommand,token,unlock);assert.equal(drafted.status,201);assert.equal(drafted.body.draft.status,'draft_only');assert.equal(drafted.body.draft.canCancel,false);assert.equal(drafted.body.draft.review.original.number,sale.body.receiptNumber);
+ const replayedDraft=await send(draftPath,'POST',draftCommand,token,unlock);assert.equal(replayedDraft.status,200);assert.equal(replayedDraft.body.replayed,true);assert.equal(replayedDraft.body.draft.id,drafted.body.draft.id);
+ assert.equal((await send(draftPath,'POST',{...draftCommand,reason:'Anderer Grund'},token,unlock)).status,409);assert.equal((await send(draftPath,'POST',{...draftCommand,requestKey:uuid()},token,unlock)).status,409);
+ for(const method of ['PUT','DELETE'])assert.equal((await send(draftPath,method,{},token,unlock)).status,405);
+ await query("UPDATE products SET name='Edited after draft' WHERE id=$1",[product]);
+ const reopenedDraft=(await send(draftPath)).body.draft;assert.equal(reopenedDraft.id,drafted.body.draft.id);assert.equal(reopenedDraft.reason,draftCommand.reason);assert.deepEqual(reopenedDraft.review,drafted.body.draft.review);
+ assert.equal((await query('SELECT count(*) n FROM payments')).rows[0].n,beforeReview);assert.equal((await query('SELECT status FROM orders WHERE id=$1',[sale.body.id])).rows[0].status,'paid');
+ assert.equal(Number((await query('SELECT count(*) n FROM pos_trade_cancellation_drafts')).rows[0].n),1);
  const beforeShare=(await query('SELECT invoice_public_token FROM receipts WHERE id=$1',[sale.body.receiptId])).rows[0];assert.equal(beforeShare.invoice_public_token,null);
  revokeAfterRead=true;assert.equal((await send('/receipts/'+sale.body.receiptId+'/invoice')).status,403);assert.equal((await query('SELECT invoice_public_token FROM receipts WHERE id=$1',[sale.body.receiptId])).rows[0].invoice_public_token,null);await query("UPDATE users SET role='owner' WHERE id=$1",[owner]);
  const invoice=await send('/receipts/'+sale.body.receiptId+'/invoice');if(process.env.TRADE_PDF_PREVIEW)await fs.writeFile(process.env.TRADE_PDF_PREVIEW,invoice.body);assert.equal(invoice.status,200);assert(invoice.body.subarray(0,4).toString()==='%PDF');assert.match(invoice.body.toString('latin1'),/MediaBox \[0 0 595\.28 841\.89\]/);

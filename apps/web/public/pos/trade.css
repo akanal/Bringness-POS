@@ -50,5 +50,11 @@
 .posapp .trade-invoice-sheet .trade-sheet-meta small{display:block;margin-top:5px}
 .trade-issued-invoice{box-sizing:border-box;width:min(1000px,96vw);height:92vh;border:1px solid #cbd7e1;border-radius:10px;padding:12px}
 .trade-issued-invoice>strong{display:block;margin-bottom:8px}.trade-issued-invoice>a{margin-left:12px}.trade-issued-invoice>iframe{display:block;width:100%;height:calc(100% - 82px);border:0;margin-top:10px}
+.trade-issued-invoice[open]{display:grid;grid-template-columns:auto auto 1fr;grid-template-rows:auto auto auto minmax(0,1fr);gap:8px}
+.trade-issued-invoice>strong,.trade-issued-invoice>[data-cancellation-review-result]{grid-column:1/-1}
+.trade-issued-invoice>[data-cancellation-review]{justify-self:start}
+.trade-issued-invoice>[data-cancellation-review-result]{max-height:28vh;overflow:auto;overflow-wrap:anywhere}
+.trade-issued-invoice>iframe{grid-column:1/-1;grid-row:4;min-height:0;height:100%;margin-top:0}
+@media(max-width:520px){.trade-issued-invoice[open]{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto auto minmax(0,1fr)}.trade-issued-invoice>[data-cancellation-review]{grid-column:1/-1}.trade-issued-invoice>iframe{grid-row:5}}
 
 .trade-invoice-sheet .trade-deposit-line td{font-size:11px;padding-top:3px;padding-bottom:3px;font-weight:400}

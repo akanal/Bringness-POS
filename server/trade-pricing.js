@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import {readJsonObject} from './http-body.js';
+import {loadCancellationReview} from './trade-cancellation-review.js';
+import {migrateCancellationDrafts,getCancellationDraft,saveCancellationDraft} from './trade-cancellation-drafts.js';
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
 export const tradeQuantityLimit=999999;
 export function tradeRecipient(value){
@@ -16,11 +18,25 @@ export function normalizeTradeTiers(tiers){
  if(result.some((t,i)=>i&&t.minQty===result[i-1].minQty))throw Error('Mengenstufen müssen eindeutig sein');return result;
 }
 export function tradePrice(tiers,quantity){return [...tiers].filter(t=>t.minQty<=quantity).sort((a,b)=>b.minQty-a.minQty)[0]?.priceCents??null;}
-export async function migrateTrade(db){await db.query(`CREATE SEQUENCE IF NOT EXISTS trade_invoice_number_seq;ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS pos_trade_enabled boolean NOT NULL DEFAULT false;CREATE TABLE IF NOT EXISTS pos_trade_prices(product_id uuid NOT NULL REFERENCES products(id),min_qty int NOT NULL CHECK(min_qty BETWEEN 1 AND 999999),price_cents int NOT NULL CHECK(price_cents>0),PRIMARY KEY(product_id,min_qty));CREATE TABLE IF NOT EXISTS pos_trade_sales(order_id uuid PRIMARY KEY REFERENCES orders(id),recipient jsonb NOT NULL);`)}
+export async function migrateTrade(db){await db.query(`CREATE SEQUENCE IF NOT EXISTS trade_invoice_number_seq;ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS pos_trade_enabled boolean NOT NULL DEFAULT false;CREATE TABLE IF NOT EXISTS pos_trade_prices(product_id uuid NOT NULL REFERENCES products(id),min_qty int NOT NULL CHECK(min_qty BETWEEN 1 AND 999999),price_cents int NOT NULL CHECK(price_cents>0),PRIMARY KEY(product_id,min_qty));CREATE TABLE IF NOT EXISTS pos_trade_sales(order_id uuid PRIMARY KEY REFERENCES orders(id),recipient jsonb NOT NULL);`);await migrateCancellationDrafts(db)}
 export function createTradeHandler(pool,authenticate){return async(req,res)=>{
- const url=new URL(req.url,'http://local');if(!['/api/v1/trade/prices','/api/v1/trade/invoices','/api/v1/trade/settings'].includes(url.pathname))return false;
+ const url=new URL(req.url,'http://local'),draftMatch=url.pathname.match(/^\/api\/v1\/trade\/invoices\/([^/]+)\/cancellation-draft$/),reviewMatch=url.pathname.match(/^\/api\/v1\/trade\/invoices\/([^/]+)\/cancellation-review$/);if(!reviewMatch&&!draftMatch&&!['/api/v1/trade/prices','/api/v1/trade/invoices','/api/v1/trade/settings'].includes(url.pathname))return false;
  const send=(status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));return true};
  const u=await authenticate(req);if(!u)return send(401,{error:'Nicht angemeldet'});if(!['owner','admin','manager'].includes(u.role))return send(403,{error:'Kein Verwaltungszugang'});
+ if(draftMatch){
+  if(!['GET','POST'].includes(req.method))return send(405,{error:'Methode nicht erlaubt.'});
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(draftMatch[1]))return send(404,{error:'Rechnung nicht gefunden.'});
+  try{
+   if(req.method==='GET')return send(200,{draft:await getCancellationDraft(pool,u,draftMatch[1])});
+   if(!['owner','admin'].includes(u.role))return send(403,{error:'Nur Inhaber oder Administratoren dürfen Stornoentwürfe speichern.'});
+   const saved=await saveCancellationDraft(pool,authenticate,req,u,draftMatch[1],await readJsonObject(req,{maxBytes:4096}));return send(saved.replayed?200:201,saved);
+  }catch(e){if(e.status)return send(e.status,{error:e.message});throw e}
+ }
+ if(reviewMatch){
+  if(req.method!=='GET')return send(405,{error:'Die Storno-Vorprüfung ist ausschließlich lesend.'});
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reviewMatch[1]))return send(404,{error:'Rechnung nicht gefunden'});
+  const review=await loadCancellationReview(pool,u,reviewMatch[1]);return review?send(200,{review}):send(404,{error:'Rechnung nicht gefunden'});
+ }
  if(url.pathname.endsWith('/settings')){
   if(!['GET','PUT'].includes(req.method))return send(405,{error:'Methode nicht erlaubt'});
   let b;try{b=req.method==='GET'?{restaurantId:url.searchParams.get('restaurantId')}:await readJsonObject(req,{maxBytes:1024});if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(b.restaurantId||'')||(req.method==='PUT'&&typeof b.enabled!=='boolean'))throw Error('Betrieb und gültigen Schalter angeben')}catch(e){return send(400,{error:e.message})}
