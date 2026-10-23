@@ -12,3 +12,9 @@ test('seller footer writes fail closed after role revocation and on missing bill
  await assert.rejects(saveSellerDocumentDetails(pool,{id:'actor',company_id:'company'},{}),e=>e.status===(active?409:403));assert.equal(calls.at(-1),'ROLLBACK');assert(released);if(!active)assert(!calls.some(q=>q.startsWith('UPDATE')));
  }
 });
+
+test('BIC distinguishes bank sort codes and accepts an empty optional field',()=>{
+ assert.throws(()=>sellerDocumentDetails({bic:'500 105 17'}),/BIC-Feld steht eine Bankleitzahl/);
+ assert.equal(sellerDocumentDetails({bic:'coba deff xxx'}).bic,'COBADEFFXXX');
+ assert.equal(sellerDocumentDetails({iban:'DE89370400440532013000',bic:''}).bic,'');
+});

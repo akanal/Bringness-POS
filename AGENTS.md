@@ -261,3 +261,7 @@ Continue authorized development autonomously and preserve established behavior a
 - `/rechnung/:token` is a read-only PDF capability route for exactly one stored trade invoice. It uses immutable recipient/seller snapshots and actual stored payment records, has no listing operation, and sends no-store/noindex/no-referrer headers. Ordinary `/beleg/:token` links remain unchanged. Do not log capabilities or copy them into source.
 - The nullable column and unique partial index are added by `migratePublicReceipts`. Preserve the column across releases; already downloaded PDFs retain their previous QR, while a newly rendered A4 invoice receives its dedicated link.
 - Verification: `server/trade-invoice-link.test.js`, PDF tests and `server/ai-tests/trade.mjs` cover invalid links, capability separation, retained invoice identity, concurrent reuse, revoked-role issuance and safe renderer failures. A real handset camera scan remains a device acceptance task.
+
+## Customer picker and bank-field simplification approved 2026-10-23
+- Remove the separate customer search field/button. Keep saved-customer selection, address reuse and versioned save/update; preserve the backend search API for existing consumers.
+- Seller BIC is optional and distinct from the German bank sort code (BLZ). Explain this beside the field, accept formatting spaces, and report numeric eight-digit sort-code input clearly. Never silently replace or discard a bank reference or weaken IBAN checksum validation.
