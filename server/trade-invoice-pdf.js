@@ -37,14 +37,13 @@ export function renderTradeInvoice(doc, receipt, items, payments) {
   };
   text('Rechnung',355,48,192,16,true,'right');
   invoiceBarcode(doc,receipt.receipt_number);
-  text(receipt.receipt_number,57,102,240,7);
   text([seller,...address].join(' · '),57,114,250,7);
   // Folding marks: address stays in the window after folding an A4 sheet.
   doc.save().strokeColor('#bbbbbb').lineWidth(0.4);for(const fy of [297.64,595.28])doc.moveTo(10,fy).lineTo(20,fy).stroke();doc.restore();
   const recipient=receipt.recipient||{};
   const recipientText=[recipient.name,recipient.street,[recipient.postalCode,recipient.city].filter(Boolean).join(' '),recipient.country,recipient.vatId&&'USt-IdNr.: '+recipient.vatId,recipient.taxNumber&&'Steuer-Nr.: '+recipient.taxNumber,recipient.email,recipient.phone&&'Tel. '+recipient.phone].filter(Boolean).join('\n');
   let addressSize=10;doc.font('TradeRegular').fontSize(addressSize);while(addressSize>8&&doc.heightOfString(recipientText,{width:240})>78){addressSize-=0.5;doc.fontSize(addressSize);}
-  const recipientY=text(recipientText,57,142,240,addressSize);
+  const recipientY=text(recipientText,57,160,240,addressSize);
   let metaY=145;
   for(const [label,value] of [['Rechnungs-Nr.',receipt.receipt_number],['Rechnungsdatum',date],['Lieferdatum',date]]){
     text(label,355,metaY,100,9);metaY=text(value,455,metaY,92,9,false,'right')+6;
