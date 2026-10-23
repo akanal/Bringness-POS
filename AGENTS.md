@@ -283,3 +283,34 @@ Continue authorized development autonomously and preserve established behavior a
 
 ## Permanently visible invoice scanner field approved 2026-10-23
 - Put the invoice-number/scanner search directly in the wholesale sales panel above deposit returns, outside collapsed Customers & Documents/Archive sections. Archive redirects focus to this same field; never duplicate it or fetch all invoices on initial render. Select its existing contents on focus for the next scan.
+
+
+## Unpublished collection requested 2026-10-23
+- Owner explicitly wants to collect changes in code and not upload or deploy until their later signal. This supersedes previous automatic live-release requests for the new package. Do not push main or trigger deployment for this collection.
+- Variant extra rows keep the remove button directly beside the name/price, with an 8px gap, aligned and wrapping on narrow screens.
+- Deposit return keeps the existing original-receipt lookup, quantities and explicit cash-payout or cart-credit choice. Enter in original receipt input performs lookup. The standard reason is retained behind “Grund ändern”; archive controls are collapsed. Credit removal is shown only with credit; local-reset recovery only with a pending request. Preserve durable request identity, replay, settlement lock and server verification.
+- Local checks passed: deposit UI including recovery visibility and Enter lookup; trade UI; customer/delivery UI and database integration; Center simple UI/onsite database flows; display persistence; 68 Center/display/owner unit checks and 61 AI demand/forecast/procurement/authorization checks. No physical scanner/display acceptance or real sale was performed.
+- Full issued-invoice cancellation remains unimplemented. Existing open-order cancellation is not an issued-invoice reversal. A future implementation needs immutable linked reversal documents, request idempotency, tenant/PIN authorization, accounting/cash movements, inventory/deposit reversals, and explicit provider refund handling. Do not claim a cancellation button exists or delete original invoices. No real invoice was canceled in this collection.
+
+
+## Local invoice cancellation review 2026-10-23
+- Continued owner-authorized local development; no upload or deployment. Stored invoice dialog now offers “Storno prüfen”, explicitly a read-only preparation, not an issued reversal/refund.
+- GET /api/v1/trade/invoices/:receiptId/cancellation-review requires active owner/admin/manager access and company-scoped wholesale receipt. All writes return 405. A repeatable-read read-only transaction collects original line/payment/discount/deposit data consistently; no number allocation, stock event, cash movement or payment write.
+- Negate already-rounded historical net/tax/gross values; do not re-price, recompute negative rounding, or equate financial refund with ingredient return. Check paid status, line/payment reconciliation, non-cash methods, already returned deposits and credited deposit returns. Every response has status review_only and canCancel false even when amounts reconcile.
+- UI escapes stored text, rejects mismatched receipt identity, displays errors and ignores replies after dialog close. The PDF remains available; responsive modal bounds checked at 1366/390px in actual Chromium with a fixture PDF.
+- Verification: 12 focused cancellation/PDF/receipt-line unit tests; actual HTTP/database wholesale integration (including unauthorized, wrong-role, foreign-company and write denial); invoice UI with failure/retry, text injection and late response checks; Chromium scan/review/close/responsive test. No production mutation or physical-device acceptance.
+- Actual linked reversal issuance, idempotent cash/provider refund booking and accounting integration remain to implement. Do not advertise this review as completed invoice cancellation.
+
+
+## Local ten-step cancellation-draft block 2026-10-23
+- Owner requested continuation in groups of ten. Continue collecting locally; no GitHub upload or deployment until a new live instruction.
+- Completed: (1) receipt-linked draft schema, (2) immutable financial review snapshot and author/time, (3) bounded reason validation, (4) owner/admin + session-bound PIN enforcement, (5) fresh locked session/role validation, (6) request/receipt deduplication with PostgreSQL advisory locks and unique constraints, (7) reload-safe pending request identity, (8) saved draft reopening, (9) explicit draft-only UI/error/closed-view handling, (10) unit/HTTP/database/UI/native-browser verification.
+- GET/POST /api/v1/trade/invoices/:receiptId/cancellation-draft; one draft per receipt, unique company/request identity. Same body replay returns stored draft, conflicting request/reason returns 409. GET retains owner/admin/manager read scope; POST owner/admin only. No update/delete or financial execution endpoint added.
+- Storage failures roll back. Draft creation requires review without issues. Stored snapshots remain the historical draft, not proof that a later execution is still permitted; execution must freshly verify all payment/deposit/accounting state.
+- `trade-cancellation.js` loads with the wholesale scripts. Review exposes the draft area; saving requires a reason and the existing administrative unlock. Lost replies preserve the exact body locally before sending. Reopening retrieves the server draft. Validate receipt/request identity before acknowledging even a closed dialog response; do not erase another pending local identity.
+- Checks passed: 10 focused unit tests, actual HTTP/PGlite trade integration including migration re-entry, missing/wrong PIN, manager/role revocation, foreign tenant, payment mismatch, injected write rollback, replay/conflict and preserved payments/order; JSDOM UI recovery/escaping/corrupt local state; actual Chromium scan/save/reopen at 1366px/390px. Truly concurrent separate PostgreSQL sessions were not tested; constraints and lock calls are implemented, not a claim of concurrency acceptance.
+- Actual issued reversal document, fiscal handling, final accounting/cash/provider refund execution remain unimplemented. No real customer invoice was canceled, no real refund sent, and no live changes made.
+
+
+## Release authorized 2026-10-23
+- Owner explicitly requested publishing the entire collected package before starting a new project. This supersedes the no-upload/no-deploy hold for the variant/deposit/cancellation review and draft collection through local commit 866aaa7. Use the existing Netcup release pipeline. Issued cancellation and actual refunds remain unimplemented; do not describe drafts as booked reversals.

@@ -8,7 +8,20 @@
   const blob=await r.blob();if(!current())return;const url=URL.createObjectURL(blob),dialog=document.createElement('dialog');dialog.className='trade-issued-invoice';
   const title=document.createElement('strong');title.textContent='Rechnung '+number+' · gespeichert';const close=document.createElement('button');close.textContent='Zurück zum Verkauf';close.onclick=()=>dialog.close();
   const link=document.createElement('a');link.href=url;link.download='Rechnung-'+number+'.pdf';link.textContent='PDF herunterladen';const frame=document.createElement('iframe');frame.title='Gespeicherte Rechnung '+number;frame.src=url;
-  dialog.append(title,close,link,frame);dialog.addEventListener('close',()=>{URL.revokeObjectURL(url);dialog.remove()},{once:true});document.getElementById('moduleBody').append(dialog);dialog.showModal();
+  const reviewButton=document.createElement('button');reviewButton.type='button';reviewButton.dataset.cancellationReview='';reviewButton.textContent='Storno prüfen';
+  const reviewArea=document.createElement('section');reviewArea.dataset.cancellationReviewResult='';reviewArea.setAttribute('aria-live','polite');
+  reviewButton.onclick=async()=>{reviewButton.disabled=true;reviewArea.textContent='Gespeicherte Rechnung und Zahlungen werden geprüft…';try{
+   const {review}=await api('/trade/invoices/'+encodeURIComponent(id)+'/cancellation-review');if(!dialog.isConnected||!dialog.open)return;
+   if(review?.status!=='review_only'||review.original?.id!==id||review.canCancel!==false)throw Error('Vorprüfung konnte nicht eindeutig zugeordnet werden.');
+   const heading=document.createElement('strong');heading.textContent='Storno-Vorprüfung · '+review.original.number;
+   const amount=document.createElement('p');amount.textContent='Ursprünglicher Betrag: '+money(review.original.totalCents)+' · Vorgesehener Gegenbetrag: '+money(review.proposedReversalCents);
+   const notice=document.createElement('p');notice.textContent=review.notice;
+   const issues=document.createElement('ul');for(const issue of review.issues){const item=document.createElement('li');item.textContent=issue.message;issues.append(item);}
+   const next=document.createElement('p');next.textContent=review.issues.length?'Vor einer Stornierung müssen die genannten Punkte geklärt werden.':'Die Beträge sind rechnerisch vollständig zuordenbar. Eine Stornierung mit Gegenbeleg ist hier noch nicht freigeschaltet.';
+   reviewArea.replaceChildren(heading,amount,notice,issues,next);
+   await window.bnMountCancellationDraft?.(reviewArea,id,review);
+  }catch(e){if(dialog.isConnected)reviewArea.textContent=e.message}finally{reviewButton.disabled=false}};
+  dialog.append(title,close,link,reviewButton,reviewArea,frame);dialog.addEventListener('close',()=>{URL.revokeObjectURL(url);dialog.remove()},{once:true});document.getElementById('moduleBody').append(dialog);dialog.showModal();
  }
  const navigation=enabled=>document.querySelectorAll('[data-view="handel"]').forEach(b=>{b.hidden=!enabled;b.style.display=enabled?'':'none'});
  let navigationRequest=0;
