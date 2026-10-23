@@ -265,3 +265,7 @@ Continue authorized development autonomously and preserve established behavior a
 ## Customer picker and bank-field simplification approved 2026-10-23
 - Remove the separate customer search field/button. Keep saved-customer selection, address reuse and versioned save/update; preserve the backend search API for existing consumers.
 - Seller BIC is optional and distinct from the German bank sort code (BLZ). Explain this beside the field, accept formatting spaces, and report numeric eight-digit sort-code input clearly. Never silently replace or discard a bank reference or weaken IBAN checksum validation.
+
+## Seller address and payment feedback correction 2026-10-23
+- Keep a seller-company address editor in wholesale Customers & Documents using the existing billing profile endpoint and management authorization. Saving it must retain the current cart and customer; never copy customer data into seller fields.
+- Cash confirmation failures stay visible in the open invoice draft. Close the draft only after success; disabled/blocked checkout must return an explicit failure. Keep existing immutable uncertain-payment replay and server confirmation checks.
