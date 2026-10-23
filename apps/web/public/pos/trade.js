@@ -99,10 +99,10 @@
    return {ok:true};
   }catch(e){if(e.status===400){try{localStorage.removeItem(key(rid));pending=null;tiers=(await api('/trade/prices?restaurantId='+encodeURIComponent(rid))).tiers;catalog();}catch{storageOK=false;}status(e.message+'\nNicht gebucht. Daten und aktuellen Betrag prüfen, dann erneut ausdrücklich bestätigen.')}else status(e.message+'\nBei unklarem Ergebnis dieselbe Zahlung abgleichen. Keine neue Verkaufskennung erzeugen.');return {ok:false,message:lastStatus};}finally{busy=false;draw()}}
   $('tradePay').onclick=pay;$('tradeResume').onclick=pay;
-  let invoiceArchiveHost=null;
+  const invoiceArchiveHost=document.createElement('section');invoiceArchiveHost.className='trade-invoice-search';host.querySelector('.trade-layout > section:last-child').append(invoiceArchiveHost);
   async function loadInvoices(target=invoiceArchiveHost){
-   if(!target||!target.isConnected)return false;invoiceArchiveHost=target;
-   target.innerHTML='<label>Rechnungsnummer / Barcode<input type="search" data-invoice-search maxlength="80" placeholder="z. B. HR-2026-000001" autocomplete="off"></label><button type="button" data-invoice-find>Rechnung suchen</button><p data-invoice-feedback role="status" aria-live="polite">Nummer eingeben oder Strichcode ins Suchfeld scannen, dann Enter drücken.</p><div data-invoice-results></div>';
+   if(!target||!target.isConnected)return false;if(target!==invoiceArchiveHost){target.textContent='Rechnungen über das sichtbare Kassenscanner-Suchfeld oberhalb der Pfandrückgabe suchen.';invoiceArchiveHost.scrollIntoView?.({block:'center'});invoiceArchiveHost.querySelector('[data-invoice-search]')?.focus();return true;}
+   target.innerHTML='<label>Rechnung mit Kassenscanner suchen · Nummer / Barcode<input type="search" data-invoice-search maxlength="80" placeholder="z. B. HR-2026-000001" autocomplete="off"></label><button type="button" data-invoice-find>Rechnung suchen</button><p data-invoice-feedback role="status" aria-live="polite">Nummer eingeben oder Strichcode ins Suchfeld scannen, dann Enter drücken.</p><div data-invoice-results></div>';
    const input=target.querySelector('[data-invoice-search]'),feedback=target.querySelector('[data-invoice-feedback]'),results=target.querySelector('[data-invoice-results]');let sequence=0;
    const search=async()=>{
     const request=++sequence,query=input.value.trim(),current=()=>target.isConnected&&request===sequence&&input.value.trim()===query;
@@ -117,7 +117,8 @@
     }catch(error){if(current())feedback.textContent='Rechnungen konnten nicht geladen werden. Bitte erneut suchen. '+error.message;}
    };
    input.oninput=()=>{sequence++;results.replaceChildren();feedback.textContent='Nummer eingeben oder Strichcode ins Suchfeld scannen, dann Enter drücken.';};
-   input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();return search();}};target.querySelector('[data-invoice-find]').onclick=search;input.focus();return true;
+   input.onfocus=()=>input.select();
+   input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();return search();}};target.querySelector('[data-invoice-find]').onclick=search;return true;
   }
 
   if(window.bnCreateSaleTools)tools=window.bnCreateSaleTools(host.querySelector('.trade-layout > section:last-child'),{rid,mode:'trade',hideSaleTools:true,locked:()=>busy||!!pending||!storageOK,hasPayment:()=>!!pending,subtotal:()=>lines.reduce((s,l)=>s+(price(l.id,l.qty)||0)*l.qty,0),draft:()=>({items:lines.map(l=>({productId:l.id,qty:l.qty})),recipient:Object.fromEntries(['name','street','postalCode','city','country','vatId','taxNumber','email','phone'].map(k=>[k,($('trade-'+k)?.value||'').trim()]))}),load:d=>{const next=d.items.map(i=>{const p=products.find(p=>p.id===i.productId);if(!p)throw Error('Artikel nicht verfügbar. Bon bleibt erhalten.');return {id:p.id,name:p.name,qty:i.qty}});lines=next;for(const k of ['name','street','postalCode','city','country','vatId','taxNumber','email','phone'])$('trade-'+k).value=d.recipient?.[k]||(k==='country'?'Deutschland':'');},changed:()=>draw()});

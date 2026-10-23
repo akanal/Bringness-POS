@@ -280,3 +280,6 @@ Continue authorized development autonomously and preserve established behavior a
 - The invoice barcode contains the invoice number. In Customers & Documents → Archive, focus the invoice-number/barcode field and scan using a keyboard-wedge scanner followed by Enter, or type the number. A unique exact match opens its saved PDF; partial queries show up to 20 scoped results. Never load every invoice by default; keep delivery notes collapsed and only the latest-sale shortcut on the sales view.
 - Search is server-side, parameterized and applied before the limit; preserve tenant/restaurant/role checks and legacy API listing callers. Ignore stale replies and stale PDF openings after edits/navigation. Do not turn an archive lookup into a financial write.
 - Do not add deletion for issued/booked invoices. Corrections or cancellations require preserved original records and an auditable process; no new cancellation workflow is implied by the search change.
+
+## Permanently visible invoice scanner field approved 2026-10-23
+- Put the invoice-number/scanner search directly in the wholesale sales panel above deposit returns, outside collapsed Customers & Documents/Archive sections. Archive redirects focus to this same field; never duplicate it or fetch all invoices on initial render. Select its existing contents on focus for the next scan.
