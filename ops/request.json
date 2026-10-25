@@ -1,6 +1,5 @@
 {
-  "operation": "deploy",
-  "target": "ai",
-  "revision": "ec8240540cd067ebfc1911509bbe435e3ff2f7e1",
-  "requestId": "deploy-stock-sales-ai-20261022"
+  "operation": "status",
+  "target": "all",
+  "requestId": "shop-live-preflight-20261025"
 }
