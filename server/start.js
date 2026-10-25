@@ -62,7 +62,7 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
 const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
 let shopRegistrationRuntime={migrate:async()=>{},handle:async()=>false};
 if(appMode!=='ai'&&process.env.SHOP_REGISTRATION_ENABLED!=='false'){
-  try{shopRegistrationRuntime=createShopRegistrationRuntime(platformGatewayPool,{enabled:true,publicOrigin:"https://bringness-pos.de"});}
+  try{shopRegistrationRuntime=createShopRegistrationRuntime(platformGatewayPool,{enabled:true,publicOrigin:"https://bringness.de"});}
   catch{console.error('Shop registration configuration unavailable; registration remains closed.');}
 }
 const shopRuntime=createShopRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_DRAFTS_ENABLED!=='false'});

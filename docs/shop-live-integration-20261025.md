@@ -8,13 +8,15 @@ database and translator running, Caddy active (run 40243739929).
 
 The release is built on current main 4b754c3d101ac3f2f60376f3fde1b2676817ebf8,
 a status-only child of the verified application base 1da9637. Existing application
-files are preserved by a base-tree Git operation. Only current server/start.js
-and server/index.js receive reviewed additive shop changes; shared price/password
+files are preserved by a base-tree Git operation. Current server/start.js
+and server/index.js receive reviewed additive shop changes; legacy billing reservation
+also excludes open shop drafts, and Windows access uses the shared entitlement guard.
+Shared price/password
 helpers, POS/waiter/AI files, dependencies and deployment infrastructure stay intact.
 
 The explicit release transform enables account-scoped shop preparation and separate
 registration on the POS runtime unless their existing flags are explicitly false.
-Registration accepts only the canonical https://bringness-pos.de origin. AI mode
+Registration accepts only the canonical https://bringness.de origin. AI mode
 remains excluded. Migrations retain closed-until-ready behaviour and prerequisite
 schema inspection. The index adds only /shop and /shop/ directory routing, and the
 existing generic logo injection excludes the shop directory.
@@ -31,3 +33,10 @@ issuance or installer delivery. Existing UI says payment/licence activation is
 blocked. These are functional sales limitations, not a claim of a sales-ready shop.
 The internal TEST adapter and invoice-preview code remain unmounted. No fake paid
 status or licence grant is introduced to make the page appear complete.
+
+Release review: https://github.com/akanal/Bringness-POS/pull/137
+Integrated current-source isolated suite: 508 passed. Final-head entrypoint and
+all five additional regression workflows passed before merging. Actual PostgreSQL
+concurrent draft/replay and legacy-path exclusion passed; Chromium passed four
+viewport widths and real login. PR 137 merged as
+7f1771d0afbcf0a7ae57dd057614eff75cd76060. Netcup publication is in progress.

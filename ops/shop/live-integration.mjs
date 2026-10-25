@@ -1,5 +1,5 @@
 import {gitBlob,prepareShopRegistrationStartup} from './integration-start.mjs';
-export const livePublicOrigin='https://bringness-pos.de';
+export const livePublicOrigin='https://bringness.de';
 // Explicit release transform; ordinary candidate generation stays default-disabled.
 export function prepareLiveShopStartup(source){
  let result=prepareShopRegistrationStartup(source);
