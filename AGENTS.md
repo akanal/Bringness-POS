@@ -314,3 +314,12 @@ Continue authorized development autonomously and preserve established behavior a
 
 ## Release authorized 2026-10-23
 - Owner explicitly requested publishing the entire collected package before starting a new project. This supersedes the no-upload/no-deploy hold for the variant/deposit/cancellation review and draft collection through local commit 866aaa7. Use the existing Netcup release pipeline. Issued cancellation and actual refunds remain unimplemented; do not describe drafts as booked reversals.
+
+
+## Independent Shop live release — 2026-10-25
+- Source of truth for Shop is repository main: PR #137, followed by canonical-origin correction 262d2309956252580cdc4e535a3dc572eb2324c1. Do not restore/deploy the earlier Library reconstruction over the current application.
+- Public canonical URL: https://bringness.de/shop/ . bringness-pos.de redirects there; registration Origin must match bringness.de.
+- Actual Netcup publication succeeded in runs 40245574911 and 40245934682; previous containers and database backups were retained. No AI deployment was requested.
+- Registration/account access, quotes/drafts, prepared checkouts and history are integrated. Payment dispatch, public payment callback, final invoice issuance and new Windows delivery remain blocked and explicitly labelled; do not call this sales-ready.
+- The 508-check shop suite and real current entrypoint with disposable PostgreSQL/Chromium passed before the first release; the canonical-origin repair passed 18 targeted checks, deployment checks and subsequent live probes. No production fixture accounts or financial data were written for acceptance.
+- Preserve existing POS/waiter/AI pages, price/password helpers, contracts, configuration and Netcup automation. Continue from current main, not reconstructed root files. See docs/shop-live-integration-20261025.md.
