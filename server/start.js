@@ -1,3 +1,5 @@
+import {createShopRegistrationRuntime} from './shop-registration-http.js';
+import {createShopRuntime} from './shop-http.js';
 import {createPosEan,migratePosEan} from './pos-ean.js';
 import {clientInputError} from './http-body.js';
 import {isolatedPreview,assertPreviewEntrypoint} from './preview-policy.js';
@@ -58,6 +60,12 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
 };
 
 const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
+let shopRegistrationRuntime={migrate:async()=>{},handle:async()=>false};
+if(appMode!=='ai'&&process.env.SHOP_REGISTRATION_ENABLED!=='false'){
+  try{shopRegistrationRuntime=createShopRegistrationRuntime(platformGatewayPool,{enabled:true,publicOrigin:"https://bringness-pos.de"});}
+  catch{console.error('Shop registration configuration unavailable; registration remains closed.');}
+}
+const shopRuntime=createShopRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_DRAFTS_ENABLED!=='false'});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
@@ -122,6 +130,8 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleBillingStatus(req,res)) return;
       if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
+      if (await shopRegistrationRuntime.handle(req,res)) return;
+      if (await shopRuntime.handle(req,res)) return;
       if (await handleTableSettlement(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
@@ -149,7 +159,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
     try {
       let html = fs.readFileSync(filePath, "utf8");
       if (/\/(admin|pos|service|tisch)\/index\.html$/.test(normalized) || normalized.endsWith('/accountant.html')) html=html.replace('</head>','<meta name="robots" content="noindex, nofollow"></head>');
-      if (!normalized.includes('/ai') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
+      if (!normalized.includes('/ai') && !normalized.includes('/apps/web/public/shop/') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=checkout-recovery-20261017"></script></body>');
@@ -218,6 +228,8 @@ async function migrateWithRetry(){
       await migrateTableSettlement(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
+      try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
+      try{await shopRegistrationRuntime.migrate();}catch{console.error('Shop registration migrations unavailable; registration remains closed.');}
       if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
       if (aiFeatures) await aiFeatures.migrateAiPlatform();

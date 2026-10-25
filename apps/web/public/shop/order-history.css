@@ -1,0 +1,13 @@
+.history-entry>label{display:grid;gap:.35rem;margin-top:1rem;font-size:.85rem}.history-entry .record-reference{font-family:monospace;min-width:0;width:100%;font-size:.85rem}.history-entry>button{margin-top:.5rem}
+.history-print-note{padding:.8rem 1rem;background:#f1f4f7;border:1px solid #dbe2e9;border-radius:8px;color:#42546a;font-weight:600}
+@media print{
+ .download-history-page header,.download-history-page footer,.download-history-page nav,.download-history-page .preview,.download-history-page .skip-link,.download-history-page button,.download-history-page form,.download-history-page .download-history-controls,.download-history-page .history-entry>a,.download-history-page .history-entry>label,.download-history-page .history-entry>p[role=status]{display:none!important}
+ .download-history-page{background:white!important;color:#000!important;font-size:10pt}
+ .download-history-page main{max-width:none;margin:0;padding:0}
+ .download-history-page h1{font-size:20pt}
+ .download-history-page .history-entry{break-inside:avoid;border:1px solid #aaa;box-shadow:none;background:white!important;padding:12pt;margin:0 0 12pt}
+ .download-history-page .history-entry h2{font-size:14pt}
+ .download-history-page .history-reference{overflow-wrap:anywhere}
+ .download-history-page .history-print-note{border:2px solid #333;background:white!important;color:#000}
+ .download-history-page .shop-status{background:white!important;color:#000!important;border:1px solid #555}
+}

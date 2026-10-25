@@ -1,0 +1,40 @@
+name: Shop integration validation
+on:
+  pull_request:
+    paths: ['apps/web/public/shop/**', 'server/shop-**', 'server/start.js', 'server/index.js', 'ops/shop/**', '.github/workflows/shop-validation.yml']
+  push:
+    branches: ['release/shop-live-20261025']
+permissions:
+  contents: read
+jobs:
+  shop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: shop_test
+          POSTGRES_PASSWORD: shop_test
+          POSTGRES_DB: bringness_shop_integration
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U shop_test -d bringness_shop_integration"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: 24}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix ops/shop --ignore-scripts --no-audit --no-fund
+      - name: Complete isolated shop suite
+        run: node ops/shop/run.mjs
+      - name: Prepare native browser
+        run: |
+          npm install --prefix "$RUNNER_TEMP/shop-browser" --no-save playwright@1.62.1
+          node "$RUNNER_TEMP/shop-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Current production entrypoint with real PostgreSQL and browser
+        run: node ops/shop/production-entrypoint-smoke.mjs
+        env:
+          SHOP_INTEGRATION_DATABASE_URL: postgres://shop_test:shop_test@localhost:5432/bringness_shop_integration
+          SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs

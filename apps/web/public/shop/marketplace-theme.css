@@ -1,0 +1,137 @@
+/* Independent shop only. Action colours describe purpose, never payment evidence. */
+:root {
+ --shop-page:#f6f7f9; --shop-surface:#fff; --shop-soft:#f0f2f5;
+ --shop-ink:#202b38; --shop-muted:#526173; --shop-line:#d8dee6;
+ --shop-space-1:4px; --shop-space-2:8px; --shop-space-3:12px;
+ --shop-space-4:16px; --shop-space-6:24px; --shop-space-8:32px;
+ --shop-brand:#17583c; --shop-link:#1e40af; --shop-focus:#1e40af;
+ --shop-primary-text:#fff; --shop-primary-bg:var(--shop-brand);
+ --shop-secondary-text:var(--shop-ink); --shop-secondary-bg:var(--shop-surface);
+ --shop-danger-text:var(--shop-error-text); --shop-danger-bg:var(--shop-error-bg);
+ --green:var(--shop-brand); --line:var(--shop-line);
+ color:var(--shop-ink); background:var(--shop-page);
+}
+body {color:var(--shop-ink);background:var(--shop-page)}
+button,.button {
+ color:var(--shop-secondary-text);background:var(--shop-secondary-bg);
+ border:1px solid var(--shop-line);border-radius:8px;min-height:40px;
+ transition:background-color .15s,border-color .15s;
+}
+button:hover,.button:hover {filter:none;border-color:#8290a1;background:var(--shop-soft)}
+button:disabled,.button[aria-disabled=true] {
+ color:#657182;background:#edf0f3;border-color:var(--shop-line);opacity:1;cursor:default;
+}
+:where(button,a,input,select):focus-visible {outline:3px solid var(--shop-focus);outline-offset:3px}
+button.action-primary,.button.action-primary,
+#review-open,#draft-save,#checkout-prepare,#cart-feedback-open {
+ color:var(--shop-primary-text);background:var(--shop-primary-bg);border-color:var(--shop-primary-bg);
+}
+button.action-primary:hover,.button.action-primary:hover,
+#review-open:hover,#draft-save:hover,#checkout-prepare:hover,#cart-feedback-open:hover {background:#10472f;border-color:#10472f}
+button.action-danger,.button.action-danger,button[data-cart-action=remove] {
+ color:var(--shop-danger-text);background:var(--shop-danger-bg);border-color:var(--shop-error-border);
+}
+button.action-danger:hover,button[data-cart-action=remove]:hover {background:#fee2e2;border-color:var(--shop-error-text)}
+/* Disabled always takes precedence over action identity. */
+button:disabled,.button[aria-disabled=true] {color:#657182!important;background:#edf0f3!important;border-color:var(--shop-line)!important}
+.outline,.dialog-head button,.nav-button,.basket-info>button,.basket-line-actions button {color:var(--shop-ink)}
+a:not(.button):not(.brand),.product-tools button {color:var(--shop-link)}
+a:not(.button):hover {text-decoration:underline;text-underline-offset:3px}
+.preview {background:var(--shop-soft);color:var(--shop-muted);border-bottom:1px solid var(--shop-line)}
+.shop-masthead {background:var(--shop-surface);border-bottom:1px solid var(--shop-line)}
+header {padding-top:18px;padding-bottom:18px}
+.brand {color:var(--shop-brand)}
+.header-search {border-color:#8896a6;border-radius:8px}
+.header-search select {background:var(--shop-soft);color:var(--shop-ink)}
+.header-search button {color:var(--shop-ink);background:var(--shop-soft);border-left:1px solid var(--shop-line)}
+.header-search:focus-within {outline-color:var(--shop-focus)}
+.shop-nav {gap:24px;padding-top:4px}
+.shop-nav a,.nav-button {color:var(--shop-ink);min-height:40px;display:inline-flex;align-items:center}
+.nav-button span,#cart-count {background:var(--shop-soft);color:var(--shop-ink)}
+.hero {background:#eef1f5;border:1px solid #e2e7ee;border-radius:12px;margin-top:24px}
+.hero p:not(.eyebrow),.hero-note>span:last-child {color:var(--shop-muted)}
+.hero-note {background:#e2e8ef;border-radius:12px;min-height:230px}
+.symbol {color:var(--shop-brand)}
+.hero h1 {letter-spacing:-1.4px}
+.hero .button {margin-top:12px}
+.muted,.card small,.card p,.account-link span,.department-grid span,
+#result-count,.product-breadcrumbs,.product-pagination span {color:var(--shop-muted)}
+.card,.department-grid button,.product-purchase,.history-entry,.download-review,.payment-return {border-color:var(--shop-line);border-radius:10px}
+.card {box-shadow:0 2px 5px #202b3805}
+.card .price {color:var(--shop-ink)}
+.product-art,.card:nth-child(2) .product-art,.card:nth-child(3) .product-art,.detail-art {background:var(--shop-soft);color:var(--shop-brand)}
+.department-grid button {color:var(--shop-ink)}
+.department-grid button:hover {border-color:#8290a1;background:var(--shop-soft)}
+.filters button {color:var(--shop-ink)}
+.filters [aria-pressed=true],.view-controls [aria-pressed=true] {color:var(--shop-link);background:var(--shop-info-bg);border-color:var(--shop-info-border)}
+.filter-chip {background:var(--shop-info-bg);color:var(--shop-link);border-color:var(--shop-info-border)}
+.totals,.checkout-amounts,.download-totals,.comparison-table th,.checkout-confirmation {background:var(--shop-soft)}
+input,select {color:var(--shop-ink);border-color:#8896a6}
+input[type=checkbox] {accent-color:var(--shop-brand)}
+.dialog-head {background:var(--shop-surface)}
+.dialog-head button {min-height:40px;padding:8px 10px}
+.product-tools button {min-height:36px}
+.card-actions {align-items:stretch}
+.card-actions button {min-height:40px}
+.quantity-control>button {color:var(--shop-ink);background:var(--shop-surface)}
+.basket-line-actions button {min-height:36px;padding:6px 8px;border:1px solid var(--shop-line);border-radius:6px}
+.basket-line-actions button[data-cart-action=remove] {color:var(--shop-danger-text);background:var(--shop-danger-bg);border-color:var(--shop-error-border)}
+@media(max-width:520px) {
+ .shop-nav {gap:16px}
+ .hero {margin-top:16px;padding:26px 22px}
+ .hero h1 {font-size:34px}
+ .dialog-actions button,.download-controls button {min-height:44px}
+}
+@media(prefers-reduced-motion:reduce) {button,.button {transition:none}html {scroll-behavior:auto}}
+@media(forced-colors:active) {
+ button,.button,button.action-primary,.button.action-primary,button.action-danger,button[data-cart-action=remove],
+ #review-open,#draft-save,#checkout-prepare,#cart-feedback-open,.filters [aria-pressed=true],.view-controls [aria-pressed=true] {
+  color:ButtonText;background:ButtonFace;border-color:ButtonText;forced-color-adjust:auto;
+ }
+ button:disabled,.button[aria-disabled=true] {color:GrayText!important;background:Canvas!important;border-color:GrayText!important}
+ :where(button,a,input,select):focus-visible {outline-color:Highlight}
+}
+@media print {
+ body {background:#fff;color:#000}
+ button,.button {box-shadow:none;transition:none}
+ .totals,.checkout-amounts,.download-totals,.comparison-table th {background:#fff;color:#000}
+}
+
+/* Repeated shop surfaces follow the same spacing and reading rhythm. */
+.card-body,.history-entry,.download-review,.payment-return {padding:var(--shop-space-6)}
+.card-actions,.download-controls,.payment-return-actions,.dialog-actions {gap:var(--shop-space-3)}
+.card h3 {margin:var(--shop-space-3) 0;line-height:1.4}
+.card p {line-height:1.6}
+.download-addresses {gap:var(--shop-space-6)}
+.download-page header .brand {color:var(--shop-brand)}
+.download-page main>nav a {padding:var(--shop-space-2) 0;min-height:40px}
+.shop-account-summary,.reference-field {background:var(--shop-soft)}
+@media(max-width:600px) {
+ .history-entry,.download-review,.payment-return {padding:var(--shop-space-4)}
+ .card-body {padding:var(--shop-space-4)}
+ .download-page main {padding:var(--shop-space-4)}
+}
+@media print {
+ .download-page .download-review {padding:0!important}
+ .download-page .download-invoice {padding:0!important}
+}
+
+/* A quiet emerald sheen gives the wordmark depth without continuous motion. */
+.brand .brand-wordmark {
+ display:inline-block;font:inherit;letter-spacing:inherit;color:var(--shop-brand);
+ text-transform:none;text-shadow:0 1px 0 #fff,0 2px 2px #17583c20;
+}
+@supports (background-clip:text) or (-webkit-background-clip:text) {
+ .brand .brand-wordmark {
+  background:linear-gradient(115deg,#123f2d 8%,#17583c 36%,#398060 49%,#17583c 61%,#123f2d 95%);
+  background-clip:text;-webkit-background-clip:text;color:transparent;
+  text-shadow:none;filter:drop-shadow(0 1px 1px #17583c20);
+ }
+}
+.brand .brand-shop {color:var(--shop-brand)}
+@media (forced-colors:active) {
+ .brand .brand-wordmark {background:none;color:LinkText;filter:none;text-shadow:none}
+}
+@media print {
+ .brand .brand-wordmark {background:none;color:#17583c;filter:none;text-shadow:none}
+}

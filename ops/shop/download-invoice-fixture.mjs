@@ -1,0 +1,3 @@
+import crypto from 'node:crypto';
+import {downloadInvoiceDescription} from '../../server/shop-download-invoice.js';
+export const invoiceSample=()=>({version:1,checkoutId:crypto.randomUUID(),invoiceNumber:'BN-2026-001000',invoiceDate:'2026-10-24',serviceDate:'2026-10-24',description:downloadInvoiceDescription,quantity:1,vatRate:19,seller:{name:'SYNTHETISCHER ANBIETER – MUSTER',street:'Musterstraße 2',postalCode:'10115',city:'Berlin',taxId:'SYNTHETISCH – UNGÜLTIG',country:'DE'},product:{productId:'pos-download',planCode:'download_license',period:'once',currency:'EUR',netCents:39900,vatCents:7581,grossCents:47481},buyer:{company_name:'SYNTHETISCHER EMPFÄNGER – MUSTER',street:'Musterstraße 1',postal_code:'10115',city:'Berlin',country:'DE'}});
