@@ -1,3 +1,4 @@
+import {readWindowsEntitlement} from './windows-entitlement.js';
 import {installerUrl,streamInstaller} from './installer-stream.js';
 import crypto from "node:crypto";
 import pg from "pg";
@@ -59,17 +60,7 @@ export async function migrateBillingAccess(){
 }
 
 async function activeDownloadEntitlement(companyId){
-  const q=await pool.query(`
-    SELECT ce.id,ce.purchased_at,ce.provider_reference,bp.code,bp.name
-    FROM company_entitlements ce
-    JOIN billing_plans bp ON bp.id=ce.plan_id
-    WHERE ce.company_id=$1
-      AND bp.code='download_license'
-      AND ce.status='active'
-    ORDER BY ce.purchased_at DESC NULLS LAST,ce.created_at DESC
-    LIMIT 1
-  `,[companyId]);
-  return q.rows[0]||null;
+  return readWindowsEntitlement(pool,companyId);
 }
 
 async function latestWindowsRelease(){
@@ -98,6 +89,7 @@ async function latestWindowsRelease(){
 async function licensedContext(req,res){
   const user=await currentUser(req);
   if(!user){ sendJson(res,401,{error:"Nicht angemeldet"}); return null; }
+  if(!["owner","admin"].includes(user.role)){ sendJson(res,403,{error:"Download nur für Inhaber und Administratoren verfügbar."}); return null; }
   const entitlement=await activeDownloadEntitlement(user.company_id);
   if(!entitlement){
     sendJson(res,402,{allowed:false,planCode:"download_license",error:"Download erst nach erfolgreicher Zahlung verfügbar.",purchaseRequired:true});

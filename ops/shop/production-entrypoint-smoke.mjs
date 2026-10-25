@@ -5,6 +5,7 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import pg from 'pg';
 import {pathToFileURL} from 'node:url';
+import {reserveCheckout} from '../../server/billing-checkout-guard.js';
 const url=new URL(process.env.SHOP_INTEGRATION_DATABASE_URL||'invalid:');
 assert.ok(['postgres:','postgresql:'].includes(url.protocol)&&['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname==='/bringness_shop_integration','Disposable integration database required');
 const pool=new pg.Pool({connectionString:url.href});assert.equal(Number((await pool.query('SELECT count(*) n FROM information_schema.tables WHERE table_schema=current_schema()')).rows[0].n),0,'Integration database must be empty');
@@ -18,7 +19,7 @@ try{
  const password='FixtureOwner1!'+crypto.randomBytes(12).toString('hex');
  async function account(label){const email=label+'-'+crypto.randomUUID()+'@example.test',requestId=crypto.randomUUID(),registration={companyName:'CI Shop '+label,ownerName:'CI Owner '+label,email,password,street:'Fixture 1',postalCode:'00123',city:'Berlin',country:'DE'};const r=await post('/api/v1/shop/registrations',{requestId,registration});assert.equal(r.status,200,JSON.stringify(r.value));assert.equal((await post('/api/v1/shop/registrations',{requestId,registration})).value.replay,true);const login=await post('/api/v1/auth/login',{email,password});assert.equal(login.status,200);assert.match(login.value.token,/^[a-f0-9]{64}$/);return {email,token:login.value.token};}
  const a=await account('A'),b=await account('B');const quote=await post('/api/v1/shop/preview',{cart:{'pos-online':1}},a.token);assert.equal(quote.status,200);assert.deepEqual(quote.value.issues,[]);const line=quote.value.lines[0];assert.ok(Number.isSafeInteger(line.grossCents));
- const requestId=crypto.randomUUID(),draft=await post('/api/v1/shop/drafts',{requestId,cart:{'pos-online':1}},a.token);assert.equal(draft.status,200);assert.equal((await post('/api/v1/shop/drafts',{requestId,cart:{'pos-online':1}},a.token)).value.id,draft.value.id);
+ const requestId=crypto.randomUUID(),copies=await Promise.all([post('/api/v1/shop/drafts',{requestId,cart:{'pos-online':1}},a.token),post('/api/v1/shop/drafts',{requestId,cart:{'pos-online':1}},a.token)]),draft=copies[0];assert.equal(draft.status,200);assert.equal(copies[1].status,200);assert.equal(copies[1].value.id,draft.value.id);const owner=(await pool.query('SELECT company_id FROM users WHERE email=$1',[a.email])).rows[0],plan=(await pool.query("SELECT id,code FROM billing_plans WHERE code='pos_base_monthly'")).rows[0];assert.equal((await reserveCheckout(pool,owner,plan,async()=>true)).code,'SHOP_DRAFT_PENDING');
  const checkout=await post('/api/v1/shop/checkouts',{requestId:crypto.randomUUID(),draftId:draft.value.id,acceptedNetCents:line.netCents,acceptedGrossCents:line.grossCents},a.token);assert.equal(checkout.status,200);assert.equal(checkout.value.status,'prepared');assert.equal(checkout.value.canPay,false);
  assert.equal((await fetch(base+'/api/v1/shop/drafts/'+draft.value.id,{headers:{Authorization:'Bearer '+b.token}})).status,404);
  const history=await fetch(base+'/api/v1/shop/checkouts/history',{headers:{Authorization:'Bearer '+a.token}});assert.equal(history.status,200);
