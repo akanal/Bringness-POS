@@ -1,0 +1,399 @@
+{
+  "version": 1,
+  "scope": "static-startup-imports-only",
+  "canDeploy": false,
+  "entries": [
+    "server/shop-http.js",
+    "server/shop-registration-http.js"
+  ],
+  "builtins": [
+    "node:crypto"
+  ],
+  "files": [
+    {
+      "path": "apps/web/public/shop/licence-state.js",
+      "bytes": 1544,
+      "sha256": "d4b5c44788672a407e209146af0cacc413a428e2fdad4233425f56b96aa59c8d",
+      "gitBlob": "9c5792c6668958886b887b9f1aa412e9d95d5fe8",
+      "kind": "shop-candidate",
+      "imports": []
+    },
+    {
+      "path": "apps/web/public/shop/registration-fields.js",
+      "bytes": 1636,
+      "sha256": "921eeba2b479e8cdf851b7b8f10170d5c34ee66f83dcd51789914abfb31a37df",
+      "gitBlob": "bd380939d617680f9ca94090e5750f977a2191bf",
+      "kind": "shop-candidate",
+      "imports": []
+    },
+    {
+      "path": "server/billing-quote.js",
+      "bytes": 608,
+      "sha256": "0879cf492eec72fe0381f74e6703a49268b079641acd31621425157fbcc26f3b",
+      "gitBlob": "76ca9bb489eebb71ee8a1e0bd5c125ffafb8e04d",
+      "kind": "shared-review-required",
+      "imports": []
+    },
+    {
+      "path": "server/module-catalog.js",
+      "bytes": 3594,
+      "sha256": "a5c90d45acc6411a1d724af8156cff92c6bbcf9455269e3a05ab9fb84d79468f",
+      "gitBlob": "99243cab3a79344a413926bac954b9990a680842",
+      "kind": "shared-review-required",
+      "imports": []
+    },
+    {
+      "path": "server/password-policy.js",
+      "bytes": 389,
+      "sha256": "21e0c5d924282e7d1d115d9d76b0a1afd9b5538e46ec3b5a17021c1bd0f5253d",
+      "gitBlob": "c495311da2c0b35365233d7aea0f4a1a35a7cc45",
+      "kind": "shared-review-required",
+      "imports": []
+    },
+    {
+      "path": "server/secret-derivation.js",
+      "bytes": 2005,
+      "sha256": "9f6aba7e8afff71b0d6318ccf8716f6e7ffb394978300d9c9107dd5c4d963c3a",
+      "gitBlob": "edf9c4530ee91a8034bea8e6e0228748daf8c115",
+      "kind": "shared-review-required",
+      "imports": [
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-account.js",
+      "bytes": 2981,
+      "sha256": "c79e3e9715041c0c4b55fa7f0f5998482ec01b31c7d8a3c3c75131facec32bfb",
+      "gitBlob": "54150fac2091199cde85b648457974e018ffca33",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-preview-policy.js",
+          "path": "server/shop-preview-policy.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-buyer-contact.js",
+      "bytes": 433,
+      "sha256": "1ed5eb8e90dbc85ce743fdb47a2e00ee2333c3798606632898ac3dd6f631c298",
+      "gitBlob": "ce736b99585cf63857b0397909004e1e044a9c04",
+      "kind": "shop-candidate",
+      "imports": []
+    },
+    {
+      "path": "server/shop-checkout-orders.js",
+      "bytes": 7188,
+      "sha256": "ec31e895bd7efb4e76a20262d61acb21d5db92293f02beed4c7f0f309dd412a4",
+      "gitBlob": "583c16e783bfea39d90ba2213eb6f802a34f8250",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        },
+        {
+          "specifier": "./shop-drafts.js",
+          "path": "server/shop-drafts.js"
+        },
+        {
+          "specifier": "./shop-order-product.js",
+          "path": "server/shop-order-product.js"
+        },
+        {
+          "specifier": "./shop-test-payment-queue.js",
+          "path": "server/shop-test-payment-queue.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-download-invoice-readiness.js",
+      "bytes": 957,
+      "sha256": "3447f8fdb883d52a67f3d89ac6abefb13e24affeb9b58c5fcde4a0134d563568",
+      "gitBlob": "ece34011f413812f9205c8dc7453cf89bfba4ab2",
+      "kind": "shop-candidate",
+      "imports": []
+    },
+    {
+      "path": "server/shop-draft-history.js",
+      "bytes": 3453,
+      "sha256": "4a9e9a1eea8d92ac081dcc470ad1d2e5fefb12b3abd8f85014721cb12f8f3a33",
+      "gitBlob": "8cea75ac1771a7712e3d75ca2a6525f17212bd80",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        },
+        {
+          "specifier": "./shop-drafts.js",
+          "path": "server/shop-drafts.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-drafts.js",
+      "bytes": 5030,
+      "sha256": "fefba37dcefe5d29b2c5923245844c6635a6d267e483d8b07b577c388ae3dd60",
+      "gitBlob": "9b4c3001b311dabfa14dee70b93c53a0c9c0f752",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        },
+        {
+          "specifier": "./shop-preview-policy.js",
+          "path": "server/shop-preview-policy.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-http.js",
+      "bytes": 7326,
+      "sha256": "357184944eec2e2eea2490a01c26da5488abe02df15f04ff7edc5a29484e5083",
+      "gitBlob": "ae33ba578deea40839750660cf8f1f23ab50db70",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        },
+        {
+          "specifier": "./shop-checkout-orders.js",
+          "path": "server/shop-checkout-orders.js"
+        },
+        {
+          "specifier": "./shop-draft-history.js",
+          "path": "server/shop-draft-history.js"
+        },
+        {
+          "specifier": "./shop-drafts.js",
+          "path": "server/shop-drafts.js"
+        },
+        {
+          "specifier": "./shop-licences.js",
+          "path": "server/shop-licences.js"
+        },
+        {
+          "specifier": "./shop-order-history.js",
+          "path": "server/shop-order-history.js"
+        },
+        {
+          "specifier": "./shop-request-body.js",
+          "path": "server/shop-request-body.js"
+        }
+      ]
+    },
+    {
+      "path": "server/shop-licences.js",
+      "bytes": 2585,
+      "sha256": "8ade28664ef13ab9a08c4c8445a04858e689e236b1069e5c2bb560a45aaf3108",
+      "gitBlob": "92e8f80eac7e1dc6447a805ac810d67ac31e6c0c",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "../apps/web/public/shop/licence-state.js",
+          "path": "apps/web/public/shop/licence-state.js"
+        },
+        {
+          "specifier": "./module-catalog.js",
+          "path": "server/module-catalog.js"
+        },
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-order-history.js",
+      "bytes": 3748,
+      "sha256": "47bb2c5fd3e7cc5361e7beae80c97becd5751a33fa3ac2363074a8c9374d8a31",
+      "gitBlob": "dbdd9d7ed4ecca3b6549fe8307e5b02da224716b",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        },
+        {
+          "specifier": "./shop-drafts.js",
+          "path": "server/shop-drafts.js"
+        },
+        {
+          "specifier": "./shop-order-product.js",
+          "path": "server/shop-order-product.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-order-product.js",
+      "bytes": 693,
+      "sha256": "ffce212a4aa9c8ac8f8eb72570ad5ea2e1e08b1970223b3eea6a0e1fc5630411",
+      "gitBlob": "7f4afb04a2c1344b701d0e2dd48ca10f51b4176f",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        }
+      ]
+    },
+    {
+      "path": "server/shop-preview-policy.js",
+      "bytes": 3233,
+      "sha256": "6bda3139a32ea82cde34e59196a52d7a66b78dcf34169f7c94a3418950ef646e",
+      "gitBlob": "0009e0853df6c183622dd3d443a26874bee29695",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./billing-quote.js",
+          "path": "server/billing-quote.js"
+        },
+        {
+          "specifier": "./shop-download-invoice-readiness.js",
+          "path": "server/shop-download-invoice-readiness.js"
+        }
+      ]
+    },
+    {
+      "path": "server/shop-registration-body.js",
+      "bytes": 560,
+      "sha256": "12dbf4d8c35a625ce752621b9aa94b81d1c7787ad815996fcc8e66e073ce8387",
+      "gitBlob": "1453c608e9c3b763531551a0afac8da969317fb8",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-request-body.js",
+          "path": "server/shop-request-body.js"
+        }
+      ]
+    },
+    {
+      "path": "server/shop-registration-http.js",
+      "bytes": 4059,
+      "sha256": "1a119c9fb9933ee8793473ce420d09ae92f0fbed964092b58c2110c7ba5f125d",
+      "gitBlob": "08038c734268568d6cc13d5fc6599a1e6c1f4029",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "./shop-registration-body.js",
+          "path": "server/shop-registration-body.js"
+        },
+        {
+          "specifier": "./shop-registration-limiter.js",
+          "path": "server/shop-registration-limiter.js"
+        },
+        {
+          "specifier": "./shop-registration.js",
+          "path": "server/shop-registration.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-registration-limiter.js",
+      "bytes": 1149,
+      "sha256": "cf5fe298fe57060ccff3d38b8877502772af841a85ee09169f3c74c223989de7",
+      "gitBlob": "5de4ac397c89a938e376a730c087678980119987",
+      "kind": "shop-candidate",
+      "imports": []
+    },
+    {
+      "path": "server/shop-registration-schema.js",
+      "bytes": 3306,
+      "sha256": "efdc1791353d33a01ef66127b2d7ca6bdf8d3574749b5be12630a0e6e8f7f82a",
+      "gitBlob": "d5aaa00846e60dc9a7246cd77c3a886869b5613c",
+      "kind": "shop-candidate",
+      "imports": []
+    },
+    {
+      "path": "server/shop-registration.js",
+      "bytes": 4570,
+      "sha256": "d13effe005c591c325d1be365810ce6498bcb4f9d68079ca3bc706f6abad1ef7",
+      "gitBlob": "42c1da2cd90cd325a4553162c732b016b5d9c446",
+      "kind": "shop-candidate",
+      "imports": [
+        {
+          "specifier": "../apps/web/public/shop/registration-fields.js",
+          "path": "apps/web/public/shop/registration-fields.js"
+        },
+        {
+          "specifier": "./password-policy.js",
+          "path": "server/password-policy.js"
+        },
+        {
+          "specifier": "./secret-derivation.js",
+          "path": "server/secret-derivation.js"
+        },
+        {
+          "specifier": "./shop-account.js",
+          "path": "server/shop-account.js"
+        },
+        {
+          "specifier": "./shop-buyer-contact.js",
+          "path": "server/shop-buyer-contact.js"
+        },
+        {
+          "specifier": "./shop-drafts.js",
+          "path": "server/shop-drafts.js"
+        },
+        {
+          "specifier": "./shop-registration-schema.js",
+          "path": "server/shop-registration-schema.js"
+        },
+        {
+          "specifier": "node:crypto",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "path": "server/shop-request-body.js",
+      "bytes": 2356,
+      "sha256": "0ac2c702dc46a8741762b4892b91406e95040d835eddbd0b5b60455908ac038f",
+      "gitBlob": "5122e4247832f0e6ea6d87b2372d2adf71cc5348",
+      "kind": "shop-candidate",
+      "imports": []
+    },
+    {
+      "path": "server/shop-test-payment-queue.js",
+      "bytes": 1603,
+      "sha256": "319e166a55d62ee4b046152cd8f9abbaf4da24e12e1c1dbc46c8530dea9eaf12",
+      "gitBlob": "e1aa5a184be06104e2090da5af9e82ace57c2724",
+      "kind": "shop-candidate",
+      "imports": []
+    }
+  ]
+}

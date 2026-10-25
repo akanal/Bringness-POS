@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import {createPreviewServer,previewPort} from './serve.mjs';
+const server=createPreviewServer();
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+test.after(()=>new Promise(resolve=>server.close(resolve)));
+const request=(route,method='GET')=>new Promise((resolve,reject)=>{
+ const req=http.request({hostname:'127.0.0.1',port:server.address().port,path:route,method},res=>{let body='';res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body}));});req.on('error',reject);req.end();
+});
+test('both local catalogue entry points work',async()=>{for(const route of ['/','/shop/','/shop']){const res=await request(route);assert.equal(res.status,200);assert.match(res.body,/Bringness/);}});
+test('assets keep correct types and no-store',async()=>{const res=await request('/shop/style.css');assert.equal(res.status,200);assert.match(res.headers['content-type'],/text\/css/);assert.equal(res.headers['cache-control'],'no-store');assert.equal(res.headers['x-content-type-options'],'nosniff');});
+test('HEAD matches GET without transmitting the body',async()=>{const get=await request('/');const head=await request('/','HEAD');assert.equal(head.status,200);assert.equal(head.body,'');assert.equal(head.headers['content-length'],get.headers['content-length']);});
+test('write methods are rejected',async()=>{const res=await request('/','POST');assert.equal(res.status,405);assert.equal(res.headers.allow,'GET, HEAD');});
+test('preview never starts payment routes',async()=>{const res=await request('/api/shop/checkout');assert.equal(res.status,503);assert.equal(JSON.parse(res.body).canPay,false);});
+test('encoded sibling traversal cannot leave the shop directory',async()=>{for(const route of ['/%2e%2e%2fshop-private/secret.txt','/%2e%2e%2findex.html','/%5c..%5cREADME.md'])assert.equal((await request(route)).status,404);});
+test('malformed URI and missing pages fail closed',async()=>{for(const route of ['/%zz','/missing.html','/%00'])assert.equal((await request(route)).status,404);});
+test('port accepts default and explicit selection',()=>{assert.equal(previewPort([],{}),5173);assert.equal(previewPort(['--port','5180'],{}),5180);});
+test('port accepts a configured local port',()=>assert.equal(previewPort([],{PORT:'5190'}),5190));
+test('invalid port is rejected before listening',()=>{for(const value of ['0','65536','abc','-1',undefined])assert.throws(()=>previewPort(['--port',value],{}));});

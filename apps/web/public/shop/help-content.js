@@ -1,0 +1,26 @@
+import {products,money} from './catalog.js';
+import {checkoutStatuses} from './checkout-state.js';
+export const helpCategories=Object.freeze(['Alle','Produkte','Konto','Vorgänge','Rechnungen']);
+const topic=(id,category,title,text,links=[])=>Object.freeze({id,category,title,text,links:Object.freeze(links.map(l=>Object.freeze(l)))});
+export const helpTopics=Object.freeze([
+ ...products.map(p=>topic('product-'+p.id,'Produkte',p.name,p.netCents===null?`${p.description} ${p.notice}`:`${money(p.netCents)} netto ${p.period==='monthly'?'pro Monat':'einmalig'}, zuzüglich 19 % MwSt. ${p.description} ${p.notice} Maßgeblich für deinen Betrieb ist der im Konto geprüfte Preis.`,[{label:'Produkt ansehen',href:'/shop/?product='+p.id}])),
+ topic('licences','Konto','Wo sehe ich vorhandene Lizenzen und Zusatzmodule?','Unter „Meine Lizenzen“ siehst du den zuletzt gespeicherten Eintrag je Produkt und dessen hinterlegte Laufzeiten. Die Übersicht verändert keine Verträge oder Freischaltungen. Den tatsächlichen Zugang prüft weiterhin die Kasse.',[{label:'Meine Lizenzen öffnen',href:'/shop/licences.html'}]),
+ topic('account','Konto','Wie öffne ich mein bestehendes Konto?','Melde dich mit deinem bestehenden Bringness-Konto direkt im Shop an. Geschützte Shop-Vorgänge sind für Inhaber und Administratoren des jeweiligen Betriebs sichtbar. Eine neue Shop-Registrierung ist noch in Vorbereitung.',[{label:'Im Shop anmelden',href:'/shop/account.html'}]),
+ topic('find','Vorgänge','Wie finde ich einen gespeicherten Vorgang?','Öffne „Alle Shop-Vorgänge“ unter „Mein Shop“. Du kannst nach Produkt und aufgezeichnetem Status filtern oder eine vollständige Vorgangsnummer suchen. Die Filter gelten auch bei einer Suche nach Nummer. „Alle Filter zurücksetzen“ zeigt wieder den ungefilterten Verlauf.',[{label:'Alle Shop-Vorgänge öffnen',href:'/shop/order-history.html'}]),
+ topic('draft','Vorgänge','Was ist der Unterschied zwischen Entwurf und Zahlungsvorbereitung?','Ein Entwurf hält deine Auswahl und die geprüften Kontopreise fest. Eine gespeicherte Zahlungsvorbereitung reserviert den Vorgang. Beides löst für sich keine Zahlung aus und ist keine Rechnung oder Lizenzfreischaltung.',[{label:'Mein Shop öffnen',href:'/shop/'}]),
+ topic('network','Vorgänge','Was mache ich bei einer ausgebliebenen Antwort?','Suche zuerst den bereits gespeicherten Vorgang und prüfe dessen Status. Starte bei einem unklaren Zahlungsstatus keine neue Zahlung. Nach einer unterbrochenen Verbindung wird nichts automatisch erneut gesendet.',[{label:'Gespeicherten Vorgang suchen',href:'/shop/order-history.html'}]),
+ topic('privacy','Konto','Warum verschwindet die Anzeige nach einem Kontowechsel?','Bei Kontowechsel, Offline-Zustand oder pausierter Ansicht werden private Ergebnisse entfernt. Lade den Verlauf nach deiner Rückkehr ausdrücklich erneut. Die Daten des anderen Betriebs werden nicht übernommen.'),
+ topic('invoice','Rechnungen','Ist eine Vorschau bereits eine Rechnung?','Eine Rechnungsvorschau und ein gedruckter Vorgangsverlauf sind keine ausgestellte Rechnung. Die Windows-Prüfung zeigt historische Rechnungsdaten und einen gekennzeichneten Vorschau-Download. Eine erfasste Zahlung allein bestätigt weder Rechnungsausstellung noch Lizenzfreigabe.',[{label:'Windows-Vorgänge öffnen',href:'/shop/download-history.html'}]),
+ topic('qr','Rechnungen','Was öffnet der QR-Code einer Rechnungsvorschau?','Der QR-Code führt zur geschützten Vorgangsprüfung. Er enthält keine Anmeldung und keinen Zahlungsnachweis. Zum Lesen brauchst du das passende bestehende Konto des Betriebs.'),
+ topic('marketplace','Produkte','Wo finde ich Hardware und Zubehör?','Diese Kategorien sind vorbereitet. Es gibt noch keine freigeschalteten Angebote. Anbieterregistrierung, Versandabläufe und Zahlungsaufteilung werden separat vorbereitet; es wird kein verfügbarer Artikel oder Preis zugesagt.'),
+ ...Object.entries(checkoutStatuses).map(([id,s])=>topic('status-'+id,'Vorgänge',s.title,s.detail,[{label:'Aufgezeichneten Status prüfen',href:'/shop/order-history.html'}]))
+]);
+const normalize=value=>String(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('de-DE');
+export function filterHelp(query='',category='Alle'){
+ if(!helpCategories.includes(category))return [];
+ const words=normalize(String(query).slice(0,150)).trim().split(/\s+/).filter(Boolean);
+ return helpTopics.filter(t=>(category==='Alle'||t.category===category)&&words.every(w=>normalize(`${t.title} ${t.text} ${t.category}`).includes(w)));
+}
+
+export function helpTopicFromHash(hash){const m=typeof hash==='string'&&/^#topic=([a-z0-9-]{1,80})$/.exec(hash);return m&&helpTopics.some(t=>t.id===m[1])?m[1]:null;}
+export function helpHrefForStatus(status){if(!Object.hasOwn(checkoutStatuses,status))throw Error('INVALID_STATUS');return '/shop/help.html#topic=status-'+status;}

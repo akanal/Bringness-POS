@@ -1,0 +1,38 @@
+{
+  "repository": "akanal/Bringness-POS",
+  "commit": "1da9637b77ffb1589f0957f152b1720af9c399ea",
+  "inspectionDate": "2026-10-24",
+  "deployedRevisionVerified": false,
+  "files": {
+    "server/start.js": "5c536d9e056c9d3d22df3724cab85e8f38cfc107",
+    ".github/workflows/netcup-operations.yml": "ad6ae409ca47651d920b3a46d203cfb4d3535233",
+    "ops/select-operation.js": "6baf0567eb8a3f7e0b66d913a137d54c64056979"
+  },
+  "matchingSharedImports": {
+    "server/provider-money.js": "307847212d9ee6c6b1d51b67a1a9731aef74493a",
+    "server/mollie-request.js": "24ee89364b38fd0bd262822bf588a3ab8d1c4312",
+    "server/http-body.js": "9086befce5b9baabcbe85e54eb575e3908ec0fdb",
+    "server/billing-quote.js": "76ca9bb489eebb71ee8a1e0bd5c125ffafb8e04d"
+  },
+  "startupSharedInspection": {
+    "inspectionDate": "2026-10-25",
+    "ref": "main",
+    "deployedRevisionVerified": false,
+    "scope": "individual blobs only, not a pinned whole-tree or deployed revision",
+    "files": {
+      "server/billing-quote.js": "76ca9bb489eebb71ee8a1e0bd5c125ffafb8e04d",
+      "server/module-catalog.js": "99243cab3a79344a413926bac954b9990a680842",
+      "server/password-policy.js": "c495311da2c0b35365233d7aea0f4a1a35a7cc45",
+      "server/secret-derivation.js": "edf9c4530ee91a8034bea8e6e0228748daf8c115"
+    }
+  },
+  "shopBrandInspection": {
+    "inspectionDate": "2026-10-25",
+    "ref": "main",
+    "deployedRevisionVerified": false,
+    "files": {
+      "server/start.js": "5c536d9e056c9d3d22df3724cab85e8f38cfc107",
+      "apps/web/public/brand-logo.js": "f99d2f12adcd199f3f97b0c587340fbd39900663"
+    }
+  }
+}

@@ -16,6 +16,10 @@ export async function reserveCheckout(pool,user,plan,approve){
   await c.query('BEGIN');
   await c.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE',[user.company_id]);
   const slot=base(plan.code)?'base':plan.code;
+  if(base(plan.code)){
+   const installed=(await c.query("SELECT to_regclass('shop_order_drafts') IS NOT NULL AS installed")).rows[0]?.installed;
+   if(installed&&(await c.query("SELECT 1 FROM shop_order_drafts WHERE company_id=$1 AND status='draft' LIMIT 1",[user.company_id])).rows.length){await c.query('ROLLBACK');return conflict('Es gibt einen offenen Shop-Entwurf. Bitte dort fortfahren oder ihn ausdrücklich verwerfen.','SHOP_DRAFT_PENDING')}
+  }
   const owned=await c.query(`SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id
    WHERE ce.company_id=$1 AND (bp.id=$2 OR ($3 AND bp.code IN ('pos_base_monthly','download_license','restaurant_monthly')))
    AND (ce.status='active' OR (ce.status='canceled' AND (ce.current_period_end IS NULL OR ce.current_period_end>now()))) LIMIT 1`,[user.company_id,plan.id,base(plan.code)]);

@@ -1,0 +1,24 @@
+/* Agreed shop palette. Change these tokens centrally; do not recolour individual states. */
+:root {
+ --shop-neutral-text:#374151; --shop-neutral-bg:#f3f4f6; --shop-neutral-border:#6b7280;
+ --shop-info-text:#1e40af; --shop-info-bg:#eff6ff; --shop-info-border:#2563eb;
+ --shop-warning-text:#92400e; --shop-warning-bg:#fffbeb; --shop-warning-border:#b45309;
+ --shop-error-text:#991b1b; --shop-error-bg:#fef2f2; --shop-error-border:#dc2626;
+ --shop-success-text:#166534; --shop-success-bg:#f0fdf4; --shop-success-border:#15803d;
+}
+.shop-status[data-tone="neutral"] {--status-text:var(--shop-neutral-text);--status-bg:var(--shop-neutral-bg);--status-border:var(--shop-neutral-border)}
+.shop-status[data-tone="info"] {--status-text:var(--shop-info-text);--status-bg:var(--shop-info-bg);--status-border:var(--shop-info-border)}
+.shop-status[data-tone="warning"] {--status-text:var(--shop-warning-text);--status-bg:var(--shop-warning-bg);--status-border:var(--shop-warning-border)}
+.shop-status[data-tone="error"] {--status-text:var(--shop-error-text);--status-bg:var(--shop-error-bg);--status-border:var(--shop-error-border)}
+.shop-status[data-tone="success"] {--status-text:var(--shop-success-text);--status-bg:var(--shop-success-bg);--status-border:var(--shop-success-border)}
+.shop-status {
+ color:var(--status-text);background:var(--status-bg);border:1px solid var(--status-border);
+ border-left-width:4px;border-radius:6px;padding:8px 12px;line-height:1.5;overflow-wrap:anywhere;
+}
+.shop-status:empty {display:none}
+@media print {
+ .shop-status {color:#000!important;background:#fff!important;border-color:#000!important;box-shadow:none!important}
+}
+@media (forced-colors:active) {
+ .shop-status {color:CanvasText;background:Canvas;border-color:CanvasText;forced-color-adjust:auto}
+}
