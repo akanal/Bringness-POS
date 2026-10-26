@@ -1,3 +1,4 @@
+import {mountOfferImport} from './offer-import-ui.js';
 import {readSellerOffer,sendSellerCommand,pendingSellerRequest,sellerIdentity,onSellerPrivacy,sellerMessage} from './seller-account-client.js';
 import {offerId} from './offer-policy.js';
 import {offerHints,filterOffers,kindLabels} from './offer-review.js';
@@ -6,6 +7,7 @@ import {validateOffer,loadOffers,saveOffers} from './offer-drafts.js?v=cloud-202
 import {preparationItems,singleOfferExport} from './offer-workspace.js';
 import {money} from './catalog.js';
 const $=id=>document.getElementById(id),form=$('offer-form');
+let importUI;
 let rows=[],selected=null,dirty=false,storage=null,cloudState=null,cloudEpoch=0,cloudOp=0,cloudBusy=false;
 let cloudDisabled=new Map();
 const status=message=>$('seller-status').textContent=message;
@@ -22,7 +24,7 @@ function renderList(){
  const hints=offerHints(row,rows),badge=element('span',hints.length?`${hints.length} Hinweise`:'Entwurf');badge.className=hints.length?'offer-badge offer-hints':'offer-badge';
  article.append(element('h3',row.title),badge,element('p',`${kindLabels[row.kind]} · ${row.category}`),element('p',`${money(row.netCents)} netto · ${row.tax==='review'?'Steuer offen':row.tax+' % MwSt.'}`));if(row.sku)article.append(element('p','Artikelnummer: '+row.sku));if(row.kind==='physical')article.append(element('p','Bestand: '+row.stock));article.append(open);$('offer-list').append(article);}
  if(!matches.length)$('offer-list').append(element('p',rows.length?'Keine Entwürfe für diese Filter. Setze die Filter zurück oder wähle einen anderen Suchbegriff.':'Noch keine Angebotsentwürfe gespeichert.'));
- $('export-offers').disabled=!rows.length;
+ $('export-offers').disabled=!rows.length;importUI?.refresh();
 }
 function leaveEditor(){return !dirty||window.confirm('Ungespeicherte Änderungen verwerfen?');}
 function fill(row=null,{cloud=null}={}){cloudEpoch++;cloudState=cloud;form.hidden=false;$('cloud-editor-resume').hidden=true;form.reset();selected=cloud?null:row?.id||null;for(const key of ['title','category','kind','price','tax','stock','gtin','condition','sku','description','delivery','fulfilment'])if(row)form.elements[key].value=row[key];dirty=false;$('editor-save-state').textContent=row?'Gespeicherter Entwurf geöffnet.':'Neuer Entwurf – noch nicht gespeichert.';$('offer-checklist').hidden=true;$('offer-preview').hidden=true;$('cloud-editor-status').textContent=cloud?`Kontoentwurf · Stand ${cloud.revision}${cloud.sourceRevision?' · Inhalt aus Stand '+cloud.sourceRevision:''}${cloud.state==='archived'?' · archiviert, bitte zuerst wiederherstellen':''}`:'Lokaler Entwurf. Übertragung ins Betriebskonto nur über die eigene Schaltfläche.';$('delete-offer').disabled=!selected;$('duplicate-offer').disabled=!selected;syncKind();previewPrice();renderList();updateFormTools();}
@@ -42,25 +44,10 @@ $('check-offer').onclick=()=>{if(!form.reportValidity())return;try{const row={..
 function previewCurrent(){if(form.hidden)return false;if(!form.reportValidity())return;try{const row=read(),box=$('preview-content');box.replaceChildren(element('h3',row.title),element('p',row.category+' · Entwurf'),element('p',row.description),element('p',`${money(row.netCents)} netto · ${row.tax==='review'?'Steuer noch zu prüfen':row.tax+' % MwSt.'}`),element('p',row.kind==='physical'?`Bestand: ${row.stock}\n${row.delivery}`:row.fulfilment));if(row.sku)box.append(element('p','Artikelnummer: '+row.sku));if(row.gtin)box.append(element('p','GTIN: '+row.gtin));$('offer-preview').hidden=false;$('offer-preview').scrollIntoView({behavior:'smooth',block:'start'});status('Vorschau aus den aktuellen Formularangaben. Noch nicht veröffentlicht.');return true;}catch(error){status(error.message);return false;}}
 $('preview-offer').onclick=()=>previewCurrent();
 $('export-offers').onclick=()=>{if(!rows.length)return;const payload={format:'bringness-offer-drafts',version:1,exportedAt:new Date().toISOString(),publication:'draft-only',offers:rows};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='bringness-angebotsentwuerfe.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Export der gespeicherten Entwürfe gestartet. Ungespeicherte Formularänderungen sind nicht enthalten.');};
-let importBusy=false;
-$('import-offers').addEventListener('change',async()=>{
- if(importBusy)return;
- const file=$('import-offers').files?.[0];if(!file)return;
- importBusy=true;$('import-offers').disabled=true;
- try{
-  if(file.size>600000)throw Error('Importdatei ist größer als 600 KB.');
-  const value=JSON.parse(await file.text());
-  if(!value||value.format!=='bringness-offer-drafts'||value.version!==1||value.publication!=='draft-only'||!Array.isArray(value.offers)||!value.offers.length||value.offers.length>50)throw Error('Keine unterstützte Bringness-Entwurfsdatei.');
-  const imported=value.offers.map(row=>({...validateOffer(row),id:'offer-'+crypto.randomUUID()}));
-  if(rows.length+imported.length>50)throw Error('Import würde die Grenze von 50 Entwürfen überschreiten.');
-  if(!window.confirm(`${imported.length} Entwürfe als neue Kopien ergänzen?`))return;
-  if(persist([...rows,...imported])){renderList();status(`${imported.length} Entwürfe ergänzt. Bestehende Entwürfe und das geöffnete Formular bleiben erhalten. Noch nichts veröffentlicht.`);}
- }catch{status('Import nicht übernommen. Prüfe Dateiformat, Pflichtangaben und die Grenze von 50 Entwürfen.');}
- finally{importBusy=false;$('import-offers').disabled=false;$('import-offers').value='';}
-});
-window.addEventListener('beforeunload' ,event=>{if(dirty||cloudBusy){event.preventDefault();event.returnValue='';}});
+importUI=mountOfferImport({host:$('offer-import-host'),input:$('import-offers'),getRows:()=>rows,isBlocked:()=>cloudBusy,commit:next=>{if(cloudBusy)return false;if(!persist(next))return false;renderList();status(storage?'Ausgewählte Entwürfe als neue lokale Kopien gespeichert. Konto und geöffnetes Formular unverändert.':'Auswahl im Arbeitsspeicher ergänzt. Browserspeicher nicht verfügbar; bitte vor dem Neuladen exportieren.');return true;}});
+window.addEventListener('beforeunload' ,event=>{if(dirty||cloudBusy||importUI?.hasSelection()){event.preventDefault();event.returnValue='';}});
 
-function cloudControls(busy){cloudBusy=busy;if(busy){cloudDisabled=new Map();for(const control of document.querySelectorAll('button,input,select,textarea')){cloudDisabled.set(control,control.disabled);control.disabled=true;}}else{for(const [control,disabled] of cloudDisabled)control.disabled=disabled;cloudDisabled.clear();syncKind();$('delete-offer').disabled=!selected;$('duplicate-offer').disabled=!selected;$('cloud-editor-save').disabled=!!cloudState&&form.hidden;}}
+function cloudControls(busy){cloudBusy=busy;if(busy){cloudDisabled=new Map();for(const control of document.querySelectorAll('button,input,select,textarea')){cloudDisabled.set(control,control.disabled);control.disabled=true;}}else{for(const [control,disabled] of cloudDisabled)control.disabled=disabled;cloudDisabled.clear();syncKind();$('delete-offer').disabled=!selected;$('duplicate-offer').disabled=!selected;$('cloud-editor-save').disabled=!!cloudState&&form.hidden;}importUI?.refresh();}
 async function pendingCloud(){try{$('cloud-editor-retry').hidden=!(await pendingSellerRequest());}catch(error){$('cloud-editor-status').textContent=sellerMessage(error);}}
 async function cloudAction(fn){if(cloudBusy)return;const op=++cloudOp,ticket=cloudEpoch;cloudControls(true);$('cloud-editor-status').textContent='Kontozugriff läuft …';try{await fn(()=>op===cloudOp&&ticket===cloudEpoch);}catch(error){if(op===cloudOp)$('cloud-editor-status').textContent=sellerMessage(error);}finally{if(op===cloudOp){cloudControls(false);await pendingCloud();}}}
 const historical=()=>/^#cloud=(offer-[a-f0-9-]{36})(?:&revision=([1-9]\d{0,8}))?$/i.exec(location.hash);
@@ -70,7 +57,7 @@ $('cloud-editor-load').onclick=()=>{if(!leaveEditor())return;cloudAction(async c
 $('cloud-editor-save').onclick=()=>{if(!form.reportValidity())return;let offer;try{offer=read();}catch(error){$('cloud-editor-status').textContent=error.message;return;}cloudAction(async current=>{const binding=await sellerIdentity();if(cloudState&&cloudState.binding!==binding)throw {code:'ACCOUNT_CHANGED'};if(cloudState?.state==='archived')throw {code:'OFFER_ARCHIVED'};const id=cloudState?.id||selected||'offer-'+crypto.randomUUID(),result=await sendSellerCommand({id,expectedRevision:cloudState?.revision||0,requestId:crypto.randomUUID(),action:'save',offer});if(!current())return;cloudState={id:result.id,revision:result.revision,state:result.state,binding};$('cloud-offer-id').value=result.id;$('cloud-editor-status').textContent=`Dauerhaft im Betriebskonto gespeichert · Stand ${result.revision}. Noch nicht veröffentlicht.`;dirty=false;$('editor-save-state').textContent='Aktuelle Formularangaben im Betriebskonto gespeichert. Lokale Liste unverändert.';});};
 $('cloud-editor-retry').onclick=()=>cloudAction(async current=>{const command=await pendingSellerRequest();if(!command)return;const result=await sendSellerCommand(command,{retry:true});if(!current())return;if(cloudState?.id===result.id)cloudState.revision=result.revision;$('cloud-editor-status').textContent='Ursprüngliche Anfrage bestätigt. Bitte den Kontoentwurf ausdrücklich laden, um den gespeicherten Inhalt zu prüfen.';});
 $('cloud-editor-resume').onclick=()=>cloudAction(async current=>{if(!cloudState)return;const binding=await sellerIdentity();if(binding!==cloudState.binding)throw {code:'ACCOUNT_CHANGED'};const result=await readSellerOffer(cloudState.id);if(!current())return;form.hidden=false;$('cloud-editor-resume').hidden=true;$('cloud-editor-status').textContent=result.revision===cloudState.revision?'Zugang geprüft. Deine Formularänderungen sind weiterhin vorhanden.':'Ein neuerer Kontostand liegt vor. Deine Formularänderungen bleiben erhalten; bitte vor dem Speichern vergleichen.';});
-onSellerPrivacy(reason=>{cloudOp++;cloudEpoch++;cloudControls(false);if(reason==='account'){if(cloudState){fill();$('preview-content').replaceChildren();$('offer-checklist-items').replaceChildren();}$('cloud-editor-status').textContent='Kontowechsel: private Kontoangaben entfernt. Bitte ausdrücklich neu laden.';}else if(cloudState){$('offer-preview').hidden=true;$('offer-checklist').hidden=true;form.hidden=true;$('cloud-editor-save').disabled=true;$('cloud-editor-resume').hidden=false;$('cloud-editor-status').textContent='Kontoansicht pausiert. Formularänderungen bleiben im Speicher; Zugang vor dem Weiterbearbeiten erneut prüfen.';}});
+onSellerPrivacy(reason=>{importUI?.clear();cloudOp++;cloudEpoch++;cloudControls(false);if(reason==='account'){if(cloudState){fill();$('preview-content').replaceChildren();$('offer-checklist-items').replaceChildren();}$('cloud-editor-status').textContent='Kontowechsel: private Kontoangaben entfernt. Bitte ausdrücklich neu laden.';}else if(cloudState){$('offer-preview').hidden=true;$('offer-checklist').hidden=true;form.hidden=true;$('cloud-editor-save').disabled=true;$('cloud-editor-resume').hidden=false;$('cloud-editor-status').textContent='Kontoansicht pausiert. Formularänderungen bleiben im Speicher; Zugang vor dem Weiterbearbeiten erneut prüfen.';}});
 const countedFields=['title','description','sku','gtin','delivery','fulfilment'];
 for(const name of countedFields){const input=form.elements[name],counter=element('p','');counter.id='count-'+name;counter.className='offer-character-count';input.after(counter);input.setAttribute('aria-describedby',((input.getAttribute('aria-describedby')||'')+' '+counter.id).trim());}
 function updateFormTools(){
