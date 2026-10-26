@@ -10,7 +10,7 @@ Owner approved the next proposed twenty points and explicitly deferred the unfin
 | 4 | Favorite notes | Private per-product notes, up to 1000 characters, session-only. |
 | 5 | Share lists | Clean public number-only link; names and notes excluded. Recipient views selection without changing own favorites/cart. |
 | 6 | Share comparisons | Up to three public products, independent comparison view, distinct billing periods. |
-| 7 | Unavailable favorites | Named lists retain missing IDs and label unavailable items; unpriced current products marked not orderable. |
+| 7 | Unavailable favorites | Default favorites and named lists retain missing IDs and label unavailable items; unpriced current products marked not orderable. |
 | 8 | Hide results | Session-local hide with restore-all; catalogue remains unchanged. |
 | 9 | Grid/list view | Existing feature retained and checked; not counted as new implementation. |
 | 10 | Remember filters/view | Sanitized public browse state in browser localStorage; explicit incoming links take priority. No coordinates or tokens. |
