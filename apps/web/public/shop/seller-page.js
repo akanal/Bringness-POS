@@ -9,7 +9,7 @@ const $=id=>document.getElementById(id),form=$('offer-form');
 let rows=[],selected=null,dirty=false,storage=null,cloudState=null,cloudEpoch=0,cloudOp=0,cloudBusy=false;
 let cloudDisabled=new Map();
 const status=message=>$('seller-status').textContent=message;
-mountCategorySelect($('offer-category'));mountCategorySelect($('offer-list-category'),{includeAll:true});
+mountCategorySelect($('offer-category'));const categoryPrompt=element('option','Bitte Kategorie auswählen');categoryPrompt.value='';categoryPrompt.defaultSelected=true;$('offer-category').prepend(categoryPrompt);mountCategorySelect($('offer-list-category'),{includeAll:true});
 try{storage=window.sessionStorage;rows=loadOffers(storage);}catch{status('Gespeicherte Entwürfe konnten nicht gelesen werden. Vorhandene Daten werden nicht überschrieben. Exportiere neue Entwürfe als Datei.');storage=null;}
 function element(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
 function syncKind(){const physical=form.elements.kind.value==='physical';$('physical-fields').hidden=!physical;$('fulfilment-fields').hidden=physical;form.elements.stock.required=physical;form.elements.delivery.required=physical;form.elements.fulfilment.required=!physical;form.elements.condition.disabled=!physical;}
