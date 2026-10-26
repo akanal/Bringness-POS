@@ -17,7 +17,7 @@ try{
  });
  await new Promise(resolve=>proxy.listen(0,'127.0.0.1',resolve));
  const origin='https://127.0.0.1:'+proxy.address().port;
- browser=await chromium.launch({headless:true});
+ browser=await chromium.launch({headless:true,...(process.env.PREVIEW_TEST_BROWSER_CHANNEL==='chrome'?{channel:'chrome'}:{})});
  const context=await browser.newContext({ignoreHTTPSErrors:true,httpCredentials:{username:'bringness-preview',password:env.PREVIEW_ACCESS_PASSWORD}});
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(origin+'/pos/');await page.fill('#email','preview@example.test');await page.fill('#password',env.PREVIEW_OWNER_PASSWORD);await page.click('#authSubmit');await page.waitForSelector('#workspace.show');
