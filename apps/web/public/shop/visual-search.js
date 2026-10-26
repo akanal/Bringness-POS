@@ -1,10 +1,11 @@
+import {listingNumber} from './listing-reference.js';
 import {products} from './catalog.js?v=categories-20261026';
 const formats=['qr_code','ean_13','ean_8','upc_a','itf'];
 export function validGtin(value){if(typeof value!=='string'||! /^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(value))return false;const digits=[...value].map(Number),check=digits.pop();return (10-digits.reverse().reduce((sum,n,i)=>sum+n*(i%2?1:3),0)%10)%10===check;}
 export function resolveScan(value,{catalog=products,origin='https://bringness.de'}={}){
  if(typeof value!=='string'||value.length>2048)return {kind:'unsupported',matches:[]};const code=value.trim();
- if(/^https?:\/\//i.test(code)){try{const u=new URL(code),allowed=['product','q','category','period','priced','sort','view'];if(u.origin!==origin||u.username||u.password||!['/shop/','/shop/index.html'].includes(u.pathname)||u.hash||[...u.searchParams.keys()].some(k=>!allowed.includes(k)||u.searchParams.getAll(k).length!==1))return {kind:'unsupported',matches:[]};const p=catalog.find(p=>p.id===u.searchParams.get('product'));return p?{kind:'product',matches:[p]}:{kind:'unsupported',matches:[]};}catch{return {kind:'unsupported',matches:[]};}}
- const direct=catalog.filter(p=>p.id===code||(typeof p.sku==='string'&&p.sku.length>0&&p.sku===code));if(direct.length)return {kind:'product',matches:direct.slice(0,8)};
+ if(/^https?:\/\//i.test(code)){try{const u=new URL(code),allowed=['ad','product','q','category','period','priced','sort','view'];if(u.origin!==origin||u.username||u.password||!['/shop/','/shop/index.html'].includes(u.pathname)||u.hash||[...u.searchParams.keys()].some(k=>!allowed.includes(k)||u.searchParams.getAll(k).length!==1))return {kind:'unsupported',matches:[]};const p=u.searchParams.has('ad')?catalog.find(p=>p.listingNumber===listingNumber(u.searchParams.get('ad'))):catalog.find(p=>p.id===u.searchParams.get('product'));return p?{kind:'product',matches:[p]}:{kind:'unsupported',matches:[]};}catch{return {kind:'unsupported',matches:[]};}}
+ const direct=catalog.filter(p=>p.listingNumber===code||p.id===code||(typeof p.sku==='string'&&p.sku.length>0&&p.sku===code));if(direct.length)return {kind:'product',matches:direct.slice(0,8)};
  if(!validGtin(code))return {kind:'unsupported',matches:[]};return {kind:'gtin',code,matches:catalog.filter(p=>validGtin(p.gtin)&&p.gtin.padStart(14,'0')===code.padStart(14,'0')).slice(0,8)};
 }
 export function validatePhoto(file){if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('PHOTO_TYPE');if(!Number.isSafeInteger(file.size)||file.size<1||file.size>8000000)throw Error('PHOTO_SIZE');}

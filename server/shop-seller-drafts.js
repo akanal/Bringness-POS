@@ -1,3 +1,4 @@
+import {listingNumber} from '../apps/web/public/shop/listing-reference.js';
 import {sellerListFilters} from '../apps/web/public/shop/seller-list-policy.js';
 import {categories,categoryMatches} from '../apps/web/public/shop/departments.js';
 import crypto from 'node:crypto';
@@ -7,10 +8,16 @@ const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-
 const error=code=>{throw shopError(code);};
 export async function migrateSellerDrafts(db){
  await db.query(`CREATE TABLE IF NOT EXISTS shop_seller_offers(company_id uuid NOT NULL REFERENCES companies(id),id text NOT NULL CHECK(length(id)=42),revision integer NOT NULL CHECK(revision>0),state text NOT NULL CHECK(state IN ('draft','archived')),payload jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(company_id,id))`);
+ // Database-owned, globally unique identity, backfilled once for existing private drafts.
+ await db.query(`ALTER TABLE shop_seller_offers ADD COLUMN IF NOT EXISTS listing_number bigint GENERATED ALWAYS AS IDENTITY (START WITH 1000001)`);
+ await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS shop_seller_listing_number ON shop_seller_offers(listing_number)`);
+ await db.query(`CREATE OR REPLACE FUNCTION shop_seller_keep_listing_number() RETURNS trigger LANGUAGE plpgsql AS $body$ BEGIN IF NEW.listing_number IS DISTINCT FROM OLD.listing_number THEN RAISE EXCEPTION 'listing number is immutable'; END IF; RETURN NEW; END $body$`);
+ await db.query(`DROP TRIGGER IF EXISTS shop_seller_listing_immutable ON shop_seller_offers`);
+ await db.query(`CREATE TRIGGER shop_seller_listing_immutable BEFORE UPDATE OF listing_number ON shop_seller_offers FOR EACH ROW EXECUTE FUNCTION shop_seller_keep_listing_number()`);
  await db.query(`CREATE TABLE IF NOT EXISTS shop_seller_requests(company_id uuid NOT NULL REFERENCES companies(id),request_id uuid NOT NULL,digest text NOT NULL CHECK(length(digest)=64),result jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(company_id,request_id))`);
  await db.query(`CREATE TABLE IF NOT EXISTS shop_seller_offer_history(company_id uuid NOT NULL,id text NOT NULL,revision integer NOT NULL,action text NOT NULL CHECK(action IN ('save','archive','restore')),state text NOT NULL,payload jsonb NOT NULL,actor_id uuid NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(company_id,id,revision),FOREIGN KEY(company_id,id) REFERENCES shop_seller_offers(company_id,id))`);
 }
-function present(row){return {id:row.id,revision:row.revision,state:row.state,offer:validateOffer(row.payload),createdAt:new Date(row.created_at).toISOString(),updatedAt:new Date(row.updated_at).toISOString(),canPublish:false};}
+function present(row){return {id:row.id,listingNumber:listingNumber(String(row.listing_number)),revision:row.revision,state:row.state,offer:validateOffer(row.payload),createdAt:new Date(row.created_at).toISOString(),updatedAt:new Date(row.updated_at).toISOString(),canPublish:false};}
 export function sellerCommand(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['id','requestId','expectedRevision','action','offer'].includes(k))||!offerId(value.id)||!uuid(value.requestId)||!Number.isSafeInteger(value.expectedRevision)||value.expectedRevision<0||value.expectedRevision>2147483646||!['save','archive','restore'].includes(value.action))error('INVALID_REQUEST');
  if(value.action!=='save'&&(value.expectedRevision===0||Object.hasOwn(value,'offer')))error('INVALID_REQUEST');
@@ -32,7 +39,7 @@ export async function writeSellerDraft(pool,{token,command:input}){
  const command=sellerCommand(input),digest=crypto.createHash('sha256').update(JSON.stringify(command)).digest('hex');
  return transaction(pool,token,true,async(db,company,actorId)=>{
   const old=(await db.query('SELECT digest,result FROM shop_seller_requests WHERE company_id=$1 AND request_id=$2',[company,command.requestId])).rows[0];
-  if(old){if(old.digest!==digest)error('REQUEST_CONFLICT');return {...old.result,replay:true};}
+  if(old){if(old.digest!==digest)error('REQUEST_CONFLICT');const reference=(await db.query('SELECT listing_number FROM shop_seller_offers WHERE company_id=$1 AND id=$2',[company,old.result.id])).rows[0];if(!reference)error('OFFER_NOT_FOUND');return {...old.result,listingNumber:listingNumber(String(reference.listing_number)),replay:true};}
   const row=(await db.query('SELECT * FROM shop_seller_offers WHERE company_id=$1 AND id=$2 FOR UPDATE',[company,command.id])).rows[0];
   if((row?.revision??0)!==command.expectedRevision)error('REVISION_CONFLICT');
   if(!row&&command.action!=='save')error('OFFER_NOT_FOUND');
@@ -69,7 +76,7 @@ export async function listSellerDrafts(pool,{token,query='',state='draft',catego
  const words=filters.query?filters.query.toLocaleLowerCase('de').split(' '):[];
  return transaction(pool,token,false,async(db,company)=>{
   const where=`company_id=$1 AND state=$2
-   AND NOT EXISTS(SELECT 1 FROM unnest($3::text[]) word WHERE strpos(lower(coalesce(payload->>'title','')||' '||coalesce(payload->>'category','')||' '||coalesce(payload->>'sku','')||' '||coalesce(payload->>'gtin','')||' '||coalesce(payload->>'description','')||' '||coalesce(payload->>'delivery','')||' '||coalesce(payload->>'fulfilment','')),word)=0)
+   AND NOT EXISTS(SELECT 1 FROM unnest($3::text[]) word WHERE strpos(lower(listing_number::text||' '||coalesce(payload->>'title','')||' '||coalesce(payload->>'category','')||' '||coalesce(payload->>'sku','')||' '||coalesce(payload->>'gtin','')||' '||coalesce(payload->>'description','')||' '||coalesce(payload->>'delivery','')||' '||coalesce(payload->>'fulfilment','')),word)=0)
    AND (payload->>'category')=ANY($4::text[])
    AND ($5='all' OR payload->>'kind'=$5)
    AND ($6='all' OR payload->>'kind'='physical' AND (($6='empty' AND coalesce(payload->>'stock','')~'^0+$') OR ($6='available' AND coalesce(payload->>'stock','')~'^[0-9]{1,7}$' AND coalesce(payload->>'stock','')!~'^0+$')))`;

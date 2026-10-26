@@ -1,0 +1,5 @@
+// Public ad numbers are strings, separate from editable merchant SKU and EAN.
+export function listingNumber(value){return typeof value==='string'&&/^[1-9]\d{5,18}$/.test(value)&&BigInt(value)<=9223372036854775807n?value:null;}
+export function listingQuery(value){if(typeof value!=='string'||value.length>150)return null;const match=/^(?:(?:Anzeige|Anzeigennummer|Anzeigen-Nr\.?)\s*:?\s*)?([1-9]\d{5,18})$/i.exec(value.trim());return match?listingNumber(match[1]):null;}
+export function listingLink(product,href){const number=listingNumber(product?.listingNumber);if(!number)throw Error('INVALID_LISTING_NUMBER');const base=new URL(href);if(!['http:','https:'].includes(base.protocol))throw Error('INVALID_PUBLIC_ORIGIN');return new URL('/shop/?ad='+number,base.origin).href;}
+export function validateListingCatalog(catalog){const used=new Set();for(const product of catalog){const number=listingNumber(product.listingNumber);if(!number||BigInt(number)>999999n||used.has(number))throw Error('MISSING_OR_DUPLICATE_LISTING_NUMBER');used.add(number);}return catalog;}

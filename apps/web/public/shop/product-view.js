@@ -1,3 +1,4 @@
+import {mountListingShare} from './listing-share.js';
 import {products,money} from './catalog.js';
 const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 const button=(text,fn,cls='outline')=>{const e=node('button',text,cls);e.type='button';e.addEventListener('click',fn);return e;};
@@ -16,7 +17,7 @@ export function mountProductView({product:p,host,onAdd,onSave,isSaved,onCompare,
  const layout=node('div',undefined,'product-detail-layout'),art=node('div',undefined,'detail-art');
  art.setAttribute('aria-hidden','true');art.append(node('span','bringness'),node('strong',p.id==='pos-online'?'POS\nOnline':p.id==='pos-download'?'POS\nWindows':'AI'),node('span','Software für deinen Betrieb'));
  const info=node('section',undefined,'product-overview'),title=node('h2',p.name);title.id='detail-title';
- info.append(node('p',p.tag,'eyebrow'),title,node('p',p.description));
+ info.append(node('p',p.tag,'eyebrow'),title);mountListingShare({product:p,host:info});info.append(node('p',p.description));
  const features=node('ul',undefined,'product-feature-list');p.features.forEach(text=>features.append(node('li',text)));info.append(features);
  const tabs=node('nav',undefined,'product-section-nav');tabs.setAttribute('aria-label','Produktabschnitte');
  for(const [id,label]of [['facts','Produktmerkmale'],['questions','Fragen & Antworten']])tabs.append(button(label,()=>host.querySelector('#detail-'+id)?.scrollIntoView?.({behavior:'smooth',block:'start'})));
