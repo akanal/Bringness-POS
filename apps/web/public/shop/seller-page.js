@@ -71,3 +71,13 @@ $('cloud-editor-resume').onclick=()=>cloudAction(async current=>{if(!cloudState)
 onSellerPrivacy(reason=>{cloudOp++;cloudEpoch++;cloudControls(false);if(reason==='account'){if(cloudState){fill();$('preview-content').replaceChildren();$('offer-checklist-items').replaceChildren();}$('cloud-editor-status').textContent='Kontowechsel: private Kontoangaben entfernt. Bitte ausdrücklich neu laden.';}else if(cloudState){$('offer-preview').hidden=true;$('offer-checklist').hidden=true;form.hidden=true;$('cloud-editor-save').disabled=true;$('cloud-editor-resume').hidden=false;$('cloud-editor-status').textContent='Kontoansicht pausiert. Formularänderungen bleiben im Speicher; Zugang vor dem Weiterbearbeiten erneut prüfen.';}});
 fill();pendingCloud();
 
+
+// A proposal is untrusted text, never a save or a publication command.
+try {
+ const key='bringness.assistant.offer-proposal.v1',raw=sessionStorage.getItem(key),p=raw&&JSON.parse(raw);
+ if(p&&typeof p.title==='string'&&p.title.trim()&&p.title.length<=120&&typeof p.description==='string'&&p.description.trim()&&p.description.length<=4000&&Number.isFinite(p.createdAt)&&Date.now()-p.createdAt>=0&&Date.now()-p.createdAt<86400000){
+  const box=$('assistant-proposal');box.hidden=false;
+  $('assistant-apply').onclick=()=>{if(cloudBusy||form.hidden)return;if((form.elements.title.value||form.elements.description.value)&&!window.confirm('Titel und Beschreibung im geöffneten Entwurf durch den Assistenten-Vorschlag ersetzen?'))return;form.elements.title.value=p.title;form.elements.description.value=p.description;form.dispatchEvent(new Event('input',{bubbles:true}));sessionStorage.removeItem(key);box.hidden=true;status('Text übernommen. Bitte prüfen und ausdrücklich speichern. Preis, Steuer und Bestand bleiben erhalten.');};
+  $('assistant-discard').onclick=()=>{sessionStorage.removeItem(key);box.hidden=true;};
+ }else if(raw)sessionStorage.removeItem(key);
+}catch{/* Unavailable session storage must never block the editor. */}
