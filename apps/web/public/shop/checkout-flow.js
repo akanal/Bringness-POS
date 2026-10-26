@@ -29,6 +29,7 @@ export function mountCheckout({draft,host,run,request,fingerprint,money,onAbando
   const amounts=create('dl');amounts.className='checkout-amounts';
   for(const [label,value]of [['Netto',o.snapshot.netCents],['19 % MwSt.',o.snapshot.vatCents],['Brutto',o.snapshot.grossCents]])amounts.append(create('dt',label),create('dd',money(value)));
   output.append(create('p',o.snapshot.period==='monthly'?'Abrechnung: monatlich':'Abrechnung: einmalig'),amounts,create('p','Zahlung und Lizenzaktivierung bleiben in dieser Shop-Vorschau gesperrt.'));
+  if(['prepared','open','uncertain','paid'].includes(o.status)){const payment=create('a','Zahlungsvorgang im TEST-Bereich öffnen');payment.href='/shop/payment.html#'+o.id;payment.className='button outline';payment.referrerPolicy='no-referrer';output.append(payment);}
   if(o.snapshot.productId==='pos-download'){const link=create('a','Rechnungsdaten und Kaufstatus prüfen');link.href=downloadReviewHref(o.id);link.className='button outline';link.referrerPolicy='no-referrer';output.append(link);}
   output.firstElementChild.scrollIntoView?.({block:'center'});
   if(o.status!=='prepared')return;
