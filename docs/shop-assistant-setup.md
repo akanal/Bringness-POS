@@ -1,0 +1,14 @@
+# Shop-Assistent auf Netcup aktivieren
+
+Der Schlüssel wird ausschließlich direkt in der Netcup-Serverkonsole eingegeben. Keine Schlüssel im Chat, in Screenshots, in GitHub-Dateien, im Browser-Code oder als Terminal-Kommandoargument speichern.
+
+1. Auf der OpenAI-Plattform einen Schlüssel für Bringness-Shop-Assistent erstellen und im Passwortmanager sichern. API-Abrechnung und Modellzugang müssen eingerichtet sein. Projektberechtigungen auf die benötigten Responses-Anfragen beschränken, sofern verfügbar. Keine pauschalen Kontorechte für einen Shop-Schlüssel vergeben.
+2. In der vorhandenen Netcup-Serverkonsole als Administrator anmelden. Es ist keine neue Serververbindung für die bestehende Veröffentlichung nötig: Der eingeschränkte automatische SSH-Zugang darf jedoch nur Status, Backup, Neustart und Deployment ausführen; er kann keine Geheimnisse ändern.
+3. Die geprüfte Datei ops/configure-shop-assistant.py aus der veröffentlichten Repository-Version auf den Server herunterladen und als root in einer interaktiven Konsole ausführen. Nicht curl direkt in eine Shell pipen. Das Programm fragt Modellkennung und Schlüssel ab; der Schlüssel wird unsichtbar eingegeben. Keine Schlüssel in Download-URLs oder Kommandoargumente einfügen.
+4. Das Programm ergänzt ausschließlich SHOP_ASSISTANT_API_KEY, SHOP_ASSISTANT_MODEL und SHOP_ASSISTANT_ENABLED in /opt/bringness-pos/config/app.env. Die bestehende Datei muss dem Administrator gehören, Rechte 600 besitzen und in einem nicht fremd beschreibbaren Verzeichnis liegen. Die drei Einstellungen ersetzen frühere Werte; andere Einstellungen bleiben erhalten. Vorher wird eine private Sicherung im selben Verzeichnis angelegt. Das Programm aktiviert keine Zahlung, ruft keinen Anbieter auf und verändert keine SSH-Rechte.
+5. Nach erfolgreichem Speichern die bestehende GitHub-Aktion Netcup operations mit deploy / pos ausführen. Ein einfacher Docker-Neustart übernimmt geänderte env-file-Werte nicht. Das Deployment liest sie beim Erstellen des neuen Containers ein und behält den vorherigen Container für einen Rückweg.
+6. Im Shop-Assistenten KI-Verfügbarkeit erneut prüfen. available:true bestätigt nur die geladene Konfiguration. Danach eine nicht vertrauliche Testfrage ausdrücklich senden, um Zugang, Abrechnung und Modell tatsächlich zu prüfen. Keine automatischen Testkosten durch das Konfigurationsprogramm.
+
+OpenAI-Modelle und Preise ändern sich; für diesen Assistenten wird ein für das Projekt freigeschaltetes Modell mit Responses und Structured Outputs benötigt. Die Modellkennung wird bewusst ausdrücklich eingegeben, nicht stillschweigend gewählt.
+
+Rückweg: Die eigene Sicherung mit Root-Rechten gezielt zurückspielen und erneut deploy / pos ausführen. Sicherungen enthalten Geheimnisse; niemals veröffentlichen. Alternativ SHOP_ASSISTANT_ENABLED=false in der geschützten Konfiguration setzen und erneut bereitstellen; die geführte Hilfe bleibt nutzbar.
