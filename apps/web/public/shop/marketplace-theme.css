@@ -135,3 +135,24 @@ input[type=checkbox] {accent-color:var(--shop-brand)}
 @media print {
  .brand .brand-wordmark {background:none;color:#17583c;filter:none;text-shadow:none}
 }
+
+/* Marketplace expansion requested from annotated screenshots, 2026-10-26. */
+.brand .brand-wordmark{position:relative;display:inline-block;padding-bottom:10px}
+.brand-arrow{position:absolute;left:8%;bottom:-1px;width:86%;height:17px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.hero{grid-template-columns:minmax(0,1fr);padding:38px 42px}
+.hero p:not(.eyebrow){max-width:720px}
+.department-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.department-grid button{padding:18px;min-width:0}
+.department-grid strong{font-size:17px}
+.header-search select{max-width:155px}
+.catalog-sidebar .filters{max-height:480px;overflow:auto;overscroll-behavior:contain}
+.list-view .card{grid-template-columns:140px minmax(0,1fr)}
+.list-view .product-art{min-height:140px;padding:18px;font-size:22px;align-items:center}
+.list-view .card-body{padding:16px 20px}
+.list-view .card p{margin:6px 0}
+.list-view .card .price{margin-top:4px;padding-top:4px}
+.list-view .card-actions{margin-top:10px}
+.list-view .product-tools{margin-top:8px}
+@media(max-width:1000px){.department-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.department-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero{padding:26px}.catalog-sidebar .filters{max-height:220px}.department-grid button{display:grid;gap:6px}.department-grid strong{min-width:0}.header-search select{max-width:115px}}
+@media(max-width:420px){.department-grid{grid-template-columns:1fr}.list-view .card{grid-template-columns:1fr}.list-view .product-art{min-height:70px;height:auto}.brand .brand-shop{font-size:10px}}
