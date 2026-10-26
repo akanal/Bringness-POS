@@ -1,3 +1,4 @@
+import {offerCsv} from './personal-policy.js';
 import {mountOfferImport} from './offer-import-ui.js';
 import {readSellerOffer,sendSellerCommand,pendingSellerRequest,sellerIdentity,onSellerPrivacy,sellerMessage} from './seller-account-client.js';
 import {offerId} from './offer-policy.js';
@@ -83,3 +84,5 @@ try {
   $('assistant-discard').onclick=()=>{sessionStorage.removeItem(key);box.hidden=true;};
  }else if(raw)sessionStorage.removeItem(key);
 }catch{/* Unavailable session storage must never block the editor. */}
+
+const csvButton=element('button','Gespeicherte lokale Entwürfe als CSV');csvButton.type='button';$('export-offers').after(csvButton);csvButton.onclick=()=>{if(cloudBusy||!rows.length){status('Keine gespeicherten lokalen Entwürfe für den CSV-Export.');return;}let url;try{url=URL.createObjectURL(new Blob([offerCsv(rows)],{type:'text/csv;charset=utf-8'}));const a=element('a','');a.href=url;a.download='bringness-lokale-entwuerfe.csv';document.body.append(a);a.click();a.remove();status('Gespeicherte lokale Entwürfe als CSV exportiert. Ungespeicherte Formularänderungen sind nicht enthalten.');}finally{if(url)setTimeout(()=>URL.revokeObjectURL(url),1000);}};
