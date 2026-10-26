@@ -1,3 +1,4 @@
+import {categoryMatches} from './departments.js?v=categories-20261026';
 export const products = Object.freeze([
   Object.freeze({id:'pos-online',name:'Bringness POS Online',category:'Software',tag:'Für deinen Geschäftsalltag',period:'monthly',netCents:3499,description:'Deine Kasse im Browser. Die Basis für Verkauf und Verwaltung, mit optionalen Modulen für deinen Betrieb.',features:['Online-Kasse und Verwaltung','Optionale Module separat buchen','Cloud-TSE im Basistarif vorgesehen'],notice:'Produktive TSE-Aktivierung bleibt ausstehend.'}),
   Object.freeze({id:'pos-download',name:'Bringness POS für Windows',category:'Software',tag:'Einmalige Basislizenz',period:'once',netCents:39900,description:'Die Windows-Variante mit eigener Basislizenz. Optionale Module werden separat im monatlichen Abo angeboten.',features:['Windows-Download','Einmalige Basislizenz','Optionale monatliche Zusatzmodule'],notice:'Offline- und Hardware-TSE-Integration sind noch nicht abgeschlossen. Hardware separat; kein sofortiger produktiver Einsatz zugesagt.'}),
@@ -6,7 +7,7 @@ export const products = Object.freeze([
 export const money = cents => new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(cents/100);
 export function filterProducts(query='',category='Alle') {
   const words=String(query).slice(0,150).normalize('NFC').trim().toLocaleLowerCase('de-DE').split(/\s+/).filter(Boolean);
-  return products.filter(p=>(category==='Alle'||p.category===category)&&words.every(word=>`${p.name} ${p.description} ${p.category}`.normalize('NFC').toLocaleLowerCase('de-DE').includes(word)));
+  return products.filter(p=>categoryMatches(p.category,category)&&words.every(word=>`${p.name} ${p.description} ${p.category}`.normalize('NFC').toLocaleLowerCase('de-DE').includes(word)));
 }
 export function validateCart(value) {
   if(!value||typeof value!=='object'||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw Error('Ungültiger Warenkorb');
