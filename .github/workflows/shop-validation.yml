@@ -33,7 +33,12 @@ jobs:
         timeout-minutes: 4
         run: |
           npm install --prefix "$RUNNER_TEMP/shop-browser" --no-save playwright@1.62.1
-          node "$RUNNER_TEMP/shop-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          if command -v google-chrome >/dev/null 2>&1; then
+            google-chrome --version
+            echo "SHOP_BROWSER_CHANNEL=chrome" >> "$GITHUB_ENV"
+          else
+            node "$RUNNER_TEMP/shop-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          fi
       - name: Current production entrypoint with real PostgreSQL and browser
         run: node ops/shop/production-entrypoint-smoke.mjs
         env:
