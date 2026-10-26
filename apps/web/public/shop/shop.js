@@ -197,6 +197,7 @@ window.addEventListener('pagehide',()=>{clearLocation();});
 
 function applyPersonalBrowse(state,push=true){const path=browseLocation(window.location.href,{...state,product:null});window.history[push?'pushState':'replaceState']({shopScroll:window.scrollY},'',path);personalTools?.resetPage();restoreNavigation();personalTools?.savePreferences();}
 personalTools=mountPersonalTools({document,getBrowse:currentBrowse,applyBrowse:applyPersonalBrowse,getSaved:()=>saved,getCompared:()=>compared,onDetails:detail,onRefresh:renderProducts,session:browserSession,initialHref:initialPersonalHref});
+const initialDetail=readBrowseLocation(initialPersonalHref).product;if(initialDetail&&$('detail-dialog').open)personalTools.detail(products.find(p=>p.id===initialDetail));
 personalTools.restorePreferences();
 for(const id of ['search','search-category','period-filter','priced-filter','sort','min-price','max-price','location-city'])$(id).addEventListener(id==='search'?'input':'change',()=>{personalTools.resetPage();renderProducts();});
 $('search-form').addEventListener('submit',()=>personalTools.recordSearch());
