@@ -31,9 +31,15 @@ jobs:
       - name: Verify protected real application and provider refusals
         run: node ops/preview-smoke.mjs .env.preview.local "$RUNNER_TEMP/preview-sale-replay.json"
       - name: Install isolated browser test dependencies
+        timeout-minutes: 4
         run: |
           npm install --prefix "$RUNNER_TEMP/preview-browser" --no-save playwright@1.62.1
-          node "$RUNNER_TEMP/preview-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          if command -v google-chrome >/dev/null 2>&1; then
+            google-chrome --version
+            echo "PREVIEW_TEST_BROWSER_CHANNEL=chrome" >> "$GITHUB_ENV"
+          else
+            node "$RUNNER_TEMP/preview-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          fi
       - name: Verify real POS and AI interfaces through a temporary local HTTPS proxy
         run: PREVIEW_TEST_PLAYWRIGHT="$RUNNER_TEMP/preview-browser/node_modules/playwright/index.mjs" node ops/preview-browser-smoke.mjs .env.preview.local
       - name: Verify network egress is unavailable inside the preview
