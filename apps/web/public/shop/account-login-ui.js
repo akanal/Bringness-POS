@@ -1,3 +1,4 @@
+import {paintPasswordEye,placePasswordEye} from './password-eye.js';
 import {requestShopLogin,validShopLogin,shopLoginDestination} from './account-login-client.js';
 const key='bringness-pos-token';
 const messages={INVALID_INPUT:'Bitte E-Mail und Passwort vollständig eingeben.',INVALID_CREDENTIALS:'E-Mail oder Passwort stimmen nicht. Bitte die Angaben prüfen.',LOGIN_LIMIT:'Zu viele gleichzeitige Anmeldeversuche. Bitte später ausdrücklich erneut versuchen.',SHOP_ACCOUNT_REQUIRED:'Für den Shop wird ein Inhaber- oder Administratorkonto benötigt.',LOGIN_UNAVAILABLE:'Anmeldung derzeit nicht möglich. Bitte später erneut versuchen.',STORAGE_UNAVAILABLE:'Die Anmeldung konnte im Browser nicht gespeichert werden. Bitte die Browsereinstellungen prüfen.',ACCOUNT_CHANGED:'Das Konto hat sich geändert. Bitte erneut anmelden.'};
@@ -8,12 +9,12 @@ export function mountShopLogin({host,storage,request=requestShopLogin,hash='',ti
  const field=(label,input)=>{const e=el('label',label);e.append(input);form.append(e);};
  email.type='email';email.name='email';email.autocomplete='username';email.maxLength=254;email.required=true;email.setAttribute('autocapitalize','none');email.spellcheck=false;
  password.type='password';password.name='password';password.autocomplete='current-password';password.maxLength=128;password.required=true;field('E-Mail',email);field('Passwort',password);
- toggle.type='button';toggle.setAttribute('aria-pressed','false');submit.type='submit';note.setAttribute('role','status');next.href=shopLoginDestination(hash);next.referrerPolicy='no-referrer';next.hidden=true;if(hash!=='#review')next.textContent=hash==='#licences'?'Weiter zu meinen Lizenzen':'Weiter zum Shop';form.append(toggle,submit);host.replaceChildren(form,note,next);
- function clear(){password.value='';password.type='password';toggle.textContent='Passwort anzeigen';toggle.setAttribute('aria-pressed','false');}
+ toggle.type='button';toggle.setAttribute('aria-pressed','false');submit.type='submit';note.setAttribute('role','status');next.href=shopLoginDestination(hash);next.referrerPolicy='no-referrer';next.hidden=true;if(hash!=='#review')next.textContent=hash==='#licences'?'Weiter zu meinen Lizenzen':'Weiter zum Shop';placePasswordEye(password,toggle);submit.className='action-primary';form.append(submit);host.replaceChildren(form,note,next);
+ function clear(){password.value='';password.type='password';paintPasswordEye(toggle,false);}
  function stop(message=''){generation++;active?.abort();active=null;w.clearTimeout(timer);timer=null;submit.disabled=false;email.disabled=false;toggle.disabled=false;clear();next.hidden=true;loggedToken=null;note.textContent=message;}
  function available(){return !disposed&&host.isConnected&&d.visibilityState!=='hidden'&&w.navigator.onLine!==false;}
  function readToken(){return storage.getItem(key)||'';}
- toggle.onclick=()=>{if(!available()||active)return;const reveal=password.type==='password';password.type=reveal?'text':'password';toggle.textContent=reveal?'Passwort verbergen':'Passwort anzeigen';toggle.setAttribute('aria-pressed',String(reveal));};
+ toggle.onclick=()=>{if(!available()||active)return;const reveal=password.type==='password';password.type=reveal?'text':'password';paintPasswordEye(toggle,reveal);};
  const send=async event=>{
   event.preventDefault();if(!available()||active)return;
   if(!validShopLogin(email.value,password.value)){note.textContent=messages.INVALID_INPUT;clear();return;}
