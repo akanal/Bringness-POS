@@ -1,5 +1,6 @@
+import {renderCategoryNavigation} from './category-navigation.js';
 import {rootDepartments,categoryMatches} from './departments.js?v=categories-20261026';
-import {mountCategorySelect,mountCategoryDirectory,mountCategoryFilters} from './category-controls.js';
+import {mountCategorySelect,mountCategoryDirectory,mountCategoryFilters} from './category-controls.js?v=directory-tools-20261026';
 import {mountLegacyPaymentReturnNotice} from './payment-return-notice.js';
 import {setShopStatus,clearShopStatus,draftStatusKey} from './status-view.js';
 import {mountDraftHistory} from './draft-history.js';
@@ -24,7 +25,7 @@ let removedItem=null,quoteTimer=null,requestBusy=false;
 let disabledControls=new Map();
 const categorySelect=$('search-category'), categoryFilters=document.querySelector('.filters'), departmentGrid=document.querySelector('.department-grid');
 mountCategorySelect(categorySelect,{includeAll:true});mountCategoryFilters(categoryFilters);departmentGrid.replaceChildren();
-mountCategoryDirectory({host:$('category-directory-list'),search:$('category-directory-search'),status:$('category-directory-status')});
+const directory=mountCategoryDirectory({host:$('category-directory-list'),search:$('category-directory-search'),status:$('category-directory-status')});
 for(const department of rootDepartments){
  const entry=document.createElement('button');entry.type='button';entry.dataset.department=department.name;
  const categoryImages={'Software':'tech','Hardware':'tech','Elektronik':'tech','Zubehör':'tech','Mode & Accessoires':'fashion','Sport & Freizeit':'fashion','Haus & Garten':'life'};
@@ -110,6 +111,7 @@ for(const id of ['period-filter','priced-filter','sort'])$(id).addEventListener(
 function resetFilters(){$('search').value='';$('period-filter').value='all';$('priced-filter').checked=false;$('sort').value='default';setCategory('Alle');}
 $('reset-filters').onclick=resetFilters;
 function renderFilterSummary(){
+ directory.setSelected(category);renderCategoryNavigation({host:$('category-navigation'),category,onSelect:value=>{setCategory(value);$('category-navigation').querySelector('button')?.focus();}});
  const parts=[];if(category!=='Alle')parts.push(['category',category]);if($('search').value.trim())parts.push(['query','Suche: '+$('search').value.trim()]);const period=$('period-filter');if(period.value!=='all')parts.push(['period',period.selectedOptions[0].textContent]);if($('priced-filter').checked)parts.push(['priced','Mit Katalogpreis']);
  const box=$('active-filters');box.replaceChildren();for(const [key,label]of parts){const chip=button(label+' ×',()=>{if(key==='category'){category='Alle';$('search-category').value='Alle';document.querySelectorAll('[data-category]').forEach(e=>e.setAttribute('aria-pressed',String(e.dataset.category==='Alle')));}if(key==='query')$('search').value='';if(key==='period')$('period-filter').value='all';if(key==='priced')$('priced-filter').checked=false;renderProducts();writeNavigation(true);(box.querySelector('button')||$('search')).focus();},'filter-chip');chip.dataset.filter=key;chip.setAttribute('aria-label',label+' entfernen');box.append(chip);}if(parts.length)box.append(button('Alle Filter löschen',resetFilters,'outline'));
  $('price-sort-note').hidden=!$('sort').value.startsWith('price-');
