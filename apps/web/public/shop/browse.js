@@ -1,8 +1,12 @@
+import {searchMatch,priceMatches,locationMatches,publicationTime} from './discovery-policy.js';
 import {listingQuery} from './listing-reference.js';
 import {products,filterProducts} from './catalog.js?v=categories-20261026';
-export function browseProducts({query='',category='Alle',period='all',priced=false,sort='default'}={}){
+export function browseProducts({query='',category='Alle',period='all',priced=false,sort='default',minPrice='',maxPrice='',city='',origin=null,radius=25}={}){
  if(listingQuery(query))return filterProducts(query);
- const list=filterProducts(query,category).filter(p=>(period==='all'||(period==='unknown'?p.period===null:p.period===period))&&(!priced||p.netCents!==null));
+ let matching=filterProducts(query,category);
+ if(!matching.length&&query.trim()&&!/\d/.test(query))matching=filterProducts('',category).filter(p=>searchMatch(p,query,{fuzzy:true}));
+ const list=matching.filter(p=>(period==='all'||(period==='unknown'?p.period===null:p.period===period))&&(!priced||p.netCents!==null)&&priceMatches(p,minPrice,maxPrice)&&locationMatches(p,city,origin,radius));
+ if(sort==='newest')list.sort((a,b)=>(publicationTime(b)??-Infinity)-(publicationTime(a)??-Infinity)||0);
  if(sort==='name')list.sort((a,b)=>a.name.localeCompare(b.name,'de'));
  if(['price-asc','price-desc'].includes(sort)){
   // Monthly and one-time prices are not comparable contract totals.
