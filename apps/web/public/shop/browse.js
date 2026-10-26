@@ -1,5 +1,7 @@
+import {listingQuery} from './listing-reference.js';
 import {products,filterProducts} from './catalog.js?v=categories-20261026';
 export function browseProducts({query='',category='Alle',period='all',priced=false,sort='default'}={}){
+ if(listingQuery(query))return filterProducts(query);
  const list=filterProducts(query,category).filter(p=>(period==='all'||(period==='unknown'?p.period===null:p.period===period))&&(!priced||p.netCents!==null));
  if(sort==='name')list.sort((a,b)=>a.name.localeCompare(b.name,'de'));
  if(['price-asc','price-desc'].includes(sort)){

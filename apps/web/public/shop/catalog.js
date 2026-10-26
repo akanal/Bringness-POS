@@ -1,11 +1,13 @@
+import {validateListingCatalog,listingQuery} from './listing-reference.js';
 import {categoryMatches} from './departments.js?v=categories-20261026';
-export const products = Object.freeze([
-  Object.freeze({id:'pos-online',name:'Bringness POS Online',category:'Software',tag:'Für deinen Geschäftsalltag',period:'monthly',netCents:3499,description:'Deine Kasse im Browser. Die Basis für Verkauf und Verwaltung, mit optionalen Modulen für deinen Betrieb.',features:['Online-Kasse und Verwaltung','Optionale Module separat buchen','Cloud-TSE im Basistarif vorgesehen'],notice:'Produktive TSE-Aktivierung bleibt ausstehend.'}),
-  Object.freeze({id:'pos-download',name:'Bringness POS für Windows',category:'Software',tag:'Einmalige Basislizenz',period:'once',netCents:39900,description:'Die Windows-Variante mit eigener Basislizenz. Optionale Module werden separat im monatlichen Abo angeboten.',features:['Windows-Download','Einmalige Basislizenz','Optionale monatliche Zusatzmodule'],notice:'Offline- und Hardware-TSE-Integration sind noch nicht abgeschlossen. Hardware separat; kein sofortiger produktiver Einsatz zugesagt.'}),
-  Object.freeze({id:'bringness-ai',name:'Bringness AI',category:'Software',tag:'Eigenständige Anwendung',period:null,netCents:null,description:'Bringness AI bleibt eine eigenständige Anwendung. Produktdetails und der endgültige Preis werden separat veröffentlicht.',features:['Getrennt von Bringness POS','Preis noch nicht festgelegt'],notice:'Noch nicht bestellbar.'})
-]);
+export const products = Object.freeze(validateListingCatalog([
+  Object.freeze({id:'pos-online',listingNumber:'100001',name:'Bringness POS Online',category:'Software',tag:'Für deinen Geschäftsalltag',period:'monthly',netCents:3499,description:'Deine Kasse im Browser. Die Basis für Verkauf und Verwaltung, mit optionalen Modulen für deinen Betrieb.',features:['Online-Kasse und Verwaltung','Optionale Module separat buchen','Cloud-TSE im Basistarif vorgesehen'],notice:'Produktive TSE-Aktivierung bleibt ausstehend.'}),
+  Object.freeze({id:'pos-download',listingNumber:'100002',name:'Bringness POS für Windows',category:'Software',tag:'Einmalige Basislizenz',period:'once',netCents:39900,description:'Die Windows-Variante mit eigener Basislizenz. Optionale Module werden separat im monatlichen Abo angeboten.',features:['Windows-Download','Einmalige Basislizenz','Optionale monatliche Zusatzmodule'],notice:'Offline- und Hardware-TSE-Integration sind noch nicht abgeschlossen. Hardware separat; kein sofortiger produktiver Einsatz zugesagt.'}),
+  Object.freeze({id:'bringness-ai',listingNumber:'100003',name:'Bringness AI',category:'Software',tag:'Eigenständige Anwendung',period:null,netCents:null,description:'Bringness AI bleibt eine eigenständige Anwendung. Produktdetails und der endgültige Preis werden separat veröffentlicht.',features:['Getrennt von Bringness POS','Preis noch nicht festgelegt'],notice:'Noch nicht bestellbar.'})
+]));
 export const money = cents => new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(cents/100);
 export function filterProducts(query='',category='Alle') {
+  const number=listingQuery(query);if(number)return products.filter(p=>p.listingNumber===number);
   const words=String(query).slice(0,150).normalize('NFC').trim().toLocaleLowerCase('de-DE').split(/\s+/).filter(Boolean);
   return products.filter(p=>categoryMatches(p.category,category)&&words.every(word=>`${p.name} ${p.description} ${p.category}`.normalize('NFC').toLocaleLowerCase('de-DE').includes(word)));
 }

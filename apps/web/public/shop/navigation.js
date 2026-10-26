@@ -1,3 +1,4 @@
+import {listingNumber} from './listing-reference.js';
 import {products,validateCart} from './catalog.js';
 import {categories} from './departments.js?v=categories-20261026';
 const periods=['all','monthly','once','unknown'];
@@ -5,7 +6,7 @@ const sorts=['default','name','price-asc','price-desc'];
 export function readBrowseLocation(href){
  const u=new URL(href,'https://shop.invalid');
  const get=(key,values,fallback)=>values.includes(u.searchParams.get(key))?u.searchParams.get(key):fallback;
- return {query:(u.searchParams.get('q')||'').slice(0,150),category:get('category',categories,'Alle'),period:get('period',periods,'all'),sort:get('sort',sorts,'default'),priced:u.searchParams.get('priced')==='1',view:get('view',['grid','list'],'grid'),product:products.some(p=>p.id===u.searchParams.get('product'))?u.searchParams.get('product'):null};
+ return {query:(u.searchParams.get('q')||'').slice(0,150),category:get('category',categories,'Alle'),period:get('period',periods,'all'),sort:get('sort',sorts,'default'),priced:u.searchParams.get('priced')==='1',view:get('view',['grid','list'],'grid'),product:u.searchParams.has('ad')?(u.searchParams.getAll('ad').length===1?products.find(p=>p.listingNumber===listingNumber(u.searchParams.get('ad')))?.id??null:null):products.some(p=>p.id===u.searchParams.get('product'))?u.searchParams.get('product'):null};
 }
 export function browseLocation(href,state){
  const u=new URL(href,'https://shop.invalid');
