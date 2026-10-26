@@ -38,4 +38,14 @@ jobs:
         run: node ops/shop/production-entrypoint-smoke.mjs
         env:
           SHOP_INTEGRATION_DATABASE_URL: postgres://shop_test:shop_test@localhost:5432/bringness_shop_integration
+          SHOP_DESIGN_ARTIFACTS: ${{ runner.temp }}/shop-design
           SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs
+
+      - name: Save public marketplace design previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bringness-green-design
+          path: ${{ runner.temp }}/shop-design/*.png
+          if-no-files-found: ignore
+          retention-days: 3
