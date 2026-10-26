@@ -30,6 +30,7 @@ jobs:
       - name: Complete isolated shop suite
         run: node ops/shop/run.mjs
       - name: Prepare native browser
+        timeout-minutes: 4
         run: |
           npm install --prefix "$RUNNER_TEMP/shop-browser" --no-save playwright@1.62.1
           node "$RUNNER_TEMP/shop-browser/node_modules/playwright/cli.js" install --with-deps chromium
