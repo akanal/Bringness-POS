@@ -58,8 +58,10 @@ try{
  await page.locator('[data-cart-action="quantity"]').fill('1');await page.locator('[data-cart-action="quantity"]').press('Tab');assert.equal(await page.locator('#review-open').isDisabled(),false);
  await page.locator('#cart-content [data-cart-action="details"]').click();await page.locator('#detail-dialog[open]').waitFor();assert.equal(await page.locator('#cart-dialog').evaluate(e=>e.open),true);await page.locator('#detail-dialog [data-close]').click();await page.waitForFunction(()=>document.activeElement?.dataset.cartAction==='details');
  if(artifacts)await page.screenshot({path:path.join(artifacts,'cart-controls-390.png')});
- await page.getByRole('button',{name:'Für später merken',exact:true}).click();assert.equal(await page.locator('#cart-count').textContent(),'0');
+ await page.locator('#cart-content [data-cart-action="save"]').click();assert.equal(await page.locator('#cart-count').textContent(),'0');
+ assert.equal(await page.locator('#cart-undo button').evaluate(e=>e===document.activeElement),true,'focus reaches undo after removal');
  await page.getByRole('button',{name:'Entfernen rückgängig',exact:true}).click();assert.equal(await page.locator('#cart-count').textContent(),'1');
+ assert.equal(await page.locator('#cart-content [data-cart-action="quantity"]').evaluate(e=>e===document.activeElement),true,'focus returns to restored item');
  assert.equal(await page.locator('#cart-dialog').evaluate(e=>e.scrollWidth>e.clientWidth),false,'cart overflow');
  await page.locator('#review-open').click();await page.locator('#review-dialog[open]').waitFor();assert.equal(await page.locator('#review-dialog button:disabled').count()>0,true);
  await page.locator('#review-dialog [data-close]').click();
