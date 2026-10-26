@@ -1,3 +1,4 @@
+import {mountVisualSearch} from './visual-search.js';
 import {mountSavedSelection} from './saved-selection.js';
 import {mountCartDock} from './cart-dock.js';
 import {renderCategoryNavigation} from './category-navigation.js';
@@ -44,6 +45,7 @@ const savedView=mountSavedSelection({document,onDetails:id=>{$('saved-dialog').c
 function moveSelectionToCart(id,source){if(cart[id]||!products.some(p=>p.id===id&&p.netCents!==null))return;$(source).close();add(id);renderCart();show('cart-dialog');}
 function restoreSaved(){if(!removedSaved)return;const old=removedSaved;if(!saved.includes(old.id))saved.splice(Math.min(old.index,saved.length),0,old.id);removedSaved=null;const stored=writeProductIds(browserSession,savedKey,saved);renderProducts();renderSaved();$('announcement').textContent=stored?'Produkt wieder auf der Merkliste.':'Produkt für diese Ansicht wiederhergestellt. Speichern im Browser war nicht möglich.';document.querySelector('[data-saved-row="'+old.id+'"] button')?.focus();}
 
+mountVisualSearch({document,onOpen:()=>show('visual-search-dialog'),onSelect:product=>{$('visual-search-dialog').close();resetFilters();detail(product);}});
 const token=()=>{try{return localStorage.getItem('bringness-pos-token')||'';}catch{return '';}};
 function invalidate(){generation++;controller?.abort();setRequestBusy(false);window.clearTimeout(quoteTimer);quoteTimer=null;clearShopStatus($('quote-validity'));quote=null;draft=null;$('account-result').replaceChildren();$('draft-result').replaceChildren();$('draft-controls').hidden=true;setShopStatus($('account-status'),'draft','Noch nicht geprüft.');}
 function show(id){const dialog=$(id);if(dialog.open){if(id==='cart-dialog')cartDock.open();return;}openers.set(dialog,document.activeElement);if(id==='cart-dialog')cartDock.open();else dialog.showModal();}
