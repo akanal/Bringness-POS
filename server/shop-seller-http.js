@@ -32,6 +32,6 @@ export function createSellerRuntime(pool,{enabled=false,publicOrigin='https://br
      else throw Error('INVALID_REQUEST');
     }
    }send(res,200,result);
-  }catch(e){if(!req.readableEnded&&req.method==='POST'){res.setHeader?.('Connection','close');res.once?.('finish',()=>req.destroy?.());}const code=e.code||e.message;send(res,codes[code]||503,{code:codes[code]?code:'SELLER_UNAVAILABLE',error:'Nicht abgeschlossen. Bitte gespeicherten Stand prüfen.'});}finally{active--;}return true;
+  }catch(e){if(!req.readableEnded&&['GET','POST'].includes(req.method)){res.setHeader?.('Connection','close');res.once?.('finish',()=>req.destroy?.());}const code=e.code||e.message;send(res,codes[code]||503,{code:codes[code]?code:'SELLER_UNAVAILABLE',error:'Nicht abgeschlossen. Bitte gespeicherten Stand prüfen.'});}finally{active--;}return true;
  }};
 }
