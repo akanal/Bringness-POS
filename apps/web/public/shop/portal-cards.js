@@ -1,0 +1,30 @@
+import {categories} from './departments.js';
+export const portalTopics=Object.freeze([
+ {category:'Elektronik',title:'Neue Ideen. Smarte Begleiter.',kicker:'TECHNIK ENTDECKEN',image:'tech',theme:'tech'},
+ {category:'Mode & Accessoires',title:'Lieblingsstücke für jeden Tag.',kicker:'DEIN EIGENER STIL',image:'fashion',theme:'fashion'},
+ {category:'Sport & Freizeit',title:'Mehr bewegen. Mehr erleben.',kicker:'AKTIV UNTERWEGS',image:'fashion',theme:'fashion'},
+ {category:'Büro & Gewerbe',title:'Platz für deinen Arbeitsalltag.',kicker:'IDEEN FÜRS BUSINESS',image:'tech',theme:'tech'},
+ {category:'Hardware',title:'Technik für deine Möglichkeiten.',kicker:'HARDWARE ENTDECKEN',image:'tech',theme:'tech'},
+ {category:'Haus & Garten',title:'Neue Ideen für dein Zuhause.',kicker:'WOHNEN UND LEBEN',image:'life',theme:'home'}
+].map(Object.freeze));
+const preferenceKey='bringness.portal.layout.v1';
+export function readPortalLayout(storage){try{const raw=storage?.getItem(preferenceKey);if(!raw||raw.length>120)return {lead:'single',home:'single'};const value=JSON.parse(raw);return {lead:value.lead==='four'?'four':'single',home:value.home==='three'?'three':'single'};}catch{return {lead:'single',home:'single'};}}
+export function topicHref(category){if(!categories.includes(category)||category==='Alle')throw Error('INVALID_CATEGORY');return '/shop/?category='+encodeURIComponent(category)+'#angebote';}
+export function mountPortalCarousel({viewport,previous,next}){
+ const w=viewport.ownerDocument.defaultView;const update=()=>{const max=Math.max(0,viewport.scrollWidth-viewport.clientWidth);previous.disabled=viewport.scrollLeft<=2;next.disabled=viewport.scrollLeft>=max-2;};
+ const move=direction=>{const width=viewport.firstElementChild?.getBoundingClientRect().width||viewport.clientWidth*.8,gap=parseFloat(w.getComputedStyle(viewport).gap)||0;viewport.scrollBy({left:direction*(width+gap),behavior:w.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});update();};
+ const onPrevious=()=>move(-1),onNext=()=>move(1),onKey=event=>{if(event.target!==viewport)return;if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();if(event.key==='Home'||event.key==='End')viewport.scrollTo({left:event.key==='Home'?0:viewport.scrollWidth,behavior:'auto'});else move(event.key==='ArrowLeft'?-1:1);update();}};
+ previous.addEventListener('click',onPrevious);next.addEventListener('click',onNext);viewport.addEventListener('scroll',update,{passive:true});viewport.addEventListener('keydown',onKey);w.addEventListener('resize',update);w.addEventListener('pageshow',update);update();return {update,dispose(){previous.removeEventListener('click',onPrevious);next.removeEventListener('click',onNext);viewport.removeEventListener('scroll',update);viewport.removeEventListener('keydown',onKey);w.removeEventListener('resize',update);w.removeEventListener('pageshow',update);}};
+}
+export function mountPortalCards({document:d,storage=null}){
+ const make=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;},byId=id=>d.getElementById(id);let layout=readPortalLayout(storage);
+ const image=(kind,alt)=>{const e=make('img');e.src='./images/marketplace-'+kind+'.webp';e.alt=alt;e.loading='lazy';e.width=1024;e.height=1024;return e;};
+ const cards=byId('portal-themes');cards.replaceChildren();for(const topic of portalTopics){const a=make('a');a.href=topicHref(topic.category);a.className='discovery-tile tile-'+topic.theme;const copy=make('div'),kicker=make('p',topic.kicker),title=make('h2',topic.title);kicker.className='eyebrow';copy.append(kicker,title);a.append(copy,image(topic.image,'Illustration zur Kategorie '+topic.category),make('span',topic.category+' →'));cards.append(a);}
+ const mini=byId('lead-mini-grid');mini.replaceChildren();for(const [category,label,kind] of [['Elektronik','Technik entdecken','tech'],['Mode & Accessoires','Mode & Stil','fashion'],['Haus & Garten','Wohnen & Leben','life'],['Büro & Gewerbe','Für dein Business','tech']]){const a=make('a');a.className='lead-mini';a.href=topicHref(category);a.append(image(kind,'Illustration: '+label),make('strong',label));mini.append(a);}
+ const home=byId('home-trio');home.replaceChildren();for(const [category,label,position] of [['Küche, Haushalt & Wohnen','Küche & Haushalt','left'],['Garten','Garten & Grün','center'],['Möbel & Dekoration','Möbel & Deko','right']]){const a=make('a');a.className='home-mini crop-'+position;a.href=topicHref(category);a.append(image('life','Illustration: '+label),make('strong',label));home.append(a);}
+ function render(){byId('lead-single').hidden=layout.lead==='four';byId('lead-four').hidden=layout.lead!=='four';byId('home-single').hidden=layout.home==='three';home.hidden=layout.home!=='three';for(const b of d.querySelectorAll('[data-lead-view]'))b.setAttribute('aria-pressed',String(b.dataset.leadView===layout.lead));for(const b of d.querySelectorAll('[data-home-view]'))b.setAttribute('aria-pressed',String(b.dataset.homeView===layout.home));}
+ function save(){try{storage?.setItem(preferenceKey,JSON.stringify(layout));}catch{/* Local display remains usable without storage. */}}
+ const handlers=[];for(const button of d.querySelectorAll('[data-lead-view],[data-home-view]')){const fn=()=>{if(button.dataset.leadView)layout.lead=button.dataset.leadView==='four'?'four':'single';else layout.home=button.dataset.homeView==='three'?'three':'single';render();save();};button.addEventListener('click',fn);handlers.push([button,fn]);}
+ render();const carousel=mountPortalCarousel({viewport:cards,previous:byId('portal-previous'),next:byId('portal-next')});return {dispose(){carousel.dispose();for(const [button,fn]of handlers)button.removeEventListener('click',fn);}};
+}
+if(typeof document!=='undefined'&&document.getElementById('portal-themes')){let storage=null;try{storage=window.sessionStorage;}catch{}mountPortalCards({document,storage});}
