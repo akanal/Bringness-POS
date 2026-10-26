@@ -28,6 +28,8 @@ for(const name of ['Alle',...departments.map(item=>item.name)]){
 }
 for(const department of departments){
  const entry=document.createElement('button');entry.type='button';entry.dataset.department=department.name;
+ const categoryImages={'Software':'tech','Hardware':'tech','Elektronik':'tech','Zubehör':'tech','Mode & Accessoires':'fashion','Sport & Freizeit':'fashion','Haus & Garten':'life'};
+ const imageName=categoryImages[department.name];if(imageName){const illustration=document.createElement('img');illustration.src='./images/marketplace-'+imageName+'.webp';illustration.alt='';illustration.loading='lazy';illustration.width=320;illustration.height=220;entry.append(illustration);}
  const title=document.createElement('strong');title.textContent=department.name;
  const description=document.createElement('span');description.textContent=department.description;entry.append(title,description);departmentGrid.append(entry);
 }
