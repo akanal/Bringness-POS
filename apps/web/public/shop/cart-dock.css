@@ -11,3 +11,4 @@
 @media print{#cart-dialog{display:none!important}body.cart-dock-open{padding:0!important}}
 
 @media(min-width:1100px) and (max-width:1199px){body.cart-dock-open:not(.cart-dock-collapsed) .catalog-results .grid:not(.list-view){grid-template-columns:1fr}}
+body.cart-dock-collapsed .assistant-entry{bottom:124px}
