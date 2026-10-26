@@ -1,3 +1,4 @@
+import {createShopAssistant} from './shop-assistant.js';
 import {createSellerRuntime} from './shop-seller-http.js';
 import {createShopRegistrationRuntime} from './shop-registration-http.js';
 import {createShopRuntime} from './shop-http.js';
@@ -67,6 +68,7 @@ if(appMode!=='ai'&&process.env.SHOP_REGISTRATION_ENABLED!=='false'){
   catch{console.error('Shop registration configuration unavailable; registration remains closed.');}
 }
 const shopRuntime=createShopRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_DRAFTS_ENABLED!=='false'});
+const shopAssistant=createShopAssistant(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_ASSISTANT_ENABLED!=='false',key:process.env.SHOP_ASSISTANT_API_KEY||process.env.OPENAI_API_KEY,model:process.env.SHOP_ASSISTANT_MODEL||process.env.OPENAI_MODEL,publicOrigin:process.env.SHOP_PUBLIC_ORIGIN||'https://bringness.de'});
 const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_SELLER_DRAFTS_ENABLED!=='false'});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
@@ -135,6 +137,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await shopRegistrationRuntime.handle(req,res)) return;
       if (await shopRuntime.handle(req,res)) return;
       if (await sellerRuntime.handle(req,res)) return;
+      if (await shopAssistant.handle(req,res)) return;
       if (await handleTableSettlement(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
@@ -232,6 +235,7 @@ async function migrateWithRetry(){
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
       try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
+      try{await shopAssistant.migrate();}catch{console.error('Shop assistant unavailable; guided help remains available.');}
       try{await sellerRuntime.migrate();}catch{console.error('Seller draft migrations unavailable; seller routes remain closed.');}
       try{await shopRegistrationRuntime.migrate();}catch{console.error('Shop registration migrations unavailable; registration remains closed.');}
       if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
