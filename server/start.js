@@ -1,3 +1,5 @@
+import {createShopPaymentRuntime} from './shop-payment-http.js';
+import {createShopDownloadRuntime} from './shop-download-http.js';
 import {createShopRegistrationRuntime} from './shop-registration-http.js';
 import {createShopRuntime} from './shop-http.js';
 import {createPosEan,migratePosEan} from './pos-ean.js';
@@ -66,6 +68,16 @@ if(appMode!=='ai'&&process.env.SHOP_REGISTRATION_ENABLED!=='false'){
   catch{console.error('Shop registration configuration unavailable; registration remains closed.');}
 }
 const shopRuntime=createShopRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_DRAFTS_ENABLED!=='false'});
+let shopPaymentRuntime={migrate:async()=>{},handle:async()=>false};
+let shopDownloadRuntime={migrate:async()=>{},handle:async()=>false};
+if(appMode!=='ai'&&process.env.SHOP_TEST_PAYMENTS_ENABLED==='true'){
+  try{
+    const seller=JSON.parse(process.env.SHOP_SELLER_PROFILE||'null');
+    const downloads=createShopDownloadRuntime(platformGatewayPool,{enabled:true,seller,publicOrigin:'https://bringness.de'});
+    const payments=createShopPaymentRuntime(platformGatewayPool,{enabled:true,apiKey:process.env.MOLLIE_TEST_API_KEY,publicOrigin:'https://bringness.de'});
+    shopDownloadRuntime=downloads;shopPaymentRuntime=payments;
+  }catch{console.error('Shop TEST payment configuration unavailable; payment routes remain closed.');}
+}
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
@@ -131,6 +143,8 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await shopRegistrationRuntime.handle(req,res)) return;
+      if (await shopPaymentRuntime.handle(req,res)) return;
+      if (await shopDownloadRuntime.handle(req,res)) return;
       if (await shopRuntime.handle(req,res)) return;
       if (await handleTableSettlement(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
@@ -229,6 +243,7 @@ async function migrateWithRetry(){
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
       try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
+      try{await shopDownloadRuntime.migrate();await shopPaymentRuntime.migrate();}catch{console.error('Shop TEST payment migrations unavailable; payment routes remain closed.');}
       try{await shopRegistrationRuntime.migrate();}catch{console.error('Shop registration migrations unavailable; registration remains closed.');}
       if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
@@ -296,6 +311,7 @@ async function applyAvailabilityRules() {
 }
 setTimeout(applyAvailabilityRules, 3000);
 setInterval(applyAvailabilityRules, 60000).unref();
+
 
 
 
