@@ -12,3 +12,20 @@ Der Schlüssel wird ausschließlich direkt in der Netcup-Serverkonsole eingegebe
 OpenAI-Modelle und Preise ändern sich; für diesen Assistenten wird ein für das Projekt freigeschaltetes Modell mit Responses und Structured Outputs benötigt. Die Modellkennung wird bewusst ausdrücklich eingegeben, nicht stillschweigend gewählt.
 
 Rückweg: Die eigene Sicherung mit Root-Rechten gezielt zurückspielen und erneut deploy / pos ausführen. Sicherungen enthalten Geheimnisse; niemals veröffentlichen. Alternativ SHOP_ASSISTANT_ENABLED=false in der geschützten Konfiguration setzen und erneut bereitstellen; die geführte Hilfe bleibt nutzbar.
+
+## Konkreter Konsolenbefehl
+
+In der Netcup-Serverkonsole als root ausführen. Die URL ist auf den geprüften Quellstand festgelegt; der Befehl enthält keinen Schlüssel.
+
+```bash
+umask 077
+bringness_setup_dir=$(mktemp -d /root/bringness-ai.XXXXXX)
+curl --fail --silent --show-error --proto '=https' --tlsv1.2 --max-time 30 \
+  --output "$bringness_setup_dir/setup.py" \
+  https://raw.githubusercontent.com/akanal/Bringness-POS/acd3163ff2377c2c0cdd250f697c70fa6a160bc5/ops/configure-shop-assistant.py \
+  && python3 "$bringness_setup_dir/setup.py"
+```
+
+Das Programm fragt zuerst nach der Modellkennung, danach nach dem Schlüssel. Eine mögliche Modellkennung ist gpt-5.4-mini, sofern dieses Modell für das eigene API-Projekt verfügbar ist; Responses und Structured Outputs sind laut [offizieller Modellbeschreibung](https://developers.openai.com/api/docs/models/gpt-5.4-mini) unterstützt. Das Programm prüft das Format, nicht Anbieterzugang oder Guthaben.
+
+Nach der Meldung „Geschützt gespeichert“ ist eine erneute Bereitstellung deploy / pos nötig. Den Schlüssel weder abschreiben noch als Screenshot senden. Als Rückmeldung genügt „geschützt gespeichert“. Die erneute Bereitstellung und eine ausdrücklich gestartete Testfrage bestätigen dann die Aktivierung.
