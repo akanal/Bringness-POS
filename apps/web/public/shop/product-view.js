@@ -1,3 +1,5 @@
+import {mountListingTools,mountGallery} from './listing-tools.js';
+import {relatedProducts} from './discovery-policy.js';
 import {mountListingShare} from './listing-share.js';
 import {products,money} from './catalog.js';
 const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -31,7 +33,7 @@ export function mountProductView({product:p,host,onAdd,onSave,isSaved,onCompare,
  const save=button(isSaved(p.id)?'Von Merkliste entfernen':'Auf Merkliste',()=>{onSave(p.id);save.textContent=isSaved(p.id)?'Von Merkliste entfernen':'Auf Merkliste';save.setAttribute('aria-pressed',String(isSaved(p.id)));});save.setAttribute('aria-pressed',String(isSaved(p.id)));purchase.append(save);
  const compare=button(isCompared(p.id)?'Aus Vergleich entfernen':'Vergleichen',()=>{onCompare(p.id);compare.textContent=isCompared(p.id)?'Aus Vergleich entfernen':'Vergleichen';compare.setAttribute('aria-pressed',String(isCompared(p.id)));});compare.setAttribute('aria-pressed',String(isCompared(p.id)));purchase.append(compare);
  const link=node('a','Direkter Produktlink','product-permalink');link.href=permalink;purchase.append(link);
- layout.append(art,info,purchase);host.append(layout);
+ layout.append(art,info,purchase);host.append(layout);mountGallery({product:p,host});mountListingTools({product:p,host,onRelated});
  const facts=node('section',undefined,'product-facts');facts.id='detail-facts';facts.append(node('h3','Produktmerkmale'));
  const dl=node('dl');for(const [label,value]of [['Anwendung',p.name],['Kategorie',p.category],['Bereitstellung',p.id==='pos-online'?'Im Browser':p.id==='pos-download'?'Windows-Download':'Eigenständige Anwendung'],['Abrechnung',p.period==='monthly'?'Monatlich':p.period==='once'?'Einmalige Basislizenz':'Noch nicht festgelegt'],['Erweiterungen',p.id.startsWith('pos-')?'Optionale Module separat':'Produktdetails folgen']]){dl.append(node('dt',label),node('dd',value));}facts.append(dl);host.append(facts);
  const faq=node('section',undefined,'product-questions');faq.id='detail-questions';faq.append(node('h3','Fragen & Antworten'));
@@ -39,4 +41,5 @@ export function mountProductView({product:p,host,onAdd,onSave,isSaved,onCompare,
  if(p.id.startsWith('pos-'))questions.push(['Sind Zusatzmodule im Basispreis enthalten?','Optionale Module werden separat gebucht. Online und Windows sind alternative Basislizenzen; pro Betrieb ist eine Basislizenz vorgesehen.']);
  for(const [q,a]of questions){const entry=node('details');entry.append(node('summary',q),node('p',a));faq.append(entry);}host.append(faq);
  const related=alternatives(p);if(related.length){const section=node('section',undefined,'product-alternatives');section.append(node('h3','Alternative Basislizenz'),node('p','Vergleiche die Bereitstellung und Abrechnung. Diese Angebote sind Alternativen für denselben Betrieb.','muted'));for(const item of related)section.append(button(item.name,()=>onRelated(item)));host.append(section);}
+ const similar=relatedProducts(products,p).filter(item=>!related.some(alt=>alt.id===item.id));if(similar.length){const section=node('section');section.className='product-related';section.append(node('h3','Ähnliche Angebote'),node('p','Weitere öffentliche Angebote derselben Kategorie; Bereitstellung und Preise können abweichen.'));for(const item of similar)section.append(button(item.name,()=>onRelated(item)));host.append(section);}
 }

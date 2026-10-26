@@ -1,3 +1,4 @@
+import {searchMatch} from './discovery-policy.js';
 import {validateListingCatalog,listingQuery} from './listing-reference.js';
 import {categoryMatches} from './departments.js?v=categories-20261026';
 export const products = Object.freeze(validateListingCatalog([
@@ -8,8 +9,7 @@ export const products = Object.freeze(validateListingCatalog([
 export const money = cents => new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(cents/100);
 export function filterProducts(query='',category='Alle') {
   const number=listingQuery(query);if(number)return products.filter(p=>p.listingNumber===number);
-  const words=String(query).slice(0,150).normalize('NFC').trim().toLocaleLowerCase('de-DE').split(/\s+/).filter(Boolean);
-  return products.filter(p=>categoryMatches(p.category,category)&&words.every(word=>`${p.name} ${p.description} ${p.category}`.normalize('NFC').toLocaleLowerCase('de-DE').includes(word)));
+  return products.filter(p=>categoryMatches(p.category,category)&&searchMatch(p,query));
 }
 export function validateCart(value) {
   if(!value||typeof value!=='object'||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw Error('Ungültiger Warenkorb');

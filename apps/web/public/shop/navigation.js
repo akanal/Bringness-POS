@@ -1,21 +1,23 @@
+import {priceBound} from './discovery-policy.js';
 import {listingNumber} from './listing-reference.js';
 import {products,validateCart} from './catalog.js';
 import {categories} from './departments.js?v=categories-20261026';
 const periods=['all','monthly','once','unknown'];
-const sorts=['default','name','price-asc','price-desc'];
+const sorts=['default','name','price-asc','price-desc','newest'];
 export function readBrowseLocation(href){
  const u=new URL(href,'https://shop.invalid');
  const get=(key,values,fallback)=>values.includes(u.searchParams.get(key))?u.searchParams.get(key):fallback;
- return {query:(u.searchParams.get('q')||'').slice(0,150),category:get('category',categories,'Alle'),period:get('period',periods,'all'),sort:get('sort',sorts,'default'),priced:u.searchParams.get('priced')==='1',view:get('view',['grid','list'],'grid'),product:u.searchParams.has('ad')?(u.searchParams.getAll('ad').length===1?products.find(p=>p.listingNumber===listingNumber(u.searchParams.get('ad')))?.id??null:null):products.some(p=>p.id===u.searchParams.get('product'))?u.searchParams.get('product'):null};
+ const bound=key=>{const v=u.searchParams.get(key)||'';return Number.isNaN(priceBound(v))?'':v;};
+ return {minPrice:bound('min'),maxPrice:bound('max'),city:(u.searchParams.get('city')||'').slice(0,80),query:(u.searchParams.get('q')||'').slice(0,150),category:get('category',categories,'Alle'),period:get('period',periods,'all'),sort:get('sort',sorts,'default'),priced:u.searchParams.get('priced')==='1',view:get('view',['grid','list'],'grid'),product:u.searchParams.has('ad')?(u.searchParams.getAll('ad').length===1?products.find(p=>p.listingNumber===listingNumber(u.searchParams.get('ad')))?.id??null:null):products.some(p=>p.id===u.searchParams.get('product'))?u.searchParams.get('product'):null};
 }
 export function browseLocation(href,state){
  const u=new URL(href,'https://shop.invalid');
  // Only public catalog state is included in shareable URLs.
  u.search='';
  if(!['','#angebote','#kategorien','#recent-section','#anbieter'].includes(u.hash))u.hash='';
- for(const [key,value,defaultValue]of [['q',String(state.query||'').slice(0,150),''],['category',state.category,'Alle'],['period',state.period,'all'],['sort',state.sort,'default'],['view',state.view,'grid'],['priced',state.priced?'1':'0','0'],['product',state.product||'','']])if(value&&value!==defaultValue)u.searchParams.set(key,value);
+ for(const [key,value,defaultValue]of [['min',state.minPrice||'',''],['max',state.maxPrice||'',''],['city',String(state.city||'').slice(0,80),''],['q',String(state.query||'').slice(0,150),''],['category',state.category,'Alle'],['period',state.period,'all'],['sort',state.sort,'default'],['view',state.view,'grid'],['priced',state.priced?'1':'0','0'],['product',state.product||'','']])if(value&&value!==defaultValue)u.searchParams.set(key,value);
  const normalized=readBrowseLocation(u.href);u.search='';
- for(const [key,value,defaultValue]of [['q',normalized.query,''],['category',normalized.category,'Alle'],['period',normalized.period,'all'],['sort',normalized.sort,'default'],['view',normalized.view,'grid'],['priced',normalized.priced?'1':'0','0'],['product',normalized.product||'','']])if(value&&value!==defaultValue)u.searchParams.set(key,value);
+ for(const [key,value,defaultValue]of [['min',normalized.minPrice,''],['max',normalized.maxPrice,''],['city',normalized.city,''],['q',normalized.query,''],['category',normalized.category,'Alle'],['period',normalized.period,'all'],['sort',normalized.sort,'default'],['view',normalized.view,'grid'],['priced',normalized.priced?'1':'0','0'],['product',normalized.product||'','']])if(value&&value!==defaultValue)u.searchParams.set(key,value);
  return u.pathname+u.search+u.hash;
 }
 export function cartIssues(cart){

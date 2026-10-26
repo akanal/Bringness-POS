@@ -10,7 +10,7 @@ test('shareable catalog state is bounded, normalized and strips noncatalog param
  const initial='https://fixture.example.test/shop/?token=secret&amount=1#token=private';
  const state={query:'POS Windows & Zubehör',category:'Software',period:'once',priced:true,sort:'name',view:'list',product:'pos-download'};
  const path=browseLocation(initial,state);assert.ok(!path.includes('secret'));assert.ok(!path.includes('private'));assert.ok(!path.includes('amount'));
- assert.deepEqual(readBrowseLocation(path),state);
+ assert.deepEqual(readBrowseLocation(path),{...state,minPrice:'',maxPrice:'',city:''});
  const bad=readBrowseLocation('/shop/?q='+encodeURIComponent('x'.repeat(1000))+'&category=foreign&period=yearly&sort=evil&view=unknown&product=foreign&priced=yes');
  assert.equal(bad.query.length,150);assert.equal(bad.category,'Alle');assert.equal(bad.period,'all');assert.equal(bad.product,null);assert.equal(bad.priced,false);
  assert.equal(browseLocation('/shop/#angebote',{query:'',category:'foreign'}),'/shop/#angebote');
@@ -58,7 +58,7 @@ test('real DOM restores product link, filters and Back/Forward; details and save
   $('saved-open').click();click('#saved-content button','In den Warenkorb');assert.equal($('cart-dialog').open,true);assert.equal($('saved-dialog').open,false);assert.equal($('cart-count').textContent,'1');assert.equal($('review-open').disabled,false);$('cart-dialog').close();
   $('search').value='POS Online';$('search').dispatchEvent(new w.Event('input'));click('.card-actions button','In den Warenkorb');$('cart-open').click();assert.equal($('review-open').disabled,false);assert.match($('cart-issues').textContent,/nur eine Basislizenz/);
   click('#cart-content button','Entfernen');assert.equal($('review-open').disabled,false);assert.equal($('cart-issues').textContent,'');
-  assert.equal($('search-suggestions').children.length,3);assert.equal(f.calls(),0);
+  assert.equal($('search-suggestions').children.length,1);assert.equal(f.calls(),0);
  }finally{f.cleanup();}
 });
 
