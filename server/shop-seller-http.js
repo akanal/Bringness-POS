@@ -23,7 +23,7 @@ export function createSellerRuntime(pool,{enabled=false,publicOrigin='https://br
     const command=await readShopRequestBody(req,{maxBytes:16384,timeoutMs:bodyTimeoutMs});result=await writeSellerDraft(pool,{token,command});
    }else{
     assertEmptyShopRequest(req);if(url.hash)throw Error('INVALID_REQUEST');
-    if(url.pathname===base){if([...url.searchParams.keys()].some(k=>!['q','state','cursor'].includes(k))||['q','state','cursor'].some(k=>url.searchParams.getAll(k).length>1))throw Error('INVALID_REQUEST');result=await listSellerDrafts(pool,{token,query:url.searchParams.get('q')??'',state:url.searchParams.get('state')??'draft',cursor:url.searchParams.get('cursor')});}
+    if(url.pathname===base){if([...url.searchParams.keys()].some(k=>!['q','state','cursor','category','kind','stock'].includes(k))||['q','state','cursor','category','kind','stock'].some(k=>url.searchParams.getAll(k).length>1))throw Error('INVALID_REQUEST');result=await listSellerDrafts(pool,{token,query:url.searchParams.get('q')??'',state:url.searchParams.get('state')??'draft',category:url.searchParams.get('category')??'Alle',kind:url.searchParams.get('kind')??'all',stock:url.searchParams.get('stock')??'all',cursor:url.searchParams.get('cursor')});}
     else{
      if(url.search)throw Error('INVALID_REQUEST');const parts=url.pathname.slice(base.length+1).split('/');
      if(parts.length===1)result=await readSellerDraft(pool,{token,id:parts[0]});
