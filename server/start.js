@@ -68,7 +68,8 @@ if(appMode!=='ai'&&process.env.SHOP_REGISTRATION_ENABLED!=='false'){
   catch{console.error('Shop registration configuration unavailable; registration remains closed.');}
 }
 const shopRuntime=createShopRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_DRAFTS_ENABLED!=='false'});
-const shopAssistant=createShopAssistant(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_ASSISTANT_ENABLED!=='false',key:process.env.SHOP_ASSISTANT_API_KEY||process.env.OPENAI_API_KEY,model:process.env.SHOP_ASSISTANT_MODEL||process.env.OPENAI_MODEL,publicOrigin:process.env.SHOP_PUBLIC_ORIGIN||'https://bringness.de'});
+let shopAssistant={migrate:async()=>{},handle:async()=>false};
+try{shopAssistant=createShopAssistant(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_ASSISTANT_ENABLED!=='false',key:process.env.SHOP_ASSISTANT_API_KEY||process.env.OPENAI_API_KEY,model:process.env.SHOP_ASSISTANT_MODEL||process.env.OPENAI_MODEL,publicOrigin:process.env.SHOP_PUBLIC_ORIGIN||'https://bringness.de'});}catch{console.error('Shop assistant configuration unavailable; guided help remains available.');}
 const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_SELLER_DRAFTS_ENABLED!=='false'});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
