@@ -1,3 +1,5 @@
+import {sellerListFilters} from '../apps/web/public/shop/seller-list-policy.js';
+import {categories,categoryMatches} from '../apps/web/public/shop/departments.js';
 import crypto from 'node:crypto';
 import {shopActor,sessionHash,shopError} from './shop-account.js';
 import {offerId,validateOffer} from '../apps/web/public/shop/offer-policy.js';
@@ -61,10 +63,19 @@ export async function sellerDraftHistory(pool,{token,id}){
   return {id,versions:rows.map(row=>({revision:row.revision,action:row.action,state:row.state,createdAt:new Date(row.created_at).toISOString()})),limit:20,canPublish:false};
  });
 }
-export async function listSellerDrafts(pool,{token,query='',state='draft',cursor=null}){
- if(typeof query!=='string'||query.length>120||!['draft','archived'].includes(state)||cursor!==null&&!offerId(cursor))error('INVALID_REQUEST');
+export async function listSellerDrafts(pool,{token,query='',state='draft',category='Alle',kind='all',stock='all',cursor=null}){
+ const filters=sellerListFilters({query,state,category,kind,stock});if(cursor!==null&&!offerId(cursor))error('INVALID_REQUEST');
+ const selectedCategories=categories.filter(c=>c!=='Alle'&&categoryMatches(c,filters.category));
+ const words=filters.query?filters.query.toLocaleLowerCase('de').split(' '):[];
  return transaction(pool,token,false,async(db,company)=>{
-  const rows=(await db.query("SELECT * FROM shop_seller_offers WHERE company_id=$1 AND state=$2 AND ($3='' OR strpos(lower(coalesce(payload->>'title','')||' '||coalesce(payload->>'category','')||' '||coalesce(payload->>'sku','')),lower($3))>0) AND ($4::text IS NULL OR id>$4) ORDER BY id LIMIT 26",[company,state,query.trim(),cursor])).rows;
-  return {offers:rows.slice(0,25).map(present),nextCursor:rows.length>25?rows[24].id:null,limit:25,canPublish:false};
+  const where=`company_id=$1 AND state=$2
+   AND NOT EXISTS(SELECT 1 FROM unnest($3::text[]) word WHERE strpos(lower(coalesce(payload->>'title','')||' '||coalesce(payload->>'category','')||' '||coalesce(payload->>'sku','')||' '||coalesce(payload->>'gtin','')||' '||coalesce(payload->>'description','')||' '||coalesce(payload->>'delivery','')||' '||coalesce(payload->>'fulfilment','')),word)=0)
+   AND (payload->>'category')=ANY($4::text[])
+   AND ($5='all' OR payload->>'kind'=$5)
+   AND ($6='all' OR payload->>'kind'='physical' AND (($6='empty' AND coalesce(payload->>'stock','')~'^0+$') OR ($6='available' AND coalesce(payload->>'stock','')~'^[0-9]{1,7}$' AND coalesce(payload->>'stock','')!~'^0+$')))`;
+  const params=[company,filters.state,words,selectedCategories,filters.kind,filters.stock];
+  const total=Number((await db.query('SELECT count(*) AS count FROM shop_seller_offers WHERE '+where,params)).rows[0].count);
+  const rows=(await db.query('SELECT * FROM shop_seller_offers WHERE '+where+' AND ($7::text IS NULL OR id>$7) ORDER BY id LIMIT 26',[...params,cursor])).rows;
+  return {offers:rows.slice(0,25).map(present),nextCursor:rows.length>25?rows[24].id:null,limit:25,total,filters,canPublish:false};
  });
 }
