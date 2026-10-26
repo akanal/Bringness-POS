@@ -1,3 +1,4 @@
+import {departments} from './departments.js';
 import {mountLegacyPaymentReturnNotice} from './payment-return-notice.js';
 import {setShopStatus,clearShopStatus,draftStatusKey} from './status-view.js';
 import {mountDraftHistory} from './draft-history.js';
@@ -19,6 +20,17 @@ const savedKey='bringness.shop.saved.v1',recentKey='bringness.shop.recent.v1',co
 let saved=readProductIds(browserSession,savedKey),recent=readProductIds(browserSession,recentKey),compared=readProductIds(browserSession,compareKey);
 let removedItem=null,quoteTimer=null,requestBusy=false;
 let disabledControls=new Map();
+const categorySelect=$('search-category'), categoryFilters=document.querySelector('.filters'), departmentGrid=document.querySelector('.department-grid');
+categorySelect.replaceChildren(); categoryFilters.replaceChildren(); departmentGrid.replaceChildren();
+for(const name of ['Alle',...departments.map(item=>item.name)]){
+ const option=document.createElement('option');option.value=name;option.textContent=name;categorySelect.append(option);
+ const filter=document.createElement('button');filter.type='button';filter.dataset.category=name;filter.textContent=name;filter.setAttribute('aria-pressed',String(name==='Alle'));categoryFilters.append(filter);
+}
+for(const department of departments){
+ const entry=document.createElement('button');entry.type='button';entry.dataset.department=department.name;
+ const title=document.createElement('strong');title.textContent=department.name;
+ const description=document.createElement('span');description.textContent=department.description;entry.append(title,description);departmentGrid.append(entry);
+}
 let cart=loadCart(browserSession),category='Alle',controller,generation=0,quote=null,draft=null;
 const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 const button=(text,fn,cls)=>{const e=node('button',text,cls);e.addEventListener('click',fn);return e;};
@@ -31,7 +43,7 @@ function price(p){return p.netCents===null?'Preis folgt':money(p.netCents);}
 function renderProducts(){
  const focused=document.activeElement?.dataset;const focusProduct=focused?.product,focusAction=focused?.action;
  const list=browseProducts({query:$('search').value,category,period:$('period-filter').value,priced:$('priced-filter').checked,sort:$('sort').value});renderFilterSummary();renderCategoryCounts();$('result-count').textContent=`${list.length} ${list.length===1?'Angebot':'Angebote'}`;$('products').replaceChildren();
- if(!list.length){$('products').append(node('p',category==='Hardware'||category==='Zubehör'?'Angebote in dieser Kategorie sind noch nicht freigeschaltet.':'Keine passenden Angebote gefunden.','empty'),button('Alle Angebote anzeigen',resetFilters,'outline'));return;}
+ if(!list.length){$('products').append(node('p',category!=='Alle'&&!products.some(p=>p.category===category)?'Angebote in dieser Kategorie sind noch nicht freigeschaltet.':'Keine passenden Angebote gefunden.','empty'),button('Alle Angebote anzeigen',resetFilters,'outline'));return;}
  for(const p of list){const card=node('article',undefined,'card'),art=node('div',p.id==='pos-online'?'POS / Online':p.id==='pos-download'?'POS / Windows':'Bringness / AI','product-art'),body=node('div',undefined,'card-body');const name=node('h3');markSearch(name,p.name,$('search').value);body.append(node('small',p.tag),name,node('p',p.description),node('div',price(p),'price'),node('span',p.period==='monthly'?'netto / Monat':p.period==='once'?'netto / einmalig':'Noch nicht bestellbar','period'));const amounts=catalogAmounts(p);body.append(node('p',amounts?`${money(amounts.grossCents)} brutto ${p.period==='monthly'?'pro Monat':'einmalig'}`:'Endgültiger Preis noch offen','card-gross'),node('span',amounts?'Shop-Vorschau':'In Vorbereitung','product-status'));const actions=node('div',undefined,'card-actions');const details=button('Details ansehen',()=>detail(p),'outline');details.dataset.product=p.id;details.dataset.action='details';actions.append(details);if(p.netCents!==null)actions.append(button('In den Warenkorb',()=>add(p.id),'action-primary'));const tools=node('div',undefined,'product-tools');for(const [action,active,text,fn]of [['save',saved.includes(p.id),saved.includes(p.id)?'Gemerkt':'Merken',()=>toggleSaved(p.id)],['compare',compared.includes(p.id),compared.includes(p.id)?'Aus Vergleich entfernen':'Vergleichen',()=>toggleCompared(p.id)]]){const control=button(text,fn,'outline');control.dataset.product=p.id;control.dataset.action=action;control.setAttribute('aria-pressed',String(active));control.setAttribute('aria-label',text+' · '+p.name);tools.append(control);}body.append(actions,tools);card.append(art,body);$('products').append(card);}
  if(focusProduct&&focusAction)document.querySelector(`[data-product="${focusProduct}"][data-action="${focusAction}"]`)?.focus();
 }

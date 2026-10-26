@@ -1,5 +1,5 @@
 import {products,validateCart} from './catalog.js';
-const categories=['Alle','Software','Hardware','Zubehör'];
+import {categories} from './departments.js';
 const periods=['all','monthly','once','unknown'];
 const sorts=['default','name','price-asc','price-desc'];
 export function readBrowseLocation(href){
