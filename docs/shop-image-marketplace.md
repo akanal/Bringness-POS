@@ -1,0 +1,7 @@
+# Image-led marketplace styling — 2026-10-26
+
+Owner supplied Screenshot (300)(1).png, an Amazon marketplace reference, and requested more imagery, a similar header and shopping cart. Implemented an independent Bringness design: dark two-row header, broad search, warm search action, account/order links, outlined cart with existing live item count, colourful linked topic cards, generated category imagery and responsive category cards.
+
+Existing cart/dialog/search hooks and all prices and payment gates are retained. Three original, unbranded category illustrations were generated with the built-in image tool and encoded to WebP without changing image content. Combined published images are approximately 204 KB; larger originals are not part of the deployed source. Prompts: (1) everyday technology, clothing and home-goods studio still life; (2) headphones, laptop and speaker against lavender; (3) sweatshirt, sneakers, backpack and cap against powder blue. No third-party product pictures, fake seller inventory, discounts or ratings.
+
+Asset paths: apps/web/public/shop/images/marketplace-life.webp, marketplace-tech.webp and marketplace-fashion.webp. Category imagery is illustrative and not linked into a purchase path for fictional products. Mobile topic cards scroll horizontally; reduced-motion preference respected. Syntax check completed; pre-existing automated release workflows provide their own evidence, not seller workflow acceptance.
