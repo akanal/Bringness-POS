@@ -1,4 +1,4 @@
-import {categories} from './departments.js';
+import {categories} from './departments.js?v=categories-20261026';
 export const draftKey='bringness.marketplace.offer-drafts.v1';
 export const offerKinds=Object.freeze(['physical','digital','service']);
 export function validateOffer(input){

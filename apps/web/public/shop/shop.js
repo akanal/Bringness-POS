@@ -1,4 +1,5 @@
-import {departments} from './departments.js';
+import {rootDepartments,categoryMatches} from './departments.js?v=categories-20261026';
+import {mountCategorySelect,mountCategoryDirectory,mountCategoryFilters} from './category-controls.js';
 import {mountLegacyPaymentReturnNotice} from './payment-return-notice.js';
 import {setShopStatus,clearShopStatus,draftStatusKey} from './status-view.js';
 import {mountDraftHistory} from './draft-history.js';
@@ -7,10 +8,10 @@ import {markSearch} from './search-view.js';
 import {mountReferenceField} from './reference-field.js';
 import {currentShopQuote,shopDate,draftPhase} from './review-state.js';
 import {mountProductView,catalogAmounts} from './product-view.js';
-import {readBrowseLocation,browseLocation,cartIssues,sessionStore} from './navigation.js';
-import {browseProducts,readProductIds,writeProductIds} from './browse.js';
+import {readBrowseLocation,browseLocation,cartIssues,sessionStore} from './navigation.js?v=categories-20261026';
+import {browseProducts,readProductIds,writeProductIds} from './browse.js?v=categories-20261026';
 import {mountCheckout} from './checkout-flow.js';
-import {products,money,loadCart,saveCart,reviewCart,validateCart} from './catalog.js';
+import {products,money,loadCart,saveCart,reviewCart,validateCart} from './catalog.js?v=categories-20261026';
 const resumeShopReview=window.location.hash==='#review';
 const $=id=>document.getElementById(id);
 if(mountLegacyPaymentReturnNotice({host:$('payment-return-notice'),href:window.location.href})){try{window.history.replaceState(null,'',browseLocation(window.location.href,readBrowseLocation(window.location.href)));}catch{/* The captured notice remains usable if URL cleanup is unavailable. */}}
@@ -21,12 +22,9 @@ let saved=readProductIds(browserSession,savedKey),recent=readProductIds(browserS
 let removedItem=null,quoteTimer=null,requestBusy=false;
 let disabledControls=new Map();
 const categorySelect=$('search-category'), categoryFilters=document.querySelector('.filters'), departmentGrid=document.querySelector('.department-grid');
-categorySelect.replaceChildren(); categoryFilters.replaceChildren(); departmentGrid.replaceChildren();
-for(const name of ['Alle',...departments.map(item=>item.name)]){
- const option=document.createElement('option');option.value=name;option.textContent=name;categorySelect.append(option);
- const filter=document.createElement('button');filter.type='button';filter.dataset.category=name;filter.textContent=name;filter.setAttribute('aria-pressed',String(name==='Alle'));categoryFilters.append(filter);
-}
-for(const department of departments){
+mountCategorySelect(categorySelect,{includeAll:true});mountCategoryFilters(categoryFilters);departmentGrid.replaceChildren();
+mountCategoryDirectory({host:$('category-directory-list'),search:$('category-directory-search'),status:$('category-directory-status')});
+for(const department of rootDepartments){
  const entry=document.createElement('button');entry.type='button';entry.dataset.department=department.name;
  const categoryImages={'Software':'tech','Hardware':'tech','Elektronik':'tech','Zubehör':'tech','Mode & Accessoires':'fashion','Sport & Freizeit':'fashion','Haus & Garten':'life'};
  const imageName=categoryImages[department.name];if(imageName){const illustration=document.createElement('img');illustration.src='./images/marketplace-'+imageName+'.webp';illustration.alt='';illustration.loading='lazy';illustration.width=320;illustration.height=220;entry.append(illustration);}
@@ -45,7 +43,7 @@ function price(p){return p.netCents===null?'Preis folgt':money(p.netCents);}
 function renderProducts(){
  const focused=document.activeElement?.dataset;const focusProduct=focused?.product,focusAction=focused?.action;
  const list=browseProducts({query:$('search').value,category,period:$('period-filter').value,priced:$('priced-filter').checked,sort:$('sort').value});renderFilterSummary();renderCategoryCounts();$('result-count').textContent=`${list.length} ${list.length===1?'Angebot':'Angebote'}`;$('products').replaceChildren();
- if(!list.length){$('products').append(node('p',category!=='Alle'&&!products.some(p=>p.category===category)?'Angebote in dieser Kategorie sind noch nicht freigeschaltet.':'Keine passenden Angebote gefunden.','empty'),button('Alle Angebote anzeigen',resetFilters,'outline'));return;}
+ if(!list.length){$('products').append(node('p',category!=='Alle'&&!products.some(p=>categoryMatches(p.category,category))?'Angebote in dieser Kategorie sind noch nicht freigeschaltet.':'Keine passenden Angebote gefunden.','empty'),button('Alle Angebote anzeigen',resetFilters,'outline'));return;}
  for(const p of list){const card=node('article',undefined,'card'),art=node('div',p.id==='pos-online'?'POS / Online':p.id==='pos-download'?'POS / Windows':'Bringness / AI','product-art'),body=node('div',undefined,'card-body');const name=node('h3');markSearch(name,p.name,$('search').value);body.append(node('small',p.tag),name,node('p',p.description),node('div',price(p),'price'),node('span',p.period==='monthly'?'netto / Monat':p.period==='once'?'netto / einmalig':'Noch nicht bestellbar','period'));const amounts=catalogAmounts(p);body.append(node('p',amounts?`${money(amounts.grossCents)} brutto ${p.period==='monthly'?'pro Monat':'einmalig'}`:'Endgültiger Preis noch offen','card-gross'),node('span',amounts?'Shop-Vorschau':'In Vorbereitung','product-status'));const actions=node('div',undefined,'card-actions');const details=button('Details ansehen',()=>detail(p),'outline');details.dataset.product=p.id;details.dataset.action='details';actions.append(details);if(p.netCents!==null)actions.append(button('In den Warenkorb',()=>add(p.id),'action-primary'));const tools=node('div',undefined,'product-tools');for(const [action,active,text,fn]of [['save',saved.includes(p.id),saved.includes(p.id)?'Gemerkt':'Merken',()=>toggleSaved(p.id)],['compare',compared.includes(p.id),compared.includes(p.id)?'Aus Vergleich entfernen':'Vergleichen',()=>toggleCompared(p.id)]]){const control=button(text,fn,'outline');control.dataset.product=p.id;control.dataset.action=action;control.setAttribute('aria-pressed',String(active));control.setAttribute('aria-label',text+' · '+p.name);tools.append(control);}body.append(actions,tools);card.append(art,body);$('products').append(card);}
  if(focusProduct&&focusAction)document.querySelector(`[data-product="${focusProduct}"][data-action="${focusAction}"]`)?.focus();
 }
@@ -101,9 +99,10 @@ $('draft-save').onclick=()=>action(async ctx=>{if(!currentShopQuote(quote))throw
 const recoverButton=button('Vorhandenen Entwurf suchen',()=>{if(requestBusy)return; $('draft-controls').hidden=false;$('draft-result').replaceChildren();action(recover);},'outline');$('account-check').after(recoverButton);
 for(const d of document.querySelectorAll('dialog')){d.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>d.close());d.addEventListener('close',()=>{if(d.id==='review-dialog')invalidate();if(d.id==='detail-dialog'&&!restoringNavigation)writeNavigation(false,null);const opener=openers.get(d);if(d.id==='detail-dialog'&&$('cart-dialog').open&&opener?.dataset.cartProduct){const target=document.querySelector(`[data-cart-product="${opener.dataset.cartProduct}"][data-cart-action="${opener.dataset.cartAction}"]`);target?.focus();return;}if(opener?.isConnected&&!opener.closest('dialog:not([open])'))opener.focus();else if(opener?.dataset.product){document.querySelector(`[data-product="${opener.dataset.product}"][data-action="${opener.dataset.action}"]`)?.focus();}});d.addEventListener('keydown',e=>{if(e.key!=='Tab')return;const focusable=[...d.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],summary,[tabindex]:not([tabindex="-1"])')].filter(n=>n.getClientRects().length);const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}});}
 $('cart-open').onclick=()=>{$('cart-feedback').hidden=true;renderCart();show('cart-dialog');};$('review-open').onclick=()=>{if(!Object.keys(cart).length)return;$('cart-dialog').close();renderReview();show('review-dialog');};$('review-back').onclick=()=>{$('review-dialog').close();renderCart();show('cart-dialog');};$('search').addEventListener('input',()=>{renderProducts();writeNavigation(false);});
-function setCategory(value){category=value;$('search-category').value=value;document.querySelectorAll('[data-category]').forEach(e=>e.setAttribute('aria-pressed',String(e.dataset.category===value)));renderProducts();writeNavigation(true);}
+function setCategory(value){category=value;$('search-category').value=value;document.querySelectorAll('[data-category]').forEach(e=>{const selected=e.dataset.category===value;e.setAttribute('aria-pressed',String(selected));if(selected&&e.closest('details'))e.closest('details').open=true;});renderProducts();writeNavigation(true);}
 for(const b of document.querySelectorAll('[data-category]'))b.onclick=()=>setCategory(b.dataset.category);
 for(const b of document.querySelectorAll('[data-department]'))b.onclick=()=>{setCategory(b.dataset.department);$('angebote').scrollIntoView?.({behavior:'smooth'});};
+document.querySelector('.all-categories').addEventListener('click',()=>{$('alle-kategorien').open=true;$('category-directory-search').focus({preventScroll:true});});
 $('search-category').onchange=()=>setCategory($('search-category').value);
 $('search-form').onsubmit=e=>{e.preventDefault();renderProducts();writeNavigation(true);$('angebote').scrollIntoView?.({behavior:'smooth'});};
 for(const id of ['period-filter','priced-filter','sort'])$(id).addEventListener('change',()=>{renderProducts();writeNavigation(true);});
@@ -128,7 +127,7 @@ $('recent-clear').onclick=()=>{recent=[];const stored=writeProductIds(browserSes
 function saveCartItemForLater(id){const next=[...new Set([...saved,id])];if(!writeProductIds(browserSession,savedKey,next)){$('storage-status').textContent='Die Merkliste konnte nicht gespeichert werden. Der Artikel bleibt im Warenkorb.';$('announcement').textContent=$('storage-status').textContent;return;}saved=next;renderSaved();renderProducts();removeCartItem(id);}
 function removeCartItem(id){removedItem={id,quantity:cart[id]};delete cart[id];changed();renderCart();$('announcement').textContent='Artikel entfernt. Rückgängig ist im Warenkorb verfügbar.';}
 function renderCartUndo(){const box=$('cart-undo');box.replaceChildren();if(!removedItem)return;const old=removedItem;box.append(node('span',products.find(p=>p.id===old.id).name+' wurde entfernt.'),button('Entfernen rückgängig',()=>{const quantity=(cart[old.id]||0)+old.quantity;if(quantity>99){$('announcement').textContent='Rückgängig derzeit nicht möglich: Die Höchstmenge von 99 würde überschritten.';return;}cart[old.id]=quantity;removedItem=null;changed();renderCart();$('announcement').textContent='Artikel wieder im Warenkorb.';},'outline'));}
-function renderCategoryCounts(){const list=browseProducts({query:$('search').value,period:$('period-filter').value,priced:$('priced-filter').checked});for(const b of document.querySelectorAll('[data-category]')){const name=b.dataset.category,count=name==='Alle'?list.length:list.filter(p=>p.category===name).length;b.textContent=name+' ('+count+')';}}
+function renderCategoryCounts(){const list=browseProducts({query:$('search').value,period:$('period-filter').value,priced:$('priced-filter').checked});for(const b of document.querySelectorAll('[data-category]')){const name=b.dataset.category,count=name==='Alle'?list.length:list.filter(p=>categoryMatches(p.category,name)).length;b.textContent=name+' ('+count+')';}}
 $('filter-toggle').onclick=()=>{const expanded=$('filter-toggle').getAttribute('aria-expanded')!=='true';$('filter-toggle').setAttribute('aria-expanded',String(expanded));$('filter-panel').classList.toggle('filters-collapsed',!expanded);};
 function renderCartFeedback(id){$('cart-feedback-product').textContent=products.find(p=>p.id===id).name+' wurde hinzugefügt.';const box=$('cart-feedback-totals');box.replaceChildren();totals(box,reviewCart(cart).groups);$('cart-feedback').hidden=false;}
 $('cart-feedback-close').onclick=()=>{$('cart-feedback').hidden=true;};
