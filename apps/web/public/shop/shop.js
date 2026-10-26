@@ -13,6 +13,7 @@ import {browseProducts,readProductIds,writeProductIds} from './browse.js?v=categ
 import {mountCheckout} from './checkout-flow.js';
 import {products,money,loadCart,saveCart,reviewCart,validateCart} from './catalog.js?v=categories-20261026';
 const resumeShopReview=window.location.hash==='#review';
+const resumeSelection=window.location.hash;
 const $=id=>document.getElementById(id);
 if(mountLegacyPaymentReturnNotice({host:$('payment-return-notice'),href:window.location.href})){try{window.history.replaceState(null,'',browseLocation(window.location.href,readBrowseLocation(window.location.href)));}catch{/* The captured notice remains usable if URL cleanup is unavailable. */}}
 const browserSession=sessionStore(window);
@@ -156,3 +157,9 @@ renderSaved();renderRecent();$('compare-count').textContent=compared.length;rest
 window.addEventListener('storage',e=>{if(e.key==='bringness-pos-token'||e.key===null){invalidate();draftHistory.clear('Das Konto hat gewechselt. Bitte den Verlauf neu laden.');}});document.addEventListener('visibilitychange',()=>{if(document.hidden){invalidate();draftHistory.clear();}});changed();renderProducts();
 
 if(resumeShopReview){renderReview();show('review-dialog');setShopStatus($('account-status'),'draft','Bitte Konto und Preise erneut prüfen.');}
+
+// Explicit navigation from the customer overview; opening a selection never submits a request.
+if(resumeSelection==='#cart'){renderCart();show('cart-dialog');}
+if(resumeSelection==='#saved'){renderSaved();show('saved-dialog');}
+if(resumeSelection==='#compare'){renderComparison();show('compare-dialog');}
+if(resumeSelection==='#alle-kategorien')$('alle-kategorien').open=true;
