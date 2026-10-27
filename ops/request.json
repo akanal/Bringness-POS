@@ -1,5 +1,5 @@
 {
-  "operation": "status",
+  "operation": "backup",
   "target": "all",
-  "requestId": "shop-release-preflight-20261027"
+  "requestId": "shop-release-backup-20261027"
 }
