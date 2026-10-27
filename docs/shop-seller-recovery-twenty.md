@@ -22,7 +22,7 @@ The owner requested autonomous continuation in twenty-point blocks. This package
 | 16 | History action/state | Archive must be archived; save/restore must be draft. Null/malformed rows are rejected. |
 | 17 | Lost first-save reply | Identical retry retains its original ID/request; successful recovery fills the confirmed ID. |
 | 18 | Edits after a lost reply | Newer form edits remain intact. Further account saves are blocked until explicit reload; export remains available. Cancelling reload preserves the edits and gate. |
-| 19 | Account/visibility transitions | Existing privacy clearing and account binding retained; pending-request UI now ignores stale asynchronous results. Recovery gates reset on account change, not on an unrelated local save. |
+| 19 | Account/visibility transitions | Existing privacy clearing and account binding retained; pending-request UI now ignores stale asynchronous results. Save/retry/resume also stop before transport when their identity check outlives the editor operation. Recovery gates reset on account change, not on an unrelated local save. |
 | 20 | Browser acceptance | Native regression added for real lost-response recovery, cancelled/accepted reload and overflow at 390/768/1280, using disposable accounts and PostgreSQL only. Record actual CI outcome below. |
 
 ## Validation

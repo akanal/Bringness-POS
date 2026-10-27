@@ -24,6 +24,8 @@ export async function sellerRecoveryBrowserChecks({page,base}){
    page.once('dialog',dialog=>dialog.dismiss());await page.locator('#cloud-editor-load').click();assert.equal(await page.locator('[name=title]').inputValue(),'CI newer unsaved '+width);assert.equal(await page.locator('#cloud-editor-save').isDisabled(),true);
    page.once('dialog',dialog=>dialog.accept());await page.locator('#cloud-editor-load').click();await page.locator('#cloud-editor-status').filter({hasText:'Aus dem Betriebskonto geladen'}).waitFor();
    assert.equal(await page.locator('[name=title]').inputValue(),'CI recovery '+width);assert.equal(await page.locator('#cloud-editor-save').isDisabled(),false);
+   await page.evaluate(async()=>{document.querySelector('#cloud-editor-save').click();window.dispatchEvent(new Event('pagehide'));await new Promise(resolve=>setTimeout(resolve,100));});
+   assert.equal(writes.length,2,'A page hidden during identity checking must not submit a new write');
   }finally{await page.unroute('**/api/v1/shop/seller/offers',route);}
  }
 }

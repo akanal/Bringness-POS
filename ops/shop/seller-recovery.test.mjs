@@ -52,5 +52,10 @@ test('lost first-save replay retains newer edits and requires explicit reload be
   $('cloud-editor-save').onclick();assert.equal(writes.length,2,'No new ID or revision may be submitted after replay');
   $('cloud-editor-load').click();await waitFor(()=>!$('cloud-editor-save').disabled);assert.equal(form.elements.title.value,offer.title);
   w.dispatchEvent(new w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(form.elements.title.value,'');assert.equal($('preview-content').textContent,'');
+  for(const [key,value]of Object.entries(offer))if(form.elements[key])form.elements[key].value=value;
+  form.dispatchEvent(new w.Event('input',{bubbles:true}));$('cloud-editor-save').click();
+  w.dispatchEvent(new w.Event('pagehide'));
+  await new Promise(resolve=>setTimeout(resolve,100));
+  assert.equal(writes.length,2,'A save invalidated during its identity check must never reach transport');
  }finally{restoreFetch();restore();w.close();}
 });
