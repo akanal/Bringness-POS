@@ -35,6 +35,10 @@ Earlier handoffs did not retain original publication/SKU mappings. They may be a
 
 ## Verification
 
-23 focused service tests passed, including original marketplace regressions. 13 client/UI tests passed. A full suite run passed640 before the six new UI checks were added. Expanded native Chromium passed at390/768/1280, including dropped committed cancellation reply, customer status, pickup readiness/cancellation and shipping. Visual QA found and fixed an existing empty-cart reload warning; browser regression now verifies that an empty committed selection is valid. Mobile status layout was reviewed.
+Application/test head `6a3cfeef9422e0818c4d5b4df5dbcd868dae07e8` passed all three applicable workflows:
 
-Final full suite and actual PostgreSQL CI results must be recorded before claiming them. All fixtures run in disposable databases; canonical-Origin browser interception forwards solely to loopback. No production account, merchant, order, secret, provider or financial fixture.
+- Shop run40566719695/job122409842571:646 tests, zero failures/cancellations/skips; actual application entrypoint with PostgreSQL16 and native Chrome passed. Includes concurrent last-unit ordering, simultaneous identical cancellation, exact-once stock restoration and stale competing cancellation rejection.
+- Native merchant/customer journeys at390/768/1280 cover acceptance, cancellation, a lost committed cancellation reply, customer status, pickup readiness/cancellation and shipment. Screenshots artifact12764155842; final local mobile status and seller layouts visually reviewed. The existing empty committed cart reload warning was fixed and regression checked.
+- POS/AI completion run40566719806 and isolated runtime/browser/network-fence/encrypted-backup+restore run40566719816 passed.
+
+Local application/test tree `ca6cf0b97343e7bf1e8bdb3b287d0c6b02aa0e46` matches the tested remote source tree. Subsequent verification-record changes are documentation only. All fixtures use disposable databases; canonical-Origin browser interception forwards solely to loopback. No production account, merchant, order, secret, provider or financial fixture. No merge or deployment.
