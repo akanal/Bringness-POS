@@ -39,4 +39,12 @@ Manuelle Datenprüfung ist eine dokumentierte Administratorentscheidung, keine a
 
 ## Prüfung
 
-Neue lokale Service- und UI-Prüfungen bestanden zunächst (9 + 7 neue Tests sowie 7 bestehende Client-Tests). Vollständige Shop-Suite und unabhängige PostgreSQL-/Chrome-Prüfung folgen am finalen Code-Commit. Browserdownload lokal fehlgeschlagen; keine lokale native Browserabnahme behauptet. CI verwendet den vorhandenen nativen Chrome und die leere, ausdrücklich dafür reservierte PostgreSQL-Datenbank.
+Anwendungs-/Prüfcommit `beb9571a172f388b30525b464505bb1aa7ed17a0` in PR #165 besteht alle drei relevanten Workflows:
+
+- Shop-Integration 40577226646 / Job 122446792782: 663 Tests, keine Fehler/übersprungenen Tests; tatsächlicher Anwendungseinstieg mit PostgreSQL und nativem Chrome erfolgreich.
+- Expliziter Händlerantrag, manuelle Freigabe, verlorene Freigabeantwort und identische Wiederholung bei 390/768/1280. Zwei gleichzeitige verschiedene Sperrentscheidungen ergeben genau einen Erfolg und einen Revisionskonflikt; identische parallele Wiederfreigaben bleiben eine Mutation.
+- Bestehende Angebots-/Bestell-/Bestands-/Stornoabläufe bleiben erfolgreich. Zusätzliche Testkonten werden nur in der zuvor nachweislich leeren Loopback-Datenbank angelegt; das echte Registrierungslimit bleibt unverändert.
+- POS/AI-Integration 40577226633 erfolgreich; isolierte Gesamtanwendung 40577226711 einschließlich Browser, Netzwerksperre sowie verschlüsselter Sicherung/Wiederherstellung erfolgreich.
+- Browserartefakt 12766894194; mobile Händler- und Prüfseiten sowie Desktop-Prüfseite visuell kontrolliert. Der Superadmin-Einstieg steht im Freigabeabschnitt, damit die mobile Kopfzeile nicht überläuft.
+
+Lokale vollständige Suite: 662 Tests vor dem zusätzlichen Zugriffstest; abschließende gezielte Service-/UI-Prüfung: 17 Tests erfolgreich, bestehender Client separat ebenfalls erfolgreich. Der endgültige unabhängige Gesamtlauf enthält 663 Tests. Lokaler Browserdownload war fehlgeschlagen; native Abnahme erfolgte in CI. Dokumentationscommits danach verändern keinen Anwendungscode. Keine Zusammenführung/Bereitstellung oder echte Händler-/Zahlungsfreigabe.
