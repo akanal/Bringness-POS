@@ -86,7 +86,7 @@ try{
   await page.locator('.offer-import-list input[type=checkbox]').first().check();page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Auswahl als lokale Kopien übernehmen',exact:true}).click();assert.equal(await page.locator('#offer-list .offer-row').count(),1);assert.equal(await page.locator('[name=title]').inputValue(),'CI unsaved title remains');assert.equal(await page.locator('[name=price]').inputValue(),'');const importedLocals=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('bringness.marketplace.offer-drafts.v1')));assert.notEqual(importedLocals[0].id,sellerCommand.id);assert.equal(importedLocals[0].gtin,'4006381333931');
   page.once('dialog',dialog=>dialog.accept());await page.locator('[data-new-kind=service]').click();
   for(const width of [1280,390]){await page.setViewportSize({width,height:900});await page.goto(base+'/shop/assistant.html#buy');await page.locator('#assistant-products article').first().waitFor();assert.equal(await page.locator('#assistant-products article').count(),3);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Assistant overflow '+width);}
-  await sellerRecoveryBrowserChecks({page,base});
+  await sellerRecoveryBrowserChecks({browser,base,token:a.token});
   assert.deepEqual(errors,[]);await context.close();
  }
  console.log('Actual entrypoint + PostgreSQL: registration/replay, real login, quote, draft/replay, prepared checkout, account isolation, history, seller persistence/concurrency/archive/version reads and no financial grants passed.');
