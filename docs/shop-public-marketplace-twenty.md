@@ -84,3 +84,24 @@ run40559466349 also passed runtime/browser/network-fence/encrypted-backup/restor
 Subsequent refinements use euro inputs, preserve/clear reviewed totals correctly,
 bound corrupt-cart input and clarify that cloud rows are private working drafts.
 Final-head verification must still be recorded separately.
+
+## Final application verification
+
+Application/test head `873a2440b4b01106a22a4b6ecf4b70ac18aca1cd`
+(tree `9c3ca376b00c0ce051d8c455ef7d23cf22f94129`, identical to local `da1b26a`)
+passed Shop run40560163618/job122386717887: **625 tests, zero failures/skips**,
+then actual-entrypoint PostgreSQL/native Chrome acceptance. This includes the
+three-width seller publication/customer handoff/inbox/withdrawal journey, lost
+committed replies, concurrent last-piece competition and same-command replay.
+Final screenshot artifact:12761680130. Local final native acceptance also passed.
+
+The same head passed POS/AI completion run40560163435 and isolated POS/AI
+run40560163438, including real interfaces, network fencing and encrypted
+backup/restore. Center Chromium job122386666824 passed; Center WebKit
+job122386666270 was still installing its browser engine when recorded, so no
+WebKit or physical Safari/device acceptance is claimed. This independent installer
+does not change the successful marketplace results.
+
+PR #163 remains a draft stacked on #162. Subsequent verification-record changes
+are documentation only. No merge, deployment, seller provisioning, real order,
+provider call, payment or invoice was performed.
