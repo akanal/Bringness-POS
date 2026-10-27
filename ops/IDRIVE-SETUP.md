@@ -1,0 +1,38 @@
+# IDrive documents connection bootstrap
+
+Prepared for the existing Frankfurt-2 account and `bringness-documents`. This is a connection bootstrap, not an activated application document backend. No invoice or receipt migration, public access, retention change, deletion, service restart or application deployment is performed.
+
+## Observed access boundary
+
+The owner-connected IDrive browser successfully signed in and shows an existing `bringness-netcup-documents` read/write key limited to selected buckets. Its secret was not read or copied. Bucket encryption and versioning were previously confirmed in the UI. Global bucket privacy and each permission still require actual API/UI acceptance.
+
+The existing GitHub Actions SSH key is forced through `ops/netcup-command.sh`, which allows only status, backup, restart and deploy. It cannot execute this bootstrap or edit secret configuration. Do not bypass that restriction by adding secret-handling code to application startup, printing existing keys or weakening SSH. One interactive administrator console on the actual Netcup host is required for the initial setup. Existing automation is preserved.
+
+## Execution on the actual POS host
+
+Obtain this reviewed source revision on the server, then use a dedicated Python virtual environment. Inspect source before executing it as root. Do not run any command containing a secret or paste credentials into chat.
+
+```sh
+python3 -m venv /opt/bringness-pos/idrive-tools
+/opt/bringness-pos/idrive-tools/bin/pip install -r ops/idrive-setup-requirements.txt
+/opt/bringness-pos/idrive-tools/bin/python ops/configure-idrive-documents.test.py
+/opt/bringness-pos/idrive-tools/bin/python ops/configure-idrive-documents.py setup
+```
+
+The administrator enters the already-created access ID and secret at invisible terminal prompts. The target configuration directory must already exist, belong to root, have no writable group/other permissions, and have no symlink components. Credentials persist only after all connection checks succeed, exclusively in `/opt/bringness-pos/config/idrive-documents.json`, mode 600. An existing destination is never overwritten. No values are printed in failures. Preserve this protected file in the server's restricted secret backup process; never commit or upload it to ordinary artifact storage.
+
+The script uploads one tiny synthetic text object under `_bringness-connection-checks/<random>.txt`, with explicit private ACL, AES256 and a no-overwrite condition. It reads the exact bytes back and requires a specific anonymous AccessDenied/403. Timeout, 404, foreign-key error or 5xx is inconclusive and fails. Unsupported private ACL or conditional upload fails with no weakened fallback. The tiny test object remains because the application key deliberately has no delete permission. A failed probe may also leave this synthetic object. This proves the tested object's behavior only, not a whole-bucket policy audit, retention compliance or recovery of real business documents.
+
+An explicit later check can use the saved credentials, creating a new synthetic object:
+
+```sh
+/opt/bringness-pos/idrive-tools/bin/python ops/configure-idrive-documents.py check
+```
+
+No automatic retries or provider calls occur merely by importing the module or running its tests. No new administrator key is created. Read/write credentials can still upload new versions, so versioning is not a substitute for retention or a separate backup.
+
+## Validation and remaining work
+
+13 isolated tests passed locally with synthetic credentials and mocked S3, including non-overwrite/symlink/file-mode checks, fixed endpoint, no retries, encrypted byte-for-byte readback, public access rejection and nonconclusive provider results. No real Netcup-to-IDrive request has yet been run. SDK is pinned in the adjacent requirements file. Official API references: https://www.idrive.com/s3-storage-e2/guides/operations and https://docs.aws.amazon.com/boto3/latest/reference/services/s3/client/put_object.html.
+
+After actual server acceptance, implement a separate reviewed application adapter with tenant authorization, immutable object references/digests, bounded timeouts and controlled original-file retrieval. Do not claim application integration or full-bucket privacy from this bootstrap. Public media, external backups and final invoice retention/delivery are separate tasks. Account still displays a seven-day trial; no paid upgrade has been made.
