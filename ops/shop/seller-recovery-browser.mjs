@@ -13,7 +13,7 @@ export async function sellerRecoveryBrowserChecks({page,base}){
    if(lose){lose=false;const response=await request.fetch();assert.equal(response.status(),200);return request.abort('failed');}
    return request.continue();
   };
-  await page.route('**/api/v1/shop/seller/offers',route);
+  await page.route(base+'/api/v1/shop/seller/offers',route);
   try{
    await page.locator('#cloud-editor-save').click();await page.locator('#cloud-editor-retry:not([hidden])').waitFor();
    await page.locator('[name=title]').fill('CI newer unsaved '+width);await page.locator('#cloud-editor-retry').click();
@@ -26,6 +26,6 @@ export async function sellerRecoveryBrowserChecks({page,base}){
    assert.equal(await page.locator('[name=title]').inputValue(),'CI recovery '+width);assert.equal(await page.locator('#cloud-editor-save').isDisabled(),false);
    await page.evaluate(async()=>{document.querySelector('#cloud-editor-save').click();window.dispatchEvent(new Event('pagehide'));await new Promise(resolve=>setTimeout(resolve,100));});
    assert.equal(writes.length,2,'A page hidden during identity checking must not submit a new write');
-  }finally{await page.unroute('**/api/v1/shop/seller/offers',route);}
+  }finally{await page.unroute(base+'/api/v1/shop/seller/offers',route);}
  }
 }
