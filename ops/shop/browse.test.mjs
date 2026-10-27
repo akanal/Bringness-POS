@@ -56,3 +56,9 @@ test('real shop browsing: synchronized categories, views, wishlist, comparison, 
   assert.equal(calls,0);assert.ok([...w.document.querySelectorAll('#review-dialog button')].some(b=>b.disabled&&/Zahlung/.test(b.textContent)));
  }finally{for(const[k,v]of Object.entries(old)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}w.close();}
 });
+
+test('category and feature search are not cut off by long product descriptions',()=>{
+ assert.equal(browseProducts({query:'Software'}).length,3);
+ assert.deepEqual(browseProducts({query:'Cloud-TSE'}).map(p=>p.id),['pos-online']);
+ assert.deepEqual(browseProducts({query:'Software',period:'once',minPrice:'399',maxPrice:'399'}).map(p=>p.id),['pos-download']);
+});

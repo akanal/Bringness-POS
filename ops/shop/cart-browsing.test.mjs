@@ -56,3 +56,46 @@ test('cart can minimize, expand from footer, continue browsing and close with Es
 test('Escape does not dismiss the cart beneath an explicit product or review modal',async()=>{const f=await fixture('cart-dock-modal-boundary'),{w,$,click}=f;try{click('.card-actions button','In den Warenkorb');$('cart-open').click();click('#cart-content button','Details ansehen');w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal($('cart-dialog').open,true);$('detail-dialog').close();$('review-open').click();assert.equal($('cart-dialog').open,false);assert.equal($('review-dialog').open,true);assert.equal(w.document.body.classList.contains('cart-dock-open'),false);$('review-back').click();assert.equal($('cart-dialog').open,true);assert.equal($('review-dialog').open,false);assert.equal($('cart-summary').textContent,'1 Artikel');}finally{f.cleanup();}});
 test('saved removal undo restores order and comparison/cart actions retain explicit selection',async()=>{const f=await fixture('selection-tools',{before:w=>w.sessionStorage.setItem('bringness.shop.saved.v1',JSON.stringify(['pos-online','pos-download','bringness-ai']))}),{$,w}=f;try{$('saved-open').click();w.document.querySelector('[data-saved-row=pos-download] [data-saved-action=remove]').click();assert.equal($('saved-count').textContent,'2');assert.match($('saved-undo').textContent,/Windows/);$('saved-undo').querySelector('button').click();assert.deepEqual(JSON.parse(w.sessionStorage.getItem('bringness.shop.saved.v1')),['pos-online','pos-download','bringness-ai']);assert.equal(w.document.activeElement.dataset.savedId,'pos-download');w.document.querySelector('[data-saved-row=pos-online] [data-saved-action=compare]').click();assert.equal($('compare-count').textContent,'1');w.document.querySelector('[data-saved-row=pos-online] [data-saved-action=cart]').click();assert.equal($('saved-dialog').open,false);assert.equal($('cart-dialog').open,true);assert.equal($('cart-count').textContent,'1');$('cart-open').click();$('saved-open').click();const existing=w.document.querySelector('[data-saved-row=pos-online] [data-saved-action=cart]');assert.equal(existing.disabled,true);existing.click();assert.equal($('cart-count').textContent,'1');assert.equal(f.requests(),0);}finally{f.cleanup();}});
 test('comparison hides only equal facts and supports remembering and explicit cart transfer',async()=>{const f=await fixture('comparison-tools',{before:w=>w.sessionStorage.setItem('bringness.shop.compare.v1',JSON.stringify(['pos-online','pos-download']))}),{$,w}=f;try{$('compare-open').click();const rows=()=>Array.from(w.document.querySelectorAll('.comparison-table tbody tr:not(.comparison-actions)'));assert.equal(rows().length,6);$('compare-differences').checked=true;$('compare-differences').dispatchEvent(new w.Event('change'));assert.equal(rows().length,5);w.document.querySelector('[data-compare-id=pos-online][data-compare-action=save]').focus();w.document.querySelector('[data-compare-id=pos-online][data-compare-action=save]').click();assert.equal($('saved-count').textContent,'1');assert.equal(w.document.activeElement.dataset.compareAction,'save');w.document.querySelector('[data-compare-id=pos-online][data-compare-action=cart]').click();assert.equal($('compare-dialog').open,false);assert.equal($('cart-dialog').open,true);assert.equal($('cart-count').textContent,'1');$('cart-open').click();$('compare-open').click();assert.equal(w.document.querySelector('[data-compare-id=pos-online][data-compare-action=cart]').disabled,true);w.document.querySelector('[data-compare-id=pos-online][data-compare-action=remove]').focus();w.document.querySelector('[data-compare-id=pos-online][data-compare-action=remove]').click();assert.equal($('compare-differences').disabled,true);assert.equal(rows().length,6);assert.equal(w.document.activeElement.dataset.compareId,'pos-download');assert.equal(f.requests(),0);}finally{f.cleanup();}});
+
+test('invalid quantity stays visible across background additions, cart reopen and product details',async()=>{
+ const f=await fixture('quantity-edit-survives'),{w,$,click}=f;try{
+  click('.card-actions button','In den Warenkorb');$('cart-open').click();
+  let input=w.document.querySelector('[data-cart-action=quantity]');input.value='1.5';input.dispatchEvent(new w.Event('input'));
+  assert.equal($('review-open').disabled,true);assert.equal($('cart-count').textContent,'1');
+  click('.card-actions button','In den Warenkorb');input=w.document.querySelector('[data-cart-action=quantity]');
+  assert.equal(input.value,'1.5');assert.equal(input.getAttribute('aria-invalid'),'true');assert.equal($('review-open').disabled,true);assert.equal($('cart-count').textContent,'2');
+  $('cart-open').click();$('cart-open').click();assert.equal(w.document.querySelector('[data-cart-action=quantity]').value,'1.5');
+  click('#cart-content button','Details ansehen');$('detail-dialog').close();assert.equal($('review-open').disabled,true);
+  input=w.document.querySelector('[data-cart-action=quantity]');input.value='3';input.dispatchEvent(new w.Event('input'));input.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+  assert.equal($('review-open').disabled,false);assert.equal($('cart-count').textContent,'3');assert.equal(w.document.querySelector('.quantity-error').textContent,'');
+  assert.equal(JSON.parse(w.sessionStorage.getItem('bringness.shop.cart.v2'))['pos-online'],3);assert.equal(f.requests(),0);
+ }finally{f.cleanup();}
+});
+test('invalid other cart row remains blocked when another row changes or is removed',async()=>{
+ const f=await fixture('quantity-other-row'),{w,$}=f;try{
+  const add=[...w.document.querySelectorAll('.card-actions button')].filter(b=>b.textContent==='In den Warenkorb');add[0].click();add[1].click();$('cart-open').click();
+  const q=w.document.querySelector('[data-cart-product=pos-online][data-cart-action=quantity]');q.value='';q.dispatchEvent(new w.Event('input'));
+  w.document.querySelector('[data-cart-product=pos-download][data-cart-action=plus]').click();assert.equal($('review-open').disabled,true);
+  w.document.querySelector('[data-cart-product=pos-download][data-cart-action=remove]').click();assert.equal($('review-open').disabled,true);
+  w.document.querySelector('[data-cart-product=pos-online][data-cart-action=plus]').click();assert.equal($('review-open').disabled,false);assert.equal($('cart-count').textContent,'2');
+ }finally{f.cleanup();}
+});
+test('review commits a valid pending edit before showing totals and never sends a request',async()=>{
+ const f=await fixture('quantity-review'),{w,$,click}=f;try{
+  click('.card-actions button','In den Warenkorb');$('cart-open').click();const q=w.document.querySelector('[data-cart-action=quantity]');q.value='4';q.dispatchEvent(new w.Event('input'));$('review-open').click();
+  assert.equal($('review-dialog').open,true);assert.match($('review-content').textContent,/4 × Bringness POS Online/);assert.match($('review-content').textContent,/166,55/);assert.equal($('cart-count').textContent,'4');assert.equal(f.requests(),0);
+ }finally{f.cleanup();}
+});
+test('opening the shop does not overwrite corrupt or unavailable saved carts',async()=>{
+ const f=await fixture('quantity-corrupt',{before:w=>w.sessionStorage.setItem('bringness.shop.cart.v2','{broken')}),{w,$,click}=f;try{
+  assert.equal(w.sessionStorage.getItem('bringness.shop.cart.v2'),'{broken');assert.match($('storage-status').textContent,/nicht überschrieben/);assert.equal($('cart-count').textContent,'0');
+  $('cart-open').click();assert.equal(w.sessionStorage.getItem('bringness.shop.cart.v2'),'{broken');click('.card-actions button','In den Warenkorb');assert.equal(JSON.parse(w.sessionStorage.getItem('bringness.shop.cart.v2'))['pos-online'],1);assert.equal($('storage-status').textContent,'');
+ }finally{f.cleanup();}
+});
+test('detail next and previous skip personally hidden results but exact ad search can retrieve them',async()=>{
+ const f=await fixture('hidden-detail-pagination'),{w,$,click}=f;try{
+  w.document.querySelector('[aria-label="Bringness POS für Windows ausblenden"]').click();click('.card-actions button','Details ansehen');
+  assert.match(w.document.querySelector('.product-pagination').textContent,/1 von 2/);click('.product-pagination button','Nächstes Produkt');assert.match($('detail-title').textContent,/AI/);$('detail-dialog').close();
+  $('search').value='100002';$('search').dispatchEvent(new w.Event('input'));assert.equal(w.document.querySelectorAll('.card').length,1);click('.card-actions button','Details ansehen');assert.match($('detail-title').textContent,/Windows/);assert.equal(f.requests(),0);
+ }finally{f.cleanup();}
+});
