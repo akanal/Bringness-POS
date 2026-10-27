@@ -1,3 +1,5 @@
+import {marketplaceConcurrencyChecks} from './marketplace-concurrency.mjs';
+import {marketplaceBrowserChecks} from './marketplace-browser.mjs';
 import {sellerRecoveryBrowserChecks} from './seller-recovery-browser.mjs';
 import {customerStabilityBrowserChecks} from './customer-stability-browser.mjs';
 import {personalBrowserChecks} from './personal-browser.mjs';
@@ -14,7 +16,7 @@ const url=new URL(process.env.SHOP_INTEGRATION_DATABASE_URL||'invalid:');
 assert.ok(['postgres:','postgresql:'].includes(url.protocol)&&['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname==='/bringness_shop_integration','Disposable integration database required');
 const pool=new pg.Pool({connectionString:url.href});assert.equal(Number((await pool.query('SELECT count(*) n FROM information_schema.tables WHERE table_schema=current_schema()')).rows[0].n),0,'Integration database must be empty');
 const listener=net.createServer();await new Promise(r=>listener.listen(0,'127.0.0.1',r));const port=listener.address().port;await new Promise(r=>listener.close(r));const base='http://127.0.0.1:'+port;
-const child=spawn(process.execPath,['server/start.js'],{env:{PATH:process.env.PATH,NODE_ENV:'test',APP_MODE:'pos',PORT:String(port),DATABASE_URL:url.href,PASSWORD_PEPPER:crypto.randomBytes(32).toString('hex')},stdio:['ignore','pipe','pipe']});let output='';for(const stream of [child.stdout,child.stderr])stream.on('data',b=>{output=(output+b).slice(-30000);});
+const child=spawn(process.execPath,['server/start.js'],{env:{PATH:process.env.PATH,NODE_ENV:'test',APP_MODE:'pos',SHOP_MARKETPLACE_ENABLED:'true',PORT:String(port),DATABASE_URL:url.href,PASSWORD_PEPPER:crypto.randomBytes(32).toString('hex')},stdio:['ignore','pipe','pipe']});let output='';for(const stream of [child.stdout,child.stderr])stream.on('data',b=>{output=(output+b).slice(-30000);});
 let browser;const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function post(path,value,token){const res=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://bringness.de',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(value)});return {status:res.status,value:await res.json()};}
 try{
@@ -87,6 +89,8 @@ try{
   page.once('dialog',dialog=>dialog.accept());await page.locator('[data-new-kind=service]').click();
   for(const width of [1280,390]){await page.setViewportSize({width,height:900});await page.goto(base+'/shop/assistant.html#buy');await page.locator('#assistant-products article').first().waitFor();assert.equal(await page.locator('#assistant-products article').count(),3);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Assistant overflow '+width);}
   await sellerRecoveryBrowserChecks({browser,base,token:a.token});
+  await marketplaceBrowserChecks({page,base,pool,sellerToken:a.token,buyerToken:b.token,sellerCompany:owner.company_id,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
+  await marketplaceConcurrencyChecks({base,pool,sellerToken:a.token,buyerToken:b.token});
   assert.deepEqual(errors,[]);await context.close();
  }
  console.log('Actual entrypoint + PostgreSQL: registration/replay, real login, quote, draft/replay, prepared checkout, account isolation, history, seller persistence/concurrency/archive/version reads and no financial grants passed.');
