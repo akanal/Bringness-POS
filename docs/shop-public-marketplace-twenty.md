@@ -75,3 +75,12 @@ and clear visible contact/inbox fields. Immutable historical order records remai
   Record its returned result before claiming PostgreSQL concurrency acceptance.
 - No deployment, productive payment, handset acceptance or real merchant approval
   is implied by source commits or isolated fixtures.
+
+Initial remote application/test head `c02e62e2243f6f9a694e1944dc0a058b65850dcf`
+passed Shop run40559466141/job122384271053: all625 checks, zero failures/skips,
+then actual-entrypoint PostgreSQL/Chrome including this three-width journey and
+concurrent last-unit/same-request acceptance. Independent isolated POS/AI
+run40559466349 also passed runtime/browser/network-fence/encrypted-backup/restore.
+Subsequent refinements use euro inputs, preserve/clear reviewed totals correctly,
+bound corrupt-cart input and clarify that cloud rows are private working drafts.
+Final-head verification must still be recorded separately.
