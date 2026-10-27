@@ -25,7 +25,14 @@ export function publicImages(product){
 }
 export function mountGallery({product,host}){
  const images=publicImages(product);if(!images.length)return false;
- const section=node('section');section.className='product-gallery';section.setAttribute('aria-label','Produktbilder');const img=node('img'),position=node('p'),controls=node('div'),zoom=node('button','Bild vergrößern'),viewport=node('div');viewport.className='gallery-zoom';zoom.type='button';let expanded=false;viewport.append(img);zoom.onclick=()=>{expanded=!expanded;img.style.maxHeight=expanded?'none':'65vh';img.style.maxWidth=expanded?'none':'100%';zoom.textContent=expanded?'Vergrößerung schließen':'Bild vergrößern';zoom.setAttribute('aria-pressed',String(expanded));};zoom.setAttribute('aria-pressed','false');const buttons=[];
- function show(at){img.src=images[at].src;img.alt=images[at].alt;position.textContent=`Bild ${at+1} von ${images.length}`;buttons.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===at)));}
- images.forEach((image,i)=>{const b=node('button',String(i+1));b.type='button';b.setAttribute('aria-label','Produktbild '+(i+1)+' anzeigen');b.onclick=()=>show(i);buttons.push(b);controls.append(b);});position.setAttribute('aria-live','polite');section.append(viewport,position,controls,zoom);host.append(section);show(0);return true;
+ const section=node('section');section.className='product-gallery';section.setAttribute('aria-label','Produktbilder');const position=node('p'),controls=node('div'),zoom=node('button','Bild vergrößern'),viewport=node('div'),status=node('p');viewport.className='gallery-zoom';zoom.type='button';let expanded=false,img=null;status.setAttribute('role','status');
+ const syncZoom=()=>{if(img){img.style.maxHeight=expanded?'none':'65vh';img.style.maxWidth=expanded?'none':'100%';}zoom.textContent=expanded?'Vergrößerung schließen':'Bild vergrößern';zoom.setAttribute('aria-pressed',String(expanded));};
+ zoom.onclick=()=>{if(zoom.disabled)return;expanded=!expanded;syncZoom();};const buttons=[];
+ function show(at){
+  expanded=false;status.textContent='';const current=node('img');img=current;current.alt=images[at].alt;zoom.disabled=true;syncZoom();
+  current.onload=()=>{if(img!==current)return;zoom.disabled=false;status.textContent='';};
+  current.onerror=()=>{if(img!==current)return;current.hidden=true;zoom.disabled=true;expanded=false;syncZoom();status.textContent='Dieses Produktbild konnte nicht geladen werden. Du kannst ein anderes Bild auswählen.';};
+  viewport.replaceChildren(current);current.src=images[at].src;position.textContent=`Bild ${at+1} von ${images.length}`;buttons.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===at)));
+ }
+ images.forEach((image,i)=>{const b=node('button',String(i+1));b.type='button';b.setAttribute('aria-label','Produktbild '+(i+1)+' anzeigen');b.onclick=()=>show(i);buttons.push(b);controls.append(b);});position.setAttribute('aria-live','polite');section.append(viewport,position,status,controls,zoom);host.append(section);show(0);return true;
 }

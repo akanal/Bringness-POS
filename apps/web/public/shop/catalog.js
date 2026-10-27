@@ -25,5 +25,10 @@ export function reviewCart(value) {
   return {lines,groups,canPay:false,canActivate:false};
 }
 export const cartKey='bringness.shop.cart.v2';
-export function loadCart(storage){try{return validateCart(JSON.parse(storage.getItem(cartKey)||'{}'));}catch{return {};}}
+export function readCartState(storage){
+ let raw;try{raw=storage.getItem(cartKey);}catch{return {cart:{},status:'unavailable'};}
+ if(raw===null)return {cart:{},status:'empty'};
+ try{return {cart:validateCart(JSON.parse(raw)),status:'saved'};}catch{return {cart:{},status:'invalid'};}
+}
+export function loadCart(storage){return readCartState(storage).cart;}
 export function saveCart(storage,cart){try{storage.setItem(cartKey,JSON.stringify(validateCart(cart)));return true;}catch{return false;}}

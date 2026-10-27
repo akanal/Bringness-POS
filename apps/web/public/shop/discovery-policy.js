@@ -1,5 +1,5 @@
 // Pure public-catalog helpers. Unknown metadata never becomes an invented fact.
-export const normalizeSearch=value=>String(value??'').slice(0,150).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('de-DE').replace(/ß/g,'ss').trim();
+export const normalizeSearch=(value,max=150)=>String(value??'').slice(0,max).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('de-DE').replace(/ß/g,'ss').trim();
 export function oneEdit(a,b){
  if(Math.abs(a.length-b.length)>1)return false;
  if(a===b)return true;
@@ -7,7 +7,7 @@ export function oneEdit(a,b){
  if(a.length>b.length)[a,b]=[b,a];let i=0;while(i<a.length&&a[i]===b[i])i++;return a.slice(i)===b.slice(i+1);
 }
 export function searchMatch(product,query,{fuzzy=false}={}){
- const words=normalizeSearch(query).split(/\s+/).filter(Boolean),text=normalizeSearch(product.name+' '+product.description+' '+product.category),tokens=text.split(/[^a-z0-9]+/).filter(Boolean);
+ const words=normalizeSearch(query).split(/\s+/).filter(Boolean),text=normalizeSearch([product.name,product.description,product.category,product.tag,...(Array.isArray(product.features)?product.features:[])].join(' '),4096),tokens=text.split(/[^a-z0-9]+/).filter(Boolean);
  return words.every(word=>text.includes(word)||(fuzzy&&word.length>=4&&!/\d/.test(word)&&tokens.some(token=>oneEdit(word,token))));
 }
 export function priceBound(value){
