@@ -10,4 +10,10 @@ export async function marketplaceConcurrencyChecks({base,pool,sellerToken,buyerT
  assert.deepEqual(buyers.map(x=>x.status).sort(),[200,409]);const winner=buyers.find(x=>x.status===200);assert.equal(winner.value.grossCents,119);const row=(await pool.query('SELECT document,revision FROM shop_market_publications WHERE id=$1',[id])).rows[0];assert.equal(row.document.variants[0].stock,0);assert.equal(row.revision,2);
  const winningToken=buyers[0].status===200?buyerToken:sellerToken,winningCommand=buyers[0].status===200?command:{...command,requestId:winner.value.requestId};
  const repeated=await Promise.all([post('marketplace/orders',winningCommand,winningToken),post('marketplace/orders',winningCommand,winningToken)]);assert.deepEqual(repeated.map(r=>r.status),[200,200]);assert.ok(repeated.every(r=>r.value.orderId===winner.value.orderId&&r.value.replay));assert.equal((await pool.query('SELECT document FROM shop_market_publications WHERE id=$1',[id])).rows[0].document.variants[0].stock,0);
+ const cancel={requestId:crypto.randomUUID(),orderId:winner.value.orderId,action:'cancel',expectedRevision:0};
+ const cancelled=await Promise.all([post('marketplace/order-status',cancel,sellerToken),post('marketplace/order-status',cancel,sellerToken)]);
+ assert.deepEqual(cancelled.map(r=>r.status),[200,200]);assert.equal(cancelled.filter(r=>r.value.replay).length,1);assert.equal((await pool.query('SELECT document FROM shop_market_publications WHERE id=$1',[id])).rows[0].document.variants[0].stock,1);
+ assert.equal(Number((await pool.query('SELECT count(*) n FROM shop_market_order_events WHERE order_id=$1',[winner.value.orderId])).rows[0].n),1);
+ const stale=await post('marketplace/order-status',{...cancel,requestId:crypto.randomUUID()},sellerToken);assert.equal(stale.status,409);
+
 }
