@@ -90,7 +90,9 @@ try{
   page.once('dialog',dialog=>dialog.accept());await page.locator('[data-new-kind=service]').click();
   for(const width of [1280,390]){await page.setViewportSize({width,height:900});await page.goto(base+'/shop/assistant.html#buy');await page.locator('#assistant-products article').first().waitFor();assert.equal(await page.locator('#assistant-products article').count(),3);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Assistant overflow '+width);}
   await sellerRecoveryBrowserChecks({browser,base,token:a.token});
-  const approvalAccounts=[];for(const width of [390,768,1280]){const a=await account('Approval'+width),company=(await pool.query('SELECT company_id FROM users WHERE email=$1',[a.email])).rows[0].company_id;approvalAccounts.push({width,token:a.token,company});}
+  // Additional review fixtures are seeded only in this verified empty loopback database.
+  // Registration replay is already tested above; do not weaken its production rate limit.
+  const approvalAccounts=[];for(const width of [390,768,1280]){const company=crypto.randomUUID(),user=crypto.randomUUID(),token=crypto.randomBytes(32).toString('hex');await pool.query('INSERT INTO companies(id,name) VALUES($1,$2)',[company,'CI Approval '+width]);await pool.query("INSERT INTO users(id,company_id,email,password_hash,display_name,role,status) VALUES($1,$2,$3,'disabled-fixture-password','CI Approval','owner','active')",[user,company,'approval-'+crypto.randomUUID()+'@example.test']);await pool.query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[user,crypto.createHash('sha256').update(token).digest('hex')]);approvalAccounts.push({width,token,company});}
   await marketplaceApprovalChecks({page,base,pool,accounts:approvalAccounts,adminToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceBrowserChecks({page,base,pool,sellerToken:a.token,buyerToken:b.token,sellerCompany:owner.company_id,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceConcurrencyChecks({base,pool,sellerToken:a.token,buyerToken:b.token});
