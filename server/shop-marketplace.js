@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {migrateMarketplaceSellers} from './shop-marketplace-sellers.js';
 import {shopActor,sessionHash,shopError} from './shop-account.js';
 import {uuid} from './shop-drafts.js';
 import {migrateSellerDrafts} from './shop-seller-drafts.js';
@@ -22,6 +23,7 @@ export async function migrateMarketplace(pool){
  for(const table of ['shop_market_allocations','shop_market_order_events']){await db.query('DROP TRIGGER IF EXISTS shop_market_immutable ON '+table);await db.query('CREATE TRIGGER shop_market_immutable BEFORE UPDATE OR DELETE ON '+table+' FOR EACH ROW EXECUTE FUNCTION shop_market_order_immutable()');}
  await db.query(`CREATE OR REPLACE FUNCTION shop_market_archive() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.state='archived' AND OLD.state<>'archived' THEN UPDATE shop_market_publications SET state='withdrawn',revision=revision+1,updated_at=clock_timestamp() WHERE company_id=NEW.company_id AND id=NEW.id AND state='published'; END IF; RETURN NEW; END $$`);
  await db.query('DROP TRIGGER IF EXISTS shop_market_archive ON shop_seller_offers');await db.query('CREATE TRIGGER shop_market_archive AFTER UPDATE OF state ON shop_seller_offers FOR EACH ROW EXECUTE FUNCTION shop_market_archive()');
+ await migrateMarketplaceSellers(db);
  await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
 }
 async function tx(pool,token,fn){const db=await pool.connect();try{await db.query('BEGIN');await db.query("SET LOCAL statement_timeout='5s'");const hash=sessionHash(token),first=await shopActor(db,hash);await db.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE',[first.company_id]);const a=await shopActor(db,hash,true);if(a.company_id!==first.company_id)fail('ACCOUNT_CHANGED');const user=(await db.query('SELECT user_id FROM sessions WHERE token_hash=$1',[hash])).rows[0];const value=await fn(db,a.company_id,user.user_id);await db.query('COMMIT');return value;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}

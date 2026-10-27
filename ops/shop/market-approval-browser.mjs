@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';import crypto from 'node:crypto';import {mkdir} from 'node:fs/promises';
+// Receives only disposable integration accounts. Never run against production.
+export async function marketplaceApprovalChecks({page,base,pool,accounts,adminToken,artifacts}){
+ const canonical='https://bringness.de',root='/api/v1/shop/marketplace';
+ const post=async(path,c,token)=>{const r=await fetch(base+root+path,{method:'POST',headers:{Origin:canonical,'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(c)});return {status:r.status,value:await r.json()};};
+ const profile={name:'CI Händlerprüfung GmbH',street:'Testweg 9',postalCode:'10115',city:'Berlin',country:'DE',email:'review@example.test'};
+ const actor=(await pool.query('SELECT user_id FROM sessions WHERE token_hash=$1',[crypto.createHash('sha256').update(adminToken).digest('hex')])).rows[0];
+ await pool.query('INSERT INTO platform_admins(user_id,active) VALUES($1,true) ON CONFLICT(user_id) DO UPDATE SET active=true',[actor.user_id]);
+ const handler=async route=>{const u=new URL(route.request().url());if(u.origin!==canonical)return route.abort();const r=await route.fetch({url:base+u.pathname+u.search,maxRedirects:0});await route.fulfill({response:r});};await page.route(canonical+'/**',handler);
+ const errors=[],onError=e=>errors.push(e.message),onDialog=dialog=>dialog.accept();page.on('pageerror',onError);page.on('dialog',onDialog);
+ try{
+ for(const {width,token:sellerToken,company:sellerCompany} of accounts){
+ await page.setViewportSize({width,height:900});await page.goto(canonical+'/shop/marketplace-seller.html');await page.evaluate(t=>{localStorage.setItem('bringness-pos-token',t);sessionStorage.clear();},sellerToken);await page.reload();
+ await page.locator('#approval-load').click();await page.locator('#approval-form').waitFor({state:'visible'});for(const [key,value]of Object.entries(profile))await page.locator('#approval-form [name='+key+']').fill(value);await page.locator('#approval-consent').check();await page.locator('#approval-form button').click();await page.waitForFunction(()=>document.getElementById('approval-status').textContent.startsWith('Gespeichert'));
+ await page.goto(canonical+'/shop/marketplace-review.html');await page.evaluate(t=>localStorage.setItem('bringness-pos-token',t),adminToken);await page.reload();await page.locator('#approval-load').click();await page.locator('#approval-list button[data-company-id="'+sellerCompany+'"]').click();await page.locator('#approval-form').waitFor({state:'visible'});await page.locator('#approval-reason').fill('Synthetic manual review');await page.locator('#approval-reference').fill('CI-ONLY');await page.locator('#approval-verified').check();
+ // Drop one committed approval response, then use the original durable command.
+ const lose=async route=>{const r=await route.fetch({url:base+root+'/seller-review',maxRedirects:0});assert.equal(r.status(),200);await route.abort('failed');};await page.route(canonical+root+'/seller-review',lose);await page.locator('#approval-form button').click();await page.waitForFunction(()=>document.getElementById('approval-status').textContent.includes('Nicht bestätigt'));await page.unroute(canonical+root+'/seller-review',lose);await page.locator('#approval-retry').click();await page.waitForFunction(()=>document.getElementById('approval-status').textContent.includes('Wiederholung bestätigt'));
+ await page.locator('#approval-load').click();await page.locator('#approval-list button[data-company-id="'+sellerCompany+'"]').click();await page.locator('#approval-form').waitFor({state:'visible'});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'approval overflow '+width);if(artifacts){await mkdir(artifacts,{recursive:true});await page.screenshot({path:artifacts+'/marketplace-review-'+width+'.png',fullPage:true});}
+ const state=(await pool.query('SELECT revision FROM shop_market_seller_reviews WHERE company_id=$1',[sellerCompany])).rows[0];const competing=await Promise.all(['suspend','suspend'].map(action=>post('/seller-review',{requestId:crypto.randomUUID(),companyId:sellerCompany,expectedRevision:state.revision,action,reason:'Synthetic suspend',reference:'CI-ONLY',profileVerified:false},adminToken)));assert.deepEqual(competing.map(r=>r.status).sort(),[200,409]);
+ const suspend={requestId:crypto.randomUUID(),companyId:sellerCompany,expectedRevision:state.revision+1,action:'resume',reason:'Synthetic resume',reference:'CI-ONLY',profileVerified:true};const copies=await Promise.all([post('/seller-review',suspend,adminToken),post('/seller-review',suspend,adminToken)]);assert.deepEqual(copies.map(r=>r.status),[200,200]);assert.equal(copies.filter(r=>r.value.replay).length,1);
+
+ }
+ assert.deepEqual(errors,[]);
+ }finally{page.off('pageerror',onError);page.off('dialog',onDialog);await page.unroute(canonical+'/**',handler);await pool.query('DELETE FROM platform_admins WHERE user_id=$1',[actor.user_id]);}
+}
