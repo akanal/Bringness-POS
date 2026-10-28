@@ -1,3 +1,5 @@
+import {createProductImages,migrateProductImages} from './product-image-storage.js';
+import {configureReceiptStorage,migrateReceiptFiles} from './receipt-file-storage.js';
 import {configuredIdriveDocumentStore} from './idrive-document-store.js';
 import {createShopDocumentsRuntime} from './shop-documents-http.js';
 import {createMarketplaceRuntime} from './shop-marketplace-http.js';
@@ -78,6 +80,8 @@ const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='
 const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)});
 let documentStore=null;
 if(appMode!=='ai'&&!isolatedPreview())try{documentStore=await configuredIdriveDocumentStore(process.env);}catch{console.error('Private document storage unavailable; document uploads remain closed.');}
+configureReceiptStorage({store:documentStore,required:appMode!=='ai'&&!isolatedPreview()&&process.env.SHOP_DOCUMENT_STORAGE==='idrive'});
+const handleProductImages=createProductImages(platformGatewayPool,{store:documentStore,required:appMode!=='ai'&&!isolatedPreview()&&process.env.SHOP_DOCUMENT_STORAGE==='idrive'});
 const documentsRuntime=createShopDocumentsRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&!isolatedPreview(),store:documentStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
@@ -112,6 +116,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleDutyPlanning(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
+      if (appMode!=='ai' && await handleProductImages(req,res)) return;
       if (appMode!=='ai' && await handleMailStatus(req,res)) return;
       if (await handleLanguageCatalog(req,res)) return;
       if (await handlePlatformAiAssets(req,res)) return;
@@ -232,6 +237,8 @@ async function migrateWithRetry(){
       await migratePosStockEvents();
       await migrateCenter();
       await migratePublicReceipts();
+      await migrateReceiptFiles(platformGatewayPool);
+      await migrateProductImages(platformGatewayPool);
       await migrateTseIntegration();
       await migrateFiskalyTest(platformGatewayPool);
       await migrateFiskalySandbox(platformGatewayPool);

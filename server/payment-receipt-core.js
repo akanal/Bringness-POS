@@ -1,3 +1,4 @@
+import {storedReceiptFile} from './receipt-file-storage.js';
 import {lineDiscount} from './sale-discount.js';
 import {receiptLines} from './receipt-lines.js';
 import crypto from "node:crypto";
@@ -35,7 +36,7 @@ return async function handlePaymentReceipt(req, res) {
   if(match[2]==='invoice'&&!['owner','admin','manager'].includes(user.role)){send(res,403,{error:'Kein Verwaltungszugang'});return true;}
   const receiptId = match[1];
   const q = await pool.query(
-    "SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.id=$1 AND c.id=$2",
+    "SELECT rc.id receipt_id,c.id company_id,rc.receipt_number,rc.issued_at,rc.public_token,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.id=$1 AND c.id=$2",
     [receiptId, user.company_id]
   );
   if (!q.rowCount) {
@@ -68,6 +69,9 @@ return async function handlePaymentReceipt(req, res) {
 }
 
 export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,req,receipt){
+ return storedReceiptFile(pool,receipt,()=>renderReceiptBytes(pool,PDFDocument,QRCode,receiptUrl,req,receipt));
+}
+async function renderReceiptBytes(pool,PDFDocument,QRCode,receiptUrl,req,receipt){
  const euro=cents=>(Number(cents||0)/100).toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2})+" EUR";
   if (receipt.merchant_snapshot) {
     const snapshot = receipt.merchant_snapshot;
@@ -216,7 +220,7 @@ export function createPublicTradeInvoiceHandler(pool,PDFDocument,QRCode,receiptU
   const token=path.slice('/rechnung/'.length);if(!invoiceTokenPattern.test(token))return fail(404,'Rechnung nicht gefunden');
   if(req.method!=='GET')return fail(405,'Methode nicht erlaubt');
   try{
-   const result=await pool.query(`SELECT rc.receipt_number,rc.issued_at,rc.public_token,rc.invoice_public_token,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id,t.recipient
+   const result=await pool.query(`SELECT rc.id receipt_id,c.id company_id,rc.receipt_number,rc.issued_at,rc.public_token,rc.invoice_public_token,rc.fiscal_status,rc.merchant_snapshot,to_jsonb(rc)->'sale_adjustment' AS sale_adjustment,o.id order_id,o.total_cents,r.name restaurant_name,c.name company_name,b.company_name billing_name,b.street,b.postal_code,b.city,b.vat_id,t.recipient
     FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN pos_trade_sales t ON t.order_id=o.id JOIN restaurants r ON r.id=o.restaurant_id JOIN companies c ON c.id=r.company_id LEFT JOIN company_billing_profiles b ON b.company_id=c.id WHERE rc.invoice_public_token=$1`,[token]);
    if(!result.rows[0])return fail(404,'Rechnung nicht gefunden');
    const receipt={...result.rows[0],formatA4:true};
