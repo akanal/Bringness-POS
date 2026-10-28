@@ -27,7 +27,7 @@ export function createShopDocumentsRuntime(pool,{enabled=false,store=null,public
     if(req.headers['sec-fetch-site']==='cross-site'||req.headers.origin&&req.headers.origin!==publicOrigin||req.method==='POST'&&req.headers.origin!==publicOrigin)throw shopError('FORBIDDEN');
     if(req.method==='GET'){
      assertEmptyShopRequest(req);
-     if(match){if(active>=4)throw shopError('DOCUMENT_BUSY');active++;try{const file=await downloadShopDocument(pool,store,{token:auth[1],id:match[1]});res.writeHead(200,{...headers,'Content-Type':file.document.mime,'Content-Length':String(file.body.length),'Content-Disposition':"attachment; filename=\"Bringness-Dokument\"; filename*=UTF-8''"+encodeURIComponent(file.document.filename).replaceAll("'",'%27'),'Content-Security-Policy':"default-src 'none'; sandbox",'X-Document-Sha256':file.document.sha256});res.end(file.body);}finally{active--;}}
+     if(match){if(active>=4)throw shopError('DOCUMENT_BUSY');active++;try{const file=await downloadShopDocument(pool,store,{token:auth[1],id:match[1]});res.writeHead(200,{...headers,'Content-Type':file.document.mime,'Content-Length':String(file.body.length),'Content-Disposition':"attachment; filename=\"Bringness-Dokument\"; filename*=UTF-8''"+encodeURIComponent(file.document.filename).replace(/[!'()*]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase()),'Content-Security-Policy':"default-src 'none'; sandbox",'X-Document-Sha256':file.document.sha256});res.end(file.body);}finally{active--;}}
      else json(res,200,await listShopDocuments(pool,{token:auth[1]}));return true;
     }
     if(req.method!=='POST'||match){json(res,405,{code:'METHOD_NOT_ALLOWED'});return true;}
