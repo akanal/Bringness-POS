@@ -43,4 +43,17 @@ Online payments and real product-image storage remain separate work. IDrive and 
 
 Local full Shop suite reports682 passes, zero failures/cancellations/skips. The focused service/UI regressions pass, including independent raw-value validation for invalid quantities while request controls are disabled. Native Chromium/PGlite acceptance passed at390/768/1280: publication/recovery, separate selections and orders for identically named merchants, profile/product links, manual shipping references, dropped committed tracking response, exact retry, correction and company-scoped customer display. Final mobile buyer/merchant screenshots were inspected. All browser/provider fixtures use disposable data and canonical-Origin requests are routed solely to loopback.
 
-Remote application/test headc274fc642e1f7db664dbad7496c7179893b763c5 has local tree591831eba5c9ab07854fb0b0dc4d0c9374aa2f2d. Actual-entrypoint PostgreSQL/native browser, simultaneous tracking replay/corrections and other applicable CI results are pending; record their actual outcomes before claiming them. See PR#167. Subsequent evidence-only updates do not change application behavior.
+Remote application/test headc274fc642e1f7db664dbad7496c7179893b763c5 has local tree591831eba5c9ab07854fb0b0dc4d0c9374aa2f2d. Final CI is recorded below. See PR#167. Subsequent evidence-only updates do not change application behavior.
+
+
+## Final independent acceptance
+
+Application/test headc274fc642e1f7db664dbad7496c7179893b763c5 passed all five applicable workflows:
+
+- Shop run40670815884/job122756803498:684 tests, zero failures/cancellations/skips. Actual application entrypoint with PostgreSQL16 and native Chrome passed, including the connected two-merchant/independent-customer journey at390/768/1280 and simultaneous tracking replay/corrections. Screenshot artifact12808546085. Local final mobile buyer/merchant screenshots from the identical application tree were visually reviewed.
+- POS/AI integration run40670815890/job122756803393 passed.
+- Isolated runtime/browser/network-fence/encrypted-backup+restore run40670815924/job122756803518 passed.
+- Bringness checks run40670815869/job122756803524 passed.
+- POS release validation run40670815859/job122756803764 passed.
+
+All acceptance writes target disposable fixtures. No real merchant/account/approval, order, payment, provider, IDrive or server configuration was modified. No merge or deployment. The higher CI count supersedes the interim local full-suite count; the final two UI regressions were also run separately locally.
