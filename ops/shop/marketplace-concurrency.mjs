@@ -16,4 +16,15 @@ export async function marketplaceConcurrencyChecks({base,pool,sellerToken,buyerT
  assert.equal(Number((await pool.query('SELECT count(*) n FROM shop_market_order_events WHERE order_id=$1',[winner.value.orderId])).rows[0].n),1);
  const stale=await post('marketplace/order-status',{...cancel,requestId:crypto.randomUUID()},sellerToken);assert.equal(stale.status,409);
 
+ // Real PostgreSQL serializes identical and competing tracking corrections.
+ const shippingId='offer-'+crypto.randomUUID(),shippingOffer={...offer,title:'CI concurrent shipping',stock:'2',sku:'TRACK',delivery:'Synthetic shipping'};
+ assert.equal((await post('seller/offers',{id:shippingId,requestId:crypto.randomUUID(),action:'save',expectedRevision:0,offer:shippingOffer},sellerToken)).status,200);
+ assert.equal((await post('marketplace/publish',{id:shippingId,requestId:crypto.randomUUID(),action:'publish',expectedRevision:0,sourceRevision:1,publication:{variants:[{sku:'TRACK',label:'Tracking',netCents:100,vatBasisPoints:1900,stock:2}],shipping:true,pickup:false,shippingNetCents:0,shippingVatBasisPoints:1900,delivery:'Synthetic shipping',pickupAddress:''}},sellerToken)).status,200);
+ const shippedOrder=await post('marketplace/orders',{requestId:crypto.randomUUID(),lines:[{id:shippingId,revision:1,sku:'TRACK',quantity:1,unitNetCents:100}],method:'shipping',shippingNetCents:0,recipient:command.recipient},buyerToken);assert.equal(shippedOrder.status,200);
+ for(const [action,expectedRevision]of [['accept',0],['ship',1]])assert.equal((await post('marketplace/order-status',{requestId:crypto.randomUUID(),orderId:shippedOrder.value.orderId,action,expectedRevision},sellerToken)).status,200);
+ const track={requestId:crypto.randomUUID(),orderId:shippedOrder.value.orderId,expectedRevision:0,tracking:{carrier:'dhl',carrierName:'DHL',number:'SYNTHETIC-RACE-123'}};
+ const trackingCopies=await Promise.all([post('marketplace/order-tracking',track,sellerToken),post('marketplace/order-tracking',track,sellerToken)]);assert.deepEqual(trackingCopies.map(r=>r.status),[200,200]);assert.equal(trackingCopies.filter(r=>r.value.replay).length,1);
+ const corrections=await Promise.all(['LEFT-123','RIGHT-123'].map(number=>post('marketplace/order-tracking',{...track,requestId:crypto.randomUUID(),expectedRevision:1,tracking:{...track.tracking,number}},sellerToken)));assert.deepEqual(corrections.map(r=>r.status).sort(),[200,409]);
+ assert.equal(Number((await pool.query('SELECT count(*) n FROM shop_market_tracking_events WHERE order_id=$1',[track.orderId])).rows[0].n),2);assert.equal((await pool.query('SELECT document FROM shop_market_publications WHERE id=$1',[shippingId])).rows[0].document.variants[0].stock,1);assert.equal((await pool.query('SELECT revision FROM shop_market_order_state WHERE order_id=$1',[track.orderId])).rows[0].revision,2);
+
 }
