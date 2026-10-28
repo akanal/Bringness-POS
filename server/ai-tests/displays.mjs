@@ -66,4 +66,16 @@ await call(base+'/media/'+saved.playlist[0].mediaId+q,{method:'DELETE'});
 const fallback=(await call('/api/v1/display-player/'+first.token,{publicCall:true})).result;assert.deepEqual(fallback.playlist,[]);
 const player=new JSDOM('<div id="screen"></div><div id="connection"></div><button id="fullscreen"></button>',{url:'https://bringness.de/display/index.html#'+first.token,runScripts:'outside-only'}).window;
 let denied=false,refreshPlayer;player.fetch=async()=>denied?{ok:false,status:403}:{ok:true,json:async()=>({...fallback,products:[{name:'Kaffee',price_cents:250}]})};player.setTimeout=()=>0;player.setInterval=fn=>{refreshPlayer=fn;return 0};player.eval(fs.readFileSync(new URL('../../apps/web/public/display/player.js',import.meta.url),'utf8'));await new Promise(resolve=>setTimeout(resolve,0));assert.match(player.document.querySelector('#screen').textContent,/Kaffee/);denied=true;await refreshPlayer();assert.doesNotMatch(player.document.querySelector('#screen').textContent,/Kaffee/);assert.match(player.document.querySelector('#screen').textContent,/nicht aktiv/);player.close();
+// The same authorized upload/player routes use private IDrive bytes after restart.
+const cloud=new Map(),cloudStore={async putExact(record,bytes){cloud.set(record.id,Buffer.from(bytes));},async getExact(record){return cloud.get(record.id);}};
+handler=createDisplays(pool,{store:cloudStore,storageRequired:true});
+const cloudMedia=await upload();
+const cloudScreen=(await call(base+q,{method:'POST',body:{...payload,playlist:[{type:'image',mediaId:cloudMedia.id,seconds:0}]}})).result;
+assert.equal((await query('SELECT content FROM pos_display_media WHERE id=$1',[cloudMedia.id])).rows[0].content,null);
+handler=createDisplays(pool,{store:cloudStore,storageRequired:true});
+assert.deepEqual((await call('/api/v1/display-player/'+cloudScreen.token+'/media/'+cloudMedia.id,{publicCall:true})).result,png);
+assert.equal((await call('/api/v1/display-player/'+first.token+'/media/'+cloudMedia.id,{publicCall:true})).status,404);
+await call(base+'/media/'+cloudMedia.id+q,{method:'DELETE'});
+assert.equal((await call('/api/v1/display-player/'+cloudScreen.token+'/media/'+cloudMedia.id,{publicCall:true})).status,404);
+assert.equal(cloud.size,1); // Existing deletion removes access, not private backup objects.
 await db.close();console.log('Display persistence passed: database media survives restart, independent stable screen URLs, saved-media library, automatic upload assignment, replacement without changing links, browser reopen, screen-only removal, permanent deletion across screens, rollback, stale-save rejection, live menu fallback, independent live windows across actual POS module switches, window reuse and popup blocking.');
