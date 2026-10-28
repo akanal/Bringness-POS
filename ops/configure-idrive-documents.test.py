@@ -235,6 +235,46 @@ class SetupTest(unittest.TestCase):
                     m.AnonymousClient().get_object(Bucket=bucket, Key=key)
             build.assert_not_called()
 
+    def test_acl_rejects_public_other_and_malformed_grants(self):
+        private = {'Owner': {'ID': 'owner'}, 'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': 'owner'}}]}
+        self.assertTrue(m.owner_only_acl(private))
+        for extra in ({'Type': 'Group', 'URI': 'http://acs.amazonaws.com/groups/global/AllUsers'},
+                      {'Type': 'CanonicalUser', 'ID': 'other'}):
+            value = json.loads(json.dumps(private))
+            value['Grants'].append({'Permission': 'READ', 'Grantee': extra})
+            self.assertFalse(m.owner_only_acl(value))
+        for response in ({}, {'Owner': {'ID': 'owner'}, 'Grants': []}, None):
+            self.assertFalse(m.owner_only_acl(response))
+
+    def test_access_inspection_is_read_only_and_never_prints_policy_or_owner(self):
+        client = Mock()
+        private = {'Owner': {'ID': S}, 'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': S}}]}
+        client.get_object_acl.return_value = private
+        client.get_bucket_acl.return_value = private
+        client.get_bucket_policy.return_value = {'Policy': S}
+        client.get_bucket_policy_status.return_value = {'PolicyStatus': {'IsPublic': False}}
+        output = io.StringIO()
+        with patch('sys.stdout', output):
+            m.inspect_access(client)
+        self.assertEqual([call[0] for call in client.method_calls],
+                         ['get_object_acl', 'get_bucket_acl', 'get_bucket_policy', 'get_bucket_policy_status'])
+        self.assertIn('NUR EIGENTUEMER', output.getvalue())
+        self.assertIn('IsPublic=false', output.getvalue())
+        self.assertNotIn(S, output.getvalue())
+
+    def test_access_inspection_handles_denied_or_absent_policy_without_details(self):
+        client = Mock()
+        for method, code in [('get_object_acl', 'AccessDenied'), ('get_bucket_acl', S),
+                             ('get_bucket_policy', 'NoSuchBucketPolicy'), ('get_bucket_policy_status', 'NotImplemented')]:
+            getattr(client, method).side_effect = ClientError({'Error': {'Code': code, 'Message': S}}, S)
+        output = io.StringIO()
+        with patch('sys.stdout', output):
+            m.inspect_access(client)
+        self.assertIn('LESERECHT FEHLT', output.getvalue())
+        self.assertIn('KEINE BUCKET-POLICY', output.getvalue())
+        self.assertIn('OPERATION NICHT VERFUEGBAR', output.getvalue())
+        self.assertNotIn(S, output.getvalue())
+
 
 if __name__ == '__main__':
     unittest.main()

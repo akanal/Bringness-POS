@@ -211,21 +211,77 @@ def probe(client, anonymous, identifier=None):
     return key
 
 
+def owner_only_acl(response):
+    if not isinstance(response, dict):
+        return False
+    owner = response.get('Owner', {}).get('ID')
+    grants = response.get('Grants')
+    if not isinstance(owner, str) or not owner or not isinstance(grants, list) or len(grants) != 1:
+        return False
+    grant = grants[0]
+    if not isinstance(grant, dict) or not isinstance(grant.get('Grantee'), dict):
+        return False
+    grantee = grant['Grantee']
+    return (grant.get('Permission') == 'FULL_CONTROL' and grantee.get('Type') == 'CanonicalUser'
+            and grantee.get('ID') == owner and not grantee.get('URI') and not grantee.get('EmailAddress'))
+
+
+def inspect_access(client):
+    """Read only: exact existing synthetic object, bucket ACL and policy state."""
+    from botocore.exceptions import ClientError
+    key = '_bringness-connection-checks/5889d47ddcb44013a0388860b7f77256.txt'
+    operations = (
+        ('Testdatei-ACL', 'get_object_acl', dict(Bucket=BUCKET, Key=key)),
+        ('Bucket-ACL', 'get_bucket_acl', dict(Bucket=BUCKET)),
+        ('Bucket-Policy', 'get_bucket_policy', dict(Bucket=BUCKET)),
+        ('Policy-Status', 'get_bucket_policy_status', dict(Bucket=BUCKET)),
+    )
+    for label, method, arguments in operations:
+        try:
+            response = getattr(client, method)(**arguments)
+            if method in ('get_object_acl', 'get_bucket_acl'):
+                result = 'NUR EIGENTUEMER' if owner_only_acl(response) else 'NICHT ALS EIGENTUEMER-EXKLUSIV BESTAETIGT'
+            elif method == 'get_bucket_policy':
+                result = 'POLICY VORHANDEN; Inhalt wird nicht ausgegeben'
+            else:
+                value = response.get('PolicyStatus', {}).get('IsPublic')
+                result = 'IsPublic=false' if value is False else 'IsPublic=true' if value is True else 'UNKLARE ANTWORT'
+        except ClientError as error:
+            code = error.response.get('Error', {}).get('Code')
+            if method in ('get_bucket_policy', 'get_bucket_policy_status') and code == 'NoSuchBucketPolicy':
+                result = 'KEINE BUCKET-POLICY'
+            elif code in ('AccessDenied', 'Forbidden', '403'):
+                result = 'LESERECHT FEHLT'
+            elif code in ('NotImplemented', 'MethodNotAllowed', 'InvalidRequest'):
+                result = 'OPERATION NICHT VERFUEGBAR'
+            elif code == 'NoSuchKey':
+                result = 'TESTDATEI NICHT GEFUNDEN'
+            else:
+                result = 'UNBEKANNTE API-ANTWORT; keine geheimen Details ausgegeben'
+        except Exception:
+            result = 'PRUEFUNG NICHT MOEGLICH; keine geheimen Details ausgegeben'
+        print(label + ': ' + result)
+    print('Nur gelesen. Keine Datei, Freigabe oder Zugangsdaten gespeichert/geaendert.')
+
+
 def main():
     global PHASE
     parser = argparse.ArgumentParser(description='Bringness IDrive: setup or explicit connection test')
-    parser.add_argument('operation', choices=('setup', 'check'))
+    parser.add_argument('operation', choices=('setup', 'check', 'inspect'))
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise ValueError('root-required')
-    if args.operation == 'setup':
+    if args.operation in ('setup', 'inspect'):
         if not sys.stdin.isatty():
             raise ValueError('interactive-console-required')
-        check_parent(CONFIG)
-        if os.path.lexists(CONFIG):
-            raise ValueError('config-already-exists')
-        print('Only Frankfurt-2 / bringness-documents. No migration, deletion or restart.')
-        print('One tiny synthetic test object will remain in the bucket.')
+        if args.operation == 'setup':
+            check_parent(CONFIG)
+            if os.path.lexists(CONFIG):
+                raise ValueError('config-already-exists')
+            print('Only Frankfurt-2 / bringness-documents. No migration, deletion or restart.')
+            print('One tiny synthetic test object will remain in the bucket.')
+        else:
+            print('Nur Zugriffsrechte der vorhandenen Testdatei und des Buckets lesen. Keine Aenderung.')
         PHASE = 'Schluesseleingabe'
         with warnings.catch_warnings():
             warnings.simplefilter('error', getpass.GetPassWarning)
@@ -238,6 +294,12 @@ def main():
         access, secret = config['access_key_id'], config['secret_access_key']
     PHASE = 'SDK-Vorbereitung'
     signed = make_client(access, secret)
+    if args.operation == 'inspect':
+        try:
+            inspect_access(signed)
+        finally:
+            signed.close()
+        return
     anonymous = AnonymousClient()
     try:
         key = probe(signed, anonymous)
