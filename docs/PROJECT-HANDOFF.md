@@ -1,0 +1,47 @@
+# Bringness — verbindliche Projektübergabe
+Stand: 28.10.2026, Europe/Berlin. Nach AGENTS.md lesen; neuere verifizierte Ergebnisse haben Vorrang vor historischen Pending-Einträgen.
+
+## Auftrag und Arbeitsweise
+Ahmet Kanal, Bringness (doppeltes s). Selbstständig weiterarbeiten, vorhandene Entscheidungen erhalten und nur echte fehlende Zugänge/Freigaben erfragen. Nicht erneut Serververbindungen oder Schlüssel anlegen lassen, wenn bestehende Automatisierung ausreicht. Keine Passwörter, API-Schlüssel, Recovery-Passphrase oder privaten Schlüssel im Chat, Git, gewöhnlichen Artefakten oder Logs speichern. Sichtbare Änderungen nur im beauftragten Umfang; POS/Kellner, Preise und Zahlungsfreigaben bewahren.
+
+## Architektur und Speicher
+Netcup bleibt der aktive Anwendungs- und PostgreSQL-Standort. IDrive e2 ist Objektspeicher für verschlüsselte Sicherungen und die sekundäre Ablage vorhandener PDF-Archivdateien; dort läuft keine PostgreSQL-Datenbank. Keine zusätzliche aktive Datenbank, Migration, Replikation oder zweite schreibende Instanz bei IDrive beauftragt. Nicht behaupten, dass bereits sämtliche Dateien/Anwendungszugriffe direkt über IDrive laufen.
+
+## Bestehende Zugangswege (Referenzen, keine Geheimwerte)
+- GitHub: https://github.com/akanal/Bringness-POS ; main ist die Quelle. Verbundenes GitHub-Werkzeug verwenden, aktuelle Branch-/Deployment-Stände lesen.
+- Netcup SCP, Server953802 „Bringness“: https://www.servercontrolpanel.de/scp-ui/servers/953802/screen .
+- Server152.53.196.43; bestehende GitHub-Workflow-Verbindung über NETCUP_SSH_KEY und NETCUP_KNOWN_HOSTS, Geheimwerte ausschließlich in Repository Secrets. .github/workflows/netcup-operations.yml und ops/select-operation.js vor Operationen lesen.
+- Erlaubte bestehende SSH-Operationen: status, backup, restart, deploy mit den im Handler geprüften Zielen. Keine freie Shell über diesen Schlüssel. Keine Umgehung oder Ausweitung für Secret-Konfiguration. Einmalige root-Konsole nur für notwendige Host-Einrichtung.
+- Handler /usr/local/sbin/bringness-operations; bestehender Anwendungspfad /opt/bringness/app; Container bringness-pos, bringness-app, bringness-db, bringness-translate; Caddy. Vor tatsächlicher Änderung aktuellen Zustand verifizieren.
+- POS-Konfiguration /opt/bringness-pos/config/app.env; Plattformkonfiguration /opt/bringness/config/app.env; bestehendes lokales Backupskript /opt/bringness/config/backup.sh. Keine Werte ausgeben.
+- IDrive-Konsole https://console.idrivee2.com ; bekanntes Konto ahmetkanal77@gmail.com. Bucket bringness-documents, Frankfurt-2, Region eu-central-1, API https://s3.eu-central-1.idrivee2.com .
+- Bestehende IDrive-Zugangsdaten: /opt/bringness-pos/config/idrive-documents.json, root-only mode600. Vom installierten Hostdienst verwendet, nicht in die App gemountet. Neue Schlüssel/erneute Eingabe nicht erforderlich.
+- Lokaler zufälliger Verschlüsselungsschlüssel /opt/bringness-pos/config/idrive-recovery.key, root-only; NICHT auslesen/anzeigen/hochladen. Passwortgeschützte Kopie liegt im Bucket unter backups/recovery. Nur der Eigentümer kennt die Wiederherstellungspassphrase und soll sie in seinem Passwortmanager halten (Bitwarden empfohlen; tatsächliche Speicherung dort nicht unabhängig geprüft).
+- Private Dienstzustände /var/lib/bringness-idrive/recovery-ready.json, documents.json, last-success.json. Enthalten Referenzen/Prüfsummen; keine öffentlichen Routen dafür anlegen.
+- IDrive Support support@idrive.com, Ticket ID908391503; Antwort im Gmail-Thread1a181ea6d6804fd9, letzte Nachricht1a182185dc69b03e. Verbundenes Gmail vorhanden. Keine neue Nachricht ohne beauftragten Anlass senden.
+
+## Verifizierter Live-Stand Marktplatz
+- Öffentlich https://bringness.de/shop/ und https://bringness.de/shop/marketplace.html .
+- PR167 (verbundene Händlerprofile, getrennte Mehrhändler-Auswahlen/Bestellungen, manuelle Trackingreferenzen) und PR168 (Kopfzeile) als954a9ea2b8f0e466cc36024992ffa7379c0ed674 veröffentlicht, Netcup40673916496/job122767352977 erfolgreich.
+- PR169: Anthrazit-Kopfzeile an den Inhaltsrändern, native Kategorieauswahl aus geladenen Angeboten und expliziten URL-Kategorien; Auswahl löst Suche aus. Kein vollständiges Kategorie-API. Veröffentlichung5ba41c0e6aacba525a30ea7e9463411ae87afb36, Netcup40677108063/job122778219737 erfolgreich. HTML/CSS/marketplace-ui.js live bytegleich geprüft. 685 Shopprüfungen plus tatsächlicher PostgreSQL/Browser-Durchlauf; Layout390/768/1280/1920 ohne Überstand.
+- Bestellungen bleiben händlergetrennt/unbezahlt; Onlinezahlung, tatsächliche Versanddienst-Ereignisse/Labels, Produktbild-Backend und KI-Key-Aktivierung nicht aus diesen Änderungen ableiten. Aktuellen SHOP_MARKETPLACE_ENABLED-Zustand nicht erfinden. Keine echten Händler-/Bestellfixtures zur Abnahme angelegt.
+
+## Verifizierter IDrive-Stand
+- Screenshot355: erstmals tatsächlicher Netcup→IDrive-Upload, bytegleiches Lesen, AES256, NoSuchBucketPolicy und beide Objekt-URLs ohne anonyme Dateiauslieferung bestanden; geschützte Konfiguration gespeichert.
+- Support/Public FAQ bestätigt: ACL-APIs liefern Kompatibilitätsantworten und sind kein Identitäts-/Berechtigungsnachweis. Keine erneuten Canonical-ID-Vergleiche. Bestehende/unlesbare Bucket-Policy bleibt ein Abbruch; Policy nicht ändern/löschen. Nur genaue403-Denial oder302 zur exakten HTTPS-IDrive-Homepage akzeptieren, Redirects nicht verfolgen.
+- PR170 gemerged alsce17ee37f085d6ba87b4a350d1102e8cba9b4eaf; ersetzt geschlossenen PR160. Installerbd6039791347f79210fc2708be39ef9c7530a89c pinnt Quelleacff2c6ce661b8b93e2df1f8ec4001f8a5f10ed8 samt SHA256. 37 Bootstrap+13 Archiv+6 Runner-Prüfungen sowie reale synthetische PostgreSQL-Wiederherstellung/exakte Daten-/PDF-Prüfung erfolgreich (40682022064/job122794849441).
+- Screenshot359: tatsächliche root-Installation erfolgreich, passwortgeschützter Wiederherstellungsschlüssel in IDrive abgelegt/geprüft, erste echte verschlüsselte Sicherung mit isolierter Wiederherstellung erfolgreich, Timer aktiviert. Dies überschreibt frühere Pending-Angaben. AF_VSOCK-Generatorwarnung verhinderte diesen Erfolg nicht.
+- Dienst bringness-idrive-archive.service, Timer bringness-idrive-archive.timer; Nachtlauf03:15 Europe/Berlin mit bis5min Zufallsversatz, nach verpasstem Termin nachholbar. Installation /opt/bringness-pos/idrive-archive/current mit versionierten releases. Nachtlauf nicht mit einer ChatGPT-Erinnerung verwechseln.
+- Sicherung: vollständiger SQL-Clusterdump plus feste Konfigurationsdateien; lokal AES256-GCM-verschlüsselt vor Upload, HTTPS/SSE-AES256, danach Download/Hash/Entschlüsselung und Restore in separatem Container ohne Netzwerk/Host-Mount/Port. Kein Restore/Stop der Produktionsdatenbank. pg_dumpall ist pro Datenbank konsistent, nicht global über alle Datenbanken/Drittdienste.
+- Vorhandene gespeicherte RechnungsVORSCHAU-PDFs werden separat exakt verschlüsselt archiviert; bleiben Vorschauen. Andere Beleg-/Dokumentdaten sind im Datenbankbackup enthalten. Kein allgemeiner Kunden-Dateiupload und keine neue Original-Rechnungs-PDF-Erzeugung eingerichtet.
+- Keine automatische Löschung, Retention-/Object-Lock-Änderung oder neuer kostenpflichtiger Vertrag. Kapazitätsgrenzen und Details: ops/IDRIVE-ARCHIVE.md ; historische Einrichtung: ops/IDRIVE-SETUP.md .
+- Erste echte Sicherung und Timeraktivierung durch Eigentümerkonsole bestätigt. Ein späterer Nachtlauf, externe Fehlerbenachrichtigung, vollständige fachliche Kassen/TSE-Abstimmung und Recovery nach echtem Hostverlust wurden noch nicht separat abgenommen. Nicht als bereits geprüft melden.
+
+## Nächste sinnvolle Schritte
+1. Nach dem ersten Nachtlauf Timerstatus und privaten letzten Erfolgszeitpunkt prüfen, ohne Secrets oder Datenbankinhalte auszugeben. Vorhandene SSH-Funktionsgrenze beachten; eine Statusausgabe allein beinhaltet derzeit nicht automatisch den Archivdienst.
+2. Externe Benachrichtigung bei fehlgeschlagenen/verpassten Backups separat umsetzen, wenn beauftragt; derzeit nur systemd/journal und last-success.json.
+3. Bei weiterem Marktplatzauftrag Bilder-/Artikel-/Kategorien-/Bestellfluss anhand vorhandener Implementierung und echter Tests weiterführen. Keine neuen Produktionsfixtures, Zahlungen oder Verkäuferfreigaben ohne konkreten Auftrag.
+4. Dokument-/Datei-Backend nur als separates autorisiertes Paket erweitern; bestehende sekundäre Sicherung nicht als vollständige Ablösung des Anwendungsspeichers darstellen.
+
+## Starttext für einen neuen Chat
+„Bitte setze Bringness fort. Lies zuerst AGENTS.md und docs/PROJECT-HANDOFF.md im Repository akanal/Bringness-POS auf main. Nutze die vorhandenen Zugänge, prüfe den aktuellen Stand und arbeite ohne unnötige Rückfragen weiter. Zugangsdaten bleiben in den geschützten Speicherorten.“

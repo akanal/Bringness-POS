@@ -1,5 +1,7 @@
 # Bringness project continuity
 
+Current consolidated handoff: [docs/PROJECT-HANDOFF.md](docs/PROJECT-HANDOFF.md). Read it after this file before continuing in a new chat. It records current access references/settings, live releases and IDrive activation; never contains secret values.
+
 ## Start here for every new development session
 
 Use the existing repository and deployment configuration. Do not ask the owner to recreate an already configured server connection merely because a chat is new. Read this file, `.github/workflows/netcup-operations.yml`, and `ops/select-operation.js` before changing deployment configuration.
