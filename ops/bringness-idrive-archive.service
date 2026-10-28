@@ -1,0 +1,18 @@
+# Managed by Bringness IDrive archive installer
+[Unit]
+Description=Bringness encrypted IDrive backup and existing PDF archive
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/opt/bringness-pos/idrive-archive/current/venv/bin/python /opt/bringness-pos/idrive-archive/current/idrive-archive.py run
+TimeoutStartSec=2h
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/bringness-idrive /run
+PrivateTmp=true
