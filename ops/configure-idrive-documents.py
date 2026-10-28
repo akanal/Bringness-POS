@@ -226,6 +226,38 @@ def owner_only_acl(response):
             and grantee.get('ID') == owner and not grantee.get('URI') and not grantee.get('EmailAddress'))
 
 
+def describe_acl(response):
+    """Print only bounded structural facts; never identifiers, emails or raw values."""
+    if not isinstance(response, dict):
+        return 'ACL-Antwort fehlt'
+    owner_data = response.get('Owner')
+    owner = owner_data.get('ID') if isinstance(owner_data, dict) else None
+    owner_exists = isinstance(owner, str) and bool(owner)
+    grants = response.get('Grants')
+    if not isinstance(grants, list) or len(grants) > 100:
+        return 'Eigentuemer-ID vorhanden=' + str(owner_exists) + '; Grants fehlen/ungueltig'
+    descriptions = ['Eigentuemer-ID vorhanden=' + str(owner_exists), 'Grants=' + str(len(grants))]
+    groups = {'http://acs.amazonaws.com/groups/global/AllUsers': 'OEFFENTLICH-ALLE',
+              'http://acs.amazonaws.com/groups/global/AuthenticatedUsers': 'ALLE-AUTHENTIFIZIERTEN',
+              'http://acs.amazonaws.com/groups/s3/LogDelivery': 'LOG-DELIVERY'}
+    for grant in grants:
+        if not isinstance(grant, dict) or not isinstance(grant.get('Grantee'), dict):
+            descriptions.append('ungueltiger Grant')
+            continue
+        grantee = grant['Grantee']
+        kind = grantee.get('Type')
+        if kind not in ('CanonicalUser', 'Group', 'AmazonCustomerByEmail'):
+            kind = 'Typ fehlt/unbekannt'
+        permission = grant.get('Permission')
+        if permission not in ('FULL_CONTROL', 'READ', 'WRITE', 'READ_ACP', 'WRITE_ACP'):
+            permission = 'Recht fehlt/unbekannt'
+        same = owner_exists and grantee.get('ID') == owner
+        uri = grantee.get('URI')
+        group = groups.get(uri, 'ANDERE-GRUPPE' if uri else 'KEINE-GRUPPE') if isinstance(uri, (str, type(None))) else 'UNGUELTIGE-GRUPPE'
+        descriptions.append(kind + '/' + permission + '/Eigentuemer=' + str(same) + '/' + group)
+    return '; '.join(descriptions)
+
+
 def inspect_access(client):
     """Read only: exact existing synthetic object, bucket ACL and policy state."""
     from botocore.exceptions import ClientError
@@ -241,6 +273,7 @@ def inspect_access(client):
             response = getattr(client, method)(**arguments)
             if method in ('get_object_acl', 'get_bucket_acl'):
                 result = 'NUR EIGENTUEMER' if owner_only_acl(response) else 'NICHT ALS EIGENTUEMER-EXKLUSIV BESTAETIGT'
+                result += '\n  ' + describe_acl(response)
             elif method == 'get_bucket_policy':
                 result = 'POLICY VORHANDEN; Inhalt wird nicht ausgegeben'
             else:

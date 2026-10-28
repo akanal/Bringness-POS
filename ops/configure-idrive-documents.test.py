@@ -275,6 +275,25 @@ class SetupTest(unittest.TestCase):
         self.assertIn('OPERATION NICHT VERFUEGBAR', output.getvalue())
         self.assertNotIn(S, output.getvalue())
 
+    def test_acl_description_distinguishes_public_group_without_identifiers(self):
+        response = {'Owner': {'ID': S}, 'Grants': [
+            {'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': S}},
+            {'Permission': 'READ', 'Grantee': {'Type': 'Group', 'URI': 'http://acs.amazonaws.com/groups/global/AllUsers'}}]}
+        output = m.describe_acl(response)
+        self.assertIn('Eigentuemer=True', output)
+        self.assertIn('OEFFENTLICH-ALLE', output)
+        self.assertNotIn(S, output)
+
+    def test_acl_description_unknown_fields_do_not_escape(self):
+        response = {'Owner': {'ID': S}, 'Grants': [
+            {'Permission': S, 'Grantee': {'Type': S, 'ID': 'different', 'URI': S, 'EmailAddress': S}}]}
+        output = m.describe_acl(response)
+        self.assertNotIn(S, output)
+        self.assertIn('Typ fehlt/unbekannt', output)
+        self.assertIn('ANDERE-GRUPPE', output)
+        for value in (None, {}, {'Grants': S}, {'Grants': [None]}):
+            self.assertIsInstance(m.describe_acl(value), str)
+
 
 if __name__ == '__main__':
     unittest.main()
