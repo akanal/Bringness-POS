@@ -63,7 +63,7 @@ def safe_failure(error, phase=None):
         message = 'Netzwerk-, TLS- oder Zeitlimitfehler beim IDrive-Endpunkt.'
     # phase is internal; never permit externally supplied diagnostics into logs.
     stages = {'Vorbereitung', 'Schluesseleingabe', 'Schluesselformat', 'SDK-Vorbereitung',
-              'Testupload', 'Testdatei lesen', 'Zugriffslisten pruefen', 'Anonymen Zugriff pruefen', 'Geschuetzt speichern'}
+              'Testupload', 'Testdatei lesen', 'Zugriffslisten pruefen', 'Bucket-Regeln pruefen', 'Anonymen Zugriff pruefen', 'Geschuetzt speichern'}
     stage = phase if phase in stages else PHASE if PHASE in stages else 'Vorbereitung'
     return 'Nicht abgeschlossen. Schritt: ' + stage + '. ' + message
 
@@ -145,11 +145,16 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 class AnonymousClient:
     """Independent unsigned HTTPS GET: no SDK signing, redirects or proxy credentials."""
+    def __init__(self, virtual_host=False):
+        self.virtual_host = virtual_host
+
     def get_object(self, *, Bucket, Key):
         from botocore.exceptions import ClientError
         if Bucket != BUCKET or not re.fullmatch(r'_bringness-connection-checks/[0-9a-f]{32}\.txt', Key):
             raise ValueError('probe-id')
-        request = urllib.request.Request(ENDPOINT + '/' + BUCKET + '/' + Key,
+        url = ('https://' + BUCKET + '.s3.eu-central-1.idrivee2.com/' + Key
+               if self.virtual_host else ENDPOINT + '/' + BUCKET + '/' + Key)
+        request = urllib.request.Request(url,
                                          headers={'Accept': 'application/xml'}, method='GET')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
         try:
@@ -184,7 +189,7 @@ class AnonymousClient:
         pass
 
 
-def probe(client, anonymous, identifier=None, access_id=None):
+def probe(client, anonymous, identifier=None, additional_anonymous=None):
     global PHASE
     from botocore.exceptions import ClientError
     identifier = identifier or uuid.uuid4().hex
@@ -192,10 +197,10 @@ def probe(client, anonymous, identifier=None, access_id=None):
         raise ValueError('probe-id')
     key = '_bringness-connection-checks/' + identifier + '.txt'
     body = b'Bringness IDrive connection check. Synthetic data only.\n'
-    # Explicit private ACL; never enables public access. No fallback that drops
-    # this protection or the no-overwrite condition when unsupported.
+    # IDrive support ticket ID908391503 and public FAQ: ACL APIs are unsupported.
+    # Use default-private bucket policy, never send an ACL or change bucket rules.
     PHASE = 'Testupload'
-    client.put_object(Bucket=BUCKET, Key=key, Body=body, ACL='private',
+    client.put_object(Bucket=BUCKET, Key=key, Body=body,
         ServerSideEncryption='AES256', IfNoneMatch='*', ContentType='text/plain',
         Metadata={'sha256': hashlib.sha256(body).hexdigest()})
     PHASE = 'Testdatei lesen'
@@ -207,85 +212,37 @@ def probe(client, anonymous, identifier=None, access_id=None):
         stream.close()
     if actual != body or response.get('ServerSideEncryption') != 'AES256':
         raise ValueError('content-or-encryption-mismatch')
-    PHASE = 'Zugriffslisten pruefen'
-    verify_private_access(client, key, access_id=access_id)
+    PHASE = 'Bucket-Regeln pruefen'
+    verify_bucket_policy(client)
     PHASE = 'Anonymen Zugriff pruefen'
-    try:
-        public = anonymous.get_object(Bucket=BUCKET, Key=key)
-    except ClientError as error:
-        metadata = error.response.get('ResponseMetadata', {})
-        if metadata.get('HTTPStatusCode') != 403 or error.response.get('Error', {}).get('Code') not in ('AccessDenied', 'Forbidden', '403'):
-            raise ValueError('anonymous-result-inconclusive') from None
-    except AnonymousHomepageRedirect:
-        # The redirect alone is not a privacy verdict. Signed ACL ownership,
-        # absence of public grants and absence of bucket policy were verified above.
-        pass
-    else:
-        public['Body'].close()
-        raise ValueError('anonymous-access-allowed')
+    for unsigned in (anonymous,) + ((additional_anonymous,) if additional_anonymous is not None else ()):
+        try:
+            public = unsigned.get_object(Bucket=BUCKET, Key=key)
+        except ClientError as error:
+            metadata = error.response.get('ResponseMetadata', {})
+            if metadata.get('HTTPStatusCode') != 403 or error.response.get('Error', {}).get('Code') not in ('AccessDenied', 'Forbidden', '403'):
+                raise ValueError('anonymous-result-inconclusive') from None
+        except AnonymousHomepageRedirect:
+            # Only the exact provider homepage redirect is recognized, never followed.
+            # Default-private policy and signed encrypted readback were checked above.
+            pass
+        else:
+            public['Body'].close()
+            raise ValueError('anonymous-access-allowed')
     # No delete API: retain this one tiny synthetic object for owner inspection.
     return key
 
 
-def verify_private_access(client, key, access_id=None):
-    """Bind object grant to independently read bucket owner; reject public access."""
+def verify_bucket_policy(client):
+    """Provider-confirmed default-private state; no ACL-stub identity inference."""
     from botocore.exceptions import ClientError
-    bucket = client.get_bucket_acl(Bucket=BUCKET)
-    if not isinstance(bucket, dict) or not isinstance(bucket.get('Owner'), dict):
-        raise ValueError('acl-not-private')
-    owner = bucket['Owner'].get('ID')
-    grants = bucket.get('Grants')
-    if not isinstance(owner, str) or not owner or len(owner) > 512 or not isinstance(grants, list) or not 1 <= len(grants) <= 3:
-        raise ValueError('acl-not-private')
-    seen = set()
-    for grant in grants:
-        if not isinstance(grant, dict) or not isinstance(grant.get('Grantee'), dict):
-            raise ValueError('acl-not-private')
-        grantee = grant['Grantee']
-        permission = grant.get('Permission')
-        if (grantee.get('Type') == 'CanonicalUser' and grantee.get('ID') == owner
-                and permission == 'FULL_CONTROL' and not grantee.get('URI') and not grantee.get('EmailAddress')):
-            token = 'owner'
-        elif (grantee.get('Type') == 'Group'
-                and grantee.get('URI') == 'http://acs.amazonaws.com/groups/s3/LogDelivery'
-                and permission in ('WRITE', 'READ_ACP') and not grantee.get('ID') and not grantee.get('EmailAddress')):
-            token = permission
-        else:
-            raise ValueError('acl-not-private')
-        if token in seen:
-            raise ValueError('acl-not-private')
-        seen.add(token)
-    if 'owner' not in seen:
-        raise ValueError('acl-not-private')
-    obj = client.get_object_acl(Bucket=BUCKET, Key=key)
-    if not isinstance(obj, dict):
-        raise ValueError('acl-not-private')
-    # IDrive can omit object Owner.ID; compare its sole canonical grant to the
-    # independently verified bucket owner instead of guessing ownership.
-    allowed = {owner}
-    if isinstance(access_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{12,128}', access_id):
-        # This exact ID is supplied only by the caller that constructed the
-        # successfully authenticated S3 client, never taken from the ACL itself.
-        allowed.add(access_id)
-    obj_grants = obj.get('Grants')
-    if (not isinstance(obj_grants, list) or len(obj_grants) != 1
-            or not isinstance(obj_grants[0], dict) or not isinstance(obj_grants[0].get('Grantee'), dict)):
-        raise ValueError('acl-owner-mismatch')
-    principal = obj_grants[0]['Grantee'].get('ID')
-    if not isinstance(principal, str) or principal not in allowed:
-        raise ValueError('acl-owner-mismatch')
-    obj_owner = obj.get('Owner', {})
-    if not isinstance(obj_owner, dict) or obj_owner.get('ID') not in (None, '', principal):
-        raise ValueError('acl-owner-mismatch')
-    canonical = dict(obj, Owner={'ID': principal})
-    if not owner_only_acl(canonical):
-        raise ValueError('acl-owner-mismatch')
     try:
         client.get_bucket_policy(Bucket=BUCKET)
     except ClientError as error:
         if error.response.get('Error', {}).get('Code') != 'NoSuchBucketPolicy':
             raise
     else:
+        # Existing policies require a separate review; never change/remove them.
         raise ValueError('bucket-policy-present')
 
 
@@ -413,14 +370,15 @@ def main():
         return
     anonymous = AnonymousClient()
     try:
-        key = probe(signed, anonymous, access_id=access)
+        key = probe(signed, anonymous, additional_anonymous=AnonymousClient(virtual_host=True))
     finally:
         signed.close()
         anonymous.close()
     if args.operation == 'setup':
         PHASE = 'Geschuetzt speichern'
         save_new_config(CONFIG, access, secret)
-    print('PASS: Upload, exaktes Zuruecklesen, AES256, private Zugriffslisten und unangemeldeter Test ohne Dateiauslieferung.')
+    print('PASS: Upload, exaktes Zuruecklesen, AES256, keine Bucket-Policy und beide unangemeldeten Objekt-URLs ohne Dateiauslieferung.')
+    print('IDrive-ACL-Antworten werden laut Support nicht als Berechtigungsnachweis verwendet.')
     print('Retained synthetic object: ' + key)
     print('No application document storage has been activated. App integration remains separate.')
 

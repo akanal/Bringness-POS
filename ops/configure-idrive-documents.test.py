@@ -91,7 +91,7 @@ class SetupTest(unittest.TestCase):
         key = m.probe(signed, anonymous, 'a' * 32)
         request = signed.put_object.call_args.kwargs
         self.assertEqual(request['Bucket'], m.BUCKET)
-        self.assertEqual(request['ACL'], 'private')
+        self.assertNotIn('ACL', request)
         self.assertEqual(request['ServerSideEncryption'], 'AES256')
         self.assertEqual(request['IfNoneMatch'], '*')
         self.assertTrue(key.startswith('_bringness-connection-checks/'))
@@ -298,34 +298,8 @@ class SetupTest(unittest.TestCase):
         for value in (None, {}, {'Grants': S}, {'Grants': [None]}):
             self.assertIsInstance(m.describe_acl(value), str)
 
-    def test_omitted_object_owner_is_bound_to_bucket_owner(self):
-        signed, anonymous = self.clients()
-        signed.get_object_acl.return_value = {'Grants': signed.get_bucket_acl.return_value['Grants']}
-        self.assertTrue(m.probe(signed, anonymous))
-        signed.get_object_acl.return_value = {'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': 'foreign'}}]}
-        with self.assertRaisesRegex(ValueError, 'acl-owner-mismatch'):
-            m.verify_private_access(signed, 'synthetic-key')
 
-    def test_log_delivery_is_allowed_without_public_read(self):
-        signed, anonymous = self.clients()
-        bucket = json.loads(json.dumps(signed.get_bucket_acl.return_value))
-        for permission in ('WRITE', 'READ_ACP'):
-            bucket['Grants'].append({'Permission': permission, 'Grantee': {'Type': 'Group', 'URI': 'http://acs.amazonaws.com/groups/s3/LogDelivery'}})
-        signed.get_bucket_acl.return_value = bucket
-        self.assertTrue(m.probe(signed, anonymous))
-        bucket['Grants'][1]['Permission'] = 'READ'
-        with self.assertRaisesRegex(ValueError, 'acl-not-private'):
-            m.verify_private_access(signed, 'synthetic-key')
 
-    def test_any_public_grant_blocks_even_if_anonymous_redirects(self):
-        signed, anonymous = self.clients()
-        bucket = json.loads(json.dumps(signed.get_bucket_acl.return_value))
-        bucket['Grants'].append({'Permission': 'READ', 'Grantee': {'Type': 'Group', 'URI': 'http://acs.amazonaws.com/groups/global/AllUsers'}})
-        signed.get_bucket_acl.return_value = bucket
-        anonymous.get_object.side_effect = m.AnonymousHomepageRedirect()
-        with self.assertRaisesRegex(ValueError, 'acl-not-private'):
-            m.probe(signed, anonymous)
-        anonymous.get_object.assert_not_called()
 
     def test_policy_present_or_unreadable_blocks_privacy_verdict(self):
         for error in (None, ClientError({'Error': {'Code': 'AccessDenied'}}, 'GetBucketPolicy')):
@@ -336,13 +310,6 @@ class SetupTest(unittest.TestCase):
                 m.probe(signed, anonymous)
             anonymous.get_object.assert_not_called()
 
-    def test_homepage_redirect_requires_signed_acl_checks(self):
-        signed, anonymous = self.clients()
-        anonymous.get_object.side_effect = m.AnonymousHomepageRedirect()
-        self.assertTrue(m.probe(signed, anonymous))
-        signed.get_bucket_acl.return_value = {}
-        with self.assertRaisesRegex(ValueError, 'acl-not-private'):
-            m.verify_private_access(signed, 'synthetic-key')
 
     def test_only_exact_provider_homepage_redirect_is_recognized(self):
         key = '_bringness-connection-checks/'+'a'*32+'.txt'
@@ -356,29 +323,51 @@ class SetupTest(unittest.TestCase):
                 with self.assertRaises(expected):
                     m.AnonymousClient().get_object(Bucket=m.BUCKET, Key=key)
 
-    def test_object_principal_can_be_exact_authenticated_access_id(self):
+
+
+
+    def test_provider_acl_stubs_are_not_requested_or_used(self):
         signed, anonymous = self.clients()
-        signed.get_object_acl.return_value = {'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': A}}]}
-        self.assertTrue(m.probe(signed, anonymous, access_id=A))
-        with self.assertRaisesRegex(ValueError, 'acl-owner-mismatch'):
-            m.verify_private_access(signed, 'synthetic-key', access_id='other-access-id123')
+        signed.get_bucket_acl.side_effect = RuntimeError('unsupported stub')
+        signed.get_object_acl.side_effect = RuntimeError('unsupported stub')
+        anonymous.get_object.side_effect = m.AnonymousHomepageRedirect()
+        self.assertTrue(m.probe(signed, anonymous))
+        signed.get_bucket_acl.assert_not_called()
+        signed.get_object_acl.assert_not_called()
+        signed.get_bucket_policy_status.assert_not_called()
+        signed.get_bucket_policy.assert_called_once_with(Bucket=m.BUCKET)
 
-    def test_foreign_or_public_grants_not_trusted_as_caller(self):
-        for grant in (
-            {'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': 'foreign'}},
-            {'Permission': 'READ', 'Grantee': {'Type': 'CanonicalUser', 'ID': A}},
-            {'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'Group', 'ID': A, 'URI': 'http://acs.amazonaws.com/groups/global/AllUsers'}},
-        ):
-            signed, _ = self.clients()
-            signed.get_object_acl.return_value = {'Grants': [grant]}
-            with self.assertRaises(ValueError):
-                m.verify_private_access(signed, 'synthetic-key', access_id=A)
+    def test_both_unsigned_object_urls_must_deny(self):
+        for second_public in (False, True):
+            signed, anonymous = self.clients()
+            other = Mock()
+            if second_public:
+                other.get_object.return_value = {'Body': io.BytesIO(b'public')}
+                with self.assertRaisesRegex(ValueError, 'anonymous-access-allowed'):
+                    m.probe(signed, anonymous, additional_anonymous=other)
+            else:
+                other.get_object.side_effect = m.AnonymousHomepageRedirect()
+                self.assertTrue(m.probe(signed, anonymous, additional_anonymous=other))
+            self.assertEqual(anonymous.get_object.call_args, other.get_object.call_args)
 
-    def test_explicit_conflicting_owner_not_overridden_by_access_id(self):
-        signed, _ = self.clients()
-        signed.get_object_acl.return_value = {'Owner': {'ID': 'foreign'}, 'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': A}}]}
-        with self.assertRaises(ValueError):
-            m.verify_private_access(signed, 'synthetic-key', access_id=A)
+    def test_virtual_host_anonymous_url_has_no_authorization(self):
+        error = HTTPError('https://synthetic.invalid',302,'',{'Location':'https://www.idrivee2.com'},io.BytesIO(b''))
+        with patch.object(m.urllib.request, 'build_opener') as build:
+            build.return_value.open.side_effect = error
+            with self.assertRaises(m.AnonymousHomepageRedirect):
+                m.AnonymousClient(virtual_host=True).get_object(Bucket=m.BUCKET,Key='_bringness-connection-checks/'+'a'*32+'.txt')
+            request=build.return_value.open.call_args.args[0]
+            self.assertEqual(request.full_url,'https://bringness-documents.s3.eu-central-1.idrivee2.com/_bringness-connection-checks/'+'a'*32+'.txt')
+            self.assertFalse(request.has_header('Authorization'))
+            self.assertFalse(request.has_header('Cookie'))
+
+    def test_policy_errors_fail_at_policy_stage_without_anonymous_request(self):
+        for code in ('AccessDenied','NotImplemented','NoSuchBucket','InvalidAccessKeyId'):
+            signed,anonymous=self.clients()
+            signed.get_bucket_policy.side_effect=ClientError({'Error':{'Code':code}},'GetBucketPolicy')
+            with self.assertRaises(ClientError):m.probe(signed,anonymous)
+            self.assertEqual(m.PHASE,'Bucket-Regeln pruefen')
+            anonymous.get_object.assert_not_called()
 
 
 if __name__ == '__main__':
