@@ -17,3 +17,9 @@ This block does not yet connect the independent billing-account PDF download ren
 Local focused tests passed for automatic invoice immutable reuse, provider failure/retry, corrupt downloads, company binding and deterministic actual PDF output; display metadata-only persistence, legacy reads, wrong-venue rejection, corruption, failure accounting and quotas. Existing actual billing-mail/display-route scenarios passed with added cloud cases, including restart, original capability access and access revocation after deletion. The first full shop run contained two failed new test fixtures due to multi-statement prepared queries; those queries were split and both focused tests then passed. A complete corrected run and CI acceptance must be recorded separately before any deployment.
 
 No production invoices, mail, media, financial data or configuration were changed by these tests. Existing credentials stay exclusively in protected runtime configuration.
+
+## Account invoice downloads — follow-up
+
+The authenticated `/api/v1/billing/invoices/:number/pdf` route now uses the same immutable private IDrive invoice archive and PDF renderer as billing email when direct IDrive storage is configured. The company-scoped paid-invoice lookup runs before provider work. Provider failure returns a retryable 503 before PDF headers are sent; it never falls back to a freshly rendered local PDF. Unconfigured and isolated-preview rendering retain the existing account PDF format.
+
+Six focused tests passed: archive reuse and byte identity, initialization retry, company mismatch, authentication, scoped lookup, unrelated method pass-through and provider failure. The complete shop suite and CI must be recorded for the final follow-up revision before deployment. This does not implement POS receipt storage, product images, branding, avatars or historical migration.

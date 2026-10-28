@@ -1,3 +1,4 @@
+import {createBillingInvoiceDownload} from '../../server/billing-invoice-download.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {pathToFileURL} from 'node:url';
@@ -44,4 +45,18 @@ test('provider failure leaves no completed record and permits retry without paym
 test('actual billing PDF renderer produces stable bytes for the same invoice',async()=>{
  const z={invoice_date:'2026-10-28',invoice_number:'BN-TEST',net_cents:3499,vat_cents:665,vat_rate:19,amount_cents:4164};
  assert.deepEqual(await invoicePdf(z,{}),await invoicePdf(z,{}));
+});
+
+test('account download and email storage reuse the same original PDF; failed configuration retries',async()=>{
+ const f=await setup();try{
+  let initializations=0;
+  const download=createBillingInvoiceDownload(f.pool,{env:{},getStore:async()=>{initializations++;if(initializations===1)throw Error('temporary configuration failure');return f.store;}});
+  await assert.rejects(download(f.z),/temporary configuration failure/);
+  const bytes=await download(f.z);
+  assert.deepEqual(await storedBillingInvoice(f.pool,f.store,f.z,{},invoicePdf),bytes);
+  assert.deepEqual(await download(f.z),bytes);
+  assert.deepEqual(f.counts(),{puts:1,gets:2});assert.equal(initializations,2);
+  await assert.rejects(download({...f.z,company_id:id}),{code:'INVOICE_STORAGE_UNAVAILABLE'});
+  assert.equal((await f.db.query('SELECT * FROM billing_invoice_files')).rows.length,1);
+ }finally{await f.db.close();}
 });
