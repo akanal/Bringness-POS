@@ -14,13 +14,13 @@ done
 echo 'IDrive-Einrichtung: Quelldateien und Pruefsummen werden geprueft.'
 work=$(mktemp -d /root/idrive-connect.XXXXXXXX)
 cd "$work"
-source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/76313fc147a248f9b699c3a26514a045bb68e301/ops
+source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/6fe1c6c6581d8a5a7b71322564650a813666698c/ops
 for file in configure-idrive-documents.py configure-idrive-documents.test.py idrive-setup-requirements.txt; do
   curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --connect-timeout 15 --max-time 90 "$source_url/$file" -o "$file"
 done
 sha256sum --check --status <<'HASHES'
-26dfc1cfc3deedee344076d5a69547015cacbaff0010b82817b8e252c0b4645c  configure-idrive-documents.py
-54737a801a9362dc9ea394f4c5309ea08804a3ab85ce376339bd6eac7b84d8c3  configure-idrive-documents.test.py
+da654a343ade729a1df63bc621a53728eefb0628a2b5848a2dbe262952753090  configure-idrive-documents.py
+3536e7d8ccacfc910dfba4a11fbeefc8913a8cd0baa1f6c669339912cc3c7727  configure-idrive-documents.test.py
 6fb5dc28edc7085e2c7c256b73848f4b9b1af709727e3483dd714658e9389aad  idrive-setup-requirements.txt
 HASHES
 echo 'Quelldateien bestaetigt. Isolierte Python-Umgebung wird eingerichtet.'
