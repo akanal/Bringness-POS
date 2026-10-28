@@ -35,6 +35,7 @@ cp -p /opt/bringness-pos/config/app.env "$work/app.env.before"
 python3 "$work/configure-idrive-app.py" stage "$work/app.env.next"
 previous=$(docker inspect --format '{{index .Config.Labels "bringness.revision"}}' bringness-pos)
 [[ "$previous" =~ ^[0-9a-f]{40}$ ]]
+[[ "$previous" == "$revision" ]] || { echo 'Anwendungsstand hat sich geaendert. Bitte einen passenden Aktivierungsbefehl verwenden; keine App-Einstellung geaendert.' >&2; exit 1; }
 docker image inspect "bringness-pos:$revision" >/dev/null
 # Test the real SDK/provider using a harmless synthetic object before changing the live environment.
 docker run --rm --network bringness-internal --env-file "$work/app.env.next" --entrypoint node "bringness-pos:$revision" server/idrive-document-check.js check
