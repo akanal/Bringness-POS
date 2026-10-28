@@ -203,7 +203,7 @@ def restore_image(facts):
 def restore_drill(sql,expected,verify=None):
     name='bringness-recovery-'+uuid.uuid4().hex[:12];admin='recovery_'+uuid.uuid4().hex[:12];created=False
     try:
-        command(['docker','run','-d','--name',name,'--network','none','--memory','1g','--cpus','1','--tmpfs','/var/lib/postgresql/data:rw,size=4g','-e','POSTGRES_HOST_AUTH_METHOD=trust','-e','POSTGRES_USER='+admin,'-e','POSTGRES_DB=postgres',restore_image(expected)],timeout=180);created=True
+        command(['docker','run','-d','--name',name,'--network','none','--memory','1g','--cpus','1','--tmpfs','/tmp/bringness-pgdata:rw,size=4g','-e','PGDATA=/tmp/bringness-pgdata','-e','POSTGRES_HOST_AUTH_METHOD=trust','-e','POSTGRES_USER='+admin,'-e','POSTGRES_DB=postgres',restore_image(expected)],timeout=180);created=True
         for attempt in range(60):
             try:command(['docker','exec',name,'pg_isready','-U',admin],timeout=5);break
             except subprocess.CalledProcessError:time.sleep(1)
@@ -214,7 +214,7 @@ def restore_drill(sql,expected,verify=None):
         if json.loads(raw)!=expected['databases']:raise ValueError('restore-databases-mismatch')
         if verify is not None:verify(name,admin)
     finally:
-        if created:command(['docker','rm','-f',name],timeout=60)
+        if created:command(['docker','rm','-f','-v',name],timeout=60)
 
 
 def upload_verified(client,source,key,work):

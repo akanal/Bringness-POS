@@ -72,7 +72,7 @@ class ArchiveTest(unittest.TestCase):
    if args[-1].startswith('SELECT json_agg'):return b'["postgres"]'
    return b''
   with patch.object(m,'command',side_effect=fake):m.restore_drill(self.source,{'databases':['postgres']})
-  create=calls[0];self.assertEqual(create[create.index('--network')+1],'none');self.assertIn('POSTGRES_DB=postgres',create);name=create[create.index('--name')+1];self.assertTrue(name.startswith('bringness-recovery-'));self.assertTrue(any(x[:3]==['docker','exec','-i'] and x[3]==name for x in calls));self.assertEqual(calls[-1],['docker','rm','-f',name])
+  create=calls[0];self.assertEqual(create[create.index('--network')+1],'none');self.assertIn('POSTGRES_DB=postgres',create);name=create[create.index('--name')+1];self.assertTrue(name.startswith('bringness-recovery-'));self.assertTrue(any(x[:3]==['docker','exec','-i'] and x[3]==name for x in calls));self.assertEqual(calls[-1],['docker','rm','-f','-v',name])
 
 class RecoveryWrapTest(unittest.TestCase):
  def test_password_wrap_recovers_exact_key_and_rejects_wrong_password_or_tamper(self):
