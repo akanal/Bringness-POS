@@ -39,7 +39,7 @@ def safe_failure(error, phase=None):
         'anonymous-access-allowed': 'Anonymer Zugriff auf das Testobjekt war moeglich; Einrichtung angehalten.',
         'anonymous-network-failure': 'Unangemeldeter HTTPS-Test konnte den Endpunkt nicht verlaesslich erreichen.',
         'acl-not-private': 'Zugriffsliste ist nicht als privat bestaetigt; keine Freigabe.',
-        'acl-owner-mismatch': 'Datei-Berechtigter stimmt nicht mit bestaetigtem Bucket-Eigentuemer ueberein.',
+        'acl-owner-mismatch': 'Datei-Berechtigter ist weder bestaetigter Bucket-Eigentuemer noch der verwendete Zugriffsschluessel. Einrichtung angehalten.',
         'bucket-policy-present': 'Bucket-Policy vorhanden; gesonderte Pruefung erforderlich.',
     }
     message = 'Ursache nicht eindeutig. Keine geheimen Fehlerdetails ausgegeben.'
@@ -184,7 +184,7 @@ class AnonymousClient:
         pass
 
 
-def probe(client, anonymous, identifier=None):
+def probe(client, anonymous, identifier=None, access_id=None):
     global PHASE
     from botocore.exceptions import ClientError
     identifier = identifier or uuid.uuid4().hex
@@ -208,7 +208,7 @@ def probe(client, anonymous, identifier=None):
     if actual != body or response.get('ServerSideEncryption') != 'AES256':
         raise ValueError('content-or-encryption-mismatch')
     PHASE = 'Zugriffslisten pruefen'
-    verify_private_access(client, key)
+    verify_private_access(client, key, access_id=access_id)
     PHASE = 'Anonymen Zugriff pruefen'
     try:
         public = anonymous.get_object(Bucket=BUCKET, Key=key)
@@ -227,7 +227,7 @@ def probe(client, anonymous, identifier=None):
     return key
 
 
-def verify_private_access(client, key):
+def verify_private_access(client, key, access_id=None):
     """Bind object grant to independently read bucket owner; reject public access."""
     from botocore.exceptions import ClientError
     bucket = client.get_bucket_acl(Bucket=BUCKET)
@@ -262,10 +262,22 @@ def verify_private_access(client, key):
         raise ValueError('acl-not-private')
     # IDrive can omit object Owner.ID; compare its sole canonical grant to the
     # independently verified bucket owner instead of guessing ownership.
-    obj_owner = obj.get('Owner', {})
-    if not isinstance(obj_owner, dict) or obj_owner.get('ID') not in (None, '', owner):
+    allowed = {owner}
+    if isinstance(access_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{12,128}', access_id):
+        # This exact ID is supplied only by the caller that constructed the
+        # successfully authenticated S3 client, never taken from the ACL itself.
+        allowed.add(access_id)
+    obj_grants = obj.get('Grants')
+    if (not isinstance(obj_grants, list) or len(obj_grants) != 1
+            or not isinstance(obj_grants[0], dict) or not isinstance(obj_grants[0].get('Grantee'), dict)):
         raise ValueError('acl-owner-mismatch')
-    canonical = dict(obj, Owner={'ID': owner})
+    principal = obj_grants[0]['Grantee'].get('ID')
+    if not isinstance(principal, str) or principal not in allowed:
+        raise ValueError('acl-owner-mismatch')
+    obj_owner = obj.get('Owner', {})
+    if not isinstance(obj_owner, dict) or obj_owner.get('ID') not in (None, '', principal):
+        raise ValueError('acl-owner-mismatch')
+    canonical = dict(obj, Owner={'ID': principal})
     if not owner_only_acl(canonical):
         raise ValueError('acl-owner-mismatch')
     try:
@@ -401,7 +413,7 @@ def main():
         return
     anonymous = AnonymousClient()
     try:
-        key = probe(signed, anonymous)
+        key = probe(signed, anonymous, access_id=access)
     finally:
         signed.close()
         anonymous.close()

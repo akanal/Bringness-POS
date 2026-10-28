@@ -356,6 +356,30 @@ class SetupTest(unittest.TestCase):
                 with self.assertRaises(expected):
                     m.AnonymousClient().get_object(Bucket=m.BUCKET, Key=key)
 
+    def test_object_principal_can_be_exact_authenticated_access_id(self):
+        signed, anonymous = self.clients()
+        signed.get_object_acl.return_value = {'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': A}}]}
+        self.assertTrue(m.probe(signed, anonymous, access_id=A))
+        with self.assertRaisesRegex(ValueError, 'acl-owner-mismatch'):
+            m.verify_private_access(signed, 'synthetic-key', access_id='other-access-id123')
+
+    def test_foreign_or_public_grants_not_trusted_as_caller(self):
+        for grant in (
+            {'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': 'foreign'}},
+            {'Permission': 'READ', 'Grantee': {'Type': 'CanonicalUser', 'ID': A}},
+            {'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'Group', 'ID': A, 'URI': 'http://acs.amazonaws.com/groups/global/AllUsers'}},
+        ):
+            signed, _ = self.clients()
+            signed.get_object_acl.return_value = {'Grants': [grant]}
+            with self.assertRaises(ValueError):
+                m.verify_private_access(signed, 'synthetic-key', access_id=A)
+
+    def test_explicit_conflicting_owner_not_overridden_by_access_id(self):
+        signed, _ = self.clients()
+        signed.get_object_acl.return_value = {'Owner': {'ID': 'foreign'}, 'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': A}}]}
+        with self.assertRaises(ValueError):
+            m.verify_private_access(signed, 'synthetic-key', access_id=A)
+
 
 if __name__ == '__main__':
     unittest.main()
