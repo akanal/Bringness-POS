@@ -4,6 +4,7 @@ import {marketMoney as money,marketGross as gross,marketLines} from './market-po
 const publicId=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function mountMarketplace({window:w,document:d=w.document,client:provided}){
  const $=id=>d.getElementById(id),el=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
+ const categories=new Set();
  const edits=new Map();let rows=[],cart=[],quote=null,busy=false,searchEpoch=0,cartEpoch=0,activeSeller='',sellerContext='',detailId='',nextCursor='';
  const client=provided||createMarketClient({window:w,onPrivacy:()=>{quote=null;busy=false;cartEpoch++;$('market-recipient').reset();$('market-confirm').hidden=true;status('Ansicht gewechselt. Auswahl vor dem Senden erneut prüfen.');}});
  const status=(text,error=false)=>{$('market-status').textContent=text;$('market-status').classList.toggle('market-error',error);};
@@ -63,8 +64,15 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   }
   if(!rows.length)host.append(el('p','Keine veröffentlichten Händlerangebote für diese Suche.'));
  }
+ function updateCategories(value=$('market-category').value){
+  const select=$('market-category');if(value&&value.length<=80)categories.add(value);
+  for(const p of rows)if(typeof p.category==='string'&&p.category.length<=80)categories.add(p.category);
+  select.replaceChildren();const all=el('option','Alle');all.value='';select.append(all);
+  for(const category of [...categories].sort((a,b)=>a.localeCompare(b,'de'))){const option=el('option',category);option.value=category;select.append(option);}
+  select.value=value;
+ }
  function parameters(){return new URLSearchParams(Object.entries({q:$('market-search').value.trim(),category:$('market-category').value.trim(),seller:sellerContext,method:$('market-filter-method').value,available:$('market-available').checked?'1':'',offer:detailId}).filter(([,v])=>v));}
- function readLocation(){const u=new URL(w.location.href);$('market-search').value=u.searchParams.get('ad')||u.searchParams.get('q')||'';$('market-category').value=u.searchParams.get('category')||'';$('market-filter-method').value=['shipping','pickup'].includes(u.searchParams.get('method'))?u.searchParams.get('method'):'';$('market-available').checked=u.searchParams.get('available')==='1';sellerContext=u.searchParams.get('seller')||'';detailId=u.searchParams.get('offer')||'';}
+ function readLocation(){const u=new URL(w.location.href);$('market-search').value=u.searchParams.get('ad')||u.searchParams.get('q')||'';updateCategories(u.searchParams.get('category')||'');$('market-filter-method').value=['shipping','pickup'].includes(u.searchParams.get('method'))?u.searchParams.get('method'):'';$('market-available').checked=u.searchParams.get('available')==='1';sellerContext=u.searchParams.get('seller')||'';detailId=u.searchParams.get('offer')||'';}
  async function search(append=false){
   const current=++searchEpoch,params=parameters(),cursor=nextCursor;$('market-next').disabled=true;
   try{
@@ -73,7 +81,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
    else{params.delete('offer');if(append)params.set('cursor',cursor);[result,profile]=await Promise.all([client.call('?'+params),sellerContext?client.call('/sellers/'+encodeURIComponent(sellerContext)):Promise.resolve(null)]);}
    if(current!==searchEpoch)return;
    if(!Array.isArray(result.offers)||!result.offers.every(p=>publicId(p.sellerId)&&Array.isArray(p.variants)))throw Object.assign(Error(),{code:'INVALID_RESPONSE'});
-   rows=append?[...rows,...result.offers]:result.offers;render();
+   rows=append?[...rows,...result.offers]:result.offers;updateCategories();render();
    const context=$('market-context');context.replaceChildren();if(profile){context.append(el('h2',profile.profile.name),el('p',profile.profile.street+', '+profile.profile.postalCode+' '+profile.profile.city+' · '+profile.profile.country),el('p',profile.profile.email),el('p','Geschäftliche Kontaktdaten des freigegebenen Händlers. Onlinezahlung ist nicht freigeschaltet.'));}
    if(profile||detailId)context.append(link('Alle Händlerangebote',{}));
    nextCursor=result.nextCursor||'';$('market-next').hidden=!nextCursor;
@@ -81,6 +89,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   finally{if(current===searchEpoch)$('market-next').disabled=false;}
  }
  $('market-search-form').addEventListener('submit',e=>{e.preventDefault();detailId='';const p=parameters();w.history.pushState(null,'',w.location.pathname+(p.size?'?'+p:''));search();});
+ $('market-category').addEventListener('change',()=>{$('market-search-form').requestSubmit();});
  $('market-reset').addEventListener('click',()=>{sellerContext='';detailId='';$('market-search-form').reset();w.history.pushState(null,'',w.location.pathname);search();});
  w.addEventListener('popstate',()=>{readLocation();search();});$('market-next').addEventListener('click',()=>search(true));
  $('market-method').addEventListener('change',()=>{invalidate();renderCart();});$('market-cart-seller').addEventListener('change',()=>{activeSeller=$('market-cart-seller').value;invalidate();renderCart();});
