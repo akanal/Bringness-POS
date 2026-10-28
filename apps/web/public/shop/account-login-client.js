@@ -1,6 +1,6 @@
 const fail=code=>Object.assign(Error(code),{code});
 export function validShopLogin(email,password){return typeof email==='string'&&email.trim().length<=254&&/^[^\s@]+@[^\s@]+$/u.test(email.trim())&&!/[\u0000-\u001f\u007f]/.test(email)&&typeof password==='string'&&password.length>0&&password.length<=128;}
-export function shopLoginDestination(hash=''){return hash==='#marketplace'?'/shop/marketplace.html#my-market-orders':hash==='#merchant'?'/shop/marketplace-seller.html':hash==='#review'?'/shop/#review':hash==='#licences'?'/shop/licences.html':'/shop/';}
+export function shopLoginDestination(hash=''){return hash==='#documents'?'/shop/documents.html':hash==='#marketplace'?'/shop/marketplace.html#my-market-orders':hash==='#merchant'?'/shop/marketplace-seller.html':hash==='#review'?'/shop/#review':hash==='#licences'?'/shop/licences.html':'/shop/';}
 export async function requestShopLogin({email,password,fetcher=fetch,signal}){
  if(!validShopLogin(email,password))throw fail('INVALID_INPUT');
  try{

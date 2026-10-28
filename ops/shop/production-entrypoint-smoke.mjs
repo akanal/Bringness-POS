@@ -1,3 +1,4 @@
+import {documentBrowserChecks} from './documents-browser.mjs';
 import {marketplaceApprovalChecks} from './market-approval-browser.mjs';
 import {marketplaceConcurrencyChecks} from './marketplace-concurrency.mjs';
 import {marketplaceBrowserChecks} from './marketplace-browser.mjs';
@@ -22,6 +23,7 @@ let browser;const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function post(path,value,token){const res=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://bringness.de',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(value)});return {status:res.status,value:await res.json()};}
 try{
  let ready=false;for(let i=0;i<120;i++){if(child.exitCode!==null)throw Error('Application exited before readiness');try{const r=await post('/api/v1/shop/registrations',{});if(r.status===400){ready=true;break;}}catch{}await pause(500);}assert.ok(ready,'Application registration never became ready');
+ const documentStatus=await fetch(base+'/api/v1/shop/documents/status');assert.equal(documentStatus.status,200);assert.equal((await documentStatus.json()).available,false);
  const html=await (await fetch(base+'/shop/')).text();assert.match(html,/brand-wordmark/);assert.ok(!html.includes('src="/brand-logo.js"'));assert.equal((await fetch(base+'/shop')).status,200);
  const password='FixtureOwner1!'+crypto.randomBytes(12).toString('hex');
  async function account(label){const email=(label+'-'+crypto.randomUUID()+'@example.test').toLowerCase(),requestId=crypto.randomUUID(),registration={companyName:'CI Shop '+label,ownerName:'CI Owner '+label,email,password,street:'Fixture 1',postalCode:'00123',city:'Berlin',country:'DE'};const r=await post('/api/v1/shop/registrations',{requestId,registration});assert.equal(r.status,200,JSON.stringify(r.value));assert.equal((await post('/api/v1/shop/registrations',{requestId,registration})).value.replay,true);const login=await post('/api/v1/auth/login',{email,password});assert.equal(login.status,200);assert.match(login.value.token,/^[a-f0-9]{64}$/);return {email,token:login.value.token};}
@@ -96,6 +98,7 @@ try{
   await marketplaceApprovalChecks({page,base,pool,accounts:approvalAccounts,adminToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceBrowserChecks({page,base,pool,sellerToken:a.token,buyerToken:b.token,sellerCompany:owner.company_id,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceConcurrencyChecks({base,pool,sellerToken:a.token,buyerToken:b.token});
+  await documentBrowserChecks({page,pool,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   assert.deepEqual(errors,[]);await context.close();
  }
  console.log('Actual entrypoint + PostgreSQL: registration/replay, real login, quote, draft/replay, prepared checkout, account isolation, history, seller persistence/concurrency/archive/version reads and no financial grants passed.');
