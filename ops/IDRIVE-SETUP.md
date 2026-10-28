@@ -44,3 +44,11 @@ After actual server acceptance, implement a separate reviewed application adapte
 The runner downloads the three reviewed source files from commit7902cf49ff13a87c4d4378d67b034c1fa907044c and verifies their embedded SHA256 digests before any Python execution. It uses a fresh root-private temporary working directory, so earlier truncated console filenames cannot affect execution. It does not upgrade or restart the production application. Requires curl, Python3 with venv, sha256sum and an interactive root console.
 
 Validation: bash syntax passed, 13 original synthetic tests passed with pinned dependencies, and five orchestration tests passed (correct ordering, damaged/failed download rejection, dependency failure and failed checks stop before setup). The orchestration tests stub privileged filesystem work and all provider calls. Real server/IDrive acceptance remains pending owner console execution and hidden credential input.
+
+## Console acceptance and unsigned check — 2026-10-28
+
+Owner console screenshots confirm installation and synthetic tests pass. Diagnostic run reached anonymous-access verification after signed upload, exact encrypted readback, then failed with an unclassified exception. Credentials are not persisted on an inconclusive probe; full acceptance remains outstanding. Never describe this as a working backup.
+
+The anonymous GET now uses an independent standard-library HTTPS client rather than the S3 SDK. It sends no Authorization or Cookie headers, disables ambient proxies and redirects, fixes endpoint/bucket/exact random probe key, sets a15-second timeout and bounds error-body reads to8193 bytes. Only HTTP403 with an explicit S3 Error/AccessDenied, Forbidden or403 code counts as denial. Redirects, public200,404,5xx, malformed/oversized responses, network failures or other error codes fail closed. This neither drops private ACL/AES256/conditional upload nor changes existing objects or bucket access policy. Signed SDK remains unchanged. Safe stage diagnostics interpolate no provider error text or keys.
+
+26 synthetic source tests and five runner tests pass; bash syntax checked. Runner now pins sourcec3244923f0f16c1f01dcf9d0fc19a6fc3d927589 with SHA256 checks. Requires new owner console run; production-to-IDrive success and durable config are not claimed.
