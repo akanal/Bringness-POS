@@ -27,12 +27,20 @@ cleanup(){
  exit "$rc"
 }
 trap cleanup EXIT
-revision=__SOURCE__
-source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/__SOURCE__/ops
+revision=acff2c6ce661b8b93e2df1f8ec4001f8a5f10ed8
+source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/acff2c6ce661b8b93e2df1f8ec4001f8a5f10ed8/ops
 files=(idrive-archive.py idrive-archive.test.py idrive-archive-smoke.py idrive-archive-requirements.txt configure-idrive-documents.py configure-idrive-documents.test.py idrive-setup-requirements.txt bringness-idrive-archive.service bringness-idrive-archive.timer)
 for file in "${files[@]}"; do curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 15 --max-time 90 "$source_url/$file" -o "$work/$file"; done
 (cd "$work"; sha256sum --check --status <<'HASHES'
-__HASHES__
+485bfb8e033ff9e931918615513d66bbe2b1c3101895a93af560639ae99921eb  idrive-archive.py
+6cfb605898aa8649ca4d426f656121519ed44eff7806e388b8c4ae15a41cca27  idrive-archive.test.py
+55372175e6c31f0e4d721d743c3680057226e50c9f034dba469c459626879759  idrive-archive-smoke.py
+8bb6b7e266be34c6c0a7956fc5f50ba9a9cc24b0bcd3fefc7f220dfecf7583ac  idrive-archive-requirements.txt
+b21a19d9e71665c4142a7046ddab8c3f4c996e468c3f45e04575e3877e6ab7ca  configure-idrive-documents.py
+3b06e1a11084969b9b69e98344893f44df6c6734627ce254435f3c5b35574add  configure-idrive-documents.test.py
+6fb5dc28edc7085e2c7c256b73848f4b9b1af709727e3483dd714658e9389aad  idrive-setup-requirements.txt
+7b3adf3163c0f3318436335422cae2ec143a1eb9d08ece6cac924587aef60012  bringness-idrive-archive.service
+c6c2249fd9ae155a4b4eb0bd4d3fa116e07a95af32a01c441ea01574bf411e8a  bringness-idrive-archive.timer
 HASHES
 )
 python3 - <<'PY'
