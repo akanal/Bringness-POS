@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+from urllib.error import HTTPError, URLError
 from botocore.exceptions import ClientError
 
 spec = importlib.util.spec_from_file_location('setup', Path(__file__).with_name('configure-idrive-documents.py'))
@@ -181,6 +182,58 @@ class SetupTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             m.probe(signed, anonymous)
         self.assertEqual(m.PHASE, 'Anonymen Zugriff pruefen')
+
+    def raw_error(self, status, body):
+        return HTTPError('https://synthetic.invalid', status, 'synthetic', {}, io.BytesIO(body))
+
+    def test_raw_anonymous_denial_matches_exact_object_without_auth(self):
+        error = self.raw_error(403, b'<Error><Code>AccessDenied</Code></Error>')
+        with patch.object(m.urllib.request, 'build_opener') as build:
+            build.return_value.open.side_effect = error
+            with self.assertRaises(ClientError) as raised:
+                m.AnonymousClient().get_object(Bucket=m.BUCKET, Key='_bringness-connection-checks/' + 'a'*32 + '.txt')
+            self.assertEqual(raised.exception.response['Error']['Code'], 'AccessDenied')
+            request = build.return_value.open.call_args.args[0]
+            self.assertEqual(request.full_url, m.ENDPOINT + '/' + m.BUCKET + '/_bringness-connection-checks/' + 'a'*32 + '.txt')
+            self.assertFalse(request.has_header('Authorization'))
+            self.assertFalse(request.has_header('Cookie'))
+            self.assertEqual(build.return_value.open.call_args.kwargs['timeout'], 15)
+            self.assertEqual(build.call_args.args[0].proxies, {})
+
+    def test_raw_anonymous_redirect_is_not_followed(self):
+        self.assertIsNone(m.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://foreign.invalid'))
+
+    def test_raw_anonymous_inconclusive_responses_fail_closed(self):
+        cases = [(403, b'<Error><Code>InvalidAccessKeyId</Code></Error>'),
+                 (403, b''), (403, b'x'*8193), (404, b''), (500, b''), (302, b'')]
+        for status, body in cases:
+            with patch.object(m.urllib.request, 'build_opener') as build:
+                build.return_value.open.side_effect = self.raw_error(status, body)
+                with self.assertRaisesRegex(ValueError, 'anonymous-result-inconclusive'):
+                    m.AnonymousClient().get_object(Bucket=m.BUCKET, Key='_bringness-connection-checks/'+'a'*32+'.txt')
+
+    def test_raw_public_success_is_still_rejected_by_probe(self):
+        signed, _ = self.clients()
+        response = Mock(status=200)
+        with patch.object(m.urllib.request, 'build_opener') as build:
+            build.return_value.open.return_value = response
+            with self.assertRaisesRegex(ValueError, 'anonymous-access-allowed'):
+                m.probe(signed, m.AnonymousClient())
+            response.close.assert_called_once()
+
+    def test_raw_anonymous_network_error_has_safe_reason(self):
+        with patch.object(m.urllib.request, 'build_opener') as build:
+            build.return_value.open.side_effect = URLError(S)
+            with self.assertRaises(ValueError) as raised:
+                m.AnonymousClient().get_object(Bucket=m.BUCKET, Key='_bringness-connection-checks/'+'a'*32+'.txt')
+            self.assertNotIn(S, m.safe_failure(raised.exception))
+
+    def test_raw_anonymous_foreign_target_never_sent(self):
+        with patch.object(m.urllib.request, 'build_opener') as build:
+            for bucket, key in [('foreign', 'x'), (m.BUCKET, '../x')]:
+                with self.assertRaises(ValueError):
+                    m.AnonymousClient().get_object(Bucket=bucket, Key=key)
+            build.assert_not_called()
 
 
 if __name__ == '__main__':

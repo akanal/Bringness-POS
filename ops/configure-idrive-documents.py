@@ -11,6 +11,9 @@ import stat
 import sys
 import uuid
 import warnings
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
 
 ENDPOINT = 'https://s3.eu-central-1.idrivee2.com'
 REGION = 'eu-central-1'
@@ -30,6 +33,7 @@ def safe_failure(error, phase=None):
         'content-or-encryption-mismatch': 'Testdaten oder Verschluesselungsbestaetigung stimmen nicht ueberein.',
         'anonymous-result-inconclusive': 'Der anonyme Zugriffstest ist nicht eindeutig; nichts freigegeben.',
         'anonymous-access-allowed': 'Anonymer Zugriff auf das Testobjekt war moeglich; Einrichtung angehalten.',
+        'anonymous-network-failure': 'Unangemeldeter HTTPS-Test konnte den Endpunkt nicht verlaesslich erreichen.',
     }
     message = 'Ursache nicht eindeutig. Keine geheimen Fehlerdetails ausgegeben.'
     if isinstance(error, ValueError) and len(error.args) == 1 and isinstance(error.args[0], str):
@@ -127,6 +131,49 @@ def make_client(access, secret, unsigned=False):
             request_checksum_calculation='when_required', response_checksum_validation='when_required'))
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class AnonymousClient:
+    """Independent unsigned HTTPS GET: no SDK signing, redirects or proxy credentials."""
+    def get_object(self, *, Bucket, Key):
+        from botocore.exceptions import ClientError
+        if Bucket != BUCKET or not re.fullmatch(r'_bringness-connection-checks/[0-9a-f]{32}\.txt', Key):
+            raise ValueError('probe-id')
+        request = urllib.request.Request(ENDPOINT + '/' + BUCKET + '/' + Key,
+                                         headers={'Accept': 'application/xml'}, method='GET')
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        try:
+            response = opener.open(request, timeout=15)
+        except urllib.error.HTTPError as error:
+            try:
+                data = error.read(8193)
+            finally:
+                error.close()
+            if error.code != 403 or len(data) > 8192:
+                raise ValueError('anonymous-result-inconclusive') from None
+            try:
+                root = ET.fromstring(data)
+                code = root.findtext('Code')
+            except ET.ParseError:
+                raise ValueError('anonymous-result-inconclusive') from None
+            if root.tag != 'Error' or code not in ('AccessDenied', 'Forbidden', '403'):
+                raise ValueError('anonymous-result-inconclusive') from None
+            raise ClientError({'Error': {'Code': code},
+                               'ResponseMetadata': {'HTTPStatusCode': 403}}, 'GetObject') from None
+        except (urllib.error.URLError, TimeoutError, OSError):
+            raise ValueError('anonymous-network-failure') from None
+        if response.status != 200:
+            response.close()
+            raise ValueError('anonymous-result-inconclusive')
+        return {'Body': response}
+
+    def close(self):
+        pass
+
+
 def probe(client, anonymous, identifier=None):
     global PHASE
     from botocore.exceptions import ClientError
@@ -191,7 +238,7 @@ def main():
         access, secret = config['access_key_id'], config['secret_access_key']
     PHASE = 'SDK-Vorbereitung'
     signed = make_client(access, secret)
-    anonymous = make_client(access, secret, unsigned=True)
+    anonymous = AnonymousClient()
     try:
         key = probe(signed, anonymous)
     finally:
