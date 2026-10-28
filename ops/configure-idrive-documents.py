@@ -22,6 +22,10 @@ CONFIG = Path('/opt/bringness-pos/config/idrive-documents.json')
 PHASE = 'Vorbereitung'
 
 
+class AnonymousHomepageRedirect(Exception):
+    pass
+
+
 def safe_failure(error, phase=None):
     """Only fixed allowlisted messages; never interpolate exception/request text."""
     reasons = {
@@ -34,6 +38,9 @@ def safe_failure(error, phase=None):
         'anonymous-result-inconclusive': 'Der anonyme Zugriffstest ist nicht eindeutig; nichts freigegeben.',
         'anonymous-access-allowed': 'Anonymer Zugriff auf das Testobjekt war moeglich; Einrichtung angehalten.',
         'anonymous-network-failure': 'Unangemeldeter HTTPS-Test konnte den Endpunkt nicht verlaesslich erreichen.',
+        'acl-not-private': 'Zugriffsliste ist nicht als privat bestaetigt; keine Freigabe.',
+        'acl-owner-mismatch': 'Datei-Berechtigter stimmt nicht mit bestaetigtem Bucket-Eigentuemer ueberein.',
+        'bucket-policy-present': 'Bucket-Policy vorhanden; gesonderte Pruefung erforderlich.',
     }
     message = 'Ursache nicht eindeutig. Keine geheimen Fehlerdetails ausgegeben.'
     if isinstance(error, ValueError) and len(error.args) == 1 and isinstance(error.args[0], str):
@@ -56,7 +63,7 @@ def safe_failure(error, phase=None):
         message = 'Netzwerk-, TLS- oder Zeitlimitfehler beim IDrive-Endpunkt.'
     # phase is internal; never permit externally supplied diagnostics into logs.
     stages = {'Vorbereitung', 'Schluesseleingabe', 'Schluesselformat', 'SDK-Vorbereitung',
-              'Testupload', 'Testdatei lesen', 'Anonymen Zugriff pruefen', 'Geschuetzt speichern'}
+              'Testupload', 'Testdatei lesen', 'Zugriffslisten pruefen', 'Anonymen Zugriff pruefen', 'Geschuetzt speichern'}
     stage = phase if phase in stages else PHASE if PHASE in stages else 'Vorbereitung'
     return 'Nicht abgeschlossen. Schritt: ' + stage + '. ' + message
 
@@ -148,6 +155,9 @@ class AnonymousClient:
         try:
             response = opener.open(request, timeout=15)
         except urllib.error.HTTPError as error:
+            if error.code == 302 and error.headers.get('Location') in ('https://www.idrivee2.com', 'https://www.idrivee2.com/'):
+                error.close()
+                raise AnonymousHomepageRedirect() from None
             try:
                 data = error.read(8193)
             finally:
@@ -197,6 +207,8 @@ def probe(client, anonymous, identifier=None):
         stream.close()
     if actual != body or response.get('ServerSideEncryption') != 'AES256':
         raise ValueError('content-or-encryption-mismatch')
+    PHASE = 'Zugriffslisten pruefen'
+    verify_private_access(client, key)
     PHASE = 'Anonymen Zugriff pruefen'
     try:
         public = anonymous.get_object(Bucket=BUCKET, Key=key)
@@ -204,11 +216,65 @@ def probe(client, anonymous, identifier=None):
         metadata = error.response.get('ResponseMetadata', {})
         if metadata.get('HTTPStatusCode') != 403 or error.response.get('Error', {}).get('Code') not in ('AccessDenied', 'Forbidden', '403'):
             raise ValueError('anonymous-result-inconclusive') from None
+    except AnonymousHomepageRedirect:
+        # The redirect alone is not a privacy verdict. Signed ACL ownership,
+        # absence of public grants and absence of bucket policy were verified above.
+        pass
     else:
         public['Body'].close()
         raise ValueError('anonymous-access-allowed')
     # No delete API: retain this one tiny synthetic object for owner inspection.
     return key
+
+
+def verify_private_access(client, key):
+    """Bind object grant to independently read bucket owner; reject public access."""
+    from botocore.exceptions import ClientError
+    bucket = client.get_bucket_acl(Bucket=BUCKET)
+    if not isinstance(bucket, dict) or not isinstance(bucket.get('Owner'), dict):
+        raise ValueError('acl-not-private')
+    owner = bucket['Owner'].get('ID')
+    grants = bucket.get('Grants')
+    if not isinstance(owner, str) or not owner or len(owner) > 512 or not isinstance(grants, list) or not 1 <= len(grants) <= 3:
+        raise ValueError('acl-not-private')
+    seen = set()
+    for grant in grants:
+        if not isinstance(grant, dict) or not isinstance(grant.get('Grantee'), dict):
+            raise ValueError('acl-not-private')
+        grantee = grant['Grantee']
+        permission = grant.get('Permission')
+        if (grantee.get('Type') == 'CanonicalUser' and grantee.get('ID') == owner
+                and permission == 'FULL_CONTROL' and not grantee.get('URI') and not grantee.get('EmailAddress')):
+            token = 'owner'
+        elif (grantee.get('Type') == 'Group'
+                and grantee.get('URI') == 'http://acs.amazonaws.com/groups/s3/LogDelivery'
+                and permission in ('WRITE', 'READ_ACP') and not grantee.get('ID') and not grantee.get('EmailAddress')):
+            token = permission
+        else:
+            raise ValueError('acl-not-private')
+        if token in seen:
+            raise ValueError('acl-not-private')
+        seen.add(token)
+    if 'owner' not in seen:
+        raise ValueError('acl-not-private')
+    obj = client.get_object_acl(Bucket=BUCKET, Key=key)
+    if not isinstance(obj, dict):
+        raise ValueError('acl-not-private')
+    # IDrive can omit object Owner.ID; compare its sole canonical grant to the
+    # independently verified bucket owner instead of guessing ownership.
+    obj_owner = obj.get('Owner', {})
+    if not isinstance(obj_owner, dict) or obj_owner.get('ID') not in (None, '', owner):
+        raise ValueError('acl-owner-mismatch')
+    canonical = dict(obj, Owner={'ID': owner})
+    if not owner_only_acl(canonical):
+        raise ValueError('acl-owner-mismatch')
+    try:
+        client.get_bucket_policy(Bucket=BUCKET)
+    except ClientError as error:
+        if error.response.get('Error', {}).get('Code') != 'NoSuchBucketPolicy':
+            raise
+    else:
+        raise ValueError('bucket-policy-present')
 
 
 def owner_only_acl(response):
@@ -342,7 +408,7 @@ def main():
     if args.operation == 'setup':
         PHASE = 'Geschuetzt speichern'
         save_new_config(CONFIG, access, secret)
-    print('PASS: upload, exact readback, AES256 and anonymous access denial for the test object.')
+    print('PASS: Upload, exaktes Zuruecklesen, AES256, private Zugriffslisten und unangemeldeter Test ohne Dateiauslieferung.')
     print('Retained synthetic object: ' + key)
     print('No application document storage has been activated. App integration remains separate.')
 

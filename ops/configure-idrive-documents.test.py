@@ -75,6 +75,10 @@ class SetupTest(unittest.TestCase):
 
     def clients(self, code='AccessDenied', status=403, public=False, body=None, encryption='AES256'):
         signed, anonymous = Mock(), Mock()
+        acl = {'Owner': {'ID': 'synthetic-owner'}, 'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': 'synthetic-owner'}}]}
+        signed.get_bucket_acl.return_value = acl
+        signed.get_object_acl.return_value = acl
+        signed.get_bucket_policy.side_effect = ClientError({'Error': {'Code': 'NoSuchBucketPolicy'}}, 'GetBucketPolicy')
         signed.get_object.return_value = {'Body': io.BytesIO(body if body is not None else b'Bringness IDrive connection check. Synthetic data only.\n'), 'ServerSideEncryption': encryption}
         if public:
             anonymous.get_object.return_value = {'Body': io.BytesIO(b'public')}
@@ -293,6 +297,64 @@ class SetupTest(unittest.TestCase):
         self.assertIn('ANDERE-GRUPPE', output)
         for value in (None, {}, {'Grants': S}, {'Grants': [None]}):
             self.assertIsInstance(m.describe_acl(value), str)
+
+    def test_omitted_object_owner_is_bound_to_bucket_owner(self):
+        signed, anonymous = self.clients()
+        signed.get_object_acl.return_value = {'Grants': signed.get_bucket_acl.return_value['Grants']}
+        self.assertTrue(m.probe(signed, anonymous))
+        signed.get_object_acl.return_value = {'Grants': [{'Permission': 'FULL_CONTROL', 'Grantee': {'Type': 'CanonicalUser', 'ID': 'foreign'}}]}
+        with self.assertRaisesRegex(ValueError, 'acl-owner-mismatch'):
+            m.verify_private_access(signed, 'synthetic-key')
+
+    def test_log_delivery_is_allowed_without_public_read(self):
+        signed, anonymous = self.clients()
+        bucket = json.loads(json.dumps(signed.get_bucket_acl.return_value))
+        for permission in ('WRITE', 'READ_ACP'):
+            bucket['Grants'].append({'Permission': permission, 'Grantee': {'Type': 'Group', 'URI': 'http://acs.amazonaws.com/groups/s3/LogDelivery'}})
+        signed.get_bucket_acl.return_value = bucket
+        self.assertTrue(m.probe(signed, anonymous))
+        bucket['Grants'][1]['Permission'] = 'READ'
+        with self.assertRaisesRegex(ValueError, 'acl-not-private'):
+            m.verify_private_access(signed, 'synthetic-key')
+
+    def test_any_public_grant_blocks_even_if_anonymous_redirects(self):
+        signed, anonymous = self.clients()
+        bucket = json.loads(json.dumps(signed.get_bucket_acl.return_value))
+        bucket['Grants'].append({'Permission': 'READ', 'Grantee': {'Type': 'Group', 'URI': 'http://acs.amazonaws.com/groups/global/AllUsers'}})
+        signed.get_bucket_acl.return_value = bucket
+        anonymous.get_object.side_effect = m.AnonymousHomepageRedirect()
+        with self.assertRaisesRegex(ValueError, 'acl-not-private'):
+            m.probe(signed, anonymous)
+        anonymous.get_object.assert_not_called()
+
+    def test_policy_present_or_unreadable_blocks_privacy_verdict(self):
+        for error in (None, ClientError({'Error': {'Code': 'AccessDenied'}}, 'GetBucketPolicy')):
+            signed, anonymous = self.clients()
+            signed.get_bucket_policy.side_effect = error
+            signed.get_bucket_policy.return_value = {'Policy': '{}'}
+            with self.assertRaises((ValueError, ClientError)):
+                m.probe(signed, anonymous)
+            anonymous.get_object.assert_not_called()
+
+    def test_homepage_redirect_requires_signed_acl_checks(self):
+        signed, anonymous = self.clients()
+        anonymous.get_object.side_effect = m.AnonymousHomepageRedirect()
+        self.assertTrue(m.probe(signed, anonymous))
+        signed.get_bucket_acl.return_value = {}
+        with self.assertRaisesRegex(ValueError, 'acl-not-private'):
+            m.verify_private_access(signed, 'synthetic-key')
+
+    def test_only_exact_provider_homepage_redirect_is_recognized(self):
+        key = '_bringness-connection-checks/'+'a'*32+'.txt'
+        for url, expected in [('https://www.idrivee2.com', m.AnonymousHomepageRedirect),
+                              ('https://foreign.invalid', ValueError),
+                              ('http://www.idrivee2.com', ValueError),
+                              ('https://www.idrivee2.com/?token=anything', ValueError)]:
+            error = HTTPError('https://synthetic.invalid', 302, '', {'Location': url}, io.BytesIO(b''))
+            with patch.object(m.urllib.request, 'build_opener') as build:
+                build.return_value.open.side_effect = error
+                with self.assertRaises(expected):
+                    m.AnonymousClient().get_object(Bucket=m.BUCKET, Key=key)
 
 
 if __name__ == '__main__':
