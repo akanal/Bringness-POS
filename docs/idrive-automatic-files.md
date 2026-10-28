@@ -1,0 +1,35 @@
+# Automatic IDrive file storage — 28 October 2026
+
+Owner authorized automatic invoice/image storage after successful direct-document activation. Screenshot 620 shows the real application SDK write/readback, deployment and final activation PASS. Live `/api/v1/shop/documents/status` subsequently returned `configured:true,available:true`. Existing backup activation remains separate and unchanged. No additional root activation or new credentials are required for the already active private-document service.
+
+## This implementation, PR 172 (not deployed)
+
+* Paid platform billing **email** PDFs are saved/read back through the existing private IDrive SDK before mail delivery. SQL keeps immutable transaction/company/source/digest/size metadata, not PDF bytes. Retries read the exact original bytes. Concurrent work is serialized per transaction; the current transaction company/status/number is checked under a shared lock. Provider failure leaves mail retryable, with no completed file record and no payment/number writes. PDF creation timestamps are fixed to the existing invoice date so retries are deterministic.
+* New display images/videos use the existing authenticated, unlocked upload and capability-player routes. A separate SDK instance retains the existing 25 MiB media bound; manual documents remain limited to 5 MiB. New media keep SQL metadata and cloud references only. Existing database bytes remain readable. Same restaurant/media binding, hash verification, byte ranges and stable screen URLs are retained.
+* Failed/successful media upload attempts have a durable 20-per-venue/100-global daily bound. Existing aggregate 250 MiB media quota counts both legacy and cloud entries. Removing media revokes player access and removes playlist references, but **does not delete remote objects**. No historical migration or cloud retention/deletion policy is added.
+
+## Remaining work — do not claim complete invoice/image migration
+
+This block does not yet connect the independent billing-account PDF download renderer, POS receipt/trade-invoice rendering, product images, restaurant logos or avatars. Their existing formats and access boundaries require separate adapters. It does not add public marketplace product-image uploads or issue new invoices. Historical files have not been moved or deleted. Private manual document uploads remain the already activated production feature.
+
+## Validation
+
+Local focused tests passed for automatic invoice immutable reuse, provider failure/retry, corrupt downloads, company binding and deterministic actual PDF output; display metadata-only persistence, legacy reads, wrong-venue rejection, corruption, failure accounting and quotas. Existing actual billing-mail/display-route scenarios passed with added cloud cases, including restart, original capability access and access revocation after deletion. The first full shop run contained two failed new test fixtures due to multi-statement prepared queries; those queries were split and both focused tests then passed. A complete corrected run and CI acceptance must be recorded separately before any deployment.
+
+No production invoices, mail, media, financial data or configuration were changed by these tests. Existing credentials stay exclusively in protected runtime configuration.
+
+## Account invoice downloads — follow-up
+
+The authenticated `/api/v1/billing/invoices/:number/pdf` route now uses the same immutable private IDrive invoice archive and PDF renderer as billing email when direct IDrive storage is configured. The company-scoped paid-invoice lookup runs before provider work. Provider failure returns a retryable 503 before PDF headers are sent; it never falls back to a freshly rendered local PDF. Unconfigured and isolated-preview rendering retain the existing account PDF format.
+
+Six focused tests passed: archive reuse and byte identity, initialization retry, company mismatch, authentication, scoped lookup, unrelated method pass-through and provider failure. The complete shop suite and CI must be recorded for the final follow-up revision before deployment. This does not implement POS receipt storage, product images, branding, avatars or historical migration.
+
+## POS receipt and product-image continuation (28 October)
+
+The shared POS PDF renderer now archives ordinary receipt and A4 trade-invoice PDFs on first PDF generation, before returning a download/public invoice or submitting a receipt email. The existing authorization/capability checks remain before rendering. SQL retains immutable references only; subsequent callers retrieve the same verified bytes. Receipt and A4 formats are separate, as are fiscal states: a later signed receipt does not reuse an earlier unsigned PDF. Current receipt ownership/fiscal state are checked under a shared lock. Storage failure returns the existing retryable error; no local PDF fallback in configured IDrive mode. Plain HTML `/beleg/:token` remains the existing rendered page, not a new archived HTML artifact. This is PDF-generation-time storage, not a background backfill of receipts that have never been rendered.
+
+The existing POS product-create endpoint stores newly submitted PNG/JPEG/WebP data-URI bytes through the private IDrive store. Existing emoji and external image URLs remain supported; external URLs are not fetched/copied. No UI/layout changes. Metadata and an opaque application image URL replace the inline data URI in the new product. The image URL intentionally permits menu customers to view that product image; bucket URLs, credentials and account documents remain private. Retrieval requires the exact active product/image binding and verifies bytes. Product deactivation, deletion or replacement of its image reference revokes that URL. No remote deletion, historical image migration or marketplace/AI/branding/avatar upload adapter is included.
+
+Product creation requires an active owner/admin/manager session, rechecked under locks before writes, with same-company restaurant and same-restaurant category validation. Upload attempts, including failed provider calls, are durably bounded to 20/company and 100/global per 24 hours; per-file 5 MiB and aggregate 100 MiB/company metadata limits apply. Orphan cloud objects after uncertain/rolled-back writes are retained; the durable daily upload allowance bounds these writes. No remote deletion/retention changes.
+
+Validation: six new PGlite/actual-handler/PDFKit tests passed, covering exact-byte reuse, independent formats and fiscal states, ownership and corruption failures, immutable SQL metadata, provider retry, actual PDF generation, product cloud-only bytes, restart reads, access revocation, authorization/category boundaries, invalid images, durable failed attempts, quotas and ordinary emoji compatibility. The 593 existing unit tests passed. The complete local shop suite passed 711 tests, zero failures/skips; the run includes all six new checks on the final executable source. GitHub checks for application commit 10471211f308ca8de9ee4860e806b7f5e3e79cbb are in progress. No merge/deployment is claimed.

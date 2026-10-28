@@ -1,3 +1,5 @@
+import {createProductImages,migrateProductImages} from './product-image-storage.js';
+import {configureReceiptStorage,migrateReceiptFiles} from './receipt-file-storage.js';
 import {configuredIdriveDocumentStore} from './idrive-document-store.js';
 import {createShopDocumentsRuntime} from './shop-documents-http.js';
 import {createMarketplaceRuntime} from './shop-marketplace-http.js';
@@ -78,6 +80,8 @@ const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='
 const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)});
 let documentStore=null;
 if(appMode!=='ai'&&!isolatedPreview())try{documentStore=await configuredIdriveDocumentStore(process.env);}catch{console.error('Private document storage unavailable; document uploads remain closed.');}
+configureReceiptStorage({store:documentStore,required:appMode!=='ai'&&!isolatedPreview()&&process.env.SHOP_DOCUMENT_STORAGE==='idrive'});
+const handleProductImages=createProductImages(platformGatewayPool,{store:documentStore,required:appMode!=='ai'&&!isolatedPreview()&&process.env.SHOP_DOCUMENT_STORAGE==='idrive'});
 const documentsRuntime=createShopDocumentsRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&!isolatedPreview(),store:documentStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
@@ -87,7 +91,9 @@ const handlePosEan=createPosEan(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
 const handleTableSettlement=createTableSettlement(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
-const handleDisplays=createDisplays(platformGatewayPool);
+let displayStore=null;
+if(appMode!=='ai'&&!isolatedPreview()&&process.env.SHOP_DOCUMENT_STORAGE==='idrive')try{displayStore=await configuredIdriveDocumentStore(process.env,{maxBytes:25*1024*1024});}catch{console.error('Display storage unavailable; new uploads remain closed.');}
+const handleDisplays=createDisplays(platformGatewayPool,{store:displayStore,storageRequired:appMode!=='ai'&&!isolatedPreview()&&process.env.SHOP_DOCUMENT_STORAGE==='idrive'});
 const handleMailStatus=createMailStatus(platformGatewayPool);
 const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
 const handleFiskalyTest=createFiskalyTest(platformGatewayPool,{sandboxStatus:companyId=>sandboxStatus(platformGatewayPool,companyId),requestSetup:(companyId,credentials)=>requestFiskalySetup(platformGatewayPool,companyId,credentials)});
@@ -110,6 +116,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleDutyPlanning(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
+      if (appMode!=='ai' && await handleProductImages(req,res)) return;
       if (appMode!=='ai' && await handleMailStatus(req,res)) return;
       if (await handleLanguageCatalog(req,res)) return;
       if (await handlePlatformAiAssets(req,res)) return;
@@ -230,6 +237,8 @@ async function migrateWithRetry(){
       await migratePosStockEvents();
       await migrateCenter();
       await migratePublicReceipts();
+      await migrateReceiptFiles(platformGatewayPool);
+      await migrateProductImages(platformGatewayPool);
       await migrateTseIntegration();
       await migrateFiskalyTest(platformGatewayPool);
       await migrateFiskalySandbox(platformGatewayPool);
@@ -251,7 +260,7 @@ async function migrateWithRetry(){
       try{await sellerRuntime.migrate();}catch{console.error('Seller draft migrations unavailable; seller routes remain closed.');}
       try{await marketplaceRuntime.migrate();}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
       try{await shopRegistrationRuntime.migrate();}catch{console.error('Shop registration migrations unavailable; registration remains closed.');}
-      if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
+      if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool,{documentStore});const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
       if (aiFeatures) await aiFeatures.migrateAiPlatform();
       const pricingPool = new pg.Pool({

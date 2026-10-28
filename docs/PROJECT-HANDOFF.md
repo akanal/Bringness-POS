@@ -54,3 +54,6 @@ Netcup bleibt der aktive Anwendungs- und PostgreSQL-Standort. IDrive e2 ist Obje
 
 ## Starttext für einen neuen Chat
 „Bitte setze Bringness fort. Lies zuerst AGENTS.md und docs/PROJECT-HANDOFF.md im Repository akanal/Bringness-POS auf main. Nutze die vorhandenen Zugänge, prüfe den aktuellen Stand und arbeite ohne unnötige Rückfragen weiter. Zugangsdaten bleiben in den geschützten Speicherorten.“
+
+## POS IDrive continuation — 28 October, PR172 development only
+Shared receipt PDF rendering (download/email/public trade invoice) now archives on first PDF generation, with separate immutable artifacts per receipt/A4 format and fiscal state. New POS product-create data-URI image bytes use private IDrive with opaque menu-readable application URLs, active-product binding, authorization/category checks and durable limits. Six new storage/actual-route/PDFKit tests and 593 existing unit tests passed. Complete local shop suite passed711 tests, zero failures/skips, including all six new checks. Executable commit10471211f308ca8de9ee4860e806b7f5e3e79cbb is saved in PR172; additional GitHub workflows are in progress. No merge/deployment. Historical files, unrendered receipt backfill, external image URLs, marketplace/AI images and branding/avatar adapters are not migrated. See docs/idrive-automatic-files.md for exact scope and limits.

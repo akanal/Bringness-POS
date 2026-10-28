@@ -5,6 +5,7 @@ import {migrateBillingMail,recordBillingMail,createBillingMail} from '../billing
 import {accessMail,formatMail,billingMail} from '../mail-templates.js';
 const db=new PGlite();await db.waitReady;const pool={query:async(sql,args)=>{if(!args&&sql.includes(';')){await db.exec(sql);return {rows:[]}}const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}}};
 await db.exec(`CREATE TABLE billing_plans(id uuid PRIMARY KEY,name text);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,email text,role text,status text,created_at timestamptz DEFAULT now());CREATE TABLE billing_transactions(id uuid PRIMARY KEY,company_id uuid,plan_id uuid,status text,paid_at timestamptz,invoice_number text,invoice_date date,net_cents int,vat_cents int,vat_rate numeric,amount_cents int,currency text,billing_snapshot jsonb,mollie_subscription_id text,provider_payment_id text,created_at timestamptz DEFAULT now());`);
+pool.connect=async()=>({query:pool.query,release(){}});
 await migrateTransactionalMail(pool);await migrateBillingMail(pool);await migrateBillingMail(pool);
 const company='11111111-1111-4111-8111-111111111111',plan='22222222-2222-4222-8222-222222222222',id='33333333-3333-4333-8333-333333333333';
 await pool.query("INSERT INTO billing_plans VALUES($1,'Kasse')",[plan]);await pool.query("INSERT INTO users VALUES($1,$2,'owner@example.test','owner','active',now())",[plan,company]);
@@ -19,4 +20,13 @@ providerStatus='paid';assert.equal(await billing.resolve({transactionId:id,billi
 await pool.query("INSERT INTO billing_transactions(id,company_id,plan_id,status,amount_cents,currency,mollie_subscription_id,paid_at) VALUES(gen_random_uuid(),$1,$2,'paid',3569,'EUR','sub_test',now())",[company,plan]);assert.equal(await billing.resolve({transactionId:id,billingKind:'reminder'},'owner@example.test'),null);
 await pool.query("UPDATE billing_transactions SET status='paid',paid_at=now(),invoice_number='BN-TEST',invoice_date=current_date,net_cents=2999,vat_cents=570,vat_rate=19 WHERE id=$1",[id]);await recordBillingMail(pool,tx,'paid');await billing.tick();assert.equal(await billing.resolve({transactionId:id,billingKind:'reminder'},'owner@example.test'),null);rendered=await billing.resolve({transactionId:id,billingKind:'invoice'},'owner@example.test');assert(rendered.text.includes('bereits bestätigt'));assert(rendered.attachments[0].content.subarray(0,4).toString()==='%PDF');assert.equal((await pool.query('SELECT * FROM transactional_mail')).rows.length,2);
 const access=formatMail(accessMail('invitation',{restaurant:'<script>Test</script>',link:'https://bringness.de/service/#activate=example'}));assert(access.text.includes('Sie'));assert(access.html.includes('&lt;script&gt;'));assert(!access.html.includes('<script>'));assert.equal(access.replyTo,'info@bringness.de');assert(access.text.includes('Bei Fragen schreiben Sie bitte an info@bringness.de.'));assert.throws(()=>accessMail('password',{link:'http://wrong.test'}));assert.throws(()=>billingMail('invoice',{amount_cents:-1,currency:'EUR'},''));
+const cloud=new Map();let cloudWrites=0;
+const documentStore={async putExact(record,bytes){cloudWrites++;cloud.set(record.sha,Buffer.from(bytes));},async getExact(record){return cloud.get(record.sha);}};
+const cloudBilling=createBillingMail(pool,{env:{...env,SHOP_DOCUMENT_STORAGE:'idrive'},documentStore});
+const archived=await cloudBilling.resolve({transactionId:id,billingKind:'invoice'},'owner@example.test');
+const replayed=await cloudBilling.resolve({transactionId:id,billingKind:'invoice'},'owner@example.test');
+assert.deepEqual(archived.attachments[0].content,replayed.attachments[0].content);assert.equal(cloudWrites,1);
+assert.equal((await pool.query('SELECT * FROM billing_invoice_files')).rows.length,1);
+assert.equal(await cloudBilling.resolve({transactionId:id,billingKind:'invoice'},'other@example.test'),null);
+await assert.rejects(createBillingMail(pool,{env:{...env,SHOP_DOCUMENT_STORAGE:'idrive'}}).resolve({transactionId:id,billingKind:'invoice'},'owner@example.test'),{code:'INVOICE_STORAGE_UNAVAILABLE'});
 await db.close();console.log('Billing mail passed: due delay, active owner scope, idempotency, provider amount/status check, settled suppression, invoice PDF and escaped formal templates.');
