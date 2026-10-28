@@ -16,6 +16,45 @@ ENDPOINT = 'https://s3.eu-central-1.idrivee2.com'
 REGION = 'eu-central-1'
 BUCKET = 'bringness-documents'
 CONFIG = Path('/opt/bringness-pos/config/idrive-documents.json')
+PHASE = 'Vorbereitung'
+
+
+def safe_failure(error, phase=None):
+    """Only fixed allowlisted messages; never interpolate exception/request text."""
+    reasons = {
+        'access-format': 'Access Key ID hat ein ungueltiges Format. Keine E-Mail und kein Kontopasswort verwenden.',
+        'secret-format': 'Secret Access Key hat ein ungueltiges Format. Vollstaendig und ohne Leerzeichen eingeben.',
+        'config-already-exists': 'Konfiguration existiert bereits und wurde nicht ersetzt.',
+        'unsafe-parent': 'Konfigurationsverzeichnis hat unsichere Rechte.',
+        'linked-parent': 'Konfigurationsverzeichnis ist verknuepft; Einrichtung angehalten.',
+        'content-or-encryption-mismatch': 'Testdaten oder Verschluesselungsbestaetigung stimmen nicht ueberein.',
+        'anonymous-result-inconclusive': 'Der anonyme Zugriffstest ist nicht eindeutig; nichts freigegeben.',
+        'anonymous-access-allowed': 'Anonymer Zugriff auf das Testobjekt war moeglich; Einrichtung angehalten.',
+    }
+    message = 'Ursache nicht eindeutig. Keine geheimen Fehlerdetails ausgegeben.'
+    if isinstance(error, ValueError) and len(error.args) == 1 and isinstance(error.args[0], str):
+        message = reasons.get(error.args[0], message)
+    from botocore.exceptions import ClientError, EndpointConnectionError, ConnectTimeoutError, ReadTimeoutError, SSLError
+    if isinstance(error, ClientError):
+        code = error.response.get('Error', {}).get('Code')
+        message = {
+            'InvalidAccessKeyId': 'Access Key ID wird von IDrive nicht erkannt.',
+            'SignatureDoesNotMatch': 'Signatur abgelehnt: Secret, Endpunkt und Serverzeit pruefen.',
+            'AccessDenied': 'IDrive verweigert diesen Schritt. Bucket-Zuweisung und Zugriffsrechte pruefen.',
+            'NoSuchBucket': 'Bucket am eingestellten Endpunkt nicht gefunden.',
+            'NotImplemented': 'IDrive unterstuetzt eine benoetigte Schutzfunktion nicht. Kein unsicherer Ersatzversuch.',
+            'InvalidArgument': 'IDrive lehnt eine Anforderung ab. Endpunkt und unterstuetzte Schutzfunktionen pruefen.',
+            'RequestTimeTooSkewed': 'Serverzeit weicht zu stark ab.',
+            'AuthorizationHeaderMalformed': 'Signaturregion oder Endpunkt wird abgelehnt.',
+            'InvalidRequest': 'IDrive lehnt die Anfrage ab. Keine Schutzfunktion automatisch entfernt.',
+        }.get(code, message)
+    elif isinstance(error, (EndpointConnectionError, ConnectTimeoutError, ReadTimeoutError, SSLError)):
+        message = 'Netzwerk-, TLS- oder Zeitlimitfehler beim IDrive-Endpunkt.'
+    # phase is internal; never permit externally supplied diagnostics into logs.
+    stages = {'Vorbereitung', 'Schluesseleingabe', 'Schluesselformat', 'SDK-Vorbereitung',
+              'Testupload', 'Testdatei lesen', 'Anonymen Zugriff pruefen', 'Geschuetzt speichern'}
+    stage = phase if phase in stages else PHASE if PHASE in stages else 'Vorbereitung'
+    return 'Nicht abgeschlossen. Schritt: ' + stage + '. ' + message
 
 
 def validate_credentials(access, secret):
@@ -89,6 +128,7 @@ def make_client(access, secret, unsigned=False):
 
 
 def probe(client, anonymous, identifier=None):
+    global PHASE
     from botocore.exceptions import ClientError
     identifier = identifier or uuid.uuid4().hex
     if not re.fullmatch(r'[0-9a-f]{32}', identifier):
@@ -97,9 +137,11 @@ def probe(client, anonymous, identifier=None):
     body = b'Bringness IDrive connection check. Synthetic data only.\n'
     # Explicit private ACL; never enables public access. No fallback that drops
     # this protection or the no-overwrite condition when unsupported.
+    PHASE = 'Testupload'
     client.put_object(Bucket=BUCKET, Key=key, Body=body, ACL='private',
         ServerSideEncryption='AES256', IfNoneMatch='*', ContentType='text/plain',
         Metadata={'sha256': hashlib.sha256(body).hexdigest()})
+    PHASE = 'Testdatei lesen'
     response = client.get_object(Bucket=BUCKET, Key=key)
     stream = response['Body']
     try:
@@ -108,6 +150,7 @@ def probe(client, anonymous, identifier=None):
         stream.close()
     if actual != body or response.get('ServerSideEncryption') != 'AES256':
         raise ValueError('content-or-encryption-mismatch')
+    PHASE = 'Anonymen Zugriff pruefen'
     try:
         public = anonymous.get_object(Bucket=BUCKET, Key=key)
     except ClientError as error:
@@ -122,6 +165,7 @@ def probe(client, anonymous, identifier=None):
 
 
 def main():
+    global PHASE
     parser = argparse.ArgumentParser(description='Bringness IDrive: setup or explicit connection test')
     parser.add_argument('operation', choices=('setup', 'check'))
     args = parser.parse_args()
@@ -135,14 +179,17 @@ def main():
             raise ValueError('config-already-exists')
         print('Only Frankfurt-2 / bringness-documents. No migration, deletion or restart.')
         print('One tiny synthetic test object will remain in the bucket.')
+        PHASE = 'Schluesseleingabe'
         with warnings.catch_warnings():
             warnings.simplefilter('error', getpass.GetPassWarning)
             access = getpass.getpass('IDrive access key ID (hidden): ')
             secret = getpass.getpass('IDrive secret access key (hidden): ')
+        PHASE = 'Schluesselformat'
         validate_credentials(access, secret)
     else:
         config = read_config(CONFIG)
         access, secret = config['access_key_id'], config['secret_access_key']
+    PHASE = 'SDK-Vorbereitung'
     signed = make_client(access, secret)
     anonymous = make_client(access, secret, unsigned=True)
     try:
@@ -151,6 +198,7 @@ def main():
         signed.close()
         anonymous.close()
     if args.operation == 'setup':
+        PHASE = 'Geschuetzt speichern'
         save_new_config(CONFIG, access, secret)
     print('PASS: upload, exact readback, AES256 and anonymous access denial for the test object.')
     print('Retained synthetic object: ' + key)
@@ -160,7 +208,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (Exception, KeyboardInterrupt):
+    except (Exception, KeyboardInterrupt) as error:
         # SDK exception details may contain signed requests, identifiers or URLs.
-        print('Not completed. Check account, permissions, connection and private configuration. No secret details printed.', file=sys.stderr)
+        print(safe_failure(error), file=sys.stderr)
         sys.exit(1)

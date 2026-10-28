@@ -134,6 +134,54 @@ class SetupTest(unittest.TestCase):
             signed.close()
             unsigned.close()
 
+    def test_safe_errors_never_echo_provider_messages_or_requests(self):
+        error = ClientError({'Error': {'Code': 'AccessDenied', 'Message': S},
+                             'ResponseMetadata': {'RequestId': S}}, S)
+        text = m.safe_failure(error, 'Testupload')
+        self.assertIn('Testupload', text)
+        self.assertIn('Zugriffsrechte', text)
+        self.assertNotIn(S, text)
+
+    def test_unknown_codes_and_errors_never_echo_secrets(self):
+        errors = [ValueError(S), RuntimeError(S),
+                  ClientError({'Error': {'Code': S, 'Message': S}}, S)]
+        for error in errors:
+            self.assertNotIn(S, m.safe_failure(error, S))
+
+    def test_format_errors_are_distinguished(self):
+        self.assertIn('Access Key ID', m.safe_failure(ValueError('access-format')))
+        self.assertIn('Secret Access Key', m.safe_failure(ValueError('secret-format')))
+
+    def test_provider_reasons_are_allowlisted(self):
+        for code, expected in [('NoSuchBucket', 'nicht gefunden'),
+                               ('SignatureDoesNotMatch', 'Signatur'),
+                               ('NotImplemented', 'Schutzfunktion'),
+                               ('InvalidAccessKeyId', 'nicht erkannt')]:
+            error = ClientError({'Error': {'Code': code, 'Message': S}}, S)
+            text = m.safe_failure(error)
+            self.assertIn(expected, text)
+            self.assertNotIn(S, text)
+
+    def test_failed_probe_reports_upload_stage(self):
+        signed, anonymous = self.clients()
+        signed.put_object.side_effect = ValueError(S)
+        with self.assertRaises(ValueError):
+            m.probe(signed, anonymous)
+        self.assertEqual(m.PHASE, 'Testupload')
+
+    def test_failed_read_reports_read_stage(self):
+        signed, anonymous = self.clients()
+        signed.get_object.side_effect = RuntimeError(S)
+        with self.assertRaises(RuntimeError):
+            m.probe(signed, anonymous)
+        self.assertEqual(m.PHASE, 'Testdatei lesen')
+
+    def test_failed_anonymous_probe_reports_privacy_stage(self):
+        signed, anonymous = self.clients(public=True)
+        with self.assertRaises(ValueError):
+            m.probe(signed, anonymous)
+        self.assertEqual(m.PHASE, 'Anonymen Zugriff pruefen')
+
 
 if __name__ == '__main__':
     unittest.main()
