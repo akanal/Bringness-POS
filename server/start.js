@@ -1,3 +1,5 @@
+import {configuredIdriveDocumentStore} from './idrive-document-store.js';
+import {createShopDocumentsRuntime} from './shop-documents-http.js';
 import {createMarketplaceRuntime} from './shop-marketplace-http.js';
 import {marketplaceEnabled} from './shop-marketplace-rollout.js';
 import {createShopAssistant} from './shop-assistant.js';
@@ -74,6 +76,9 @@ let shopAssistant={migrate:async()=>{},handle:async()=>false};
 try{shopAssistant=createShopAssistant(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_ASSISTANT_ENABLED!=='false',key:process.env.SHOP_ASSISTANT_API_KEY||process.env.OPENAI_API_KEY,model:process.env.SHOP_ASSISTANT_MODEL||process.env.OPENAI_MODEL,publicOrigin:process.env.SHOP_PUBLIC_ORIGIN||'https://bringness.de'});}catch{console.error('Shop assistant configuration unavailable; guided help remains available.');}
 const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_SELLER_DRAFTS_ENABLED!=='false'});
 const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)});
+let documentStore=null;
+if(appMode!=='ai'&&!isolatedPreview())try{documentStore=await configuredIdriveDocumentStore(process.env);}catch{console.error('Private document storage unavailable; document uploads remain closed.');}
+const documentsRuntime=createShopDocumentsRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&!isolatedPreview(),store:documentStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
@@ -139,6 +144,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleFiskalyTest(req,res)) return;
       if (await handleTseRoutes(req,res)) return;
       if (await shopRegistrationRuntime.handle(req,res)) return;
+      if (await documentsRuntime.handle(req,res)) return;
       if (await shopRuntime.handle(req,res)) return;
       if (await sellerRuntime.handle(req,res)) return;
       if (await marketplaceRuntime.handle(req,res)) return;
@@ -239,6 +245,7 @@ async function migrateWithRetry(){
       await migrateTableSettlement(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
       await migrateStaffInvitations();
+      try{await documentsRuntime.migrate();}catch{console.error('Private document migrations unavailable; uploads remain closed.');}
       try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
       try{await shopAssistant.migrate();}catch{console.error('Shop assistant unavailable; guided help remains available.');}
       try{await sellerRuntime.migrate();}catch{console.error('Seller draft migrations unavailable; seller routes remain closed.');}

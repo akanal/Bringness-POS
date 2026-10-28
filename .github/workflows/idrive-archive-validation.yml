@@ -22,6 +22,8 @@ jobs:
       - name: Synthetic security and encryption tests
         run: |
           python ops/configure-idrive-documents.test.py
+          python ops/configure-idrive-app.test.py
+          bash -n ops/enable-idrive-app.sh
           python ops/idrive-archive.test.py
           python ops/idrive-connect.test.py
           bash -n ops/idrive-archive-install.sh
