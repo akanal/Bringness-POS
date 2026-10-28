@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('app',Path(__file__).with_name('configure-idrive-app.py'));m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 class StageTest(unittest.TestCase):
  def setUp(self):
@@ -25,4 +26,11 @@ class StageTest(unittest.TestCase):
   self.app.chmod(0o644)
   with self.assertRaises(ValueError):m.stage(self.output,self.app,self.config)
   self.assertFalse(self.output.exists())
+ def test_atomic_apply_preserves_mode_and_copies_only_prepared_values(self):
+  m.stage(self.output,self.app,self.config);expected=self.output.read_bytes();m.apply_stage(self.output,self.app);self.assertEqual(self.app.read_bytes(),expected);self.assertEqual(self.app.stat().st_mode&0o777,0o600);self.assertFalse(list(self.root.glob('.app-idrive-next-*')))
+ def test_failed_atomic_publication_preserves_original_and_cleans_private_temporary(self):
+  original=self.app.read_bytes();m.stage(self.output,self.app,self.config)
+  with patch.object(m.os,'replace',side_effect=OSError('synthetic')):
+   with self.assertRaises(OSError):m.apply_stage(self.output,self.app)
+  self.assertEqual(self.app.read_bytes(),original);self.assertFalse(list(self.root.glob('.app-idrive-next-*')))
 if __name__=='__main__':unittest.main()

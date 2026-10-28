@@ -10,8 +10,9 @@ previous=''
 cleanup(){
  rc=$?
  trap - EXIT
+ set +e
  if ((rc && changed)) && [[ -s "$work/app.env.before" && "$previous" =~ ^[0-9a-f]{40}$ ]]; then
-  install -m 600 "$work/app.env.before" /opt/bringness-pos/config/app.env
+  python3 "$work/configure-idrive-app.py" apply "$work/app.env.before"
   if ! SSH_ORIGINAL_COMMAND="deploy pos $previous" /usr/local/sbin/bringness-operations; then echo 'Rueckkehr zur vorherigen Anwendung bitte pruefen.' >&2; fi
  fi
  rm -rf -- "$work"
@@ -28,15 +29,16 @@ __HASHES__
 HASHES
 )
 python3 "$work/configure-idrive-app.test.py"
+cp -p /opt/bringness-pos/config/app.env "$work/app.env.before"
 python3 "$work/configure-idrive-app.py" stage "$work/app.env.next"
 previous=$(docker inspect --format '{{index .Config.Labels "bringness.revision"}}' bringness-pos)
 [[ "$previous" =~ ^[0-9a-f]{40}$ ]]
 docker image inspect "bringness-pos:$revision" >/dev/null
 # Test the real SDK/provider using a harmless synthetic object before changing the live environment.
 docker run --rm --network bringness-internal --env-file "$work/app.env.next" --entrypoint node "bringness-pos:$revision" server/idrive-document-check.js check
-cp -p /opt/bringness-pos/config/app.env "$work/app.env.before"
-install -m 600 "$work/app.env.next" /opt/bringness-pos/config/app.env
+cmp -s /opt/bringness-pos/config/app.env "$work/app.env.before" || { echo 'App-Konfiguration wurde zwischenzeitlich geaendert. Abbruch.' >&2; exit 1; }
 changed=1
+python3 "$work/configure-idrive-app.py" apply "$work/app.env.next"
 SSH_ORIGINAL_COMMAND="deploy pos $revision" /usr/local/sbin/bringness-operations
 curl --proto '=https' --tlsv1.2 -fsS --connect-timeout 15 --max-time 25 https://bringness.de/api/v1/shop/documents/status -o "$work/status.json"
 python3 - "$work/status.json" <<'PY'
