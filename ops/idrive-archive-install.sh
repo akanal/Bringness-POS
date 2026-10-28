@@ -6,7 +6,27 @@ umask 077
 for tool in curl python3 sha256sum systemctl docker; do command -v "$tool" >/dev/null || exit 1; done
 work=$(mktemp -d /root/idrive-archive-install.XXXXXXXX)
 new_release=''
-trap 'rc=$?; if [[ -n "$new_release" && ! -f "$new_release/.complete" ]]; then rm -rf -- "$new_release"; fi; rm -rf -- "$work"; if ((rc)); then echo "Nicht abgeschlossen. Kein Erfolg behauptet; vorhandene Sicherungen bleiben erhalten." >&2; fi; exit "$rc"' EXIT
+previous=''
+switched=0
+old_timer_active=0
+cleanup(){
+ rc=$?
+ trap - EXIT
+ if ((rc && switched)) && [[ -n "$previous" ]]; then
+  ln -s "$previous" "$work/rollback-current"
+  mv -Tf "$work/rollback-current" /opt/bringness-pos/idrive-archive/current
+  for unit in bringness-idrive-archive.service bringness-idrive-archive.timer; do
+   [[ ! -f "$work/old-$unit" ]] || install -m 644 "$work/old-$unit" /etc/systemd/system/$unit
+  done
+  systemctl daemon-reload || true
+ fi
+ if ((rc && old_timer_active)); then systemctl start bringness-idrive-archive.timer || true; fi
+ if [[ -n "$new_release" && ! -f "$new_release/.complete" ]]; then rm -rf -- "$new_release"; fi
+ rm -rf -- "$work"
+ if ((rc)); then echo 'Nicht abgeschlossen. Vorhandene Sicherungen bleiben erhalten; bestehende Installation wurde soweit vorhanden beibehalten.' >&2; fi
+ exit "$rc"
+}
+trap cleanup EXIT
 revision=__SOURCE__
 source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/__SOURCE__/ops
 files=(idrive-archive.py idrive-archive.test.py idrive-archive-smoke.py idrive-archive-requirements.txt configure-idrive-documents.py configure-idrive-documents.test.py idrive-setup-requirements.txt bringness-idrive-archive.service bringness-idrive-archive.timer)
@@ -50,6 +70,7 @@ PY
 for unit in bringness-idrive-archive.service bringness-idrive-archive.timer; do
  if [[ -e /etc/systemd/system/$unit ]]; then
   [[ ! -L /etc/systemd/system/$unit ]] && grep -qxF '# Managed by Bringness IDrive archive installer' /etc/systemd/system/$unit || { echo 'Unbekannter bestehender Dienst. Abbruch.' >&2; exit 1; }
+  cp -p /etc/systemd/system/$unit "$work/old-$unit"
  fi
 done
 # Never interrupt an already running archive, and never replace an unknown link/file.
@@ -57,9 +78,13 @@ if systemctl is-active --quiet bringness-idrive-archive.service; then echo 'Sich
 current=/opt/bringness-pos/idrive-archive/current
 if [[ -e "$current" || -L "$current" ]]; then
  [[ -L "$current" && $(readlink "$current") =~ ^/opt/bringness-pos/idrive-archive/releases/[0-9a-f]{40}$ ]] || exit 1
+ previous=$(readlink "$current")
 fi
+if systemctl is-active --quiet bringness-idrive-archive.timer; then old_timer_active=1; fi
+systemctl stop bringness-idrive-archive.timer 2>/dev/null || true
 ln -s "$release" "$work/current"
 mv -Tf "$work/current" "$current"
+switched=1
 for unit in bringness-idrive-archive.service bringness-idrive-archive.timer; do install -m 644 "$release/$unit" /etc/systemd/system/$unit; done
 systemctl daemon-reload
 # Enable scheduling only after a real encrypted upload/readback/isolated restore succeeds.

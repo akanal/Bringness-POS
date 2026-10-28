@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
+import resource
 import stat
 import subprocess
 import tempfile
@@ -138,7 +140,8 @@ def decrypt(source,target,key):
 
 def command(args,*,output=None,input_file=None,timeout=1800):
     # Provider/database command output is never printed: dumps may contain secrets.
-    result=subprocess.run(args,stdin=input_file,stdout=output if output is not None else subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=timeout,check=True)
+    def file_limit():resource.setrlimit(resource.RLIMIT_FSIZE,(MAX,MAX))
+    result=subprocess.run(args,stdin=input_file,stdout=output if output is not None else subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=timeout,check=True,preexec_fn=file_limit if output is not None else None)
     return result.stdout
 
 
@@ -278,13 +281,16 @@ def archive_documents(client,key,work,state,container='bringness-db'):
 
 
 def run(config_path=bootstrap.CONFIG,root=ROOT,state=STATE):
-    global PHASE
+    global PHASE,MAX
     os.umask(0o077)
     root,state=Path(root),Path(state)
     for directory in (root,state):
         if directory.is_symlink() or directory.resolve()!=directory:raise ValueError('linked-directory')
         info=directory.stat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid!=os.geteuid() or info.st_mode&(0o077 if directory==state else 0o022):raise ValueError('unsafe-directory')
+    free=shutil.disk_usage(state).free
+    MAX=min(MAX,(free-1024**3)//7)
+    if MAX<64*1024**2:raise ValueError('insufficient-private-workspace')
     fd=os.open(state/'run.lock',os.O_WRONLY|os.O_CREAT|os.O_NOFOLLOW,0o600)
     with os.fdopen(fd,'w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)

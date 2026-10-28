@@ -74,6 +74,23 @@ class ArchiveTest(unittest.TestCase):
   with patch.object(m,'command',side_effect=fake):m.restore_drill(self.source,{'databases':['postgres']})
   create=calls[0];self.assertEqual(create[create.index('--network')+1],'none');self.assertIn('POSTGRES_DB=postgres',create);name=create[create.index('--name')+1];self.assertTrue(name.startswith('bringness-recovery-'));self.assertTrue(any(x[:3]==['docker','exec','-i'] and x[3]==name for x in calls));self.assertEqual(calls[-1],['docker','rm','-f','-v',name])
 
+class FullRunTest(unittest.TestCase):
+ def test_full_job_publishes_success_only_after_verified_restore(self):
+  with tempfile.TemporaryDirectory() as temp:
+   root=Path(temp);state=root/'state';state.mkdir(mode=0o700);config=root/'config.json';m.bootstrap.save_new_config(config,'syntheticaccess123456','syntheticsecret1234567890');key=m.recovery_key(root/'idrive-recovery.key');receipt=state/'recovery-ready.json';receipt.write_text(json.dumps({'keySha256':__import__('hashlib').sha256(key).hexdigest(),'object':'backups/recovery/synthetic.bnenc'}));receipt.chmod(0o600)
+   client=Mock();stored={}
+   def put(**args):stored[args['Key']]=args['Body'].read()
+   client.put_object.side_effect=put;client.get_object.side_effect=lambda **args:{'Body':io.BytesIO(stored[args['Key']]),'ServerSideEncryption':'AES256'}
+   bundle=m.bundle_backup
+   body=b'-- synthetic SQL only\n'*10
+   def dump(path):path.write_bytes(body);path.chmod(0o600)
+   def restore(path,facts):self.assertEqual(path.read_bytes(),body);self.assertFalse((state/'last-success.json').exists())
+   with patch.object(m.bootstrap,'make_client',return_value=client),patch.object(m.bootstrap,'probe',return_value='synthetic'),patch.object(m,'cluster_facts',return_value={'databases':['postgres'],'serverVersion':160000}),patch.object(m,'dump_cluster',side_effect=dump),patch.object(m,'bundle_backup',side_effect=lambda sql,target:bundle(sql,target,{'config.json':config})),patch.object(m,'restore_drill',side_effect=restore),patch.object(m,'pdf_documents',return_value=iter([])),patch.object(m,'MAX',m.MAX):
+    m.run(config,root,state)
+   result=json.loads((state/'last-success.json').read_text());self.assertEqual(result['databaseRestore'],'passed');self.assertEqual(result['newPreviewPdfs'],0);self.assertEqual(len(stored),2)
+   for encrypted in stored.values():self.assertTrue(encrypted.startswith(m.MAGIC));self.assertNotIn(body,encrypted);self.assertNotIn(key,encrypted)
+   self.assertFalse(list(state.glob('run-*')))
+
 class RecoveryWrapTest(unittest.TestCase):
  def test_password_wrap_recovers_exact_key_and_rejects_wrong_password_or_tamper(self):
   key=os.urandom(32);password='Synthetic-only-long-recovery-passphrase';wrapped=m.wrap_key(key,password)
