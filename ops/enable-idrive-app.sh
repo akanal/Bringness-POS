@@ -20,12 +20,14 @@ cleanup(){
  exit "$rc"
 }
 trap cleanup EXIT
-revision=__RELEASE__
+revision=1cd1203d95f92f2201eca273f95ab1f205c51ff2
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'Aktivierungsrevision noch nicht vorbereitet.' >&2; exit 1; }
-source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/__SOURCE__/ops
+source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/51c278ec95c908e15d68d49c5b14322cfc509ed4/ops
 for file in configure-idrive-app.py configure-idrive-app.test.py configure-idrive-documents.py; do curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 15 --max-time 90 "$source_url/$file" -o "$work/$file"; done
 (cd "$work"; sha256sum --check --status <<'HASHES'
-__HASHES__
+366226849db78e78222ff7e151743b1a88b8eac0b27acef2e4837f6184694a19  configure-idrive-app.py
+9d6098f65304bbeaf3054d9c473f5682c86abc2325d71494e16dda07373a3a06  configure-idrive-app.test.py
+b21a19d9e71665c4142a7046ddab8c3f4c996e468c3f45e04575e3877e6ab7ca  configure-idrive-documents.py
 HASHES
 )
 python3 "$work/configure-idrive-app.test.py"
