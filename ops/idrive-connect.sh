@@ -2,6 +2,8 @@
 # Explicit administrator console bootstrap; never opens remote shell access.
 set -euo pipefail
 umask 077
+mode=${1:-setup}
+case "$mode" in setup|inspect) ;; *) echo 'Unbekannter Modus' >&2; exit 1 ;; esac
 if [ "$(id -u)" != 0 ] || [ ! -t 0 ]; then
   echo 'Bitte als root in der interaktiven Serverkonsole starten.' >&2
   exit 1
@@ -12,19 +14,23 @@ done
 echo 'IDrive-Einrichtung: Quelldateien und Pruefsummen werden geprueft.'
 work=$(mktemp -d /root/idrive-connect.XXXXXXXX)
 cd "$work"
-source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/c3244923f0f16c1f01dcf9d0fc19a6fc3d927589/ops
+source_url=https://raw.githubusercontent.com/akanal/Bringness-POS/81c7fe8c451fba219e4c4b305355f1f78013ec77/ops
 for file in configure-idrive-documents.py configure-idrive-documents.test.py idrive-setup-requirements.txt; do
   curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --connect-timeout 15 --max-time 90 "$source_url/$file" -o "$file"
 done
 sha256sum --check --status <<'HASHES'
-f03e1b29b09306b59b89f0622f4c22bfdfe3277c2fbad401d96e3aa05836f080  configure-idrive-documents.py
-8bd607d528eb6eb61633a66d2aba2e71cba2cdeebaa45289a1a940391b9dc04b  configure-idrive-documents.test.py
+5b890a1a62153a8b54919030bf3fe5d95b9c898dbc20e2fc60dd178933025cb6  configure-idrive-documents.py
+d7fa996fe9a36bbc57a4c999930e85f341827b556f935e1f843ebd98f0adf090  configure-idrive-documents.test.py
 6fb5dc28edc7085e2c7c256b73848f4b9b1af709727e3483dd714658e9389aad  idrive-setup-requirements.txt
 HASHES
 echo 'Quelldateien bestaetigt. Isolierte Python-Umgebung wird eingerichtet.'
 python3 -m venv "$work/venv"
 "$work/venv/bin/python" -m pip install --disable-pip-version-check --no-input --requirement idrive-setup-requirements.txt
 "$work/venv/bin/python" configure-idrive-documents.test.py
+if [ "$mode" = inspect ]; then
+  "$work/venv/bin/python" configure-idrive-documents.py inspect
+  exit 0
+fi
 # Preserve all existing application configuration and reject linked or unsafe paths.
 python3 - <<'PY'
 import os, stat

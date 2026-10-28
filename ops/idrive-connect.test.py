@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 class RunnerTest(unittest.TestCase):
-    def run_case(self, mode='ok'):
+    def run_case(self, mode='ok', argument=None):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             commands = temp / 'commands'
@@ -51,7 +51,8 @@ fi''',
                        TEST_SOURCE=str(ROOT), TEST_FAKE=str(fake))
             master, slave = pty.openpty()
             try:
-                result = subprocess.run(['bash', str(ROOT / 'idrive-connect.sh')],
+                command = ['bash', str(ROOT / 'idrive-connect.sh')] + ([argument] if argument else [])
+                result = subprocess.run(command,
                                         stdin=slave, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, env=env, timeout=15)
             finally:
@@ -84,6 +85,13 @@ fi''',
         code, log = self.run_case('tests-fail')
         self.assertNotEqual(code, 0)
         self.assertNotIn('configure-idrive-documents.py ', log)
+
+    def test_inspect_runs_only_inspection_after_tests(self):
+        code, log = self.run_case(argument='inspect')
+        self.assertEqual(code, 0)
+        self.assertIn('configure-idrive-documents.py inspect', log)
+        self.assertNotIn('configure-idrive-documents.py setup', log)
+        self.assertNotIn('configure-idrive-documents.py check', log)
 
 
 if __name__ == '__main__':
