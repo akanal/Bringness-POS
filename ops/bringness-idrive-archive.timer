@@ -1,0 +1,12 @@
+# Managed by Bringness IDrive archive installer
+[Unit]
+Description=Nightly Bringness IDrive archive at 03:15 Europe/Berlin
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Europe/Berlin
+Persistent=true
+RandomizedDelaySec=5m
+Unit=bringness-idrive-archive.service
+
+[Install]
+WantedBy=timers.target
