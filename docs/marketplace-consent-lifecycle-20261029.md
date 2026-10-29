@@ -44,5 +44,29 @@ unfinished external prerequisites.
 
 ## Verification
 
-Pending final suite and CI results. New tests use only synthetic data and held
-local transports; they do not contact Mollie or create real merchant consent.
+Application commit6e7279aa97a900b74d50d66502d8cb97f3c4412e,
+treead7bb731aa8ed1f23e1ddb176a7555a1b4945dc4, PR182 stacked on PR181.
+
+- Focused merchant connection suite:15 passed, zero failures/skips.
+- General local suite:669 passed, zero failures/skips.
+- Local complete payment suite with concurrency2:128 passed, zero failures,
+  two real-PostgreSQL-only skips. CI covers those two checks.
+- GitHub payment safety40964025788/job123763794093:130 passed, zero failures
+  or skips, including held-response overlap, the existing deterministic lock
+  regression, parallel refresh/recheck and exactly-once non-fulfilling handoff.
+- Shop40964025835/job123763794276 succeeded: native merchant/customer TEST
+  checkout browser, complete705-test suite and actual application-entrypoint
+  startup with real PostgreSQL and the existing browser acceptance flows.
+- All four applicable GitHub application workflows succeeded on the exact
+  application commit/tree above. The following report commit changes docs only.
+- Isolated preview40964025887/job123763794637 succeeded, including actual
+  interfaces, egress refusal, encrypted backup and independent restoration.
+- Full local Shop suite:705 passed, zero failures/skips.
+- POS/AI40964025785/job123763794119 succeeded.
+- An initial local default-parallel payment run reported one archive-integrity
+  test-file failure without an assertion diagnostic. That unchanged test passed
+  alone, and the complete bounded-concurrency rerun passed as reported above.
+  Do not count the initial run as successful or infer its cause.
+
+New tests use only synthetic data and held local transports. No real Mollie
+communication, provider acceptance, merchant consent, payment or fulfilment.
