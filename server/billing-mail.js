@@ -21,7 +21,7 @@ export function createBillingMail(pool,{env=process.env,fetchPayment=fetch}={}){
   return z;
  }
  async function tick(){if(running)return;running=true;try{const rows=(await pool.query(rowSql+` WHERE e.due_at<=now() AND ((e.kind='invoice' AND bt.status='paid') OR (e.kind='reminder' AND bt.status='failed')) AND NOT EXISTS(SELECT 1 FROM transactional_mail m WHERE m.dedupe_key='billing:'||e.kind||':'||bt.id::text) ORDER BY e.due_at LIMIT 20`)).rows;for(const z of rows){try{const good=await current(z.id,z.email);if(good)await enqueueMail(pool,'billing:'+z.kind+':'+z.id,z.email,{kind:'billing',transactionId:z.id,billingKind:z.kind});}catch{console.error('Billing mail event unavailable');}}}finally{running=false}}
- async function resolve(message,recipient){const z=await current(message.transactionId,recipient);if(!z||z.kind!==message.billingKind)return null;const result=billingMail(z.kind,z,origin()+'/pos/');if(z.kind==='invoice')result.attachments=[{filename:'Rechnung-'+z.invoice_number.replace(/[^A-Za-z0-9-]/g,'')+'.pdf',content:await invoicePdf(z,env)}];return result;}
+ async function resolve(message,recipient){const z=await current(message.transactionId,recipient);if(!z||z.kind!==message.billingKind)return null;const result=billingMail(z.kind,z,origin()+'/pos/');if(z.kind==='invoice'){const number=await pool.query('SELECT customer_number FROM companies WHERE id=$1',[z.company_id]);z.customer_number=number.rows[0]?.customer_number??null;result.attachments=[{filename:'Rechnung-'+z.invoice_number.replace(/[^A-Za-z0-9-]/g,'')+'.pdf',content:await invoicePdf(z,env)}];}return result;}
  return {tick,resolve};
 }
 export async function invoicePdf(z,env){
@@ -29,6 +29,7 @@ export async function invoicePdf(z,env){
  const money=x=>(Number(x)/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'}),b=z.billing_snapshot||{};
  doc.fontSize(22).text(env.INVOICE_SELLER_NAME||'Bringness');if(env.INVOICE_SELLER_ADDRESS)doc.fontSize(10).text(env.INVOICE_SELLER_ADDRESS);if(env.INVOICE_TAX_ID)doc.fontSize(10).text('Steuer-ID / USt-ID: '+env.INVOICE_TAX_ID);
  doc.moveDown().fontSize(18).text('Rechnung '+z.invoice_number).fontSize(10).text('Rechnungsdatum: '+new Date(z.invoice_date).toLocaleDateString('de-DE')).moveDown();
+ if(z.customer_number!=null){doc.fontSize(9).text('Kundennummer: '+String(z.customer_number),355,130,{width:185,align:'right'});}
  for(const v of [b.company_name,b.contact_name,b.street,[b.postal_code,b.city].filter(Boolean).join(' '),b.country,b.vat_id])if(v)doc.text(String(v));
  doc.moveDown().text(z.name||'Bringness-Abonnement').text('Nettobetrag: '+money(z.net_cents)).text('MwSt. '+Number(z.vat_rate||19).toLocaleString('de-DE')+' %: '+money(z.vat_cents)).text('Gesamtbetrag: '+money(z.amount_cents)).moveDown().text('Zahlung über Mollie erhalten.').text('Bei Fragen schreiben Sie bitte an info@bringness.de.');doc.end();return ready;
 }
