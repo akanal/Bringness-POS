@@ -4,6 +4,8 @@ on:
     paths:
       - 'server/shop-payment-*.js'
       - 'server/shop-mollie-*.js'
+      - 'server/shop-document-*.js'
+      - 'server/shop-credit-note-*.js'
       - '.github/workflows/shop-payment-tests.yml'
   workflow_dispatch:
 permissions:
@@ -22,4 +24,4 @@ jobs:
       # PGlite is test-only; keep it out of the production dependency graph.
       - run: npm install --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.3.14
       - name: Payment and refund safety suites
-        run: node --test server/shop-payment-*.test.js server/shop-mollie-*.test.js
+        run: node --test server/shop-payment-*.test.js server/shop-mollie-*.test.js server/shop-document-*.test.js server/shop-credit-note-*.test.js
