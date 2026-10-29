@@ -11,6 +11,7 @@ test('issue and archive commit together, and rollback if archive insert fails',a
  const db=new PGlite(),pool={connect:async()=>({query:(...a)=>db.query(...a),release(){}})};
  try{
   await migrateShopDocumentNumbers(db);await migrateShopDocumentRecords(db);await migrateShopDocumentArchive(db);
+  await assert.rejects(issueShopDocumentRecord(pool,{companyId,kind:'invoice',year:2026,orderId,content:{totalCents:1190},archive:'yes'}),/SHOP_DOCUMENT_ARCHIVE_OPTION_INVALID/);
   const first=await issueShopDocumentRecord(pool,{companyId,kind:'invoice',year:2026,orderId,content:{totalCents:1190},archive:true});
   assert.equal(await verifyShopDocumentArchiveConsistency(db,first.id),true);
   const duplicateId='55555555-5555-4555-8555-555555555555';
