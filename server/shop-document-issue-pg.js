@@ -4,6 +4,7 @@ import {validateShopDocumentNumber} from './shop-document-number-policy.js';
 // Isolated transaction primitive. Not mounted in production.
 // Fiscal correctness and invoice content must be validated by the caller.
 export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,originalDocumentId=null,content,id=randomUUID(),archive=false}){
+ if(typeof archive!=='boolean')throw Error('SHOP_DOCUMENT_ARCHIVE_OPTION_INVALID');
  if(!['invoice','credit_note'].includes(kind)||!Number.isSafeInteger(year)||year<2000||year>9999)throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
  if(typeof companyId!=='string'||typeof orderId!=='string'||!companyId||!orderId||!content||typeof content!=='object'||Array.isArray(content))throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
  if(kind==='credit_note'&&!originalDocumentId)throw Error('SHOP_DOCUMENT_ORIGINAL_REQUIRED');
