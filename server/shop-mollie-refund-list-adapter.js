@@ -11,6 +11,8 @@ export function createShopMollieRefundLister({apiKey,fetchImpl=globalThis.fetch}
   if(!Array.isArray(refunds)||refunds.length>100)throw Error('MOLLIE_REFUND_LIST_INVALID');
   // Never silently accept an incomplete refund history.
   if(data?._links?.next?.href)throw Error('MOLLIE_REFUND_LIST_PAGINATION_REQUIRED');
+  if(data?.count!==undefined&&(!Number.isSafeInteger(data.count)||data.count<refunds.length))throw Error('MOLLIE_REFUND_LIST_INVALID');
+  if(data?.count>refunds.length)throw Error('MOLLIE_REFUND_LIST_PAGINATION_REQUIRED');
   return refunds.map(refund=>({id:refund.id,status:refund.status}));
  };
 }
