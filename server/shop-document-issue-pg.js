@@ -1,8 +1,9 @@
 import {randomUUID} from 'node:crypto';
+import {digestShopDocument} from './shop-document-archive-policy.js';
 import {validateShopDocumentNumber} from './shop-document-number-policy.js';
 // Isolated transaction primitive. Not mounted in production.
 // Fiscal correctness and invoice content must be validated by the caller.
-export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,originalDocumentId=null,content,id=randomUUID()}){
+export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,originalDocumentId=null,content,id=randomUUID(),archive=false}){
  if(!['invoice','credit_note'].includes(kind)||!Number.isSafeInteger(year)||year<2000||year>9999)throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
  if(typeof companyId!=='string'||typeof orderId!=='string'||!companyId||!orderId||!content||typeof content!=='object'||Array.isArray(content))throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
  if(kind==='credit_note'&&!originalDocumentId)throw Error('SHOP_DOCUMENT_ORIGINAL_REQUIRED');
@@ -24,6 +25,11 @@ export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,
   validateShopDocumentNumber({companyId,kind,year,sequence,documentNumber});
   await db.query(`INSERT INTO shop_document_records(id,company_id,kind,year,sequence,document_number,order_id,original_document_id,content)
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[id,companyId,kind,year,sequence,documentNumber,orderId,originalDocumentId,content]);
+  if(archive){
+   const payload={documentNumber,kind,orderId,content};
+   const {digest}=digestShopDocument(payload);
+   await db.query('INSERT INTO shop_document_archive(document_id,payload,digest_sha256) VALUES($1,$2,$3)',[id,payload,digest]);
+  }
   await db.query('COMMIT');
   return Object.freeze({id,companyId,kind,year,sequence,documentNumber,orderId});
  }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
