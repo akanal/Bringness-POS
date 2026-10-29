@@ -8,6 +8,8 @@ export function createShopMolliePaymentFetcher({apiKey,fetchImpl=globalThis.fetc
   if(typeof reference!=='string'||!/^tr_[A-Za-z0-9]+$/.test(reference))throw Error('MOLLIE_PAYMENT_REFERENCE_INVALID');
   const response=await fetchImpl(`${apiBase}/payments/${encodeURIComponent(reference)}`,{method:'GET',headers:{Authorization:`Bearer ${apiKey}`,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(10000)});
   if(!response.ok)throw Error('MOLLIE_PAYMENT_FETCH_FAILED');
+  const contentType=response.headers?.get?.('content-type');
+  if(contentType&&!/^application\/json(?:\s*;|\s*$)/i.test(contentType))throw Error('MOLLIE_PAYMENT_CONTENT_TYPE_INVALID');
   const data=await response.json();
   const amount=data?.amount;
   if(typeof amount?.value!=='string'||!/^\d+\.\d{2}$/.test(amount.value))throw Error('MOLLIE_AMOUNT_INVALID');
