@@ -15,6 +15,8 @@ test('confirmed payment required and duplicate invoices blocked in guarded mode'
   await db.query("INSERT INTO shop_payment_ledger(order_id,company_id,amount_cents,currency,snapshot,provider_reference) VALUES($1,$2,1190,'EUR',$3,'tr_confirmed')",[orderId,companyId,{amountCents:1190,events:[],status:'unpaid'}]);
   await assert.rejects(issueShopDocumentRecord(pool,args),/SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED/);
   await db.query("UPDATE shop_payment_ledger SET snapshot=$2 WHERE order_id=$1",[orderId,{amountCents:1190,status:'paid',events:[{kind:'paid',id:'tr_confirmed',amountCents:1190}]}]);
+  await assert.rejects(issueShopDocumentRecord(pool,{...args,content:{totalCents:1191}}),/SHOP_DOCUMENT_PAYMENT_AMOUNT_MISMATCH/);
+  await assert.rejects(issueShopDocumentRecord(pool,{...args,content:{totalCents:'1190'}}),/SHOP_DOCUMENT_PAYMENT_AMOUNT_MISMATCH/);
   const first=await issueShopDocumentRecord(pool,args);
   assert.equal(first.documentNumber,'INV-2026-000000001');
   await assert.rejects(issueShopDocumentRecord(pool,args),/SHOP_DOCUMENT_INVOICE_ALREADY_EXISTS/);
