@@ -18,3 +18,15 @@ test('rejects invalid references, incomplete pagination, and bad responses',asyn
  const failed=createShopMollieRefundLister({apiKey,fetchImpl:async()=>({ok:false})});
  await assert.rejects(failed('tr_123'),/FETCH_FAILED/);
 });
+
+test('rejects malformed, unknown-status and duplicate refund entries',async()=>{
+ for(const refunds of [
+  [{id:'bad',status:'refunded'}],
+  [{id:'re_123',status:'unknown'}],
+  [{id:'re_123',status:'refunded'},{id:'re_123',status:'pending'}],
+  [null]
+ ]){
+  const list=createShopMollieRefundLister({apiKey,fetchImpl:async()=>({ok:true,json:async()=>({_embedded:{refunds}})})});
+  await assert.rejects(list('tr_123'),/MOLLIE_REFUND_LIST_(INVALID|DUPLICATE)/);
+ }
+});
