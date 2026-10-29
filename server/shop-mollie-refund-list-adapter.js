@@ -6,6 +6,8 @@ export function createShopMollieRefundLister({apiKey,fetchImpl=globalThis.fetch}
   if(typeof paymentId!=='string'||!/^tr_[A-Za-z0-9]+$/.test(paymentId))throw Error('MOLLIE_PAYMENT_REFERENCE_INVALID');
   const response=await fetchImpl(`https://api.mollie.com/v2/payments/${encodeURIComponent(paymentId)}/refunds?limit=100`,{method:'GET',headers:{Authorization:`Bearer ${apiKey}`,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(10000)});
   if(!response.ok)throw Error('MOLLIE_REFUND_LIST_FETCH_FAILED');
+  const contentType=response.headers?.get?.('content-type');
+  if(contentType&&!/^application\/json(?:\s*;|\s*$)/i.test(contentType))throw Error('MOLLIE_REFUND_LIST_CONTENT_TYPE_INVALID');
   const data=await response.json();
   const refunds=data?._embedded?.refunds;
   if(!Array.isArray(refunds)||refunds.length>100)throw Error('MOLLIE_REFUND_LIST_INVALID');
