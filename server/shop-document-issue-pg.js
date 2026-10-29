@@ -24,6 +24,7 @@ export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,
    const refundedAmount=events.filter(event=>event.kind==='refund').reduce((sum,event)=>sum+event.amountCents,0);
    if(!Number.isSafeInteger(paidAmount)||paidAmount!==Number(row.amount_cents)||!Number.isSafeInteger(refundedAmount)||refundedAmount>paidAmount)throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
    if(events.filter(event=>event.kind==='paid').length!==1||row.snapshot.amountCents!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
+   if(events[0]?.kind!=='paid'||events[0].id!==row.provider_reference||events.slice(1).some(event=>event.kind!=='refund'))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
    if(kind==='invoice'&&refundedAmount!==0)throw Error('SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED');
    if(kind==='credit_note'&&(refundedAmount===0||row.snapshot.status==='refunded'&&refundedAmount!==paidAmount||row.snapshot.status==='partially_refunded'&&refundedAmount>=paidAmount))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
    if(kind==='invoice'){
