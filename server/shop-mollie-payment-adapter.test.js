@@ -19,3 +19,8 @@ test('Mollie adapter rejects invalid references, malformed amounts and HTTP erro
  await assert.rejects(failed('tr_123'),/FETCH_FAILED/);
  assert.throws(()=>createShopMolliePaymentFetcher({apiKey:'bad'}),/API_KEY_INVALID/);
 });
+
+test('payment fetcher rejects non-JSON responses',async()=>{
+ const fetchPayment=createShopMolliePaymentFetcher({apiKey,fetchImpl:async()=>({ok:true,headers:{get:()=> 'text/html'},json:async()=>({})})});
+ await assert.rejects(fetchPayment('tr_123'),/CONTENT_TYPE_INVALID/);
+});
