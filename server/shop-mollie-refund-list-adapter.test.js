@@ -30,3 +30,8 @@ test('rejects malformed, unknown-status and duplicate refund entries',async()=>{
   await assert.rejects(list('tr_123'),/MOLLIE_REFUND_LIST_(INVALID|DUPLICATE)/);
  }
 });
+
+test('refund listing rejects non-JSON provider response',async()=>{
+ const list=createShopMollieRefundLister({apiKey,fetchImpl:async()=>({ok:true,headers:{get:()=> 'text/html'},json:async()=>({_embedded:{refunds:[]}})})});
+ await assert.rejects(list('tr_123'),/CONTENT_TYPE_INVALID/);
+});
