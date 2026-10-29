@@ -7,7 +7,7 @@ export async function migrateShopDocumentArchiveAudit(pool){
  action text NOT NULL CHECK(action IN ('read','verify','export')),
  occurred_at timestamptz NOT NULL DEFAULT now()
  )`);
- await pool.query(`CREATE OR REPLACE FUNCTION shop_document_archive_audit_reject_mutation() RETURNS trigger LANGUAGE plpgsql AS $$$
+ await pool.query(`CREATE OR REPLACE FUNCTION shop_document_archive_audit_reject_mutation() RETURNS trigger LANGUAGE plpgsql AS $
  BEGIN RAISE EXCEPTION 'SHOP_ARCHIVE_AUDIT_IMMUTABLE'; END; $$`);
  await pool.query('DROP TRIGGER IF EXISTS shop_document_archive_audit_immutable ON shop_document_archive_audit');
  await pool.query(`CREATE TRIGGER shop_document_archive_audit_immutable BEFORE UPDATE OR DELETE ON shop_document_archive_audit
