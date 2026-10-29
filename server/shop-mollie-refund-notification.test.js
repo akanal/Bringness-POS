@@ -9,9 +9,10 @@ test('refund list rejects malformed, oversized and missing provider records',asy
  await assert.rejects(reconcileShopRefundNotifications({...base,listProviderRefunds:async()=>[{id:'invalid',status:'refunded'}]}),/REFERENCE_INVALID/);
  await assert.rejects(reconcileShopRefundNotifications({...base,pool:{query:async()=>({rows:[]})},listProviderRefunds:async()=>[]}),/PAYMENT_NOT_FOUND/);
 });
-test('pending refunds are skipped and duplicates ignored',async()=>{
- const result=await reconcileShopRefundNotifications({...base,listProviderRefunds:async id=>{assert.equal(id,'tr_123');return [{id:'re_1',status:'pending'},{id:'re_1',status:'pending'}]}});
+test('pending refunds are skipped and duplicate IDs rejected',async()=>{
+ const result=await reconcileShopRefundNotifications({...base,listProviderRefunds:async id=>{assert.equal(id,'tr_123');return [{id:'re_1',status:'pending'}]}});
  assert.deepEqual(result,[]);
+ await assert.rejects(reconcileShopRefundNotifications({...base,listProviderRefunds:async()=>[{id:'re_1',status:'pending'},{id:'re_1',status:'refunded'}]}),/REFERENCE_DUPLICATE/);
 });
 
 test('invalid later refund prevents any provider fetch or ledger mutation',async()=>{
