@@ -8,6 +8,7 @@ export function createShopMollieRefundFetcher({apiKey,fetchImpl=globalThis.fetch
   const response=await fetchImpl(`https://api.mollie.com/v2/payments/${encodeURIComponent(paymentId)}/refunds/${encodeURIComponent(refundId)}`,{method:'GET',headers:{Authorization:`Bearer ${apiKey}`,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(10000)});
   if(!response.ok)throw Error('MOLLIE_REFUND_FETCH_FAILED');
   const data=await response.json();
+  if(data?.id!==refundId||data?.paymentId!==paymentId)throw Error('MOLLIE_REFUND_REFERENCE_MISMATCH');
   if(typeof data?.amount?.value!=='string'||!/^\d+\.\d{2}$/.test(data.amount.value))throw Error('MOLLIE_REFUND_AMOUNT_INVALID');
   const [euros,cents]=data.amount.value.split('.');
   const amountCents=Number(euros)*100+Number(cents);
