@@ -21,6 +21,7 @@ test('persistent ledger enforces order amount, tenant isolation, replay and roll
   assert.equal((await recordShopPaymentEvent(pool,{orderId:order,companyId:company,event})).snapshot.status,'paid');
   assert.equal((await recordShopPaymentEvent(pool,{orderId:order,companyId:company,event})).replay,true);
   assert.equal((await initializeShopPaymentLedger(pool,{orderId:order,companyId:company,amountCents:1000,currency:'EUR'})).status,'paid');
+  await assert.rejects(bindShopPaymentProvider(pool,{orderId:order,companyId:company,providerReference:'provider_456'}),/BINDING_CLOSED/);
   await assert.rejects(recordShopPaymentEvent(pool,{orderId:order,companyId:company,event:{id:'r',kind:'refund',amountCents:1001,verified:true,providerReference:'provider_123'}}),/EXCEEDS_PAID/);
   assert.equal((await db.query('SELECT snapshot FROM shop_payment_ledger WHERE order_id=$1',[order])).rows[0].snapshot.status,'paid');
   assert.equal((await recordShopPaymentEvent(pool,{orderId:order,companyId:company,event:{id:'r',kind:'refund',amountCents:1000,verified:true,providerReference:'provider_123'}})).snapshot.status,'refunded');
