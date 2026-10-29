@@ -35,3 +35,10 @@ test('refund without metadata requires verified parent payment order',async()=>{
   assert.equal((await reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId,currency:'EUR',amountCents:500,status:'paid'})})).snapshot.status,'refunded');
  }finally{await db.close()}
 });
+
+test('corrupt stored amount is rejected before provider fetch',async()=>{
+ let calls=0;
+ const pool={query:async()=>({rows:[{provider_reference:'tr_123',currency:'EUR',amount_cents:'9007199254740993'}]})};
+ await assert.rejects(reconcileShopRefund({pool,orderId,companyId,refundId:'re_1',fetchProviderRefund:async()=>{calls++;return {};},fetchProviderPayment:async()=>{calls++;return {};}}),/REFUND_PAYMENT_AMOUNT_INVALID/);
+ assert.equal(calls,0);
+});
