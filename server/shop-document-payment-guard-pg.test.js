@@ -51,7 +51,7 @@ test('rejects inconsistent refund totals and duplicate payment events',async()=>
   const paid={kind:'paid',id:'tr_confirmed',amountCents:1190};
   await db.query("INSERT INTO shop_payment_ledger(order_id,company_id,amount_cents,currency,snapshot,provider_reference) VALUES($1,$2,1190,'EUR',$3,'tr_confirmed')",[orderId,companyId,{amountCents:1190,status:'paid',events:[paid]}]);
   const args={companyId,orderId,kind:'invoice',year:2026,content:{totalCents:1190},requirePaid:true,archive:true};
-  for(const events of [[paid,paid],[paid,{kind:'refund',id:'re_1',amountCents:1200}]]) {
+  for(const events of [[paid,paid],[paid,{kind:'refund',id:'re_1',amountCents:1200}],[{kind:'paid',amountCents:1190}],[{kind:'paid',id:'',amountCents:1190}]]) {
    await db.query('UPDATE shop_payment_ledger SET snapshot=$2 WHERE order_id=$1',[orderId,{amountCents:1190,status:'paid',events}]);
    await assert.rejects(issueShopDocumentRecord(pool,args),/SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID/);
   }
