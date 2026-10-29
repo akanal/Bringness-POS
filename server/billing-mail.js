@@ -2,12 +2,17 @@ import {providerEuroCents} from './provider-money.js';
 import PDFDocument from 'pdfkit';
 import {enqueueMail} from './transactional-mail.js';
 import {billingMail} from './mail-templates.js';
-export async function migrateBillingMail(pool){await pool.query(`CREATE TABLE IF NOT EXISTS billing_mail_events(transaction_id uuid PRIMARY KEY REFERENCES billing_transactions(id) ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('invoice','reminder')),created_at timestamptz NOT NULL DEFAULT now(),due_at timestamptz NOT NULL);`)}
+export async function migrateBillingMail(pool){await pool.query(`CREATE SEQUENCE IF NOT EXISTS bringness_customer_number_seq START WITH 100001;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS customer_number bigint;
+ALTER TABLE companies ALTER COLUMN customer_number SET DEFAULT nextval('bringness_customer_number_seq');
+UPDATE companies SET customer_number=nextval('bringness_customer_number_seq') WHERE customer_number IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS companies_customer_number_unique ON companies(customer_number);
+CREATE TABLE IF NOT EXISTS billing_mail_events(transaction_id uuid PRIMARY KEY REFERENCES billing_transactions(id) ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('invoice','reminder')),created_at timestamptz NOT NULL DEFAULT now(),due_at timestamptz NOT NULL);`)}
 export async function recordBillingMail(c,tx,status){
  if(status==='paid'&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) VALUES($1,'invoice',now()) ON CONFLICT(transaction_id) DO UPDATE SET kind='invoice',due_at=now()",[tx.id]);
  else if(status==='failed'&&tx.mollie_subscription_id&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) SELECT id,'reminder',now()+interval '7 days' FROM billing_transactions WHERE id=$1 AND created_at>now()-interval '1 day' ON CONFLICT DO NOTHING",[tx.id]);
 }
-const rowSql=`SELECT bt.*,bp.name,e.kind,e.created_at event_at,u.email FROM billing_mail_events e JOIN billing_transactions bt ON bt.id=e.transaction_id JOIN billing_plans bp ON bp.id=bt.plan_id JOIN LATERAL(SELECT email FROM users WHERE company_id=bt.company_id AND role='owner' AND status='active' ORDER BY created_at,id LIMIT 1) u ON true`;
+const rowSql=`SELECT bt.*,bp.name,e.kind,e.created_at event_at,u.email,c.customer_number FROM billing_mail_events e JOIN billing_transactions bt ON bt.id=e.transaction_id JOIN billing_plans bp ON bp.id=bt.plan_id JOIN companies c ON c.id=bt.company_id JOIN LATERAL(SELECT email FROM users WHERE company_id=bt.company_id AND role='owner' AND status='active' ORDER BY created_at,id LIMIT 1) u ON true`;
 export function createBillingMail(pool,{env=process.env,fetchPayment=fetch}={}){
  let running=false;
  const origin=()=>{const u=new URL(env.PUBLIC_BASE_URL||'https://bringness.de');if(u.protocol!=='https:')throw Error('PUBLIC_ORIGIN_INVALID');return u.origin};
@@ -29,6 +34,7 @@ export async function invoicePdf(z,env){
  const money=x=>(Number(x)/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'}),b=z.billing_snapshot||{};
  doc.fontSize(22).text(env.INVOICE_SELLER_NAME||'Bringness');if(env.INVOICE_SELLER_ADDRESS)doc.fontSize(10).text(env.INVOICE_SELLER_ADDRESS);if(env.INVOICE_TAX_ID)doc.fontSize(10).text('Steuer-ID / USt-ID: '+env.INVOICE_TAX_ID);
  doc.moveDown().fontSize(18).text('Rechnung '+z.invoice_number).fontSize(10).text('Rechnungsdatum: '+new Date(z.invoice_date).toLocaleDateString('de-DE')).moveDown();
+ if(z.customer_number!=null){doc.fontSize(9).text('Kundennummer: '+String(z.customer_number),355,130,{width:185,align:'right'});}
  for(const v of [b.company_name,b.contact_name,b.street,[b.postal_code,b.city].filter(Boolean).join(' '),b.country,b.vat_id])if(v)doc.text(String(v));
  doc.moveDown().text(z.name||'Bringness-Abonnement').text('Nettobetrag: '+money(z.net_cents)).text('MwSt. '+Number(z.vat_rate||19).toLocaleString('de-DE')+' %: '+money(z.vat_cents)).text('Gesamtbetrag: '+money(z.amount_cents)).moveDown().text('Zahlung über Mollie erhalten.').text('Bei Fragen schreiben Sie bitte an info@bringness.de.');doc.end();return ready;
 }
