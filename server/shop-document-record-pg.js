@@ -17,8 +17,8 @@ export async function migrateShopDocumentRecords(pool){
  UNIQUE(company_id,document_number),
  CHECK ((kind='invoice' AND original_document_id IS NULL) OR (kind='credit_note' AND original_document_id IS NOT NULL))
  )`);
- await pool.query(`CREATE OR REPLACE FUNCTION shop_document_record_reject_mutation() RETURNS trigger LANGUAGE plpgsql AS $
- BEGIN RAISE EXCEPTION 'SHOP_DOCUMENT_RECORD_IMMUTABLE'; END; $`);
+ await pool.query(`CREATE OR REPLACE FUNCTION shop_document_record_reject_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+ BEGIN RAISE EXCEPTION 'SHOP_DOCUMENT_RECORD_IMMUTABLE'; END; $$`);
  await pool.query('DROP TRIGGER IF EXISTS shop_document_record_immutable ON shop_document_records');
  await pool.query(`CREATE TRIGGER shop_document_record_immutable BEFORE UPDATE OR DELETE ON shop_document_records
  FOR EACH ROW EXECUTE FUNCTION shop_document_record_reject_mutation()`);
