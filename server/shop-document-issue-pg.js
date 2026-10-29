@@ -16,7 +16,7 @@ export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,
   if(requirePaid){
    const payment=await db.query('SELECT amount_cents,currency,snapshot,provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId]);
    const row=payment.rows[0];
-   if(!row||!row.provider_reference||row.currency!=='EUR'||!row.snapshot||row.snapshot.status!=='paid')throw Error('SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED');
+   if(!row||!row.provider_reference||row.currency!=='EUR'||!row.snapshot||!(kind==='invoice'?row.snapshot.status==='paid':['partially_refunded','refunded'].includes(row.snapshot.status)))throw Error('SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED');
    const paidEvents=row.snapshot.events?.filter(event=>event.kind==='paid')??[];
    const paidAmount=paidEvents.reduce((sum,event)=>sum+event.amountCents,0);
    if(!Number.isSafeInteger(paidAmount)||paidAmount!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
@@ -24,6 +24,13 @@ export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,
     if(!Number.isSafeInteger(content.totalCents)||content.totalCents!==Number(row.amount_cents)||row.snapshot.amountCents!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_AMOUNT_MISMATCH');
     const existing=await db.query("SELECT id FROM shop_document_records WHERE order_id=$1 AND company_id=$2 AND kind='invoice'",[orderId,companyId]);
     if(existing.rows.length)throw Error('SHOP_DOCUMENT_INVOICE_ALREADY_EXISTS');
+   }else{
+    const refundId=content.refundId;
+    if(typeof refundId!=='string'||!/^re_[A-Za-z0-9]+$/.test(refundId)||!Number.isSafeInteger(content.amountCents)||content.amountCents<=0||content.currency!=='EUR'||content.originalInvoiceId!==originalDocumentId)throw Error('SHOP_DOCUMENT_REFUND_INVALID');
+    const refunds=row.snapshot.events.filter(event=>event.kind==='refund'&&event.id===refundId);
+    if(refunds.length!==1||refunds[0].amountCents!==content.amountCents)throw Error('SHOP_DOCUMENT_REFUND_NOT_CONFIRMED');
+    const existing=await db.query("SELECT id FROM shop_document_records WHERE company_id=$1 AND order_id=$2 AND kind='credit_note' AND content->>'refundId'=$3",[companyId,orderId,refundId]);
+    if(existing.rows.length)throw Error('SHOP_DOCUMENT_REFUND_ALREADY_CREDITED');
    }
   }
   if(kind==='credit_note'){
