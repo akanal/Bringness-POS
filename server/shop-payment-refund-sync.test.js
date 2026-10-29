@@ -12,7 +12,7 @@ test('confirmed partial and full refunds are recorded once and never exceed paid
   await bindShopPaymentProvider(pool,{orderId,companyId,providerReference:'tr_1000'});
   await recordShopPaymentEvent(pool,{orderId,companyId,event:{id:'tr_1000',kind:'paid',amountCents:1000,providerReference:'tr_1000',verified:true}});
   const fetchProviderRefund=async(paymentId,refundId)=>({id:refundId,paymentId,orderId,currency:'EUR',amountCents:refundId==='re_1'?300:700,status:'refunded'});
-  const base={pool,orderId,companyId,fetchProviderRefund};
+  const base={pool,orderId,companyId,fetchProviderRefund,fetchProviderPayment:async()=>({id:'tr_1000',orderId,currency:'EUR'})};
   assert.equal((await reconcileShopRefund({...base,refundId:'re_1'})).snapshot.status,'partially_refunded');
   assert.equal((await reconcileShopRefund({...base,refundId:'re_1'})).replay,true);
   assert.equal((await reconcileShopRefund({...base,refundId:'re_2'})).snapshot.status,'refunded');
@@ -28,6 +28,7 @@ test('refund without metadata requires verified parent payment order',async()=>{
   await bindShopPaymentProvider(pool,{orderId,companyId,providerReference:'tr_parent'});
   await recordShopPaymentEvent(pool,{orderId,companyId,event:{id:'tr_parent',kind:'paid',amountCents:500,providerReference:'tr_parent',verified:true}});
   const args={pool,orderId,companyId,refundId:'re_parent',fetchProviderRefund:async()=>({id:'re_parent',paymentId:'tr_parent',currency:'EUR',amountCents:500,status:'refunded'})};
+  await assert.rejects(reconcileShopRefund(args),/ADAPTER_REQUIRED/);
   await assert.rejects(reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId:'other',currency:'EUR'})}),/PARENT_PAYMENT_MISMATCH/);
   assert.equal((await reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId,currency:'EUR'})})).snapshot.status,'refunded');
  }finally{await db.close()}
