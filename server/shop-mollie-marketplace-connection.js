@@ -1,3 +1,4 @@
+import {marketplaceTestPreflight} from './shop-mollie-marketplace-preflight.js';
 import {randomBytes,randomUUID,createHash,createCipheriv,createDecipheriv} from 'node:crypto';
 import {shopActor,sessionHash,shopError} from './shop-account.js';
 import {uuid} from './shop-drafts.js';
@@ -23,7 +24,7 @@ export async function migrateMarketplaceConnections(db){
 // activation. The host must supply protected app credentials and a stable key.
 export function createMarketplaceConnections(pool,{clientId,clientSecret,tokenKey,publicOrigin,fetcher=globalThis.fetch}={}){
  let origin;try{const u=new URL(publicOrigin);if(u.origin!==publicOrigin||u.protocol!=='https:')throw Error();origin=u.origin;}catch{fail('INVALID_MARKET_ORIGIN');}
- const configured=/^app_[A-Za-z0-9]{1,100}$/.test(clientId||'')&&typeof clientSecret==='string'&&clientSecret.length>=10&&/^[a-f0-9]{64}$/i.test(tokenKey||'');
+ const configured=marketplaceTestPreflight({clientId,clientSecret,tokenKey,publicOrigin,fetcher}).configurationValid;
  const callback=origin+'/api/v1/shop/marketplace/merchant-callback';
  function requireConfig(){if(!configured)fail('MARKET_CONNECT_DISABLED');}
  function seal(tokens,seller,id){
