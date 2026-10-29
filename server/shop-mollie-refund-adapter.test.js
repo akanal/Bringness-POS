@@ -27,3 +27,8 @@ test('refund fetcher rejects mismatched provider refund and payment IDs',async()
   await assert.rejects(fetchRefund('tr_123','re_456'),/REFERENCE_MISMATCH/);
  }
 });
+
+test('refund fetcher refuses unexpected response content types',async()=>{
+ const fetchRefund=createShopMollieRefundFetcher({apiKey,fetchImpl:async()=>({ok:true,headers:{get:()=> 'text/html'},json:async()=>({})})});
+ await assert.rejects(fetchRefund('tr_123','re_456'),/CONTENT_TYPE_INVALID/);
+});
