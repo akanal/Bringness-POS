@@ -95,6 +95,11 @@ test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are
   else assert.match(race[0].reason.message,/MARKET_CONNECTION_IN_USE/);
   assert.equal((await s.loadConnection(seller)).connectionId,binding.connectionId);
   const results=await Promise.all([c().reconcileBatch(),c().reconcileBatch()]);assert.equal(results.reduce((n,r)=>n+r.checked,0),1);
+  await pool.query("UPDATE shop_market_test_checkouts SET reconcile_after=clock_timestamp()-interval '1 second'");
+  const manual=await Promise.allSettled(Array.from({length:8},()=>c().merchantRecheck({token:'merchant-fixture',orderId})));
+  assert.equal(manual.filter(r=>r.status==='fulfilled'&&r.value.confirmed).length,1);
+  for(const r of manual.filter(r=>r.status==='rejected'))assert.match(r.reason.message,/MARKET_RECHECK_BUSY/);
+  assert.equal(posts,1);
   payment={...payment,status:'paid'};await Promise.all(Array.from({length:8},()=>c().reconcilePayment(payment.id)));
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);
   assert.equal((await c().status(args)).canFulfil,false);assert.equal(posts,1);

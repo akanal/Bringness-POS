@@ -68,6 +68,17 @@ try{
   await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   if(process.env.SHOP_DESIGN_ARTIFACTS){await mkdir(process.env.SHOP_DESIGN_ARTIFACTS,{recursive:true});await page.screenshot({path:join(process.env.SHOP_DESIGN_ARTIFACTS,'market-payment-'+width+'.png'),fullPage:true});}
  }
+ await page.evaluate(()=>localStorage.setItem('bringness-pos-token','owner-a'));await page.goto(base+'/shop/marketplace-seller.html');
+ await page.getByRole('button',{name:'Zahlungsübersicht laden',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Keine Warenfreigabe oder Umsatzbuchung.'));
+ assert.ok((await page.locator('#seller-payment-connection').textContent()).includes(orderId));
+ // A fresh unresolved fixture status is not required: paid test rows remain
+ // terminal and expose no second payment/recheck action in the merchant UI.
+ assert.equal(await page.getByRole('button',{name:'Zahlungsstand nachprüfen',exact:true}).count(),0);
+ for(const width of [390,768,1280]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
+ await page.evaluate(()=>{localStorage.removeItem('bringness-pos-token');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-pos-token'}));});
+ assert.ok(!(await page.locator('#seller-payment-connection').textContent()).includes(orderId));
+ await page.evaluate(()=>localStorage.setItem('bringness-pos-token','owner-b'));await page.goto(base+'/shop/marketplace-payment-return.html?marketOrderId='+orderId);
+ await page.waitForFunction(()=>document.body.textContent.includes('Testzahlung bestätigt'));
  assert.equal((await f.db.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);assert.equal(paymentPosts,1);assert.deepEqual(errors,[]);
  await page.evaluate(()=>{localStorage.removeItem('bringness-pos-token');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-pos-token'}));});assert.ok(!(await page.locator('#market-payment-return').textContent()).includes('11,90'));
  console.log('PASS: HTTPS browser consent/cookie/callback, profile, lost reply/recovery/return, test-only handoff and 390/768/1280 layouts');
