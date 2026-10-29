@@ -1,0 +1,25 @@
+name: Shop payment safety tests
+on:
+  pull_request:
+    paths:
+      - 'server/shop-payment-*.js'
+      - 'server/shop-mollie-*.js'
+      - '.github/workflows/shop-payment-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  payment-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # PGlite is test-only; keep it out of the production dependency graph.
+      - run: npm install --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.3.14
+      - name: Payment and refund safety suites
+        run: node --test server/shop-payment-*.test.js server/shop-mollie-*.test.js
