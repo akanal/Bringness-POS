@@ -13,6 +13,13 @@ export function createShopMollieRefundLister({apiKey,fetchImpl=globalThis.fetch}
   if(data?._links?.next?.href)throw Error('MOLLIE_REFUND_LIST_PAGINATION_REQUIRED');
   if(data?.count!==undefined&&(!Number.isSafeInteger(data.count)||data.count<refunds.length))throw Error('MOLLIE_REFUND_LIST_INVALID');
   if(data?.count>refunds.length)throw Error('MOLLIE_REFUND_LIST_PAGINATION_REQUIRED');
+  // Validate the complete page before handing any refund to reconciliation.
+  const ids=new Set();
+  for(const refund of refunds){
+   if(typeof refund?.id!=='string'||!/^re_[A-Za-z0-9]+$/.test(refund.id)||typeof refund.status!=='string'||!['queued','pending','processing','refunded','failed','canceled'].includes(refund.status))throw Error('MOLLIE_REFUND_LIST_INVALID');
+   if(ids.has(refund.id))throw Error('MOLLIE_REFUND_LIST_DUPLICATE');
+   ids.add(refund.id);
+  }
   return refunds.map(refund=>({id:refund.id,status:refund.status}));
  };
 }
