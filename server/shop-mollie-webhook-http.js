@@ -1,5 +1,5 @@
 import {processShopMollieNotification} from './shop-mollie-notification-service.js';
-// Explicitly unmounted. Integrators must use a dedicated, rate-limited endpoint
+// Explicitly unmounted. Integrators must add rate limiting to a dedicated endpoint
 // and avoid logging raw request bodies, tokens, or provider responses.
 export function createShopMollieWebhookHandler({pool,fetchProviderPayment,maxBytes=2048}){
  if(!pool||typeof fetchProviderPayment!=='function')throw Error('MOLLIE_WEBHOOK_NOT_CONFIGURED');
