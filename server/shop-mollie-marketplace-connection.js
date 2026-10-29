@@ -1,3 +1,4 @@
+import {marketplaceTestPreflight} from './shop-mollie-marketplace-preflight.js';
 import {randomBytes,randomUUID,createHash,createCipheriv,createDecipheriv} from 'node:crypto';
 import {shopActor,sessionHash,shopError} from './shop-account.js';
 import {uuid} from './shop-drafts.js';
@@ -23,7 +24,7 @@ export async function migrateMarketplaceConnections(db){
 // activation. The host must supply protected app credentials and a stable key.
 export function createMarketplaceConnections(pool,{clientId,clientSecret,tokenKey,publicOrigin,fetcher=globalThis.fetch}={}){
  let origin;try{const u=new URL(publicOrigin);if(u.origin!==publicOrigin||u.protocol!=='https:')throw Error();origin=u.origin;}catch{fail('INVALID_MARKET_ORIGIN');}
- const configured=/^app_[A-Za-z0-9]{1,100}$/.test(clientId||'')&&typeof clientSecret==='string'&&clientSecret.length>=10&&/^[a-f0-9]{64}$/i.test(tokenKey||'');
+ const configured=marketplaceTestPreflight({clientId,clientSecret,tokenKey,publicOrigin,fetcher}).configurationValid;
  const callback=origin+'/api/v1/shop/marketplace/merchant-callback';
  function requireConfig(){if(!configured)fail('MARKET_CONNECT_DISABLED');}
  function seal(tokens,seller,id){
@@ -37,7 +38,9 @@ export function createMarketplaceConnections(pool,{clientId,clientSecret,tokenKe
  }catch{fail('MARKET_MERCHANT_NOT_CONNECTED');}}
  async function tx(session,fn){const db=await pool.connect();try{
   await db.query('BEGIN');await db.query("SET LOCAL statement_timeout='5s'");
-  const first=await shopActor(db,session);await db.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE',[first.company_id]);
+  const first=await shopActor(db,session);// Serialize merchant changes without blocking foreign-key KEY SHARE locks
+  // from checkout inserts that already hold a seller SHARE lock.
+  await db.query('SELECT id FROM companies WHERE id=$1 FOR NO KEY UPDATE',[first.company_id]);
   const actor=await shopActor(db,session,true);if(actor.company_id!==first.company_id)fail('ACCOUNT_CHANGED');
   const seller=(await db.query("SELECT 1 FROM shop_market_sellers WHERE company_id=$1 AND status='approved' FOR UPDATE",[actor.company_id])).rows[0];
   if(!seller)fail('SELLER_NOT_APPROVED');const r=await fn(db,actor.company_id);await db.query('COMMIT');return r;

@@ -66,7 +66,7 @@ test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are
  const url=new URL(connectionString);if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.pathname!=='/bringness_checkout_test')throw Error('ISOLATED_CHECKOUT_DATABASE_REQUIRED');
  const schema='merchant_'+randomUUID().replaceAll('-',''),admin=new pg.Pool({connectionString});let pool;
  try{
-  await admin.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString,max:12,options:'-c search_path='+schema});
+  await admin.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString,max:12,application_name:schema,options:'-c search_path='+schema});
   await pool.query(`CREATE TABLE companies(id uuid PRIMARY KEY);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz)`);
   await migrateMarketplace(pool);await migrateMarketplaceConnections(pool);
   const seller=randomUUID(),buyer=randomUUID(),orderId=randomUUID();
@@ -89,6 +89,26 @@ test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are
   await Promise.all(Array.from({length:8},()=>s.withAccessToken(seller,binding.connectionId,async token=>assert.equal(token,'access_postgres_fixture_1'))));assert.equal(refreshes,1);
   await pool.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[orderId,seller,randomUUID(),{grossCents:1190,currency:'EUR'},{method:'shipping'}]);await pool.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[buyer,randomUUID(),'fixture',orderId,{}]);
   const c=()=>createMarketplaceCheckout(pool,{resolveProvider:integration.checkoutProviderResolver}),args={token:'buyer-fixture',orderId,requestId:randomUUID()};
+  // Deterministically stage the lock order: consent holds the company lock and
+  // waits for seller UPDATE, while checkout-style work holds seller SHARE then
+  // acquires a company foreign-key KEY SHARE lock. FOR UPDATE deadlocks here;
+  // NO KEY UPDATE must let the FK insert finish before consent can continue.
+  await pool.query('CREATE TABLE merchant_fk_probe(company_id uuid REFERENCES companies(id))');
+  const blocker=await pool.connect();let consent;
+  try{
+   await blocker.query('BEGIN');await blocker.query("SET LOCAL statement_timeout='750ms'");
+   await blocker.query('SELECT company_id FROM shop_market_sellers WHERE company_id=$1 FOR SHARE',[seller]);
+   consent=s.begin({token:'merchant-fixture'}).then(value=>({value}),error=>({error}));
+   let waiting=false;
+   for(let i=0;i<100;i++){
+    const rows=(await pool.query("SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query LIKE 'SELECT 1 FROM shop_market_sellers%'",[schema])).rows;
+    if(rows.length){waiting=true;break;}await new Promise(resolve=>setTimeout(resolve,10));
+   }
+   assert.equal(waiting,true,'merchant consent must reach the staged seller lock');
+   await blocker.query('INSERT INTO merchant_fk_probe VALUES($1)',[seller]);
+   await blocker.query('COMMIT');
+   const result=await consent;assert.equal(result.error,undefined);assert.ok(result.value.authorizationUrl);
+  }finally{await blocker.query('ROLLBACK');blocker.release();if(consent)await consent;}
   const race=await Promise.allSettled([s.begin({token:'merchant-fixture'}),c().start(args)]);
   assert.equal(race[1].status,'rejected');assert.match(race[1].reason.message,/MARKET_PAYMENT_UNCERTAIN/);assert.equal(posts,1);
   if(race[0].status==='fulfilled'){const attempt=race[0].value;await assert.rejects(s.complete({state:new URL(attempt.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:attempt.browserNonce}),/MARKET_CONNECTION_IN_USE/);}
