@@ -17,9 +17,13 @@ export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,
    const payment=await db.query('SELECT amount_cents,currency,snapshot,provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId]);
    const row=payment.rows[0];
    if(!row||!row.provider_reference||row.currency!=='EUR'||!row.snapshot||!(kind==='invoice'?row.snapshot.status==='paid':['partially_refunded','refunded'].includes(row.snapshot.status)))throw Error('SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED');
-   const paidEvents=row.snapshot.events?.filter(event=>event.kind==='paid')??[];
-   const paidAmount=paidEvents.reduce((sum,event)=>sum+event.amountCents,0);
-   if(!Number.isSafeInteger(paidAmount)||paidAmount!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
+   const events=row.snapshot.events;
+   if(!Array.isArray(events)||events.some(event=>!event||!['paid','refund'].includes(event.kind)||!Number.isSafeInteger(event.amountCents)||event.amountCents<=0)||new Set(events.map(event=>event.id)).size!==events.length)throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
+   const paidAmount=events.filter(event=>event.kind==='paid').reduce((sum,event)=>sum+event.amountCents,0);
+   const refundedAmount=events.filter(event=>event.kind==='refund').reduce((sum,event)=>sum+event.amountCents,0);
+   if(!Number.isSafeInteger(paidAmount)||paidAmount!==Number(row.amount_cents)||!Number.isSafeInteger(refundedAmount)||refundedAmount>paidAmount)throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
+   if(kind==='invoice'&&refundedAmount!==0)throw Error('SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED');
+   if(kind==='credit_note'&&(refundedAmount===0||row.snapshot.status==='refunded'&&refundedAmount!==paidAmount||row.snapshot.status==='partially_refunded'&&refundedAmount>=paidAmount))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
    if(kind==='invoice'){
     if(!Number.isSafeInteger(content.totalCents)||content.totalCents!==Number(row.amount_cents)||row.snapshot.amountCents!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_AMOUNT_MISMATCH');
     const existing=await db.query("SELECT id FROM shop_document_records WHERE order_id=$1 AND company_id=$2 AND kind='invoice'",[orderId,companyId]);
