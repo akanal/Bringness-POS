@@ -7,6 +7,7 @@ on:
       - 'server/shop-document-*.js'
       - 'server/shop-credit-note-*.js'
       - 'server/shop-invoice-*.js'
+      - 'server/shop-document-archive-*.js'
       - '.github/workflows/shop-payment-tests.yml'
   workflow_dispatch:
 permissions:
