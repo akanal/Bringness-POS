@@ -19,3 +19,16 @@ test('confirmed partial and full refunds are recorded once and never exceed paid
   await assert.rejects(reconcileShopRefund({...base,refundId:'re_3'}),/EXCEEDS_PAID/);
  }finally{await db.close();}
 });
+
+test('refund without metadata requires verified parent payment order',async()=>{
+ const db=new PGlite();const pool={query:(...a)=>db.query(...a),connect:async()=>({query:(...a)=>db.query(...a),release(){}})};
+ try{
+  await migrateShopPaymentLedger(pool);
+  await initializeShopPaymentLedger(pool,{orderId,companyId,amountCents:500,currency:'EUR'});
+  await bindShopPaymentProvider(pool,{orderId,companyId,providerReference:'tr_parent'});
+  await recordShopPaymentEvent(pool,{orderId,companyId,event:{id:'tr_parent',kind:'paid',amountCents:500,providerReference:'tr_parent',verified:true}});
+  const args={pool,orderId,companyId,refundId:'re_parent',fetchProviderRefund:async()=>({id:'re_parent',paymentId:'tr_parent',currency:'EUR',amountCents:500,status:'refunded'})};
+  await assert.rejects(reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId:'other',currency:'EUR'})}),/PARENT_PAYMENT_MISMATCH/);
+  assert.equal((await reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId,currency:'EUR'})})).snapshot.status,'refunded');
+ }finally{await db.close()}
+});
