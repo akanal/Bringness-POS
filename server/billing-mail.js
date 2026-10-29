@@ -7,7 +7,7 @@ export async function recordBillingMail(c,tx,status){
  if(status==='paid'&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) VALUES($1,'invoice',now()) ON CONFLICT(transaction_id) DO UPDATE SET kind='invoice',due_at=now()",[tx.id]);
  else if(status==='failed'&&tx.mollie_subscription_id&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) SELECT id,'reminder',now()+interval '7 days' FROM billing_transactions WHERE id=$1 AND created_at>now()-interval '1 day' ON CONFLICT DO NOTHING",[tx.id]);
 }
-const rowSql=`SELECT bt.*,bp.name,e.kind,e.created_at event_at,u.email,c.customer_number FROM billing_mail_events e JOIN billing_transactions bt ON bt.id=e.transaction_id JOIN billing_plans bp ON bp.id=bt.plan_id JOIN companies c ON c.id=bt.company_id JOIN LATERAL(SELECT email FROM users WHERE company_id=bt.company_id AND role='owner' AND status='active' ORDER BY created_at,id LIMIT 1) u ON true`;
+const rowSql=`SELECT bt.*,bp.name,e.kind,e.created_at event_at,u.email,(SELECT to_jsonb(c)->>'customer_number' FROM companies c WHERE c.id=bt.company_id) AS customer_number FROM billing_mail_events e JOIN billing_transactions bt ON bt.id=e.transaction_id JOIN billing_plans bp ON bp.id=bt.plan_id JOIN LATERAL(SELECT email FROM users WHERE company_id=bt.company_id AND role='owner' AND status='active' ORDER BY created_at,id LIMIT 1) u ON true`;
 export function createBillingMail(pool,{env=process.env,fetchPayment=fetch}={}){
  let running=false;
  const origin=()=>{const u=new URL(env.PUBLIC_BASE_URL||'https://bringness.de');if(u.protocol!=='https:')throw Error('PUBLIC_ORIGIN_INVALID');return u.origin};
