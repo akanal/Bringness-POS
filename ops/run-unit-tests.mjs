@@ -6,10 +6,13 @@ import {fileURLToPath} from 'node:url';
 // Keep the default test command runnable after the documented root npm ci.
 const root=fileURLToPath(new URL('../',import.meta.url));
 const dedicated=new Set(['center-browser.test.js','center-database.test.js','pos-payment-browser.test.js']);
+// PGlite-backed suites run in the isolated shop-payment CI job, which installs
+// the test-only dependency without changing production npm dependencies.
+const shopDatabaseTests=new Set(['shop-mollie-notification-service.test.js','shop-payment-ledger-pg.test.js','shop-payment-provider-sync.test.js','shop-payment-refund-sync.test.js']);
 const files=[];
 for(const directory of ['server','tests']){
  for(const name of (await readdir(new URL('../'+directory+'/',import.meta.url))).sort()){
-  if(/\.test\.(js|mjs)$/.test(name)&&!dedicated.has(name))files.push(directory+'/'+name);
+  if(/\.test\.(js|mjs)$/.test(name)&&!dedicated.has(name)&&!shopDatabaseTests.has(name))files.push(directory+'/'+name);
  }
 }
 if(!files.length)throw Error('No unit tests found');
