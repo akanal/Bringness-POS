@@ -1,8 +1,8 @@
 import {reconcileShopRefund} from './shop-payment-refund-sync.js';
 // Explicitly unmounted. Mollie payment webhooks do not prove refunds;
 // only an authenticated server job should supply refund IDs from Mollie.
-export async function reconcileShopRefundNotifications({pool,orderId,companyId,fetchProviderRefund,listProviderRefunds}){
- if(typeof listProviderRefunds!=='function'||typeof fetchProviderRefund!=='function')throw Error('REFUND_PROVIDER_ADAPTER_REQUIRED');
+export async function reconcileShopRefundNotifications({pool,orderId,companyId,fetchProviderRefund,listProviderRefunds,fetchProviderPayment}){
+ if(typeof listProviderRefunds!=='function'||typeof fetchProviderRefund!=='function'||typeof fetchProviderPayment!=='function')throw Error('REFUND_PROVIDER_ADAPTER_REQUIRED');
  const result=await pool.query('SELECT provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2',[orderId,companyId]);
  const paymentId=result.rows[0]?.provider_reference;
  if(!paymentId)throw Error('REFUND_PAYMENT_NOT_FOUND');
@@ -23,7 +23,7 @@ export async function reconcileShopRefundNotifications({pool,orderId,companyId,f
   if(seen.has(id))continue;
   seen.add(id);
   if(refund.status!=='refunded')continue;
-  outcomes.push(await reconcileShopRefund({pool,orderId,companyId,refundId:id,fetchProviderRefund}));
+  outcomes.push(await reconcileShopRefund({pool,orderId,companyId,refundId:id,fetchProviderRefund,fetchProviderPayment}));
  }
  return outcomes;
 }
