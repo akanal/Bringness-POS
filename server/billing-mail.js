@@ -2,12 +2,7 @@ import {providerEuroCents} from './provider-money.js';
 import PDFDocument from 'pdfkit';
 import {enqueueMail} from './transactional-mail.js';
 import {billingMail} from './mail-templates.js';
-export async function migrateBillingMail(pool){await pool.query(`CREATE SEQUENCE IF NOT EXISTS bringness_customer_number_seq START WITH 100001;
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS customer_number bigint;
-ALTER TABLE companies ALTER COLUMN customer_number SET DEFAULT nextval('bringness_customer_number_seq');
-UPDATE companies SET customer_number=nextval('bringness_customer_number_seq') WHERE customer_number IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS companies_customer_number_unique ON companies(customer_number);
-CREATE TABLE IF NOT EXISTS billing_mail_events(transaction_id uuid PRIMARY KEY REFERENCES billing_transactions(id) ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('invoice','reminder')),created_at timestamptz NOT NULL DEFAULT now(),due_at timestamptz NOT NULL);`)}
+export async function migrateBillingMail(pool){await pool.query(`CREATE TABLE IF NOT EXISTS billing_mail_events(transaction_id uuid PRIMARY KEY REFERENCES billing_transactions(id) ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('invoice','reminder')),created_at timestamptz NOT NULL DEFAULT now(),due_at timestamptz NOT NULL);`)}
 export async function recordBillingMail(c,tx,status){
  if(status==='paid'&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) VALUES($1,'invoice',now()) ON CONFLICT(transaction_id) DO UPDATE SET kind='invoice',due_at=now()",[tx.id]);
  else if(status==='failed'&&tx.mollie_subscription_id&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) SELECT id,'reminder',now()+interval '7 days' FROM billing_transactions WHERE id=$1 AND created_at>now()-interval '1 day' ON CONFLICT DO NOTHING",[tx.id]);
