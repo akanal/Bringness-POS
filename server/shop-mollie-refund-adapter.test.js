@@ -11,7 +11,7 @@ test('read-only refund fetcher retrieves provider facts',async()=>{
  assert.equal(options.method,'GET');
 });
 test('refund fetcher rejects malformed IDs, amounts and provider failures',async()=>{
- const invalid=createShopMollieRefundFetcher({apiKey,fetchImpl:async()=>({ok:true,json:async()=>({amount:{value:'3.500',currency:'EUR'}})})});
+ const invalid=createShopMollieRefundFetcher({apiKey,fetchImpl:async()=>({ok:true,json:async()=>({id:'re_456',paymentId:'tr_123',amount:{value:'3.500',currency:'EUR'}})})});
  await assert.rejects(invalid('tr_123','re_456'),/AMOUNT_INVALID/);
  await assert.rejects(invalid('tr_123','bad'),/REFERENCE_INVALID/);
  const failed=createShopMollieRefundFetcher({apiKey,fetchImpl:async()=>({ok:false})});
