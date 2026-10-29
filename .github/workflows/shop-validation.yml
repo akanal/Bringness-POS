@@ -46,6 +46,12 @@ jobs:
           SHOP_DESIGN_ARTIFACTS: ${{ runner.temp }}/shop-design
           SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs
 
+      - name: Protected merchant and customer TEST checkout in native browser
+        run: node ops/shop/marketplace-payment-browser.mjs
+        env:
+          SHOP_DESIGN_ARTIFACTS: ${{ runner.temp }}/shop-design
+          SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs
+
       - name: Save public marketplace design previews
         if: always()
         uses: actions/upload-artifact@v4
