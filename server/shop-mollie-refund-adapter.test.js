@@ -17,3 +17,13 @@ test('refund fetcher rejects malformed IDs, amounts and provider failures',async
  const failed=createShopMollieRefundFetcher({apiKey,fetchImpl:async()=>({ok:false})});
  await assert.rejects(failed('tr_123','re_456'),/FETCH_FAILED/);
 });
+
+test('refund fetcher rejects mismatched provider refund and payment IDs',async()=>{
+ for(const payload of [
+  {id:'re_other',paymentId:'tr_123'},
+  {id:'re_456',paymentId:'tr_other'}
+ ]){
+  const fetchRefund=createShopMollieRefundFetcher({apiKey,fetchImpl:async()=>({ok:true,json:async()=>({...payload,amount:{value:'3.50',currency:'EUR'},status:'refunded'})})});
+  await assert.rejects(fetchRefund('tr_123','re_456'),/REFERENCE_MISMATCH/);
+ }
+});
