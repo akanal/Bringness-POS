@@ -21,6 +21,7 @@ export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,
    const paidAmount=paidEvents.reduce((sum,event)=>sum+event.amountCents,0);
    if(!Number.isSafeInteger(paidAmount)||paidAmount!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
    if(kind==='invoice'){
+    if(!Number.isSafeInteger(content.totalCents)||content.totalCents!==Number(row.amount_cents)||row.snapshot.amountCents!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_AMOUNT_MISMATCH');
     const existing=await db.query("SELECT id FROM shop_document_records WHERE order_id=$1 AND company_id=$2 AND kind='invoice'",[orderId,companyId]);
     if(existing.rows.length)throw Error('SHOP_DOCUMENT_INVOICE_ALREADY_EXISTS');
    }
