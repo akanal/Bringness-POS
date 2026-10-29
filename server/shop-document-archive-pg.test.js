@@ -4,7 +4,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {migrateShopDocumentRecords} from './shop-document-record-pg.js';
 import {migrateShopDocumentArchive,archiveShopDocument,verifyArchivedShopDocument} from './shop-document-archive-pg.js';
 const companyId='11111111-1111-4111-8111-111111111111',orderId='33333333-3333-4333-8333-333333333333',documentId='44444444-4444-4444-8444-444444444444';
-test('archive stores one digest and detects altered payload',async()=>{
+test('archive stores one digest and blocks mutations',async()=>{
  const db=new PGlite();
  try{
   await migrateShopDocumentRecords(db);await migrateShopDocumentArchive(db);
@@ -12,7 +12,8 @@ test('archive stores one digest and detects altered payload',async()=>{
   await archiveShopDocument(db,{documentId,payload:{invoice:'INV-2026-000000001',totalCents:1190}});
   assert.equal(await verifyArchivedShopDocument(db,documentId),true);
   await assert.rejects(archiveShopDocument(db,{documentId,payload:{totalCents:1190}}),/ALREADY_EXISTS/);
-  await db.query('UPDATE shop_document_archive SET payload=$1 WHERE document_id=$2',[{invoice:'INV-2026-000000001',totalCents:1191},documentId]);
-  assert.equal(await verifyArchivedShopDocument(db,documentId),false);
+  await assert.rejects(db.query('UPDATE shop_document_archive SET payload=$1 WHERE document_id=$2',[{invoice:'INV-2026-000000001',totalCents:1191},documentId]),/SHOP_ARCHIVE_IMMUTABLE/);
+  await assert.rejects(db.query('DELETE FROM shop_document_archive WHERE document_id=$1',[documentId]),/SHOP_ARCHIVE_IMMUTABLE/);
+  assert.equal(await verifyArchivedShopDocument(db,documentId),true);
  }finally{await db.close();}
 });
