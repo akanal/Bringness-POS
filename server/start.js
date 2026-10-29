@@ -1,3 +1,4 @@
+import {migrateMerchantCustomerNumbers} from './merchant-customer-numbers.js';
 import {configuredIdriveDocumentStore} from './idrive-document-store.js';
 import {createShopDocumentsRuntime} from './shop-documents-http.js';
 import {createMarketplaceRuntime} from './shop-marketplace-http.js';
@@ -244,6 +245,7 @@ async function migrateWithRetry(){
       await migratePaymentCheckout(platformGatewayPool);
       await migrateTableSettlement(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
+      await migrateMerchantCustomerNumbers(platformGatewayPool);
       await migrateStaffInvitations();
       try{await documentsRuntime.migrate();}catch{console.error('Private document migrations unavailable; uploads remain closed.');}
       try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
