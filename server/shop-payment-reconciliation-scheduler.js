@@ -10,7 +10,7 @@ export function startMarketplaceReconciliation({reconcile,intervalMs=60000,limit
    let result;
    try{const r=await reconcile({limit});result={ok:true,checked:r.checked,failed:r.failed,busy:r.busy===true};}
    catch{result={ok:false,code:'MARKET_RECONCILIATION_UNAVAILABLE'};}
-   try{onResult(result);}catch{/* Observability must not stop payment recovery. */}
+   try{Promise.resolve(onResult(result)).catch(()=>{});}catch{/* Observability must not stop payment recovery. */}
    return result;
   })().finally(()=>{running=null;schedule();});return running;
  }

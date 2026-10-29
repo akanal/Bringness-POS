@@ -11,7 +11,7 @@ test('scheduler is explicit, nonoverlapping, waits after work and drains on stop
  assert.equal(c.timers.size,0);assert.deepEqual(seen,[{ok:true,checked:1,failed:0,busy:false}]);assert.deepEqual(await scheduler.tick(),{stopped:true});assert.equal(calls,1);
 });
 test('worker errors and observer failures neither leak secrets nor stop scheduling',async()=>{
- const c=clock();const scheduler=startMarketplaceReconciliation({...c,reconcile:async()=>{throw Error('secret');},onResult:()=>{throw Error('observer');}});
+ const c=clock();const scheduler=startMarketplaceReconciliation({...c,reconcile:async()=>{throw Error('secret');},onResult:async()=>{throw Error('observer');}});
  assert.deepEqual(await scheduler.tick(),{ok:false,code:'MARKET_RECONCILIATION_UNAVAILABLE'});assert.equal(c.timers.size,1);await scheduler.stop();assert.equal(c.timers.size,0);
 });
 test('scheduler rejects unsafe cadence and unbounded batches',()=>{
