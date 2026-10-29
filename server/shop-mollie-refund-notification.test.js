@@ -13,3 +13,11 @@ test('pending refunds are skipped and duplicates ignored',async()=>{
  const result=await reconcileShopRefundNotifications({...base,listProviderRefunds:async id=>{assert.equal(id,'tr_123');return [{id:'re_1',status:'pending'},{id:'re_1',status:'pending'}]}});
  assert.deepEqual(result,[]);
 });
+
+test('invalid later refund prevents any provider fetch or ledger mutation',async()=>{
+ let fetched=0;
+ await assert.rejects(reconcileShopRefundNotifications({...base,fetchProviderRefund:async()=>{fetched++;return {};},listProviderRefunds:async()=>[{id:'re_1',status:'refunded'},{id:'invalid',status:'refunded'}]}),/REFERENCE_INVALID/);
+ assert.equal(fetched,0);
+ await assert.rejects(reconcileShopRefundNotifications({...base,fetchProviderRefund:async()=>{fetched++;return {};},listProviderRefunds:async()=>[{id:'re_1',status:'refunded'},{id:'re_2',status:'unexpected'}]}),/STATUS_INVALID/);
+ assert.equal(fetched,0);
+});
