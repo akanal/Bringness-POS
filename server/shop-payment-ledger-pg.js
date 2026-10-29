@@ -6,6 +6,7 @@ export async function migrateShopPaymentLedger(pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS shop_payment_ledger(
  order_id uuid PRIMARY KEY,
  company_id uuid NOT NULL,
+ provider_reference text UNIQUE,
  amount_cents bigint NOT NULL CHECK(amount_cents>0),
  currency text NOT NULL CHECK(currency='EUR'),
  snapshot jsonb NOT NULL,
@@ -20,12 +21,25 @@ export async function initializeShopPaymentLedger(pool,{orderId,companyId,amount
  if(!row||row.company_id!==companyId||Number(row.amount_cents)!==amountCents||row.currency!==currency)throw Error('PAYMENT_LEDGER_CONFLICT');
  return row.snapshot;
 }
+export async function bindShopPaymentProvider(pool,{orderId,companyId,providerReference}){
+ if(typeof providerReference!=='string'||!/^[A-Za-z0-9_-]{3,160}$/.test(providerReference))throw Error('PAYMENT_PROVIDER_REFERENCE_INVALID');
+ const db=await pool.connect();
+ try{
+  await db.query('BEGIN');
+  const row=(await db.query('SELECT provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId])).rows[0];
+  if(!row)throw Error('PAYMENT_ORDER_NOT_FOUND');
+  if(row.provider_reference&&row.provider_reference!==providerReference)throw Error('PAYMENT_PROVIDER_REFERENCE_CONFLICT');
+  if(!row.provider_reference)await db.query('UPDATE shop_payment_ledger SET provider_reference=$3 WHERE order_id=$1 AND company_id=$2',[orderId,companyId,providerReference]);
+  await db.query('COMMIT');return {orderId,providerReference};
+ }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
+}
 export async function recordShopPaymentEvent(pool,{orderId,companyId,event}){
  const db=await pool.connect();
  try{
   await db.query('BEGIN');
-  const row=(await db.query('SELECT snapshot FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId])).rows[0];
+  const row=(await db.query('SELECT snapshot,provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId])).rows[0];
   if(!row)throw Error('PAYMENT_ORDER_NOT_FOUND');
+  if(!row.provider_reference||row.provider_reference!==event?.providerReference)throw Error('PAYMENT_PROVIDER_REFERENCE_MISMATCH');
   const result=applyShopPaymentEvent(row.snapshot,event);
   if(!result.replay)await db.query('UPDATE shop_payment_ledger SET snapshot=$3,updated_at=now() WHERE order_id=$1 AND company_id=$2',[orderId,companyId,result.snapshot]);
   await db.query('COMMIT');return result;
