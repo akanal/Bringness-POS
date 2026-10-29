@@ -38,7 +38,9 @@ export function createMarketplaceConnections(pool,{clientId,clientSecret,tokenKe
  }catch{fail('MARKET_MERCHANT_NOT_CONNECTED');}}
  async function tx(session,fn){const db=await pool.connect();try{
   await db.query('BEGIN');await db.query("SET LOCAL statement_timeout='5s'");
-  const first=await shopActor(db,session);await db.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE',[first.company_id]);
+  const first=await shopActor(db,session);// Serialize merchant changes without blocking foreign-key KEY SHARE locks
+  // from checkout inserts that already hold a seller SHARE lock.
+  await db.query('SELECT id FROM companies WHERE id=$1 FOR NO KEY UPDATE',[first.company_id]);
   const actor=await shopActor(db,session,true);if(actor.company_id!==first.company_id)fail('ACCOUNT_CHANGED');
   const seller=(await db.query("SELECT 1 FROM shop_market_sellers WHERE company_id=$1 AND status='approved' FOR UPDATE",[actor.company_id])).rows[0];
   if(!seller)fail('SELLER_NOT_APPROVED');const r=await fn(db,actor.company_id);await db.query('COMMIT');return r;
