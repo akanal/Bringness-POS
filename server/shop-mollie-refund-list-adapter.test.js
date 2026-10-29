@@ -12,6 +12,8 @@ test('lists refunds from server-side Mollie API',async()=>{
 test('rejects invalid references, incomplete pagination, and bad responses',async()=>{
  const list=createShopMollieRefundLister({apiKey,fetchImpl:async()=>({ok:true,json:async()=>({_embedded:{refunds:[]},_links:{next:{href:'https://example.invalid/next'}}})})});
  await assert.rejects(list('tr_123'),/PAGINATION_REQUIRED/);
+ const truncated=createShopMollieRefundLister({apiKey,fetchImpl:async()=>({ok:true,json:async()=>({count:2,_embedded:{refunds:[{id:'re_1',status:'refunded'}]}})})});
+ await assert.rejects(truncated('tr_123'),/PAGINATION_REQUIRED/);
  await assert.rejects(list('invalid'),/REFERENCE_INVALID/);
  const failed=createShopMollieRefundLister({apiKey,fetchImpl:async()=>({ok:false})});
  await assert.rejects(failed('tr_123'),/FETCH_FAILED/);
