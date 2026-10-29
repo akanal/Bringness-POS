@@ -8,7 +8,15 @@ export async function reconcileShopRefundNotifications({pool,orderId,companyId,f
  if(!paymentId)throw Error('REFUND_PAYMENT_NOT_FOUND');
  const refunds=await listProviderRefunds(paymentId);
  if(!Array.isArray(refunds)||refunds.length>100)throw Error('REFUND_PROVIDER_RESPONSE_INVALID');
- const seen=new Set();const outcomes=[];
+ const seen=new Set();
+ // Preflight the entire provider page so malformed later entries cannot cause
+ // an earlier refund to be committed before validation fails.
+ for(const refund of refunds){
+  const id=refund?.id;
+  if(typeof id!=='string'||!/^re_[A-Za-z0-9]+$/.test(id))throw Error('REFUND_REFERENCE_INVALID');
+  if(typeof refund.status!=='string'||!['queued','pending','processing','refunded','failed','canceled'].includes(refund.status))throw Error('REFUND_STATUS_INVALID');
+ }
+ const outcomes=[];
  for(const refund of refunds){
   const id=refund?.id;
   if(typeof id!=='string'||!/^re_[A-Za-z0-9]+$/.test(id))throw Error('REFUND_REFERENCE_INVALID');
