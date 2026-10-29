@@ -4,6 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import pg from 'pg';
 import {migrateMarketplace} from './shop-marketplace.js';
 import {createMarketplaceCheckout} from './shop-payment-marketplace-checkout.js';
+import {createMarketplaceMollieTestResolver} from './shop-mollie-marketplace-test-adapter.js';
 
 const connectionString=process.env.MARKET_CHECKOUT_TEST_DATABASE_URL;
 test('real PostgreSQL simultaneous checkout attempts and shared request IDs remain single-dispatch', {skip:!connectionString},async()=>{
@@ -29,10 +30,23 @@ test('real PostgreSQL simultaneous checkout attempts and shared request IDs rema
    await pool.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[buyer,request,'test',id,{}]);
   }
   let calls=0;
-  const provider={mode:'test',sellerCompanyId:seller,merchantId:'fixture-merchant',
-   async createPayment(c){calls++;await new Promise(r=>setTimeout(r,50));return {id:'tr_'+c.orderId.replaceAll('-',''),mode:'test',merchantId:c.merchantId,orderId:c.orderId,amountCents:c.amountCents,currency:'EUR',status:'open',checkoutUrl:'https://checkout.mollie.com/test'};},
-   async fetchPayment(){throw Error('not needed');},async recoverPayment(){return null;}};
-  const checkout=createMarketplaceCheckout(pool,{resolveProvider:async()=>provider});
+  const binding={kind:'mollie-oauth',mode:'test',status:'verified',sellerCompanyId:seller,connectionId:randomUUID(),merchantId:'org_fixture',profileId:'pfl_fixture'};
+  const resolver=createMarketplaceMollieTestResolver({publicOrigin:'https://bringness.de',
+   loadConnection:async()=>binding,withAccessToken:async(sellerId,revision,fn)=>{assert.equal(sellerId,seller);assert.equal(revision,binding.connectionId);return fn('access_postgres_isolated_fixture');},
+   fetcher:async(url,options)=>{
+    const path=new URL(url).pathname;let value;
+    if(path==='/v2/organizations/me')value={id:binding.merchantId};
+    else if(path==='/v2/profiles/'+binding.profileId)value={id:binding.profileId,status:'verified'};
+    else{
+     assert.equal(options.method,'POST');calls++;const body=JSON.parse(options.body);
+     assert.equal(body.testmode,true);assert.equal(body.amount.value,'11.90');
+     await new Promise(r=>setTimeout(r,50));
+     value={resource:'payment',id:'tr_'+body.metadata.marketOrderId.replaceAll('-',''),mode:'test',profileId:binding.profileId,
+      status:'open',sequenceType:'oneoff',amount:body.amount,metadata:body.metadata,_links:{checkout:{href:'https://checkout.mollie.com/test'}}};
+    }
+    return Response.json(value);
+   }});
+  const checkout=createMarketplaceCheckout(pool,{resolveProvider:resolver});
   const requests=await Promise.all(Array.from({length:8},()=>checkout.start({token:'buyer-fixture',orderId,requestId:randomUUID()})));
   assert.equal(calls,1);assert.ok(requests.every(r=>['open','uncertain'].includes(r.paymentStatus)));
   const count=await pool.query('SELECT count(*)::int AS n FROM shop_market_test_checkouts');assert.equal(count.rows[0].n,1);

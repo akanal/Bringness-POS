@@ -122,3 +122,39 @@ test('HTTP checkout requires same origin, exact command and authenticated owner;
   assert.equal((await post('/checkout',body)).status,409);
  }finally{if(server)await new Promise(r=>server.close(r));await f.db.close();}
 });
+
+test('marketplace service and HTTP recover a lost Mollie adapter reply with one POST and no fulfilment',async()=>{
+ const {createMarketplaceMollieTestResolver}=await import('./shop-mollie-marketplace-test-adapter.js');
+ const f=await setup();let server;
+ try{
+  const binding={kind:'mollie-oauth',mode:'test',status:'verified',sellerCompanyId:f.a,connectionId:randomUUID(),merchantId:'org_fixture',profileId:'pfl_fixture'};
+  let providerPayment,creates=0,loseReply=true;const requests=[];
+  const resolver=createMarketplaceMollieTestResolver({publicOrigin:'https://bringness.de',
+   loadConnection:async()=>binding,withAccessToken:async(seller,revision,fn)=>{assert.equal(seller,f.a);assert.equal(revision,binding.connectionId);return fn('access_isolated_test_fixture');},
+   fetcher:async(url,options)=>{
+    const u=new URL(url);requests.push({url,method:options.method});let value;
+    if(u.pathname==='/v2/organizations/me')value={id:binding.merchantId};
+    else if(u.pathname==='/v2/profiles/'+binding.profileId)value={id:binding.profileId,status:'verified'};
+    else if(options.method==='POST'){
+     creates++;const body=JSON.parse(options.body);assert.equal(body.testmode,true);assert.equal(body.amount.value,'11.90');
+     providerPayment={resource:'payment',id:'tr_molliefixture',mode:'test',profileId:binding.profileId,status:'open',sequenceType:'oneoff',amount:body.amount,metadata:body.metadata,_links:{checkout:{href:'https://checkout.mollie.com/test'}}};
+     if(loseReply)throw Error('lost response');value=providerPayment;
+    }else if(u.pathname==='/v2/payments')value={count:1,_embedded:{payments:[providerPayment]},_links:{next:null}};
+    else value=providerPayment;
+    return Response.json(value);
+   }});
+  const checkout=createMarketplaceCheckout(f.pool,{resolveProvider:resolver});
+  await assert.rejects(checkout.start(f.args),/MARKET_PAYMENT_UNCERTAIN/);assert.equal(creates,1);
+  // Recreate the HTTP runtime: no in-memory dispatch or payment state survives.
+  const runtime=createMarketplaceRuntime(f.pool,{enabled:true,checkoutProviderResolver:resolver});await runtime.migrate();
+  server=http.createServer(async(req,res)=>{if(!await runtime.handle(req,res)){res.statusCode=404;res.end();}});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port+'/api/v1/shop/marketplace';
+  const post=async(path,body)=>fetch(base+path,{method:'POST',headers:{Origin:'https://bringness.de','Content-Type':'application/json',Authorization:'Bearer owner-b'},body:JSON.stringify(body)});
+  const retry=await post('/checkout',{orderId:f.orderId,requestId:randomUUID()});assert.equal(retry.status,200);assert.equal((await retry.json()).paymentStatus,'uncertain');assert.equal(creates,1);
+  loseReply=false;const recovered=await post('/checkout-refresh',{orderId:f.orderId});assert.equal(recovered.status,200);assert.equal((await recovered.json()).paymentStatus,'open');assert.equal(creates,1);
+  providerPayment.status='paid';const paid=await (await post('/checkout-refresh',{orderId:f.orderId})).json();assert.equal(paid.paymentStatus,'paid');assert.equal(paid.canPay,false);assert.equal(paid.canFulfil,false);
+  await assert.rejects(transitionMarketplaceOrder(f.pool,{token:'owner-a',command:{orderId:f.orderId,requestId:randomUUID(),expectedRevision:0,action:'accept'}}),/MARKET_TEST_CHECKOUT_ACTIVE/);
+  assert.ok(requests.every(r=>new URL(r.url).origin==='https://api.mollie.com'));assert.equal(creates,1);
+  const events=(await f.db.query('SELECT state FROM shop_market_test_checkout_events ORDER BY id')).rows.map(r=>r.state);assert.deepEqual(events,['prepared','uncertain','open','paid']);
+ }finally{if(server)await new Promise(r=>server.close(r));await f.db.close();}
+});
