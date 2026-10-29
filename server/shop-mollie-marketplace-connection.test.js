@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import http from 'node:http';
 import {fixture} from '../ops/shop/fixture.mjs';
 import {migrateMarketplace} from './shop-marketplace.js';
@@ -13,12 +13,13 @@ import {marketplaceInbox,transitionMarketplaceOrder} from './shop-marketplace-or
 async function setup(){
  const f=await fixture();await migrateMarketplace(f.pool);await migrateMarketplaceConnections(f.pool);
  for(const c of [f.a,f.b])await f.db.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved',$2)",[c,{name:'Fixture',street:'Testweg 1',postalCode:'10115',city:'Berlin',country:'DE',email:'test@example.test'}]);
- const calls=[];let refreshes=0,posts=0,current,lose=false,failRefresh=false,badToken=false;
+ const calls=[];let refreshes=0,posts=0,current,lose=false,failRefresh=false,badToken=false,onExchange;
  const tokens=()=>({access_token:'access_isolated_fixture_'+refreshes,refresh_token:'refresh_isolated_fixture_'+refreshes,expires_in:3600,token_type:'bearer',scope:'organizations.read profiles.read payments.read payments.write'});
  const fetcher=async(url,opts={})=>{
   calls.push({url,method:opts.method||'GET'});const u=new URL(url);assert.equal(u.origin,'https://api.mollie.com');assert.equal(opts.redirect,'error');
   if(u.pathname==='/oauth2/tokens'){
    const p=new URLSearchParams(opts.body);assert.match(opts.headers.Authorization,/^Basic /);
+   if(onExchange)await onExchange(p);
    if(p.get('grant_type')==='refresh_token'){refreshes++;if(failRefresh)return Response.json({error:'fixture provider secret must not leak'},{status:400});}
    return Response.json(badToken?{...tokens(),access_token:'live_forbidden'}:tokens());
   }
@@ -37,7 +38,7 @@ async function setup(){
  const integration=createMarketplaceTestIntegration(f.pool,config),service=integration.merchantConnections;
  async function connect(){const start=await service.begin({token:'owner-a'}),state=new URL(start.authorizationUrl).searchParams.get('state');await service.complete({state,code:'fixture_code',browserNonce:start.browserNonce});return service.verify({token:'owner-a',profileId:'pfl_fixture'});}
  async function order(){const id=randomUUID();await f.db.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[id,f.a,randomUUID(),{reference:'Fixture order',grossCents:1190,netCents:1000,vatCents:190,currency:'EUR',lines:[]},{method:'shipping'}]);await f.db.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[f.b,randomUUID(),'fixture',id,{}]);return {orderId:id,token:'owner-b',requestId:randomUUID()};}
- return {...f,config,service,integration,connect,order,calls,get refreshes(){return refreshes;},get posts(){return posts;},get current(){return current;},set current(x){current=x;},set lose(x){lose=x;},set failRefresh(x){failRefresh=x;},set badToken(x){badToken=x;}};
+ return {...f,config,service,integration,connect,order,calls,get refreshes(){return refreshes;},get posts(){return posts;},get current(){return current;},set current(x){current=x;},set lose(x){lose=x;},set failRefresh(x){failRefresh=x;},set badToken(x){badToken=x;},set onExchange(x){onExchange=x;}};
 }
 test('consent is bound to browser, session and approved seller, single use with encrypted credentials',async()=>{
  const f=await setup();try{
@@ -123,4 +124,72 @@ test('HTTP consent cookie, callback, exact input, cross-site guards and untruste
   assert.equal((await f.db.query('SELECT state FROM shop_market_test_checkouts')).rows[0].state,'paid');
   const fake=await fetch(base+'/checkout-notification',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id=tr_connectionfixture&status=paid'});assert.equal(fake.status,400);assert.equal(f.posts,1);
  }finally{if(server)await new Promise(r=>server.close(r));await f.db.close();}
+});
+
+// Hold provider I/O outside any SQL transaction so invalidation order is explicit.
+async function heldConsent(f){
+ let entered,release;
+ const started=new Promise(r=>{entered=r;}),gate=new Promise(r=>{release=r;});
+ f.onExchange=async()=>{entered();await gate;};
+ const b=await f.service.begin({token:'owner-a'}),args={state:new URL(b.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:b.browserNonce};
+ const result=f.service.complete(args).then(value=>({value}),error=>({error}));
+ await started;f.onExchange=null;
+ return {args,result,release};
+}
+test('a newer consent attempt invalidates an in-flight callback without consuming the newer state',async()=>{
+ const f=await setup();let held;try{
+  held=await heldConsent(f);const next=await f.service.begin({token:'owner-a'});
+  held.release();assert.match((await held.result).error.message,/MARKET_CONNECT_STATE/);
+  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);
+  await f.service.complete({state:new URL(next.authorizationUrl).searchParams.get('state'),code:'new',browserNonce:next.browserNonce});
+  assert.equal((await f.service.verify({token:'owner-a',profileId:'pfl_fixture'})).status,'verified');
+  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_states')).rows.length,0);
+ }finally{held?.release();if(held)await held.result;await f.db.close();}
+});
+test('disconnect during OAuth exchange cannot be undone by the late callback',async()=>{
+ const f=await setup();let held;try{
+  await f.connect();const original=await f.service.loadConnection(f.a);held=await heldConsent(f);
+  await f.service.disconnect({token:'owner-a'});held.release();assert.match((await held.result).error.message,/MARKET_CONNECT_STATE/);
+  const row=(await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows[0];
+  assert.equal(row.connection_id,original.connectionId);assert.equal(row.status,'revoked');assert.equal(row.token_envelope,null);
+  assert.equal(f.posts,0);
+ }finally{held?.release();if(held)await held.result;await f.db.close();}
+});
+test('an older callback cannot replace a newer completed and verified connection',async()=>{
+ const f=await setup();let held;try{
+  held=await heldConsent(f);await f.connect();const current=await f.service.loadConnection(f.a);
+  held.release();assert.match((await held.result).error.message,/MARKET_CONNECT_STATE/);
+  assert.deepEqual(await f.service.loadConnection(f.a),current);assert.equal(current.status,'verified');
+ }finally{held?.release();if(held)await held.result;await f.db.close();}
+});
+test('consumed callback cannot replay during or after provider I/O',async()=>{
+ const f=await setup();let held;try{
+  held=await heldConsent(f);const before=f.calls.length;
+  await assert.rejects(f.service.complete(held.args),/MARKET_CONNECT_STATE/);assert.equal(f.calls.length,before);
+  held.release();assert.ok((await held.result).value.connected);
+  await assert.rejects(f.service.complete(held.args),/MARKET_CONNECT_STATE/);assert.equal(f.calls.length,before);
+ }finally{held?.release();if(held)await held.result;await f.db.close();}
+});
+for(const invalidation of ['expiry','session','seller'])test('callback rechecks '+invalidation+' after provider exchange',async()=>{
+ const f=await setup();let held;try{
+  held=await heldConsent(f);
+  if(invalidation==='expiry')await f.db.exec("UPDATE shop_market_mollie_states SET expires_at=clock_timestamp()-interval '1 second'");
+  if(invalidation==='session')await f.db.query("DELETE FROM sessions WHERE token_hash=$1",[createHash('sha256').update('owner-a').digest('hex')]);
+  if(invalidation==='seller')await f.db.query("UPDATE shop_market_sellers SET status='suspended' WHERE company_id=$1",[f.a]);
+  held.release();assert.match((await held.result).error.message,/MARKET_CONNECT_STATE|UNAUTHORIZED|SELLER_NOT_APPROVED/);
+  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);assert.equal(f.posts,0);
+ }finally{held?.release();if(held)await held.result;await f.db.close();}
+});
+test('migration upgrades existing states idempotently; failed token exchange remains single-use',async()=>{
+ const f=await setup();try{
+  const legacy=await f.service.begin({token:'owner-a'});
+  await f.db.exec('ALTER TABLE shop_market_mollie_states DROP COLUMN consumed_at');
+  await migrateMarketplaceConnections(f.pool);await migrateMarketplaceConnections(f.pool);
+  await f.service.complete({state:new URL(legacy.authorizationUrl).searchParams.get('state'),code:'legacy',browserNonce:legacy.browserNonce});
+  assert.equal((await f.service.status({token:'owner-a'})).status,'pending');
+  f.badToken=true;const next=await f.service.begin({token:'owner-a'}),args={state:new URL(next.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:next.browserNonce};
+  await assert.rejects(f.service.complete(args),/MARKET_CONNECT_FAILED/);const count=f.calls.length;
+  await assert.rejects(f.service.complete(args),/MARKET_CONNECT_STATE/);assert.equal(f.calls.length,count);
+  assert.equal((await f.db.query('SELECT consumed_at FROM shop_market_mollie_states')).rows.length,1);
+ }finally{await f.db.close();}
 });

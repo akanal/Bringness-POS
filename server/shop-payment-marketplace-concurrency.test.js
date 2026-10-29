@@ -72,9 +72,10 @@ test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are
   const seller=randomUUID(),buyer=randomUUID(),orderId=randomUUID();
   for(const [id,token]of [[seller,'merchant-fixture'],[buyer,'buyer-fixture']]){const user=randomUUID();await pool.query('INSERT INTO companies VALUES($1)',[id]);await pool.query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[user,id]);await pool.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[user,createHash('sha256').update(token).digest('hex')]);}
   await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved','{}')",[seller]);
-  let refreshes=0,posts=0,payment;
+  let refreshes=0,posts=0,payment,onExchange;
   const integration=createMarketplaceTestIntegration(pool,{publicOrigin:'https://bringness.de',clientId:'app_fixture',clientSecret:'fixture_not_real_secret',tokenKey:'ab'.repeat(32),fetcher:async(url,options)=>{
    const u=new URL(url);if(u.pathname==='/oauth2/tokens'){
+    if(onExchange)await onExchange(new URLSearchParams(options.body));
     if(new URLSearchParams(options.body).get('grant_type')==='refresh_token'){refreshes++;await new Promise(r=>setTimeout(r,50));}
     return Response.json({access_token:'access_postgres_fixture_'+refreshes,refresh_token:'refresh_postgres_fixture_'+refreshes,expires_in:3600,token_type:'bearer',scope:'organizations.read profiles.read payments.read payments.write'});
    }
@@ -85,6 +86,27 @@ test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are
    return Response.json(payment);
   }});
   const s=integration.merchantConnections,b=await s.begin({token:'merchant-fixture'});await s.complete({state:new URL(b.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:b.browserNonce});await s.verify({token:'merchant-fixture',profileId:'pfl_fixture'});
+  // Provider responses are held explicitly while independent transactions
+  // supersede or revoke consent. No timing assumption or real provider I/O.
+  const beginArgs=async()=>{const attempt=await s.begin({token:'merchant-fixture'});return {state:new URL(attempt.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:attempt.browserNonce};};
+  for(const action of ['new-attempt','new-connection','disconnect']){
+   let entered,release;const started=new Promise(r=>{entered=r;}),gate=new Promise(r=>{release=r;});
+   onExchange=async()=>{entered();await gate;};
+   const args=await beginArgs(),late=s.complete(args).then(value=>({value}),error=>({error}));
+   try{
+    await started;onExchange=null;
+    await assert.rejects(s.complete(args),/MARKET_CONNECT_STATE/);
+    const original=await s.loadConnection(seller);let next;
+    if(action==='disconnect')await s.disconnect({token:'merchant-fixture'});
+    else {next=await beginArgs();if(action==='new-connection'){await s.complete(next);await s.verify({token:'merchant-fixture',profileId:'pfl_fixture'});}}
+    const expected=await s.loadConnection(seller);
+    release();assert.match((await late).error.message,/MARKET_CONNECT_STATE/);
+    assert.deepEqual(await s.loadConnection(seller),expected);
+    if(action==='disconnect'){assert.equal(expected.status,'revoked');assert.equal(expected.connectionId,original.connectionId);next=await beginArgs();}
+    if(action!=='new-connection'){await s.complete(next);await s.verify({token:'merchant-fixture',profileId:'pfl_fixture'});}
+    assert.equal(posts,0);
+   }finally{release();await late;onExchange=null;}
+  }
   const binding=await s.loadConnection(seller);await pool.query("UPDATE shop_market_mollie_connections SET expires_at=now()-interval '1 second'");
   await Promise.all(Array.from({length:8},()=>s.withAccessToken(seller,binding.connectionId,async token=>assert.equal(token,'access_postgres_fixture_1'))));assert.equal(refreshes,1);
   await pool.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[orderId,seller,randomUUID(),{grossCents:1190,currency:'EUR'},{method:'shipping'}]);await pool.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[buyer,randomUUID(),'fixture',orderId,{}]);
