@@ -21,7 +21,7 @@ screens, startup configuration, protected secrets or production data.
    status, checkout URL, refund and chargeback flags. Return no OAuth credentials or raw
    provider metadata to callers; paid test results do not release goods.
 7. Use the existing fixed Mollie HTTPS transport with redirect rejection, timeouts,
-   bounded response size and required JSON content type. Errors remain uncertain.
+   bounded response size and required JSON or HAL+JSON content type. Errors remain uncertain.
 8. Recover by bounded read-only payment pagination followed by an exact payment fetch.
    Inspect all visited pages for conflicting/duplicate intents, reject incomplete lists,
    reconstruct fixed-host next-page requests and stop on loops or scan exhaustion.
@@ -53,6 +53,7 @@ again by its ID and verified against the original command before attachment.
 ## Primary API references checked on 2026-10-29
 
 - https://docs.mollie.com/reference/create-payment
+- https://docs.mollie.com/reference/get-payment
 - https://docs.mollie.com/reference/list-payments
 - https://docs.mollie.com/reference/api-idempotency
 - https://docs.mollie.com/reference/authentication
@@ -64,12 +65,14 @@ integration uses OAuth rather than asking third-party merchants to provide API k
 
 ## Validation
 
-- Local adapter/protocol and checkout integration tests passed (18 adapter tests plus
+- Local adapter/protocol and checkout integration tests passed (20 adapter tests plus
   nine service/HTTP/database tests in the combined payment run).
-- Complete local payment/document/refund suite: 97 tests, 96 passed, zero failures;
+- Complete local payment/document/refund suite: 99 tests, 98 passed, zero failures;
   one PostgreSQL-only test skipped because no isolated local database is configured.
-- General project unit suite: 657 passed, zero failures/skips.
+- General project unit suite: 659 passed, zero failures/skips.
+- Focused adapter + actual service/HTTP integration suite: 29 passed, no failures/skips.
 - Syntax and whitespace checks passed. Provider requests used isolated mocks only.
 - The previous backend package passed all six GitHub workflows on a14e8f3; the
-  updated adapter/PostgreSQL concurrency acceptance remains pending CI.
+  first adapter revision d05519c passed 97 payment checks including real PostgreSQL
+  concurrency; final HAL+JSON/query/pagination compatibility corrections remain pending CI.
 - No production service, merchant account, credential or payment was changed.

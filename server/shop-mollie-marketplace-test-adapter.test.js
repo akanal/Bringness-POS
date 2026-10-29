@@ -131,3 +131,20 @@ test('host connection/token callback failures are sanitized and missing callback
  const g=fixture();g.options.withAccessToken=async()=>{throw Error(token);};await assert.rejects((await g.adapter()).createPayment(g.command),e=>e.message==='MARKET_PAYMENT_UNCERTAIN');assert.equal(g.calls.length,0);
  const h=fixture();h.options.withAccessToken=async()=>({status:'paid'});await assert.rejects((await h.adapter()).createPayment(h.command),/MARKET_MERCHANT_NOT_CONNECTED/);assert.equal(h.calls.length,0);
 });
+test('Mollie HAL+JSON responses are accepted and get-payment sends only its documented testmode query',async()=>{
+ const f=fixture(),fetcher=f.options.fetcher;
+ f.options.fetcher=async(url,options)=>{
+  const u=new URL(url);
+  if(u.pathname.startsWith('/v2/payments/'))assert.deepEqual([...u.searchParams],[['testmode','true']]);
+  const response=await fetcher(url,options);response.headers.set('content-type','application/hal+json; charset=utf-8');return response;
+ };
+ const a=await f.adapter();await a.createPayment(f.command);assert.equal((await a.fetchPayment('tr_fixture')).id,'tr_fixture');
+});
+test('pagination may omit defaults while reconstructed requests retain exact merchant and test mode',async()=>{
+ const f=fixture();f.saved=f.raw();
+ f.customList=u=>{
+  assert.equal(u.searchParams.get('profileId'),'pfl_fixture');assert.equal(u.searchParams.get('testmode'),'true');assert.equal(u.searchParams.get('limit'),'50');assert.equal(u.searchParams.get('sort'),'desc');
+  return u.searchParams.has('from')?{count:1,_embedded:{payments:[f.raw()]},_links:{next:null}}:{count:0,_embedded:{payments:[]},_links:{next:{href:'https://api.mollie.com/v2/payments?from=tr_next'}}};
+ };
+ assert.equal((await (await f.adapter()).recoverPayment(f.command)).id,'tr_fixture');
+});

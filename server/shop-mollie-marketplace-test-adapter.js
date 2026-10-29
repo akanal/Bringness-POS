@@ -58,7 +58,7 @@ export function createMarketplaceMollieTestResolver({loadConnection,withAccessTo
       const response=await mollieFetch('https://api.mollie.com/v2/'+path,{method:body?'POST':'GET',
        headers:{Authorization:'Bearer '+token,Accept:'application/json',...(body?{'Content-Type':'application/json','Idempotency-Key':key}:{})},
        ...(body?{body:JSON.stringify(body)}:{})},fetcher);
-      if(!response.ok||!/^application\/json(?:\s*;|\s*$)/i.test(response.headers?.get?.('content-type')||''))throw Error();
+      if(!response.ok||!/^application\/(?:json|hal\+json)(?:\s*;|\s*$)/i.test(response.headers?.get?.('content-type')||''))throw Error();
       return await response.json();
      }catch{fail('MARKET_PAYMENT_UNCERTAIN');}
     }
@@ -71,7 +71,7 @@ export function createMarketplaceMollieTestResolver({loadConnection,withAccessTo
   }
   const query=()=>new URLSearchParams({profileId:binding.profileId,testmode:'true'});
   const getPayment=async(request,id,expected)=>{
-   const raw=await request('payments/'+id+'?'+query());
+   const raw=await request('payments/'+id+'?testmode=true');
    if(raw?.id!==id)fail('MARKET_PAYMENT_MISMATCH');return normalize(raw,binding,expected);
   };
   return Object.freeze({mode:'test',sellerCompanyId:seller,merchantId:binding.merchantId,
@@ -102,14 +102,14 @@ export function createMarketplaceMollieTestResolver({loadConnection,withAccessTo
       }
       const next=data._links?.next?.href;
       if(next==null)return found?getPayment(request,found,c):null;
-      // Never follow provider-supplied URLs. Validate a complete fixed query and
+      // Never follow provider-supplied URLs. Validate the allowed query and
       // reconstruct the next request; redirects cannot receive OAuth credentials.
       let nextUrl;try{nextUrl=new URL(next);}catch{fail('MARKET_RECOVERY_INCOMPLETE');}
       const keys=['profileId','testmode','limit','sort','from'];
       if(nextUrl.origin!=='https://api.mollie.com'||nextUrl.pathname!=='/v2/payments'||nextUrl.username||nextUrl.password||nextUrl.hash||
-       [...nextUrl.searchParams.keys()].some(k=>!keys.includes(k))||keys.some(k=>nextUrl.searchParams.getAll(k).length!==1)||
-       nextUrl.searchParams.get('profileId')!==binding.profileId||nextUrl.searchParams.get('testmode')!=='true'||
-       nextUrl.searchParams.get('limit')!=='50'||nextUrl.searchParams.get('sort')!=='desc'||!paymentId(nextUrl.searchParams.get('from')))fail('MARKET_RECOVERY_INCOMPLETE');
+       [...nextUrl.searchParams.keys()].some(k=>!keys.includes(k))||keys.some(k=>nextUrl.searchParams.getAll(k).length>1)||
+       ['profileId','testmode','limit','sort'].some(k=>nextUrl.searchParams.has(k)&&nextUrl.searchParams.get(k)!==({profileId:binding.profileId,testmode:'true',limit:'50',sort:'desc'})[k])||
+       nextUrl.searchParams.getAll('from').length!==1||!paymentId(nextUrl.searchParams.get('from')))fail('MARKET_RECOVERY_INCOMPLETE');
       from=nextUrl.searchParams.get('from');if(cursors.has(from))fail('MARKET_RECOVERY_INCOMPLETE');cursors.add(from);
      }
      fail('MARKET_RECOVERY_INCOMPLETE');
