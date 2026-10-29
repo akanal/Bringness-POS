@@ -7,6 +7,7 @@ export function assessShopCreditNote({snapshot,refundId,amountCents,originalInvo
  if(!Number.isSafeInteger(amountCents)||amountCents<=0)throw Error('CREDIT_NOTE_AMOUNT_INVALID');
  const matches=snapshot.events.filter(e=>e.id===refundId);
  if(matches.length!==1||matches[0].kind!=='refund'||matches[0].amountCents!==amountCents)throw Error('CREDIT_NOTE_REFUND_NOT_RECORDED');
+ if(new Set(snapshot.events.map(e=>e.id)).size!==snapshot.events.length)throw Error('CREDIT_NOTE_LEDGER_INVALID');
  const paid=snapshot.events.filter(e=>e.kind==='paid').reduce((sum,e)=>sum+e.amountCents,0);
  const refunded=snapshot.events.filter(e=>e.kind==='refund').reduce((sum,e)=>sum+e.amountCents,0);
  if(!Number.isSafeInteger(paid)||!Number.isSafeInteger(refunded)||paid!==snapshot.amountCents||refunded>paid)throw Error('CREDIT_NOTE_LEDGER_INVALID');
