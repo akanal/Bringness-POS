@@ -39,7 +39,7 @@ export function createMarketplaceConnections(pool,{clientId,clientSecret,tokenKe
   await db.query('BEGIN');await db.query("SET LOCAL statement_timeout='5s'");
   const first=await shopActor(db,session);await db.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE',[first.company_id]);
   const actor=await shopActor(db,session,true);if(actor.company_id!==first.company_id)fail('ACCOUNT_CHANGED');
-  const seller=(await db.query("SELECT 1 FROM shop_market_sellers WHERE company_id=$1 AND status='approved' FOR SHARE",[actor.company_id])).rows[0];
+  const seller=(await db.query("SELECT 1 FROM shop_market_sellers WHERE company_id=$1 AND status='approved' FOR UPDATE",[actor.company_id])).rows[0];
   if(!seller)fail('SELLER_NOT_APPROVED');const r=await fn(db,actor.company_id);await db.query('COMMIT');return r;
  }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
  async function exchange(body){
@@ -68,7 +68,9 @@ export function createMarketplaceConnections(pool,{clientId,clientSecret,tokenKe
   // re-read the connection; refreshed credentials are durable before payment I/O.
   const db=await pool.connect();let access;
   try{await db.query('BEGIN');await db.query("SET LOCAL statement_timeout='5s'");
-   const r=(await db.query(`SELECT c.* FROM shop_market_mollie_connections c JOIN shop_market_sellers s ON s.company_id=c.seller_company_id WHERE c.seller_company_id=$1 AND c.connection_id=$2 AND s.status='approved' FOR UPDATE OF c FOR SHARE OF s`,[seller,id])).rows[0];
+   const approved=(await db.query("SELECT 1 FROM shop_market_sellers WHERE company_id=$1 AND status='approved' FOR SHARE",[seller])).rows[0];
+   if(!approved)fail('MARKET_MERCHANT_NOT_CONNECTED');
+   const r=(await db.query('SELECT * FROM shop_market_mollie_connections WHERE seller_company_id=$1 AND connection_id=$2 FOR UPDATE',[seller,id])).rows[0];
    if(!r||!(pending?['pending','verified']:['verified']).includes(r.status))fail('MARKET_MERCHANT_NOT_CONNECTED');
    let t=open(r);
    if(new Date(r.expires_at).getTime()<=Date.now()+60000){

@@ -94,7 +94,10 @@ export function createMarketplaceCheckout(pool,{resolveProvider,providerTimeoutM
    const row=(await db.query('SELECT * FROM shop_market_test_checkouts WHERE order_id=$1 AND buyer_company_id=$2 FOR UPDATE',[orderId,buyer])).rows[0];
    if(!row)fail('ORDER_NOT_FOUND');proof(row,payment);
    // A late open/failed reply cannot overwrite a confirmed payment.
-   if(row.state==='paid'){if(payment.status!=='paid')return publicResult(row);}
+   if(row.state==='paid'){
+    await db.query("INSERT INTO shop_market_test_payment_handoffs(order_id,seller_company_id,payment_mode,can_fulfil) VALUES($1,$2,'test',false) ON CONFLICT(order_id) DO NOTHING",[row.order_id,row.seller_company_id]);
+    if(payment.status!=='paid')return publicResult(row);
+   }
    else if(['failed','expired','canceled'].includes(row.state)&&payment.status!==row.state)fail('MARKET_PAYMENT_STATE_CONFLICT');
    if(row.state===payment.status&&row.provider_id===payment.id)return publicResult(row);
    const saved=(await db.query(`UPDATE shop_market_test_checkouts SET state=$2,provider_id=$3,checkout_url=$4,

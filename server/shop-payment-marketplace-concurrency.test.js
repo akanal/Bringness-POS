@@ -89,7 +89,11 @@ test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are
   await Promise.all(Array.from({length:8},()=>s.withAccessToken(seller,binding.connectionId,async token=>assert.equal(token,'access_postgres_fixture_1'))));assert.equal(refreshes,1);
   await pool.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[orderId,seller,randomUUID(),{grossCents:1190,currency:'EUR'},{method:'shipping'}]);await pool.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[buyer,randomUUID(),'fixture',orderId,{}]);
   const c=()=>createMarketplaceCheckout(pool,{resolveProvider:integration.checkoutProviderResolver}),args={token:'buyer-fixture',orderId,requestId:randomUUID()};
-  await assert.rejects(c().start(args),/MARKET_PAYMENT_UNCERTAIN/);assert.equal(posts,1);
+  const race=await Promise.allSettled([s.begin({token:'merchant-fixture'}),c().start(args)]);
+  assert.equal(race[1].status,'rejected');assert.match(race[1].reason.message,/MARKET_PAYMENT_UNCERTAIN/);assert.equal(posts,1);
+  if(race[0].status==='fulfilled'){const attempt=race[0].value;await assert.rejects(s.complete({state:new URL(attempt.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:attempt.browserNonce}),/MARKET_CONNECTION_IN_USE/);}
+  else assert.match(race[0].reason.message,/MARKET_CONNECTION_IN_USE/);
+  assert.equal((await s.loadConnection(seller)).connectionId,binding.connectionId);
   const results=await Promise.all([c().reconcileBatch(),c().reconcileBatch()]);assert.equal(results.reduce((n,r)=>n+r.checked,0),1);
   payment={...payment,status:'paid'};await Promise.all(Array.from({length:8},()=>c().reconcilePayment(payment.id)));
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);
