@@ -1,4 +1,5 @@
 import {applyShopPaymentEvent} from './shop-payment-ledger.js';
+import {assertShopPaymentAmount} from './shop-payment-state.js';
 // Standalone persistence primitive; intentionally not wired into HTTP/provider handlers.
 // Caller must verify provider authenticity and order ownership before invoking.
 export async function migrateShopPaymentLedger(pool){
@@ -12,12 +13,12 @@ export async function migrateShopPaymentLedger(pool){
  )`);
 }
 export async function initializeShopPaymentLedger(pool,{orderId,companyId,amountCents,currency}){
- if(!Number.isSafeInteger(amountCents)||amountCents<=0||currency!=='EUR')throw Error('PAYMENT_AMOUNT_INVALID');
+ assertShopPaymentAmount({amountCents,currency,orderId});
  const initial={amountCents,events:[],status:'unpaid'};
  await pool.query('INSERT INTO shop_payment_ledger(order_id,company_id,amount_cents,currency,snapshot) VALUES($1,$2,$3,$4,$5) ON CONFLICT(order_id) DO NOTHING',[orderId,companyId,amountCents,currency,initial]);
- const row=(await pool.query('SELECT company_id,amount_cents,currency FROM shop_payment_ledger WHERE order_id=$1',[orderId])).rows[0];
+ const row=(await pool.query('SELECT company_id,amount_cents,currency,snapshot FROM shop_payment_ledger WHERE order_id=$1',[orderId])).rows[0];
  if(!row||row.company_id!==companyId||Number(row.amount_cents)!==amountCents||row.currency!==currency)throw Error('PAYMENT_LEDGER_CONFLICT');
- return initial;
+ return row.snapshot;
 }
 export async function recordShopPaymentEvent(pool,{orderId,companyId,event}){
  const db=await pool.connect();
