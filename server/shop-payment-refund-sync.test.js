@@ -29,7 +29,9 @@ test('refund without metadata requires verified parent payment order',async()=>{
   await recordShopPaymentEvent(pool,{orderId,companyId,event:{id:'tr_parent',kind:'paid',amountCents:500,providerReference:'tr_parent',verified:true}});
   const args={pool,orderId,companyId,refundId:'re_parent',fetchProviderRefund:async()=>({id:'re_parent',paymentId:'tr_parent',currency:'EUR',amountCents:500,status:'refunded'})};
   await assert.rejects(reconcileShopRefund(args),/ADAPTER_REQUIRED/);
-  await assert.rejects(reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId:'other',currency:'EUR',amountCents:500,status:'paid'})}),/PARENT_PAYMENT_MISMATCH/);
+  let refundFetches=0;
+  await assert.rejects(reconcileShopRefund({...args,fetchProviderRefund:async()=>{refundFetches++;return {};},fetchProviderPayment:async()=>({id:'tr_parent',orderId:'other',currency:'EUR',amountCents:500,status:'paid'})}),/PARENT_PAYMENT_MISMATCH/);
+  assert.equal(refundFetches,0);
   await assert.rejects(reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId,currency:'EUR',amountCents:499,status:'paid'})}),/PARENT_PAYMENT_MISMATCH/);
   await assert.rejects(reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId,currency:'EUR',amountCents:500,status:'open'})}),/PARENT_PAYMENT_MISMATCH/);
   assert.equal((await reconcileShopRefund({...args,fetchProviderPayment:async()=>({id:'tr_parent',orderId,currency:'EUR',amountCents:500,status:'paid'})})).snapshot.status,'refunded');
