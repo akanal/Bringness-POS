@@ -17,6 +17,8 @@ test('stores immutable invoice and linked credit note; rejects reused numbers',a
   await storeShopDocumentRecord(pool,credit);
   await assert.rejects(storeShopDocumentRecord(pool,{...invoice,id:'66666666-6666-4666-8666-666666666666'}));
   await assert.rejects(storeShopDocumentRecord(pool,{...credit,id:'77777777-7777-4777-8777-777777777777',sequence:2,documentNumber:'CRN-2026-000000002',originalDocumentId:creditId}),/ORIGINAL_NOT_FOUND/);
+  await assert.rejects(db.query('UPDATE shop_document_records SET content=$1 WHERE id=$2',[{totalCents:999},invoiceId]),/SHOP_DOCUMENT_RECORD_IMMUTABLE/);
+  await assert.rejects(db.query('DELETE FROM shop_document_records WHERE id=$1',[invoiceId]),/SHOP_DOCUMENT_RECORD_IMMUTABLE/);
   const rows=await db.query('SELECT kind,document_number FROM shop_document_records ORDER BY kind');
   assert.equal(rows.rows.length,2);
  }finally{await db.close();}
