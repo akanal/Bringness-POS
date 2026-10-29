@@ -16,6 +16,19 @@ jobs:
   payment-safety:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: checkout_test
+          POSTGRES_PASSWORD: checkout_test
+          POSTGRES_DB: bringness_checkout_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U checkout_test -d bringness_checkout_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MARKET_CHECKOUT_TEST_DATABASE_URL: postgres://checkout_test:checkout_test@127.0.0.1:5432/bringness_checkout_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -54,3 +54,12 @@ Netcup bleibt der aktive Anwendungs- und PostgreSQL-Standort. IDrive e2 ist Obje
 
 ## Starttext für einen neuen Chat
 „Bitte setze Bringness fort. Lies zuerst AGENTS.md und docs/PROJECT-HANDOFF.md im Repository akanal/Bringness-POS auf main. Nutze die vorhandenen Zugänge, prüfe den aktuellen Stand und arbeite ohne unnötige Rückfragen weiter. Zugangsdaten bleiben in den geschützten Speicherorten.“
+
+
+## Händler-OAuth und Kunden-Testcheckout — 29.10.2026
+- Aktuelle getrennte Entwicklung: PR179, aufgebaut auf PR178. Keine Zusammenführung oder Veröffentlichung autorisiert/ausgeführt. Produktions-start.js erhält weiter keinen Checkoutresolver.
+- Anwendungsstand61e62ff955ef607a90157da98966a0fd18478875, lokaler identischer Tree7603ea6c2f3d87b89dc676e8af060be53f751ec4. Details und Teststand: docs/marketplace-merchant-checkout-ten-20261029.md.
+- Vorhandene Anmeldung/Rollen, Händlerfreigabe, Bestellansichten und Zahlungsschutz werden weiterverwendet. Neue optionale Host-Zusammensetzung: createMarketplaceTestIntegration; geschützte OAuth-State-/Cookie-Rückkehr, verschlüsselte Tokens mit Händler-/Revisionsbindung, serialisierter Refresh, Profilprüfung und lokale Sperre.
+- Kunden-Testansicht und eigene Rückkehrseite sind integriert. Benachrichtigungen liefern ausschließlich Zahlungs-ID-Hinweise; Status/Betrag stammen aus neu abgefragten Anbieterfakten. Begrenzter Hostworker mit dauerhaften Claims und GET-Recovery erzeugt keine zweite Zahlung. Scheduler nicht produktiv aktiviert.
+- Einmaliger unveränderlicher Test-Handoff zum vorhandenen Händlerauftrag; can_fulfil=false. Testzahlung gibt niemals reale Ware, Bestand, Fiskalbeleg oder Lizenz frei. Echte Händler-/Providerabnahme, geschützte Hostkonfiguration, Scheduling, produktive Buchung/Refund und identitätserhaltende Wiederfreigabe für aktive gesperrte Bindungen bleiben gesonderte Voraussetzungen. Keine Geheimwerte im Chat verlangen.
+- Alle sechs Prüfläufe auf61e62ff erfolgreich.107 GitHub-Zahlungstests ohne Skip,703 Shop-Tests ohne Fehler/Skip, neuer nativer HTTPS-Kunden-/Händlerbrowsertest sowie echter Anwendungsstart mit PostgreSQL und bestehende Browserabläufe bestanden. Shop40957194617/job123740221733, Browserartefakt12932899143;659 allgemeine lokale Tests. Keine echte Mollie-Verbindung oder Zahlung aus synthetischen Tests ableiten.
