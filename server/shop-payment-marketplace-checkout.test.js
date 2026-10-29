@@ -158,3 +158,48 @@ test('marketplace service and HTTP recover a lost Mollie adapter reply with one 
   const events=(await f.db.query('SELECT state FROM shop_market_test_checkout_events ORDER BY id')).rows.map(r=>r.state);assert.deepEqual(events,['prepared','uncertain','open','paid']);
  }finally{if(server)await new Promise(r=>server.close(r));await f.db.close();}
 });
+
+test('merchant review is tenant-private, owner-only, lookup-only and throttled',async()=>{
+ const f=await setup();try{
+  await f.checkout.start(f.args);
+  for(const token of ['owner-b','waiter','expired','inactive','reset'])await assert.rejects(f.checkout.merchantRecheck({token,orderId:f.orderId}),/(ORDER_NOT_FOUND|FORBIDDEN|UNAUTHORIZED|SELLER_NOT_APPROVED)/);
+  const list=await f.checkout.merchantPayments({token:'owner-a'});assert.equal(list.payments.length,1);assert.equal(list.payments[0].orderId,f.orderId);assert.equal(list.canFulfil,false);
+  for(const secret of ['merchantId','provider_id','checkout_url','buyer_company_id','connection_id'])assert.equal(JSON.stringify(list).includes(secret),false);
+  f.current={...f.current,status:'paid'};
+  const checked=await f.checkout.merchantRecheck({token:'owner-a',orderId:f.orderId});assert.equal(checked.confirmed,true);assert.equal(checked.payments[0].paymentStatus,'paid');assert.equal(f.calls,1);
+  assert.equal((await f.db.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);
+  await assert.rejects(f.checkout.merchantRecheck({token:'owner-a',orderId:f.orderId}),/MARKET_ORDER_NOT_PAYABLE/);
+ }finally{await f.db.close();}
+});
+test('background failures persist bounded retries and sanitized review state across restarts',async()=>{
+ const f=await setup();try{
+  await f.checkout.start(f.args);f.provider.fetchPayment=async()=>{throw Error('private_access_token_should_never_escape');};
+  for(let i=0;i<8;i++){
+   await f.db.exec("UPDATE shop_market_test_checkouts SET reconcile_after=clock_timestamp()-interval '1 second'");
+   const restarted=createMarketplaceCheckout(f.pool,{resolveProvider:f.resolveProvider});assert.deepEqual(await restarted.reconcileBatch(),{checked:0,failed:1});
+  }
+  let r=(await f.checkout.merchantPayments({token:'owner-a'})).payments[0];assert.equal(r.attempts,8);assert.equal(r.reviewRequired,true);assert.equal(r.lastError,'MARKET_PAYMENT_UNCERTAIN');
+  await f.db.exec("UPDATE shop_market_test_checkouts SET reconcile_after=clock_timestamp()-interval '1 second'");
+  assert.deepEqual(await f.checkout.reconcileBatch(),{checked:0,failed:0});
+  f.provider.fetchPayment=async()=>({...f.current});
+  assert.equal((await f.checkout.merchantRecheck({token:'owner-a',orderId:f.orderId})).confirmed,true);
+  r=(await f.checkout.merchantPayments({token:'owner-a'})).payments[0];assert.equal(r.reviewRequired,false);assert.equal(r.attempts,0);assert.equal(r.lastError,null);assert.equal(f.calls,1);
+  await assert.rejects(f.checkout.merchantRecheck({token:'owner-a',orderId:f.orderId}),/MARKET_RECHECK_BUSY/);
+ }finally{await f.db.close();}
+});
+test('provider mismatches stop automatic retries and retain unpaid fulfilment barrier',async()=>{
+ const f=await setup();try{
+  await f.checkout.start(f.args);f.current={...f.current,amountCents:1};
+  assert.deepEqual(await f.checkout.reconcileBatch(),{checked:0,failed:1});
+  const r=(await f.checkout.merchantPayments({token:'owner-a'})).payments[0];assert.equal(r.reviewRequired,true);assert.equal(r.lastError,'MARKET_PAYMENT_MISMATCH');
+  assert.equal((await f.checkout.status(f.args)).paymentStatus,'open');assert.equal((await f.db.query('SELECT * FROM shop_market_test_payment_handoffs')).rows.length,0);
+ }finally{await f.db.close();}
+});
+test('host preflight reports test boundaries and scheduler starts only after configuration and migration',async()=>{
+ const f=await setup();try{
+  const disabled=createMarketplaceRuntime(f.pool,{enabled:true});await disabled.migrate();assert.throws(()=>disabled.startReconciliation(),/MARKET_CHECKOUT_DISABLED/);
+  const runtime=createMarketplaceRuntime(f.pool,{enabled:true,checkoutProviderResolver:f.resolveProvider});assert.throws(()=>runtime.startReconciliation(),/MARKET_CHECKOUT_DISABLED/);await runtime.migrate();
+  assert.equal(runtime.readiness().productionReady,false);const worker=runtime.startReconciliation();assert.equal(runtime.readiness().schedulerRunning,true);assert.throws(()=>runtime.startReconciliation(),/MARKET_SCHEDULER_ACTIVE/);
+  assert.deepEqual(await worker.tick(),{ok:true,checked:0,failed:0,busy:false});await worker.stop();assert.equal(runtime.readiness().schedulerRunning,false);
+ }finally{await f.db.close();}
+});

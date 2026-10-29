@@ -63,3 +63,9 @@ Netcup bleibt der aktive Anwendungs- und PostgreSQL-Standort. IDrive e2 ist Obje
 - Kunden-Testansicht und eigene Rückkehrseite sind integriert. Benachrichtigungen liefern ausschließlich Zahlungs-ID-Hinweise; Status/Betrag stammen aus neu abgefragten Anbieterfakten. Begrenzter Hostworker mit dauerhaften Claims und GET-Recovery erzeugt keine zweite Zahlung. Scheduler nicht produktiv aktiviert.
 - Einmaliger unveränderlicher Test-Handoff zum vorhandenen Händlerauftrag; can_fulfil=false. Testzahlung gibt niemals reale Ware, Bestand, Fiskalbeleg oder Lizenz frei. Echte Händler-/Providerabnahme, geschützte Hostkonfiguration, Scheduling, produktive Buchung/Refund und identitätserhaltende Wiederfreigabe für aktive gesperrte Bindungen bleiben gesonderte Voraussetzungen. Keine Geheimwerte im Chat verlangen.
 - Alle sechs Prüfläufe auf61e62ff erfolgreich.107 GitHub-Zahlungstests ohne Skip,703 Shop-Tests ohne Fehler/Skip, neuer nativer HTTPS-Kunden-/Händlerbrowsertest sowie echter Anwendungsstart mit PostgreSQL und bestehende Browserabläufe bestanden. Shop40957194617/job123740221733, Browserartefakt12932899143;659 allgemeine lokale Tests. Keine echte Mollie-Verbindung oder Zahlung aus synthetischen Tests ableiten.
+
+
+## Zahlungsabgleich und Händlerprüfung — 29.10.2026
+- Folgeentwicklung zu PR179: optionaler Host-Scheduler, dauerhafte Rückoff-/Prüfzustände, private Händlerübersicht und geschützte GET-Nachprüfung. Details: docs/marketplace-reconciliation-ten-20261029.md.
+- Produktions-start.js bleibt unverbunden. Keine Hostkonfiguration, echte Händlerzustimmung, echte Zahlung, produktive Abrechnung oder reale Waren-/Küchenfreigabe aus den isolierten Tests ableiten.
+- Neue Prüfungen betreffen Restart/Retry, Mandantentrennung, Fehlergeheimhaltung, Hostlebenszyklus, native Händlerübersicht und parallele PostgreSQL-Nachprüfung. Endgültige Ergebnisse stehen im Paketdokument.

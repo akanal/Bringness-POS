@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {shopActor,sessionHash,shopError} from './shop-account.js';
 import {uuid} from './shop-drafts.js';
+import {marketplaceTransaction} from './shop-marketplace.js';
 import {verifyShopProviderPayment} from './shop-payment-provider-check.js';
 import {safeCheckoutUrl,paymentId} from './shop-provider-proof.js';
 
@@ -22,6 +23,13 @@ export async function migrateMarketplaceCheckout(db){
  )`);
  await db.query('ALTER TABLE shop_market_test_checkouts ADD COLUMN IF NOT EXISTS connection_id uuid');
  await db.query('ALTER TABLE shop_market_test_checkouts ADD COLUMN IF NOT EXISTS reconcile_after timestamptz NOT NULL DEFAULT clock_timestamp()');
+ await db.query(`ALTER TABLE shop_market_test_checkouts
+  ADD COLUMN IF NOT EXISTS reconcile_attempts integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS reconcile_error text,
+  ADD COLUMN IF NOT EXISTS last_checked_at timestamptz,
+  ADD COLUMN IF NOT EXISTS review_required boolean NOT NULL DEFAULT false`);
+ await db.query('CREATE INDEX IF NOT EXISTS shop_market_checkout_due ON shop_market_test_checkouts(reconcile_after,order_id) WHERE review_required=false');
+
  await db.query(`CREATE TABLE IF NOT EXISTS shop_market_test_payment_handoffs(
  order_id uuid PRIMARY KEY REFERENCES shop_market_test_checkouts(order_id),seller_company_id uuid NOT NULL REFERENCES companies(id),
  payment_mode text NOT NULL CHECK(payment_mode='test'),can_fulfil boolean NOT NULL CHECK(can_fulfil=false),created_at timestamptz NOT NULL DEFAULT clock_timestamp())`);
@@ -169,8 +177,55 @@ export function createMarketplaceCheckout(pool,{resolveProvider,providerTimeoutM
   if(!payment)fail('MARKET_PAYMENT_UNCERTAIN');
   return attach(args.token,args.orderId,payment,{internal});
  }
+
+ async function merchant(token,fn){return marketplaceTransaction(pool,token,async(db,company)=>{
+  const approved=(await db.query("SELECT 1 FROM shop_market_sellers WHERE company_id=$1 AND status='approved' FOR SHARE",[company])).rows.length;
+  if(!approved)fail('SELLER_NOT_APPROVED');return fn(db,company);
+ });}
+ async function reconcileClaim(orderId){
+  try{
+   await refresh({orderId},{internal:true});
+   await pool.query(`UPDATE shop_market_test_checkouts SET reconcile_attempts=0,reconcile_error=NULL,
+    review_required=false,last_checked_at=clock_timestamp() WHERE order_id=$1`,[orderId]);
+   return true;
+  }catch(e){
+   const code=['MARKET_PAYMENT_MISMATCH','MARKET_PAYMENT_STATE_CONFLICT','MARKET_MERCHANT_CHANGED','MARKET_MERCHANT_NOT_CONNECTED'].includes(e.code||e.message)?(e.code||e.message):'MARKET_PAYMENT_UNCERTAIN';
+   await pool.query(`UPDATE shop_market_test_checkouts SET reconcile_attempts=LEAST(reconcile_attempts+1,8),
+    reconcile_error=$2,last_checked_at=clock_timestamp(),
+    review_required=($2<>'MARKET_PAYMENT_UNCERTAIN' OR reconcile_attempts>=7),
+    reconcile_after=clock_timestamp()+(LEAST(3600,60*power(2,LEAST(reconcile_attempts,6)))::int*interval '1 second') WHERE order_id=$1 AND state IN ('uncertain','open','pending','authorized')`,[orderId,code]);
+   return false;
+  }
+ }
  let reconciling=false;
  return {enabled,start,refresh,
+  async merchantPayments({token}){return merchant(token,async(db,company)=>{
+   const rows=(await db.query(`SELECT order_id,state,amount_cents,currency,reconcile_attempts,reconcile_error,
+    last_checked_at,reconcile_after,review_required,created_at FROM shop_market_test_checkouts
+    WHERE seller_company_id=$1 ORDER BY review_required DESC,created_at DESC,order_id LIMIT 51`,[company])).rows;
+   return {paymentMode:'test',canFulfil:false,canPay:false,hasMore:rows.length>50,payments:rows.slice(0,50).map(r=>({
+    orderId:r.order_id,paymentStatus:r.state,amountCents:Number(r.amount_cents),currency:r.currency,
+    attempts:r.reconcile_attempts,lastError:r.reconcile_error,reviewRequired:r.review_required,
+    lastCheckedAt:r.last_checked_at?new Date(r.last_checked_at).toISOString():null,
+    nextCheckAt:new Date(r.reconcile_after).toISOString(),
+    overdue:!['paid','failed','expired','canceled'].includes(r.state)&&Date.now()-new Date(r.created_at).getTime()>24*3600000,
+    canRecheck:['uncertain','open','pending','authorized'].includes(r.state)}))};
+  });},
+  async merchantRecheck({token,orderId}){
+   if(!enabled)fail('MARKET_CHECKOUT_DISABLED');if(!uuid(orderId))fail('INVALID_MARKET_INPUT');
+   // Authenticate and scope BEFORE any provider lookup. The same durable claim
+   // throttles separate devices and worker instances; manual review never creates payments.
+   await merchant(token,async(db,company)=>{
+    const row=(await db.query('SELECT * FROM shop_market_test_checkouts WHERE order_id=$1 AND seller_company_id=$2 FOR UPDATE',[orderId,company])).rows[0];
+    if(!row)fail('ORDER_NOT_FOUND');
+    if(!['uncertain','open','pending','authorized'].includes(row.state))fail('MARKET_ORDER_NOT_PAYABLE');
+    const claimed=(await db.query("UPDATE shop_market_test_checkouts SET reconcile_after=clock_timestamp()+interval '1 minute' WHERE order_id=$1 AND reconcile_after<=clock_timestamp() RETURNING order_id",[orderId])).rows.length;
+    if(!claimed)fail('MARKET_RECHECK_BUSY');
+   });
+   const confirmed=await reconcileClaim(orderId);
+   // Recheck role/account before disclosing the resulting private state.
+   return {...await this.merchantPayments({token}),confirmed};
+  },
   async availability({token,orderId}){return transaction(token,orderId,async(db,buyer,order)=>{
    const row=(await db.query('SELECT * FROM shop_market_test_checkouts WHERE order_id=$1 AND buyer_company_id=$2',[orderId,buyer])).rows[0];
    if(row)return {...publicResult(row),canStartTest:false};
@@ -190,8 +245,14 @@ export function createMarketplaceCheckout(pool,{resolveProvider,providerTimeoutM
   async reconcileBatch({limit=20}={}){
    if(!enabled)fail('MARKET_CHECKOUT_DISABLED');if(!Number.isInteger(limit)||limit<1||limit>50)fail('INVALID_MARKET_INPUT');
    if(reconciling)return {busy:true,checked:0,failed:0};reconciling=true;let checked=0,failed=0;
-   try{const rows=(await pool.query("UPDATE shop_market_test_checkouts SET reconcile_after=clock_timestamp()+interval '1 minute' WHERE order_id IN (SELECT order_id FROM shop_market_test_checkouts WHERE state IN ('uncertain','open','pending','authorized') AND reconcile_after<=clock_timestamp() ORDER BY reconcile_after,order_id LIMIT $1 FOR UPDATE SKIP LOCKED) RETURNING order_id",[limit])).rows;
-    for(const r of rows){try{await refresh({orderId:r.order_id},{internal:true});checked++;}catch{failed++;}}
+   try{const visited=[];
+    // Claim immediately before I/O, so a slow earlier payment cannot consume
+    // the lease of the remaining batch before those lookups even start.
+    for(let i=0;i<limit;i++){
+     const row=(await pool.query("UPDATE shop_market_test_checkouts SET reconcile_after=clock_timestamp()+interval '1 minute' WHERE order_id IN (SELECT order_id FROM shop_market_test_checkouts WHERE review_required=false AND state IN ('uncertain','open','pending','authorized') AND reconcile_after<=clock_timestamp() AND NOT(order_id=ANY($1::uuid[])) ORDER BY reconcile_after,order_id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING order_id",[visited])).rows[0];
+     if(!row)break;visited.push(row.order_id);
+     if(await reconcileClaim(row.order_id))checked++;else failed++;
+    }
     return {checked,failed};
    }finally{reconciling=false;}
   },
