@@ -6,6 +6,7 @@ import {validateShopDocumentNumber} from './shop-document-number-policy.js';
 export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,originalDocumentId=null,content,id=randomUUID(),archive=false,requirePaid=false}){
  if(typeof requirePaid!=='boolean')throw Error('SHOP_DOCUMENT_PAYMENT_OPTION_INVALID');
  if(typeof archive!=='boolean')throw Error('SHOP_DOCUMENT_ARCHIVE_OPTION_INVALID');
+ if(requirePaid&&!archive)throw Error('SHOP_DOCUMENT_ARCHIVE_REQUIRED');
  if(!['invoice','credit_note'].includes(kind)||!Number.isSafeInteger(year)||year<2000||year>9999)throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
  if(typeof companyId!=='string'||typeof orderId!=='string'||!companyId||!orderId||!content||typeof content!=='object'||Array.isArray(content))throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
  if(kind==='credit_note'&&!originalDocumentId)throw Error('SHOP_DOCUMENT_ORIGINAL_REQUIRED');
