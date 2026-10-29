@@ -8,11 +8,13 @@ export async function reconcileShopRefund({pool,orderId,companyId,refundId,fetch
  const result=await pool.query('SELECT provider_reference,currency,amount_cents FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2',[orderId,companyId]);
  const row=result.rows[0];
  if(!row||!row.provider_reference)throw Error('REFUND_PAYMENT_NOT_FOUND');
+ const amountCents=Number(row.amount_cents);
+ if(!Number.isSafeInteger(amountCents)||amountCents<=0)throw Error('REFUND_PAYMENT_AMOUNT_INVALID');
  const providerRefund=await fetchProviderRefund(row.provider_reference,refundId);
  // Mollie refunds need not carry payment metadata. Resolve the order using
  // the separately fetched parent payment, not an untrusted refund field.
  const payment=await fetchProviderPayment(row.provider_reference);
- if(payment?.id!==row.provider_reference||payment?.orderId!==orderId||payment?.currency!==row.currency||payment?.amountCents!==Number(row.amount_cents)||payment?.status!=='paid')throw Error('REFUND_PARENT_PAYMENT_MISMATCH');
+ if(payment?.id!==row.provider_reference||payment?.orderId!==orderId||payment?.currency!==row.currency||payment?.amountCents!==amountCents||payment?.status!=='paid')throw Error('REFUND_PARENT_PAYMENT_MISMATCH');
  if(providerRefund?.orderId!==undefined&&providerRefund.orderId!==orderId)throw Error('REFUND_ORDER_MISMATCH');
  const verifiedRefund={...providerRefund,orderId:payment.orderId};
  const event=verifyShopProviderRefund({orderId,providerReference:row.provider_reference,currency:row.currency},verifiedRefund);
