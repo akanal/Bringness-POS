@@ -59,3 +59,40 @@ test('real PostgreSQL simultaneous checkout attempts and shared request IDs rema
   if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();
  }
 });
+
+test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are single-use and test-only',{skip:!connectionString},async()=>{
+ const {migrateMarketplaceConnections}=await import('./shop-mollie-marketplace-connection.js');
+ const {createMarketplaceTestIntegration}=await import('./shop-mollie-marketplace-integration.js');
+ const url=new URL(connectionString);if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.pathname!=='/bringness_checkout_test')throw Error('ISOLATED_CHECKOUT_DATABASE_REQUIRED');
+ const schema='merchant_'+randomUUID().replaceAll('-',''),admin=new pg.Pool({connectionString});let pool;
+ try{
+  await admin.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString,max:12,options:'-c search_path='+schema});
+  await pool.query(`CREATE TABLE companies(id uuid PRIMARY KEY);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz)`);
+  await migrateMarketplace(pool);await migrateMarketplaceConnections(pool);
+  const seller=randomUUID(),buyer=randomUUID(),orderId=randomUUID();
+  for(const [id,token]of [[seller,'merchant-fixture'],[buyer,'buyer-fixture']]){const user=randomUUID();await pool.query('INSERT INTO companies VALUES($1)',[id]);await pool.query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[user,id]);await pool.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[user,createHash('sha256').update(token).digest('hex')]);}
+  await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved','{}')",[seller]);
+  let refreshes=0,posts=0,payment;
+  const integration=createMarketplaceTestIntegration(pool,{publicOrigin:'https://bringness.de',clientId:'app_fixture',clientSecret:'fixture_not_real_secret',tokenKey:'ab'.repeat(32),fetcher:async(url,options)=>{
+   const u=new URL(url);if(u.pathname==='/oauth2/tokens'){
+    if(new URLSearchParams(options.body).get('grant_type')==='refresh_token'){refreshes++;await new Promise(r=>setTimeout(r,50));}
+    return Response.json({access_token:'access_postgres_fixture_'+refreshes,refresh_token:'refresh_postgres_fixture_'+refreshes,expires_in:3600,token_type:'bearer',scope:'organizations.read profiles.read payments.read payments.write'});
+   }
+   if(u.pathname==='/v2/organizations/me')return Response.json({id:'org_fixture'});
+   if(u.pathname==='/v2/profiles/pfl_fixture')return Response.json({id:'pfl_fixture',status:'verified'});
+   if(options.method==='POST'){posts++;const body=JSON.parse(options.body);payment={resource:'payment',id:'tr_pgmerchant',mode:'test',profileId:'pfl_fixture',sequenceType:'oneoff',status:'open',amount:body.amount,metadata:body.metadata,_links:{checkout:{href:'https://checkout.mollie.com/test'}}};throw Error('lost reply');}
+   if(u.pathname==='/v2/payments')return Response.json({count:1,_embedded:{payments:[payment]},_links:{next:null}});
+   return Response.json(payment);
+  }});
+  const s=integration.merchantConnections,b=await s.begin({token:'merchant-fixture'});await s.complete({state:new URL(b.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:b.browserNonce});await s.verify({token:'merchant-fixture',profileId:'pfl_fixture'});
+  const binding=await s.loadConnection(seller);await pool.query("UPDATE shop_market_mollie_connections SET expires_at=now()-interval '1 second'");
+  await Promise.all(Array.from({length:8},()=>s.withAccessToken(seller,binding.connectionId,async token=>assert.equal(token,'access_postgres_fixture_1'))));assert.equal(refreshes,1);
+  await pool.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[orderId,seller,randomUUID(),{grossCents:1190,currency:'EUR'},{method:'shipping'}]);await pool.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[buyer,randomUUID(),'fixture',orderId,{}]);
+  const c=()=>createMarketplaceCheckout(pool,{resolveProvider:integration.checkoutProviderResolver}),args={token:'buyer-fixture',orderId,requestId:randomUUID()};
+  await assert.rejects(c().start(args),/MARKET_PAYMENT_UNCERTAIN/);assert.equal(posts,1);
+  const results=await Promise.all([c().reconcileBatch(),c().reconcileBatch()]);assert.equal(results.reduce((n,r)=>n+r.checked,0),1);
+  payment={...payment,status:'paid'};await Promise.all(Array.from({length:8},()=>c().reconcilePayment(payment.id)));
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);
+  assert.equal((await c().status(args)).canFulfil,false);assert.equal(posts,1);
+ }finally{if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();}
+});

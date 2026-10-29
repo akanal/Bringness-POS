@@ -1,3 +1,4 @@
+import {mountMarketMerchant} from './market-merchant-ui.js';
 import {mountMarketOrderViews} from './market-order-ui.js';
 import {createMarketClient,marketError} from './market-client.js';
 import {marketMoney} from './market-policy.js';
@@ -14,6 +15,7 @@ export function mountMarketplaceSeller({window:w,document:d=w.document,client:pr
  async function write(action){if(busy||!source||!current)return;if(action==='publish'&&!$('publish-form').reportValidity())return;if(!w.confirm(action==='publish'?'Angebot mit diesen Varianten, Beständen und Lieferangaben öffentlich anbieten?':'Öffentliches Angebot zurückziehen? Bereits übergebene Bestellungen bleiben erhalten.'))return;busy=true;try{const command={id:source.id,requestId:w.crypto.randomUUID(),action,expectedRevision:current.revision,...(action==='publish'?{sourceRevision:source.revision,publication:data()}:{})};const r=await client.write('publish',command);source=null;current=null;$('publish-form').hidden=true;status(r.state==='published'?'Angebot veröffentlicht. Vor einer weiteren Änderung den aktuellen Stand laden.':'Angebot zurückgezogen.');}catch(e){status(marketError(e),true);}finally{busy=false;}}
  $('publish-form').addEventListener('submit',e=>{e.preventDefault();write('publish');});$('publish-withdraw').addEventListener('click',()=>write('withdraw'));
  $('publish-retry').addEventListener('click',async()=>{if(busy)return;busy=true;try{const r=await client.retry('publish');source=null;current=null;$('publish-form').hidden=true;status('Anfrage bestätigt: '+r.state+'. Aktuellen Stand vor weiteren Änderungen laden.');}catch(e){status(marketError(e),true);}finally{busy=false;}});
+ const paymentHost=d.getElementById('seller-payment-connection');if(paymentHost)mountMarketMerchant({window:w,host:paymentHost,client});
  mountMarketOrderViews({window:w,document:d,client,seller:true});
  return {client};
 }

@@ -30,7 +30,7 @@ test('marketplace Mollie test adapter binds OAuth seller, profile, cents and imm
  const post=f.calls.at(-1),body=JSON.parse(post.options.body);
  assert.equal(post.options.headers['Idempotency-Key'],f.command.idempotencyKey);assert.equal(body.amount.value,'11.90');
  assert.equal(body.profileId,'pfl_fixture');assert.equal(body.testmode,true);assert.equal(body.sequenceType,'oneoff');
- assert.equal(body.metadata.marketCheckoutKey,f.command.idempotencyKey);assert.equal(body.redirectUrl,'https://bringness.de/shop/order-history.html?marketOrderId='+f.command.orderId);
+ assert.equal(body.metadata.marketCheckoutKey,f.command.idempotencyKey);assert.equal(body.redirectUrl,'https://bringness.de/shop/marketplace-payment-return.html?marketOrderId='+f.command.orderId);
  for(const c of f.calls){assert.equal(c.options.headers.Authorization,'Bearer '+token);assert.equal(c.options.redirect,'error');assert.ok(c.options.signal instanceof AbortSignal);}
  assert.equal(JSON.stringify(result).includes(token),false);assert.equal(JSON.stringify(a).includes(token),false);
  assert.equal(Object.hasOwn(body,'applicationFee'),false);assert.equal(Object.hasOwn(body,'webhookUrl'),false);

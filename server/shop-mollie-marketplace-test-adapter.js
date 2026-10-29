@@ -40,7 +40,7 @@ function normalize(raw,binding,expected){
 // startup registration, HTTP onboarding or live mode. Both callbacks are trusted
 // host integrations, never browser-supplied data. withAccessToken must enforce the
 // exact seller + connection revision and securely refresh OAuth credentials.
-export function createMarketplaceMollieTestResolver({loadConnection,withAccessToken,publicOrigin,fetcher=globalThis.fetch,maxRecoveryPages=4}={}){
+export function createMarketplaceMollieTestResolver({loadConnection,withAccessToken,publicOrigin,fetcher=globalThis.fetch,maxRecoveryPages=4,webhookEnabled=false}={}){
  if(typeof loadConnection!=='function'||typeof withAccessToken!=='function'||typeof fetcher!=='function')fail('INVALID_MARKET_PROVIDER_CONFIG');
  if(!Number.isSafeInteger(maxRecoveryPages)||maxRecoveryPages<1||maxRecoveryPages>10)fail('INVALID_MARKET_PROVIDER_CONFIG');
  let origin;try{const u=new URL(publicOrigin);if(u.protocol!=='https:'||u.origin!==publicOrigin||u.username||u.password)throw Error();origin=u.origin;}catch{fail('INVALID_MARKET_PROVIDER_ORIGIN');}
@@ -74,12 +74,13 @@ export function createMarketplaceMollieTestResolver({loadConnection,withAccessTo
    const raw=await request('payments/'+id+'?testmode=true');
    if(raw?.id!==id)fail('MARKET_PAYMENT_MISMATCH');return normalize(raw,binding,expected);
   };
-  return Object.freeze({mode:'test',sellerCompanyId:seller,merchantId:binding.merchantId,
+  return Object.freeze({mode:'test',sellerCompanyId:seller,merchantId:binding.merchantId,connectionId:binding.connectionId,
    async createPayment(value){
     const c=command(value,binding);
     return using(async request=>normalize(await request('payments',{key:c.idempotencyKey,body:{
      amount:{currency:'EUR',value:centsString(c.amountCents)},description:'Bringness Marktplatz '+c.orderId,
-     redirectUrl:origin+'/shop/order-history.html?marketOrderId='+c.orderId,
+     redirectUrl:origin+'/shop/marketplace-payment-return.html?marketOrderId='+c.orderId,
+     ...(webhookEnabled?{webhookUrl:origin+'/api/v1/shop/marketplace/checkout-notification'}:{}),
      profileId:binding.profileId,testmode:true,sequenceType:'oneoff',
      metadata:{marketOrderId:c.orderId,marketSellerCompanyId:seller,marketCheckoutKey:c.idempotencyKey}
     }}),binding,c));

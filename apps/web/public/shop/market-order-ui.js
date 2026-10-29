@@ -1,3 +1,4 @@
+import {mountMarketPayment} from './market-payment-ui.js';
 import {marketMoney} from './market-policy.js';
 import {marketError} from './market-client.js';
 import {marketOrderLabels,marketOrderActions} from './market-order-policy.js';
@@ -32,8 +33,9 @@ export function mountMarketOrderViews({window:w,document:d=w.document,client,sel
    else{box.append(el('p',r.seller.name));if(typeof r.sellerId==='string'&&/^[a-f0-9-]{36}$/i.test(r.sellerId)){const a=el('a','Aktuelles Händlerprofil');a.href='/shop/marketplace.html?'+new URLSearchParams({seller:r.sellerId});box.append(a);}}
    for(const l of r.lines)box.append(el('p',l.quantity+' × '+l.name));box.append(el('p',marketMoney(r.grossCents)+' inkl. MwSt. · Unbezahlt'),el('p',r.delivery),el('p','Zuletzt gespeichert: '+new Date(r.updatedAt).toLocaleString('de-DE')));
    if(r.tracking){box.append(el('p','Versandangabe des Händlers: '+r.tracking.carrierName+' · '+r.tracking.number+' · Stand '+r.trackingRevision));const url=marketTrackingUrl(r.tracking);if(url){const a=el('a','Sendung bei DHL verfolgen (externe Seite)');a.href=url;a.target='_blank';a.rel='noopener noreferrer nofollow';a.referrerPolicy='no-referrer';box.append(a);}box.append(el('p','Versandangabe bestätigt weder Zahlung noch Zustellung.'));}
-   if(seller){for(const action of marketOrderActions(r.status,r.method)){const button=el('button',labels[action]);button.type='button';button.disabled=busy;button.addEventListener('click',()=>write(r,action));box.append(button);}if(r.method==='shipping'&&r.status==='shipped')trackingForm(r,box);}
-   host.append(box);
+   if(r.testPayment?.mode==='test')box.append(el('p','Testzahlung: '+r.testPayment.status+' · Keine Warenfreigabe.'));
+   if(seller){for(const action of (Array.isArray(r.actions)?r.actions:marketOrderActions(r.status,r.method))){const button=el('button',labels[action]);button.type='button';button.disabled=busy;button.addEventListener('click',()=>write(r,action));box.append(button);}if(r.method==='shipping'&&r.status==='shipped')trackingForm(r,box);}
+   host.append(box);if(!seller){const version=epoch;mountMarketPayment({window:w,host:box,client,orderId:r.id,amountCents:r.grossCents,isCurrent:()=>version===epoch});}
   }
   if(!rows.length)host.append(el('p','Keine Bestellungen vorhanden.'));load.disabled=busy;
  }
