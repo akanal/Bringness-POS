@@ -15,13 +15,12 @@ export async function reconcileShopRefundNotifications({pool,orderId,companyId,f
   const id=refund?.id;
   if(typeof id!=='string'||!/^re_[A-Za-z0-9]+$/.test(id))throw Error('REFUND_REFERENCE_INVALID');
   if(typeof refund.status!=='string'||!['queued','pending','processing','refunded','failed','canceled'].includes(refund.status))throw Error('REFUND_STATUS_INVALID');
+  if(seen.has(id))throw Error('REFUND_REFERENCE_DUPLICATE');
+  seen.add(id);
  }
  const outcomes=[];
  for(const refund of refunds){
-  const id=refund?.id;
-  if(typeof id!=='string'||!/^re_[A-Za-z0-9]+$/.test(id))throw Error('REFUND_REFERENCE_INVALID');
-  if(seen.has(id))continue;
-  seen.add(id);
+  const id=refund.id;
   if(refund.status!=='refunded')continue;
   outcomes.push(await reconcileShopRefund({pool,orderId,companyId,refundId:id,fetchProviderRefund,fetchProviderPayment}));
  }
