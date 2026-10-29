@@ -20,7 +20,7 @@ Anbieterbeweis- und Test-Handoff-Funktionen bleiben die einzige Zahlungslogik.
    Zahlungsstatus und unveränderliche Zahlungsbeweise werden dabei nicht umgeschrieben.
 5. Geschützte Händlerübersicht und POST-Nachprüfung mit vorhandener frischer owner/admin-
    Authentifizierung und Händlerfreigabe. Nur eigene Bestellungen, keine Provider-IDs,
-   Käuferdaten oder Secrets. Nachprüfung nutzt dieselbe dauerhafte Minuten-Sperre,
+   Käuferdaten oder Secrets. Nachprüfung nutzt dieselbe dauerhafte Sperre (mindestens eine Minute; nach Fehlern auch den Rückoff),
    führt ausschließlich vorhandene GET-Recovery aus und erzeugt keine zweite Zahlung.
 6. Host-Vorprüfung `runtime.readiness()` meldet Migration, Testadapter und Scheduler getrennt.
    Meldet stets Testmodus, productionReady=false/canPay=false/canFulfil=false. Sie beweist
@@ -70,4 +70,27 @@ Testbestätigung ist kein Umsatz und keine Erlaubnis zur Warenübergabe.
 
 ## Verifikation
 
-Aktuelle bestätigte Ergebnisse werden nach Abschluss der Prüfungen ergänzt.
+Anwendungsstand0c0b71272ed3713cb0c40282b096a8bbd4235b60 (Remote), identischer lokaler Tree
+f89fe6fd9c514276b6089a0c91d0478cd9603fdb.
+
+- 662 allgemeine lokale Projekttests bestanden, keine Fehler/ausgelassenen Tests.
+- 705 lokale Shop-Tests bestanden. Nach den letzten Privatsphäre-/Hostlebenszyklusänderungen
+  zusätzlich14 fokussierte Checkout-/HTTP-/Hostprüfungen und2 UI-Prüfungen bestanden.
+- Asynchrone Fehler des reinen Ergebnisbeobachters werden ebenfalls abgefangen;
+  die3 Schedulerprüfungen bestehen auf dem endgültigen Codezustand.
+- Endgültige GitHub-Zahlungssicherheit40960682825/job123752321979:115 bestanden,
+  keine Fehler/ausgelassenen Tests, einschließlich realem PostgreSQL und acht
+  gleichzeitigen Händler-Nachprüfungen ohne zweiten Zahlungsstart.
+- Nativer HTTPS-Browserteil in40960682847/job123752321608 bestanden: OAuth/Cookie,
+  Profilprüfung, verlorene Antwort/GET-Recovery/Rückkehr, private Händlerübersicht,
+  terminale Testbestellung ohne zweite Aktion, Datenschutz und390/768/1280.
+- Alle vier für den gestapelten PR ausgelösten Anwendungsworkflows auf0c0b7127
+  erfolgreich: Zahlungssicherheit40960682825, Shop40960682847/job123752321608,
+  POS/AI40960682936 und isolierte Vorschau40960682838.
+- Vollständige Shop-Suite sowie tatsächlicher Anwendungsstart mit PostgreSQL und
+  bestehenden nativen Händler-/Kundenabläufen in40960682847 erfolgreich abgeschlossen.
+
+Alle Anbieterantworten sind isoliert simuliert; kein echter Händler/Provider wurde
+verbunden. Lokale Komplettzahlungssuite hatte nach Bereitstellung der Testabhängigkeit
+keine Fehler; die beiden mangels lokalem PostgreSQL übersprungenen Parallelprüfungen
+sind im endgültigen GitHub-Lauf ohne Skip bestanden. Kein Produktionsstart oder Deployment.
