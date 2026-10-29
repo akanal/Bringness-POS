@@ -3,7 +3,8 @@ import {digestShopDocument} from './shop-document-archive-policy.js';
 import {validateShopDocumentNumber} from './shop-document-number-policy.js';
 // Isolated transaction primitive. Not mounted in production.
 // Fiscal correctness and invoice content must be validated by the caller.
-export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,originalDocumentId=null,content,id=randomUUID(),archive=false}){
+export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,originalDocumentId=null,content,id=randomUUID(),archive=false,requirePaid=false}){
+ if(typeof requirePaid!=='boolean')throw Error('SHOP_DOCUMENT_PAYMENT_OPTION_INVALID');
  if(typeof archive!=='boolean')throw Error('SHOP_DOCUMENT_ARCHIVE_OPTION_INVALID');
  if(!['invoice','credit_note'].includes(kind)||!Number.isSafeInteger(year)||year<2000||year>9999)throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
  if(typeof companyId!=='string'||typeof orderId!=='string'||!companyId||!orderId||!content||typeof content!=='object'||Array.isArray(content))throw Error('SHOP_DOCUMENT_ISSUE_INVALID');
@@ -12,6 +13,18 @@ export async function issueShopDocumentRecord(pool,{companyId,kind,year,orderId,
  const db=await pool.connect();
  try{
   await db.query('BEGIN');
+  if(requirePaid){
+   const payment=await db.query('SELECT amount_cents,currency,snapshot,provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId]);
+   const row=payment.rows[0];
+   if(!row||!row.provider_reference||row.currency!=='EUR'||!row.snapshot||row.snapshot.status!=='paid')throw Error('SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED');
+   const paidEvents=row.snapshot.events?.filter(event=>event.kind==='paid')??[];
+   const paidAmount=paidEvents.reduce((sum,event)=>sum+event.amountCents,0);
+   if(!Number.isSafeInteger(paidAmount)||paidAmount!==Number(row.amount_cents))throw Error('SHOP_DOCUMENT_PAYMENT_LEDGER_INVALID');
+   if(kind==='invoice'){
+    const existing=await db.query("SELECT id FROM shop_document_records WHERE order_id=$1 AND company_id=$2 AND kind='invoice'",[orderId,companyId]);
+    if(existing.rows.length)throw Error('SHOP_DOCUMENT_INVOICE_ALREADY_EXISTS');
+   }
+  }
   if(kind==='credit_note'){
    const original=await db.query("SELECT id FROM shop_document_records WHERE id=$1 AND company_id=$2 AND order_id=$3 AND kind='invoice'",[originalDocumentId,companyId,orderId]);
    if(original.rows.length!==1)throw Error('SHOP_DOCUMENT_ORIGINAL_NOT_FOUND');
