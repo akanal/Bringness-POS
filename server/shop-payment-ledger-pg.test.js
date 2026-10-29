@@ -9,13 +9,14 @@ test('persistent ledger enforces order amount, tenant isolation, replay and roll
  try{
   await migrateShopPaymentLedger(pool);
   await initializeShopPaymentLedger(pool,{orderId:order,companyId:company,amountCents:1000,currency:'EUR'});
-  await initializeShopPaymentLedger(pool,{orderId:order,companyId:company,amountCents:1000,currency:'EUR'});
+  assert.equal((await initializeShopPaymentLedger(pool,{orderId:order,companyId:company,amountCents:1000,currency:'EUR'})).status,'unpaid');
   await assert.rejects(initializeShopPaymentLedger(pool,{orderId:order,companyId:other,amountCents:1000,currency:'EUR'}),/LEDGER_CONFLICT/);
   await assert.rejects(initializeShopPaymentLedger(pool,{orderId:order,companyId:company,amountCents:900,currency:'EUR'}),/LEDGER_CONFLICT/);
   await assert.rejects(recordShopPaymentEvent(pool,{orderId:order,companyId:other,event:{id:'p',kind:'paid',amountCents:1000,verified:true}}),/ORDER_NOT_FOUND/);
   const event={id:'p',kind:'paid',amountCents:1000,verified:true};
   assert.equal((await recordShopPaymentEvent(pool,{orderId:order,companyId:company,event})).snapshot.status,'paid');
   assert.equal((await recordShopPaymentEvent(pool,{orderId:order,companyId:company,event})).replay,true);
+  assert.equal((await initializeShopPaymentLedger(pool,{orderId:order,companyId:company,amountCents:1000,currency:'EUR'})).status,'paid');
   await assert.rejects(recordShopPaymentEvent(pool,{orderId:order,companyId:company,event:{id:'r',kind:'refund',amountCents:1001,verified:true}}),/EXCEEDS_PAID/);
   assert.equal((await db.query('SELECT snapshot FROM shop_payment_ledger WHERE order_id=$1',[order])).rows[0].snapshot.status,'paid');
   assert.equal((await recordShopPaymentEvent(pool,{orderId:order,companyId:company,event:{id:'r',kind:'refund',amountCents:1000,verified:true}})).snapshot.status,'refunded');
