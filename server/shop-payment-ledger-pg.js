@@ -26,8 +26,9 @@ export async function bindShopPaymentProvider(pool,{orderId,companyId,providerRe
  const db=await pool.connect();
  try{
   await db.query('BEGIN');
-  const row=(await db.query('SELECT provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId])).rows[0];
+  const row=(await db.query('SELECT provider_reference,snapshot FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId])).rows[0];
   if(!row)throw Error('PAYMENT_ORDER_NOT_FOUND');
+  if(row.snapshot.status!=='unpaid'&&row.provider_reference!==providerReference)throw Error('PAYMENT_PROVIDER_BINDING_CLOSED');
   if(row.provider_reference&&row.provider_reference!==providerReference)throw Error('PAYMENT_PROVIDER_REFERENCE_CONFLICT');
   if(!row.provider_reference)await db.query('UPDATE shop_payment_ledger SET provider_reference=$3 WHERE order_id=$1 AND company_id=$2',[orderId,companyId,providerReference]);
   await db.query('COMMIT');return {orderId,providerReference};
@@ -40,6 +41,7 @@ export async function recordShopPaymentEvent(pool,{orderId,companyId,event}){
   const row=(await db.query('SELECT snapshot,provider_reference FROM shop_payment_ledger WHERE order_id=$1 AND company_id=$2 FOR UPDATE',[orderId,companyId])).rows[0];
   if(!row)throw Error('PAYMENT_ORDER_NOT_FOUND');
   if(!row.provider_reference||row.provider_reference!==event?.providerReference)throw Error('PAYMENT_PROVIDER_REFERENCE_MISMATCH');
+  // Provider verification must occur upstream; this module is not an authenticated webhook handler.
   const result=applyShopPaymentEvent(row.snapshot,event);
   if(!result.replay)await db.query('UPDATE shop_payment_ledger SET snapshot=$3,updated_at=now() WHERE order_id=$1 AND company_id=$2',[orderId,companyId,result.snapshot]);
   await db.query('COMMIT');return result;
