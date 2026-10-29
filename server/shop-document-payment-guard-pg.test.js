@@ -24,3 +24,20 @@ test('confirmed payment required and duplicate invoices blocked in guarded mode'
   assert.equal(count.rows[0].n,1);
  }finally{await db.close();}
 });
+
+test('guarded credit note requires a recorded refund and prevents repeated crediting',async()=>{
+ const db=new PGlite(),pool={connect:async()=>({query:(...args)=>db.query(...args),release(){}})};
+ try{
+  await migrateShopDocumentNumbers(db);await migrateShopDocumentRecords(db);await migrateShopPaymentLedger(db);
+  await db.query("INSERT INTO shop_payment_ledger(order_id,company_id,amount_cents,currency,snapshot,provider_reference) VALUES($1,$2,1190,'EUR',$3,'tr_confirmed')",[orderId,companyId,{amountCents:1190,status:'paid',events:[{kind:'paid',id:'tr_confirmed',amountCents:1190}]}]);
+  const invoice=await issueShopDocumentRecord(pool,{companyId,orderId,kind:'invoice',year:2026,content:{totalCents:1190},requirePaid:true});
+  const content={originalInvoiceId:invoice.id,refundId:'re_123',amountCents:300,currency:'EUR'};
+  const args={companyId,orderId,kind:'credit_note',year:2026,originalDocumentId:invoice.id,content,requirePaid:true};
+  await assert.rejects(issueShopDocumentRecord(pool,args),/SHOP_DOCUMENT_PAYMENT_NOT_CONFIRMED/);
+  await db.query("UPDATE shop_payment_ledger SET snapshot=$2 WHERE order_id=$1",[orderId,{amountCents:1190,status:'partially_refunded',events:[{kind:'paid',id:'tr_confirmed',amountCents:1190},{kind:'refund',id:'re_123',amountCents:300}]}]);
+  await assert.rejects(issueShopDocumentRecord(pool,{...args,content:{...content,amountCents:301}}),/SHOP_DOCUMENT_REFUND_NOT_CONFIRMED/);
+  const credit=await issueShopDocumentRecord(pool,args);
+  assert.equal(credit.documentNumber,'CRN-2026-000000001');
+  await assert.rejects(issueShopDocumentRecord(pool,args),/SHOP_DOCUMENT_REFUND_ALREADY_CREDITED/);
+ }finally{await db.close();}
+});
