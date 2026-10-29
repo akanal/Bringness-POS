@@ -55,8 +55,18 @@ Die Restaurantregeln und die übrigen POS-/Kellneroberflächen bleiben unveränd
 
 ## Prüfung
 
-Erste lokale Durchläufe:7 neue Verbindungs-/HTTP-/Recovery-Tests und5 neue UI-Tests bestanden;
-659 allgemeine Projekttests bestanden. Zahlungsregression105 bestanden, ein lokaler
-PostgreSQL-Test mangels Server übersprungen. Neue zusätzliche PostgreSQL-Abnahme und
-abschließende vollständige Shop-/Browser-Prüfung folgen in CI. Dieser Abschnitt wird mit
-den tatsächlichen Ergebnissen aktualisiert; Vorbereitung ist kein erfolgreicher Lauf.
+Anwendungsstand:61e62ff955ef607a90157da98966a0fd18478875 auf GitHub,
+identischer lokaler Tree7603ea6c2f3d87b89dc676e8af060be53f751ec4 /12f885fb.
+
+- 659 allgemeine lokale Projekttests bestanden.
+- 16 lokale Verbindungs-/Checkout-Integrationsprüfungen nach der letzten Serversperrkorrektur bestanden.
+- 12 fokussierte UI-Prüfungen bestanden, darunter geschlossene Bestellungen ohne neuen Zahlungsstart.
+- 107 Zahlungstests in GitHub bestanden, keine ausgelassenen Prüfungen. Enthält echten PostgreSQL-Einmalstart, parallele Token-Erneuerung, gleichzeitigen Abgleich und Kontowechsel gegen begonnene Zahlung.
+- Neuer nativer HTTPS-Browsertest in Shop40957194617/job123740221733 bestanden: sichere Cookie-/State-Zustimmung, Callback, Profilprüfung, verlorene Zahlungsantwort, GET-Recovery, Rückkehrseite, einmaliger Test-Handoff und390/768/1280 ohne Überstand. Provider vollständig isoliert simuliert.
+- Abschließende GitHub-Shop-Suite:703 bestanden, keine Fehler oder ausgelassenen Prüfungen. Echter Anwendungsstart mit PostgreSQL und bestehende native Händler-/Kundenabläufe ebenfalls erfolgreich.
+- Alle sechs Anwendungs-Prüfläufe auf61e62ff erfolgreich: Shop40957194617/job123740221733, Zahlungssicherheit40957194569, POS/AI40957194565, isolierte Vorschau40957194459, Bringness40957194475 und Release40957194423. Browserartefakt12932899143.
+
+Frühere Browserprüfung zeigte einen Teststatus-Knopf bei bereits geschlossenen unbezahlten
+Bestellungen. Die aktuelle Version beschränkt ihn auf zahlbare Bestellungen oder bereits
+gebundene Testzahlungen; bestehende native Händler-/Kundenprüfungen bleiben unverändert.
+Kein Produktionskonto, Secret, Zahlungsauftrag oder Live-System wurde geändert.
