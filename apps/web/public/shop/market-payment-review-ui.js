@@ -21,9 +21,9 @@ export function mountMarketPaymentReview({window:w,host,client}){
   list.replaceChildren(fragment);status.textContent=r.payments.length?(r.hasMore?'Die neuesten 50 Testzahlungen. Weitere Vorgänge sind vorhanden.':'Testzahlungen geladen. Keine Warenfreigabe oder Umsatzbuchung.'):'Keine Testzahlungen vorhanden.';
  }
  async function action(orderId){
-  if(busy||d.hidden)return;busy=true;const start=++epoch,original=token();for(const b of section.querySelectorAll('button'))b.disabled=true;
+  if(busy||d.hidden)return;busy=true;const start=++epoch,original=token();for(const b of section.querySelectorAll('button'))b.disabled=true;list.replaceChildren();status.textContent='Zahlungsstand wird geprüft.';
   try{const r=await client.call(orderId?'/merchant-recheck':'/merchant-payments',{auth:true,...(orderId?{body:{orderId}}:{})});if(start!==epoch||token()!==original||d.hidden)return;render(r);if(orderId&&r.confirmed===false)status.textContent='Zahlungsstand nicht bestätigt. Die Bestellung bleibt gesperrt; später erneut prüfen.';}
-  catch(e){if(start===epoch&&token()===original){list.replaceChildren();status.textContent=marketError(e);}}
+  catch(e){if(start===epoch){if(token()!==original)privacy();else{list.replaceChildren();status.textContent=marketError(e);}}}
   finally{busy=false;for(const b of section.querySelectorAll('button'))b.disabled=false;}
  }
  load.addEventListener('click',()=>action());return {privacy};

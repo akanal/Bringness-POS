@@ -200,6 +200,21 @@ test('host preflight reports test boundaries and scheduler starts only after con
   const disabled=createMarketplaceRuntime(f.pool,{enabled:true});await disabled.migrate();assert.throws(()=>disabled.startReconciliation(),/MARKET_CHECKOUT_DISABLED/);
   const runtime=createMarketplaceRuntime(f.pool,{enabled:true,checkoutProviderResolver:f.resolveProvider});assert.throws(()=>runtime.startReconciliation(),/MARKET_CHECKOUT_DISABLED/);await runtime.migrate();
   assert.equal(runtime.readiness().productionReady,false);const worker=runtime.startReconciliation();assert.equal(runtime.readiness().schedulerRunning,true);assert.throws(()=>runtime.startReconciliation(),/MARKET_SCHEDULER_ACTIVE/);
-  assert.deepEqual(await worker.tick(),{ok:true,checked:0,failed:0,busy:false});await worker.stop();assert.equal(runtime.readiness().schedulerRunning,false);
+  assert.deepEqual(await worker.tick(),{ok:true,checked:0,failed:0,busy:false});await worker.stop();assert.equal(runtime.readiness().schedulerRunning,false);const next=runtime.startReconciliation();await worker.stop();assert.equal(runtime.readiness().schedulerRunning,true);await next.stop();
  }finally{await f.db.close();}
+});
+test('merchant payment HTTP routes enforce origin, exact commands and tenant scope',async()=>{
+ const f=await setup();let server;try{
+  await f.checkout.start(f.args);const runtime=createMarketplaceRuntime(f.pool,{enabled:true,checkoutProviderResolver:f.resolveProvider});await runtime.migrate();
+  server=http.createServer(async(req,res)=>{if(!await runtime.handle(req,res)){res.statusCode=404;res.end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+  const base='http://127.0.0.1:'+server.address().port+'/api/v1/shop/marketplace';
+  const get=await fetch(base+'/merchant-payments',{headers:{Authorization:'Bearer owner-a'}});assert.equal(get.status,200);assert.equal((await get.json()).payments.length,1);
+  assert.equal((await fetch(base+'/merchant-payments?unexpected=1',{headers:{Authorization:'Bearer owner-a'}})).status,400);
+  const post=(token,origin,body)=>fetch(base+'/merchant-recheck',{method:'POST',headers:{Authorization:'Bearer '+token,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  assert.equal((await post('owner-a','https://evil.test',{orderId:f.orderId})).status,403);
+  assert.equal((await post('owner-a','https://bringness.de',{orderId:f.orderId,amountCents:1})).status,400);
+  assert.equal((await post('owner-b','https://bringness.de',{orderId:f.orderId})).status,403);
+  assert.equal((await post('owner-a','https://bringness.de',{orderId:f.orderId})).status,200);assert.equal(f.calls,1);
+  assert.equal((await post('owner-a','https://bringness.de',{orderId:f.orderId})).status,409);
+ }finally{if(server)await new Promise(r=>server.close(r));await f.db.close();}
 });
