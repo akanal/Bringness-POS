@@ -7,7 +7,7 @@ export async function recordBillingMail(c,tx,status){
  if(status==='paid'&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) VALUES($1,'invoice',now()) ON CONFLICT(transaction_id) DO UPDATE SET kind='invoice',due_at=now()",[tx.id]);
  else if(status==='failed'&&tx.mollie_subscription_id&&!tx.paid_at)await c.query("INSERT INTO billing_mail_events(transaction_id,kind,due_at) SELECT id,'reminder',now()+interval '7 days' FROM billing_transactions WHERE id=$1 AND created_at>now()-interval '1 day' ON CONFLICT DO NOTHING",[tx.id]);
 }
-const rowSql=`SELECT bt.*,bp.name,e.kind,e.created_at event_at,u.email,(SELECT to_jsonb(c)->>'customer_number' FROM companies c WHERE c.id=bt.company_id) AS customer_number FROM billing_mail_events e JOIN billing_transactions bt ON bt.id=e.transaction_id JOIN billing_plans bp ON bp.id=bt.plan_id JOIN LATERAL(SELECT email FROM users WHERE company_id=bt.company_id AND role='owner' AND status='active' ORDER BY created_at,id LIMIT 1) u ON true`;
+const rowSql=`SELECT bt.*,bp.name,e.kind,e.created_at event_at,u.email FROM billing_mail_events e JOIN billing_transactions bt ON bt.id=e.transaction_id JOIN billing_plans bp ON bp.id=bt.plan_id JOIN LATERAL(SELECT email FROM users WHERE company_id=bt.company_id AND role='owner' AND status='active' ORDER BY created_at,id LIMIT 1) u ON true`;
 export function createBillingMail(pool,{env=process.env,fetchPayment=fetch}={}){
  let running=false;
  const origin=()=>{const u=new URL(env.PUBLIC_BASE_URL||'https://bringness.de');if(u.protocol!=='https:')throw Error('PUBLIC_ORIGIN_INVALID');return u.origin};
@@ -21,7 +21,7 @@ export function createBillingMail(pool,{env=process.env,fetchPayment=fetch}={}){
   return z;
  }
  async function tick(){if(running)return;running=true;try{const rows=(await pool.query(rowSql+` WHERE e.due_at<=now() AND ((e.kind='invoice' AND bt.status='paid') OR (e.kind='reminder' AND bt.status='failed')) AND NOT EXISTS(SELECT 1 FROM transactional_mail m WHERE m.dedupe_key='billing:'||e.kind||':'||bt.id::text) ORDER BY e.due_at LIMIT 20`)).rows;for(const z of rows){try{const good=await current(z.id,z.email);if(good)await enqueueMail(pool,'billing:'+z.kind+':'+z.id,z.email,{kind:'billing',transactionId:z.id,billingKind:z.kind});}catch{console.error('Billing mail event unavailable');}}}finally{running=false}}
- async function resolve(message,recipient){const z=await current(message.transactionId,recipient);if(!z||z.kind!==message.billingKind)return null;const result=billingMail(z.kind,z,origin()+'/pos/');if(z.kind==='invoice')result.attachments=[{filename:'Rechnung-'+z.invoice_number.replace(/[^A-Za-z0-9-]/g,'')+'.pdf',content:await invoicePdf(z,env)}];return result;}
+ async function resolve(message,recipient){const z=await current(message.transactionId,recipient);if(!z||z.kind!==message.billingKind)return null;const result=billingMail(z.kind,z,origin()+'/pos/');if(z.kind==='invoice'){const number=await pool.query('SELECT customer_number FROM companies WHERE id=$1',[z.company_id]);z.customer_number=number.rows[0]?.customer_number??null;result.attachments=[{filename:'Rechnung-'+z.invoice_number.replace(/[^A-Za-z0-9-]/g,'')+'.pdf',content:await invoicePdf(z,env)}];}return result;}
  return {tick,resolve};
 }
 export async function invoicePdf(z,env){
