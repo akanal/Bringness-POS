@@ -18,6 +18,9 @@ export async function transitionMarketplaceOrder(pool,{token,command}){
  const order=(await db.query('SELECT * FROM shop_market_seller_orders WHERE id=$1 AND company_id=$2 FOR UPDATE',[c.orderId,company])).rows[0];if(!order)fail('ORDER_NOT_FOUND');
  const state=(await db.query('SELECT * FROM shop_market_order_state WHERE order_id=$1 FOR UPDATE',[order.id])).rows[0],revision=state?.revision??0,status=state?.status??'received';
  if(c.expectedRevision!==revision)fail('REVISION_CONFLICT');
+ const checkout=(await db.query('SELECT state FROM shop_market_test_checkouts WHERE order_id=$1',[order.id])).rows[0];
+ // Test payments must never release real fulfilment or stock during ambiguity.
+ if(checkout&&!['failed','expired','canceled'].includes(checkout.state))fail('MARKET_TEST_CHECKOUT_ACTIVE');
  const next=nextMarketOrder(status,order.shipment.method,c.action);
  if(['rejected','cancelled'].includes(next)){
  const allocations=(await db.query('SELECT offer_id,sku,quantity FROM shop_market_allocations WHERE order_id=$1 ORDER BY offer_id,sku',[order.id])).rows;
