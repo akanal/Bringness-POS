@@ -11,9 +11,9 @@ test('read verifies integrity and commits an audit entry',async()=>{
  try{
   await migrateShopDocumentRecords(db);await migrateShopDocumentArchive(db);await migrateShopDocumentArchiveAudit(db);
   await db.query("INSERT INTO shop_document_records(id,company_id,kind,year,sequence,document_number,order_id,content) VALUES($1,$2,'invoice',2026,1,'INV-2026-000000001',$3,$4)",[documentId,companyId,orderId,{totalCents:1190}]);
-  await archiveShopDocument(db,{documentId,payload:{totalCents:1190}});
+  await archiveShopDocument(db,{documentId,payload:{documentNumber:'INV-2026-000000001',kind:'invoice',orderId,content:{totalCents:1190}}});
   const read=await readShopArchivedDocument(pool,{documentId,actor:{id:'staff-1',companyId,role:'staff'}});
-  assert.equal(read.payload.totalCents,1190);
+  assert.equal(read.payload.content.totalCents,1190);
   assert.equal((await db.query('SELECT count(*)::int AS count FROM shop_document_archive_audit')).rows[0].count,1);
   await assert.rejects(readShopArchivedDocument(pool,{documentId,actor:{id:'',companyId,role:'staff'}}),/ACTOR_INVALID/);
   assert.equal((await db.query('SELECT count(*)::int AS count FROM shop_document_archive_audit')).rows[0].count,1);
