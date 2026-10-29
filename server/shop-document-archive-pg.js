@@ -7,8 +7,8 @@ export async function migrateShopDocumentArchive(pool){
  digest_sha256 text NOT NULL CHECK(digest_sha256 ~ '^[a-f0-9]{64}$'),
  archived_at timestamptz NOT NULL DEFAULT now()
  )`);
- await pool.query(`CREATE OR REPLACE FUNCTION shop_document_archive_reject_mutation() RETURNS trigger LANGUAGE plpgsql AS $
- BEGIN RAISE EXCEPTION 'SHOP_ARCHIVE_IMMUTABLE'; END; $`);
+ await pool.query(`CREATE OR REPLACE FUNCTION shop_document_archive_reject_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+ BEGIN RAISE EXCEPTION 'SHOP_ARCHIVE_IMMUTABLE'; END; $$`);
  await pool.query(`DROP TRIGGER IF EXISTS shop_document_archive_immutable ON shop_document_archive`);
  await pool.query(`CREATE TRIGGER shop_document_archive_immutable BEFORE UPDATE OR DELETE ON shop_document_archive
  FOR EACH ROW EXECUTE FUNCTION shop_document_archive_reject_mutation()`);
