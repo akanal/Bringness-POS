@@ -27,8 +27,6 @@ jobs:
         with: {node-version: 24}
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm ci --prefix ops/shop --ignore-scripts --no-audit --no-fund
-      - name: Complete isolated shop suite
-        run: node ops/shop/run.mjs
       - name: Prepare native browser
         timeout-minutes: 4
         run: |
@@ -39,16 +37,18 @@ jobs:
           else
             node "$RUNNER_TEMP/shop-browser/node_modules/playwright/cli.js" install --with-deps chromium
           fi
+      - name: Protected merchant and customer TEST checkout in native browser
+        run: node ops/shop/marketplace-payment-browser.mjs
+        env:
+          SHOP_DESIGN_ARTIFACTS: ${{ runner.temp }}/shop-design
+          SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs
+
+      - name: Complete isolated shop suite
+        run: node ops/shop/run.mjs
       - name: Current production entrypoint with real PostgreSQL and browser
         run: node ops/shop/production-entrypoint-smoke.mjs
         env:
           SHOP_INTEGRATION_DATABASE_URL: postgres://shop_test:shop_test@localhost:5432/bringness_shop_integration
-          SHOP_DESIGN_ARTIFACTS: ${{ runner.temp }}/shop-design
-          SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs
-
-      - name: Protected merchant and customer TEST checkout in native browser
-        run: node ops/shop/marketplace-payment-browser.mjs
-        env:
           SHOP_DESIGN_ARTIFACTS: ${{ runner.temp }}/shop-design
           SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs
 

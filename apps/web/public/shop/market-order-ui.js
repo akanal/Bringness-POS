@@ -35,7 +35,7 @@ export function mountMarketOrderViews({window:w,document:d=w.document,client,sel
    if(r.tracking){box.append(el('p','Versandangabe des Händlers: '+r.tracking.carrierName+' · '+r.tracking.number+' · Stand '+r.trackingRevision));const url=marketTrackingUrl(r.tracking);if(url){const a=el('a','Sendung bei DHL verfolgen (externe Seite)');a.href=url;a.target='_blank';a.rel='noopener noreferrer nofollow';a.referrerPolicy='no-referrer';box.append(a);}box.append(el('p','Versandangabe bestätigt weder Zahlung noch Zustellung.'));}
    if(r.testPayment?.mode==='test')box.append(el('p','Testzahlung: '+r.testPayment.status+' · Keine Warenfreigabe.'));
    if(seller){for(const action of (Array.isArray(r.actions)?r.actions:marketOrderActions(r.status,r.method))){const button=el('button',labels[action]);button.type='button';button.disabled=busy;button.addEventListener('click',()=>write(r,action));box.append(button);}if(r.method==='shipping'&&r.status==='shipped')trackingForm(r,box);}
-   host.append(box);if(!seller){const version=epoch;mountMarketPayment({window:w,host:box,client,orderId:r.id,amountCents:r.grossCents,isCurrent:()=>version===epoch});}
+   host.append(box);if(!seller&&(['received','accepted'].includes(r.status)||r.testPayment?.mode==='test')){const version=epoch;mountMarketPayment({window:w,host:box,client,orderId:r.id,amountCents:r.grossCents,isCurrent:()=>version===epoch});}
   }
   if(!rows.length)host.append(el('p','Keine Bestellungen vorhanden.'));load.disabled=busy;
  }
