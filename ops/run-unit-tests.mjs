@@ -8,7 +8,7 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const dedicated=new Set(['center-browser.test.js','center-database.test.js','pos-payment-browser.test.js']);
 // PGlite-backed suites run in the isolated shop-payment CI job, which installs
 // the test-only dependency without changing production npm dependencies.
-const shopDatabaseTests=new Set(['shop-mollie-notification-service.test.js','shop-payment-ledger-pg.test.js','shop-payment-provider-sync.test.js','shop-payment-refund-sync.test.js','shop-document-number-pg.test.js']);
+const shopDatabaseTests=new Set(['shop-mollie-notification-service.test.js','shop-payment-ledger-pg.test.js','shop-payment-provider-sync.test.js','shop-payment-refund-sync.test.js','shop-document-number-pg.test.js','shop-document-record-pg.test.js']);
 const files=[];
 for(const directory of ['server','tests']){
  for(const name of (await readdir(new URL('../'+directory+'/',import.meta.url))).sort()){
