@@ -41,6 +41,8 @@ test('guarded credit note requires a recorded refund and prevents repeated credi
   const credit=await issueShopDocumentRecord(pool,args);
   assert.equal(credit.documentNumber,'CRN-2026-000000001');
   await assert.rejects(issueShopDocumentRecord(pool,args),/SHOP_DOCUMENT_REFUND_ALREADY_CREDITED/);
+  const archives=await db.query('SELECT count(*)::int AS n FROM shop_document_archive');
+  assert.equal(archives.rows[0].n,2);
  }finally{await db.close();}
 });
 
