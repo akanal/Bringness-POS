@@ -1,0 +1,13 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {readFile} from 'node:fs/promises';import {dependency} from './dependency.mjs';
+import {mountGuidedOffer} from '../../apps/web/public/shop/guided-offer.js';
+test('guided offer steps keep edits and never save, publish or mark account readiness',async()=>{
+ const {JSDOM}=createRequire(import.meta.url)(dependency('jsdom','SHOP_JSDOM_PATH'));const dom=new JSDOM(await readFile(new URL('../../apps/web/public/shop/seller.html',import.meta.url),'utf8'),{url:'https://bringness.de/shop/seller.html',pretendToBeVisual:true}),w=dom.window,d=w.document,$=id=>d.getElementById(id);let submits=0,writes=0;
+ w.fetch=()=>{writes++;throw Error('unexpected request');};$('offer-form').addEventListener('submit',e=>{submits++;e.preventDefault();});$('offer-title').value='Keep this edited title';w.localStorage.setItem('fixture','unchanged');
+ try{mountGuidedOffer({window:w});assert.equal($('guided-offer-nav').querySelectorAll('button').length,5);assert.equal($('guided-offer-prev').disabled,true);
+ $('guided-offer-field').click();assert.equal(d.activeElement,$('offer-title'));
+ for(let i=0;i<4;i++)$('guided-offer-next').click();assert.equal($('guided-offer-next').disabled,true);assert.equal($('guided-offer-status').textContent,'Schritt 5 von 5');assert.equal($('guided-offer-publish').hidden,false);assert.match($('guided-offer-copy').textContent,/veröffentlicht noch nichts/);
+ $('guided-offer-prev').click();assert.match($('guided-offer-copy').textContent,/Stück/);$('offer-kind').value='digital';$('offer-kind').dispatchEvent(new w.Event('change'));$('physical-fields').hidden=true;$('fulfilment-fields').hidden=false;assert.match($('guided-offer-copy').textContent,/bleibt privat/);$('guided-offer-field').click();assert.equal(d.activeElement,$('offer-fulfilment'));
+ $('offer-form').hidden=true;$('guided-offer-field').click();assert.match($('guided-offer-status').textContent,/nicht verfügbar/);assert.equal($('offer-form').hidden,true);
+ assert.equal($('offer-title').value,'Keep this edited title');assert.equal(w.localStorage.getItem('fixture'),'unchanged');assert.equal(w.localStorage.length,1);assert.equal(w.sessionStorage.length,0);assert.equal(submits,0);assert.equal(writes,0);assert.equal(d.querySelectorAll('#guided-start [aria-current=step]').length,1);
+ }finally{w.close();}
+});
