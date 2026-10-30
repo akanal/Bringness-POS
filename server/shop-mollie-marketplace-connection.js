@@ -19,6 +19,7 @@ export async function migrateMarketplaceConnections(db){
  await db.query(`CREATE TABLE IF NOT EXISTS shop_market_mollie_states(
  state_hash text PRIMARY KEY,seller_company_id uuid NOT NULL UNIQUE REFERENCES companies(id),session_hash text NOT NULL,
  browser_hash text NOT NULL,expires_at timestamptz NOT NULL)`);
+ await db.query('ALTER TABLE shop_market_mollie_states ADD COLUMN IF NOT EXISTS claimed_at timestamptz');
 }
 // No default env lookup, generated runtime key, platform-key fallback or startup
 // activation. The host must supply protected app credentials and a stable key.
@@ -95,19 +96,25 @@ export function createMarketplaceConnections(pool,{clientId,clientSecret,tokenKe
    await tx(session,async(db,seller)=>{
     // Do not silently replace a binding while it owns unresolved/paid test intents.
     const active=(await db.query("SELECT 1 FROM shop_market_test_checkouts WHERE seller_company_id=$1 AND state NOT IN ('failed','expired','canceled') LIMIT 1",[seller])).rows[0];if(active)fail('MARKET_CONNECTION_IN_USE');
-    await db.query(`INSERT INTO shop_market_mollie_states VALUES($1,$2,$3,$4,clock_timestamp()+interval '10 minutes') ON CONFLICT(seller_company_id) DO UPDATE SET state_hash=excluded.state_hash,session_hash=excluded.session_hash,browser_hash=excluded.browser_hash,expires_at=excluded.expires_at`,[hash(state),seller,session,hash(browserNonce)]);
+    await db.query(`INSERT INTO shop_market_mollie_states(state_hash,seller_company_id,session_hash,browser_hash,expires_at) VALUES($1,$2,$3,$4,clock_timestamp()+interval '10 minutes') ON CONFLICT(seller_company_id) DO UPDATE SET state_hash=excluded.state_hash,session_hash=excluded.session_hash,browser_hash=excluded.browser_hash,expires_at=excluded.expires_at,claimed_at=NULL`,[hash(state),seller,session,hash(browserNonce)]);
    });const u=new URL('https://my.mollie.com/oauth2/authorize');for(const [k,v]of Object.entries({client_id:clientId,redirect_uri:callback,response_type:'code',scope:scopes,state,locale:'de_DE'}))u.searchParams.set(k,v);
    return {authorizationUrl:u.href,browserNonce};
   },
   async complete({state,code,error,browserNonce}){requireConfig();if(!cookiePattern.test(state||'')||!cookiePattern.test(browserNonce||''))fail('MARKET_CONNECT_STATE');
-   // Consume once before token exchange. Lost replies require new explicit consent,
-   // never replay a one-use provider code or replace a connection ambiguously.
-   const saved=(await pool.query('DELETE FROM shop_market_mollie_states WHERE state_hash=$1 AND browser_hash=$2 AND expires_at>clock_timestamp() RETURNING *',[hash(state),hash(browserNonce)])).rows[0];if(!saved)fail('MARKET_CONNECT_STATE');
+   // Claim durably before token exchange, but retain the attempt until commit.
+   // Disconnect/new consent invalidates even an in-flight callback. A claimed
+   // provider code is never replayed after failure/restart or a lost reply.
+   const saved=(await pool.query('UPDATE shop_market_mollie_states SET claimed_at=clock_timestamp() WHERE state_hash=$1 AND browser_hash=$2 AND expires_at>clock_timestamp() AND claimed_at IS NULL RETURNING *',[hash(state),hash(browserNonce)])).rows[0];if(!saved)fail('MARKET_CONNECT_STATE');
    await tx(saved.session_hash,async(db,seller)=>{if(seller!==saved.seller_company_id)fail('ACCOUNT_CHANGED');});
    if(error)fail('MARKET_CONNECT_DENIED');if(typeof code!=='string'||!code||code.length>2048)fail('MARKET_CONNECT_STATE');
    const t=await exchange({grant_type:'authorization_code',code,redirect_uri:callback}),id=randomUUID();
    await tx(saved.session_hash,async(db,seller)=>{
     if(seller!==saved.seller_company_id)fail('ACCOUNT_CHANGED');
+    // This runs under the same company/seller locks as begin/disconnect. The
+    // deletion and binding write commit together; an old callback cannot delete
+    // a newer attempt or resurrect a disconnected/replaced/expired one.
+    const attempt=(await db.query('DELETE FROM shop_market_mollie_states WHERE state_hash=$1 AND seller_company_id=$2 AND session_hash=$3 AND browser_hash=$4 AND claimed_at IS NOT NULL AND expires_at>clock_timestamp() RETURNING state_hash',[hash(state),seller,saved.session_hash,hash(browserNonce)])).rows[0];
+    if(!attempt)fail('MARKET_CONNECT_STATE');
     const active=(await db.query("SELECT 1 FROM shop_market_test_checkouts WHERE seller_company_id=$1 AND state NOT IN ('failed','expired','canceled') LIMIT 1",[seller])).rows[0];if(active)fail('MARKET_CONNECTION_IN_USE');
     await db.query(`INSERT INTO shop_market_mollie_connections(seller_company_id,connection_id,status,token_envelope,expires_at) VALUES($1,$2,'pending',$3,clock_timestamp()+($4 * interval '1 second')) ON CONFLICT(seller_company_id) DO UPDATE SET connection_id=excluded.connection_id,status='pending',merchant_id=NULL,profile_id=NULL,token_envelope=excluded.token_envelope,expires_at=excluded.expires_at,updated_at=clock_timestamp()`,[seller,id,seal({access_token:t.access_token,refresh_token:t.refresh_token},seller,id),t.expires_in]);
    });return {connected:true,paymentsEnabled:false};
