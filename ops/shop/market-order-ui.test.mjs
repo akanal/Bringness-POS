@@ -12,3 +12,11 @@ test('buyer history shows status but has no merchant mutation buttons or recipie
 test('uncertain write retains older view and explicit retry never creates a new command',async()=>{let writes=0,retries=0;const f=await setup({call:async()=>({orders:[row()]}),write:async()=>{writes++;throw Error('lost');},retry:async kind=>{assert.equal(kind,'order-status');retries++;return {};}});try{await f.view.refresh();f.d.querySelector('#seller-orders button').click();await tick();assert.match(f.d.getElementById('seller-orders-status').textContent,/nicht bestätigt/);f.d.getElementById('seller-order-retry').click();await tick();assert.equal(writes,1);assert.equal(retries,1);assert.equal(f.d.getElementById('seller-orders').textContent,'');}finally{f.close();}});
 
 test('buyer can inspect test payment only for payable orders or existing test intents',async()=>{const r=row();const f=await setup({call:async()=>({orders:[r]})},false);try{await f.view.refresh();assert.deepEqual([...f.d.querySelectorAll('#buyer-orders button')].map(b=>b.textContent),['Test-Zahlungsstand laden']);r.status='cancelled';r.revision=1;await f.view.refresh();assert.equal(f.d.querySelectorAll('#buyer-orders button').length,0);r.testPayment={mode:'test',status:'canceled',canFulfil:false};await f.view.refresh();assert.deepEqual([...f.d.querySelectorAll('#buyer-orders button')].map(b=>b.textContent),['Test-Zahlungsstand laden']);}finally{f.close();}});
+
+test('buyer next-step explanation is collapsed, read-only, escaped and cleared on privacy reset',async()=>{
+ const r=row();r.status='shipped';r.method='shipping';r.seller.name='<script>seller</script>';let writes=0;
+ const f=await setup({call:async()=>({orders:[r]}),write:async()=>{writes++;}},false);
+ try{await f.view.refresh();const help=f.d.querySelector('#buyer-orders .buyer-next-step');assert.ok(help);assert.equal(help.open,false);assert.match(help.textContent,/Sendungsnummer/);assert.match(help.textContent,/zuletzt geladene/);help.open=true;assert.equal(writes,0);assert.equal(f.d.querySelectorAll('#buyer-orders script').length,0);assert.equal(f.d.querySelectorAll('#buyer-orders button').length,0);
+ f.view.privacy();assert.equal(f.d.querySelectorAll('.buyer-next-step').length,0);assert.equal(writes,0);
+ }finally{f.close();}
+});
