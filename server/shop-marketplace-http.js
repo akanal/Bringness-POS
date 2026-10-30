@@ -17,7 +17,10 @@ export function createMarketplaceRuntime(pool,{enabled=false,publicOrigin='https
   if([...u.searchParams.keys()].some(k=>!['state','code','error','error_description'].includes(k))||['state','code','error'].some(k=>u.searchParams.getAll(k).length>1))throw Error('INVALID_REQUEST');
   const cookies=(req.headers.cookie||'').split(';').map(s=>s.trim()).filter(s=>s.startsWith('__Host-market-connect='));
   let outcome='failed';try{await merchantConnections.complete({state:u.searchParams.get('state'),code:u.searchParams.get('code'),error:u.searchParams.get('error'),browserNonce:cookies.length===1?cookies[0].slice('__Host-market-connect='.length):''});outcome='connected';}catch{}
-  res.writeHead(303,{'Location':'/shop/marketplace-seller.html?merchantConnection='+outcome,'Cache-Control':'no-store','Referrer-Policy':'no-referrer','Set-Cookie':'__Host-market-connect=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});res.end();return true;
+  // A callback response may arrive after a newer begin set its browser nonce.
+  // Never expire that newer cookie from an old response. The single HttpOnly
+  // nonce expires after 600 seconds; durable state claims prevent code replay.
+  res.writeHead(303,{'Location':'/shop/marketplace-seller.html?merchantConnection='+outcome,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'});res.end();return true;
  }
  if(path==='/checkout-notification'){
   if(req.method!=='POST'||!checkout.enabled||u.search||!/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/i.test(req.headers['content-type']||''))throw Error('INVALID_REQUEST');

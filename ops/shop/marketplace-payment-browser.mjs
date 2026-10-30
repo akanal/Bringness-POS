@@ -55,6 +55,20 @@ try{
  });
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());
  await page.goto(base+'/shop/marketplace-seller.html');await page.evaluate(()=>localStorage.setItem('bringness-pos-token','owner-a'));
+ // Browser cookie storage must survive a stale return after a newer begin.
+ const beginInBrowser=()=>page.evaluate(async()=>{
+  const r=await fetch('/api/v1/shop/marketplace/merchant-connect',{method:'POST',headers:{Authorization:'Bearer owner-a','Content-Type':'application/json'},body:'{}'});
+  if(!r.ok)throw Error('fixture consent begin failed');return r.json();
+ });
+ const obsolete=await beginInBrowser(),replacement=await beginInBrowser();
+ const nonce=(await context.cookies(base)).find(c=>c.name==='__Host-market-connect');
+ assert.ok(nonce?.httpOnly&&nonce.secure);assert.equal(nonce.sameSite,'Lax');
+ const callbackUrl=value=>base+'/api/v1/shop/marketplace/merchant-callback?'+new URLSearchParams({state:new URL(value.authorizationUrl).searchParams.get('state'),code:'fixture_browser_code'});
+ await page.goto(callbackUrl(obsolete));assert.ok(page.url().endsWith('merchantConnection=failed'));
+ assert.equal((await context.cookies(base)).find(c=>c.name==='__Host-market-connect')?.value,nonce.value);
+ assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);
+ await page.goto(callbackUrl(replacement));assert.ok(page.url().endsWith('merchantConnection=connected'));
+ assert.equal((await f.db.query('SELECT status FROM shop_market_mollie_connections')).rows[0].status,'pending');
  await page.getByRole('button',{name:'Verbindungsstatus laden',exact:true}).click();await page.getByRole('button',{name:'Mollie-Konto für Test verbinden',exact:true}).waitFor({state:'visible'});
  await page.getByRole('button',{name:'Mollie-Konto für Test verbinden',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Rückkehr von Mollie. Bitte den gespeicherten Verbindungsstatus laden.'));
  await page.getByRole('button',{name:'Verbindungsstatus laden',exact:true}).click();await page.getByLabel('Mollie-Profil-ID',{exact:true}).fill('pfl_browserfixture');await page.getByRole('button',{name:'Händlerprofil prüfen',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Händlerprofil für Testzahlungen geprüft'));
@@ -81,5 +95,5 @@ try{
  await page.waitForFunction(()=>document.body.textContent.includes('Testzahlung bestätigt'));
  assert.equal((await f.db.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);assert.equal(paymentPosts,1);assert.deepEqual(errors,[]);
  await page.evaluate(()=>{localStorage.removeItem('bringness-pos-token');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-pos-token'}));});assert.ok(!(await page.locator('#market-payment-return').textContent()).includes('11,90'));
- console.log('PASS: HTTPS browser consent/cookie/callback, profile, lost reply/recovery/return, test-only handoff and 390/768/1280 layouts');
+ console.log('PASS: HTTPS browser stale callback/new nonce recovery, consent/cookie/callback, profile, lost reply/recovery/return, test-only handoff and 390/768/1280 layouts');
 }finally{await browser?.close();if(server)await new Promise(r=>server.close(r));await f.db.close();await rm(temp,{recursive:true,force:true});}

@@ -248,3 +248,23 @@ test('failed binding write rolls back state deletion but never permits replay of
   assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_states')).rows.length,0);
  }finally{await f.db.close();}
 });
+test('late HTTP callback cannot erase the browser cookie of a newer consent attempt',async()=>{
+ const f=await setup(),h=heldExchange(f);let server,pending;
+ try{
+  const runtime=createMarketplaceRuntime(f.pool,{enabled:true,merchantConnections:h.service});await runtime.migrate();
+  server=http.createServer(async(req,res)=>{if(!await runtime.handle(req,res)){res.statusCode=404;res.end();}});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port+'/api/v1/shop/marketplace';
+  const begin=async()=>{
+   const r=await fetch(base+'/merchant-connect',{method:'POST',headers:{Origin:'https://bringness.de','Content-Type':'application/json',Authorization:'Bearer owner-a'},body:'{}'});
+   assert.equal(r.status,200);return {value:await r.json(),cookie:r.headers.get('set-cookie').split(';')[0]};
+  };
+  const complete=b=>fetch(base+'/merchant-callback?'+new URLSearchParams({state:new URL(b.value.authorizationUrl).searchParams.get('state'),code:'fixture'}),{headers:{cookie:b.cookie},redirect:'manual'});
+  const first=await begin();pending=complete(first);await h.entered;
+  const next=await begin();assert.notEqual(next.cookie,first.cookie);h.release();
+  const stale=await pending;assert.equal(stale.status,303);assert.equal(stale.headers.get('location'),'/shop/marketplace-seller.html?merchantConnection=failed');
+  assert.equal(stale.headers.get('set-cookie'),null,'an old response must not expire the new browser nonce');
+  assert.equal(stale.headers.get('cache-control'),'no-store');assert.equal(stale.headers.get('referrer-policy'),'no-referrer');
+  const current=await complete(next);assert.equal(current.status,303);assert.equal(current.headers.get('location'),'/shop/marketplace-seller.html?merchantConnection=connected');
+  assert.equal(current.headers.get('set-cookie'),null);assert.equal((await f.service.status({token:'owner-a'})).status,'pending');assert.equal(f.posts,0);
+ }finally{h.release();if(pending)await pending;if(server)await new Promise(r=>server.close(r));await f.db.close();}
+});
