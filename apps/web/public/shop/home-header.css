@@ -39,3 +39,17 @@
 @media(max-width:640px){.portal-home .shop-masthead .account-link .home-action-copy{display:none}}
 @media(max-width:640px){.portal-home .home-location span{min-width:0;flex:1}.portal-home .home-location small{flex-shrink:0}.portal-home .home-location strong{min-width:0;flex:1}}
 @media(max-width:380px){.portal-home .shop-masthead .cart-label{display:none}.portal-home .shop-masthead .brand{font-size:25px}}
+/* Owner correction: coloured header, white page background. */
+body.portal-home{background:#fff}
+.portal-home .preview{background:#124a39;color:#dcece3;border-bottom:1px solid #ffffff18}
+.portal-home .shop-masthead{background:linear-gradient(115deg,#1c624c,#103f33);border-bottom:1px solid #164c3b;--shop-link:#fff;box-shadow:0 5px 18px #103f3314}
+.portal-home .shop-masthead .brand,.portal-home .shop-masthead .brand-wordmark{color:#fff;-webkit-text-fill-color:#fff}
+.portal-home .shop-masthead .brand-shop,.portal-home .home-location small,.portal-home .home-action-copy small{color:#d1e5d8}
+.portal-home .shop-masthead .brand-arrow{stroke:#d0f0db;border-color:#ffffff35;background:#ffffff10}
+.portal-home .shop-masthead .home-location,.portal-home .shop-masthead .account-link,.portal-home .shop-masthead .orders-link,.portal-home .shop-masthead .cart-header{color:#fff}
+.portal-home .shop-masthead .cart-picture #cart-count{background:#d1edcf;color:#163e2c}
+.portal-home .shop-masthead .shop-nav{border-top-color:#ffffff20;scrollbar-color:#8db49d transparent}
+.portal-home .shop-masthead .shop-nav a,.portal-home .shop-masthead .shop-nav button,.portal-home .shop-masthead .shop-nav .all-categories{color:#f4faf6}
+.portal-home .shop-masthead .shop-nav .all-categories{border-right-color:#ffffff30}
+.portal-home .shop-masthead .shop-nav a:hover,.portal-home .shop-masthead .shop-nav button:hover,.portal-home .shop-masthead .home-location:hover,.portal-home .shop-masthead .cart-header:hover{background:#ffffff16;color:#fff}
+@media(forced-colors:active){.portal-home .shop-masthead .brand-wordmark{-webkit-text-fill-color:LinkText;color:LinkText}}

@@ -549,3 +549,7 @@ Work the ten-point merchant/payment acceptance block continuously to completion.
 
 ## Owner white marketplace header trial — 2026-10-30
 Owner supplied an Amazon header reference and requested an independent Bringness header with white background, first on /shop/ only. Preserve the existing main-page search, camera/code search, category navigation, cart and account/order links. Location is a shortcut to the existing explicit filter, never a guessed delivery address or automatic geolocation. Do not roll this header out to other marketplace pages until the owner explicitly approves its appearance. POS/waiter and payment settings remain outside this design change.
+
+
+## Owner header/background correction — 2026-10-30
+Supersedes the white-header interpretation: the HEADER should have a beautiful Bringness colour; the PAGE BACKGROUND should be white. Use an emerald-green header with contrasting white/mint text, and white homepage background. Keep the trial limited to /shop/ until owner approves rollout to other marketplace pages. Preserve existing controls and colourful content cards.
