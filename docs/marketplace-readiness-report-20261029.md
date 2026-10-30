@@ -1,6 +1,7 @@
 # Ausführbarer lokaler Marktplatz-Prüfbericht — 29.10.2026
 
-Fortsetzung von PR181. Dieser Block macht die vorhandene reine Vorprüfung als
+Fortsetzung von PR182 unter Erhalt seiner geprüften OAuth-Lebenszykluskorrektur.
+Dieser Block macht die vorhandene reine Vorprüfung aus PR181 als
 begrenzten, maschinenlesbaren CLI-Bericht nutzbar. Er führt keine Host- oder
 Anbieterabnahme aus und aktiviert keinen Zahlungsweg.
 
@@ -62,5 +63,21 @@ dass sie extern geprüft wurden. Synthetische Testdaten ersetzen keine Abnahme.
 - Neue Bericht-/Unterprozesstests:6 bestanden; zusammen mit vorhandener
   Konfigurationskontrolle13 bestanden, keine Fehler oder Skips.
 - Allgemeine lokale Suite:675 bestanden, keine Fehler oder Skips.
-- Vollständige Shop-Suite und GitHub-Prüfungen: noch nicht abgeschlossen.
+- Vollständige lokale Shop-Suite:705 bestanden, keine Fehler oder Skips.
+- Vollständige lokale Zahlungssuite:134 bestanden, keine Fehler, zwei
+  PostgreSQL-Prüfungen lokal übersprungen und durch GitHub abgedeckt.
+- Anwendungsstand9765eaed6244348e4e87609a1c0c92297cdedc73,
+  Tree85ca5d988853b955044309cffa6a9b7bfe61d608, PR183 auf PR182.
+- GitHub-Zahlung40984974520/job123833762046:136 bestanden, keine Fehler oder
+  Skips, einschließlich realer PostgreSQL-Parallel-/OAuth-Prüfungen und der
+  neuen echten CLI-Unterprozesse.
+- GitHub-POS/AI40984974723/job123833762708 und isolierte Vorschau
+  40984974648/job123833762363 einschließlich verschlüsselter Sicherung und
+  Wiederherstellung erfolgreich.
+- GitHub-Shop40984974644/job123833762282 erfolgreich:705 Shopprüfungen,
+  nativer geschützter Händler-/Kunden-HTTPS-Browserablauf bei390/768/1280 und
+  tatsächlicher Anwendungsstart mit isolierter PostgreSQL-Datenbank und
+  vorhandenen Browser-/Mandanten-/Parallelitätsprüfungen bestanden.
+- Alle vier maßgeblichen GitHub-Prüfläufe auf dem obigen Anwendungsstand
+  erfolgreich. Anschließender Prüfbericht ändert ausschließlich Dokumentation.
 - Kein Merge, Deployment, echter Anbieterzugriff oder tatsächliche Hostprüfung.
