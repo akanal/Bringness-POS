@@ -9,7 +9,7 @@ export function mountCookieSettings(d){
  reopen.onclick=()=>{show();box.querySelector('button').focus();};
  for(const b of box.querySelectorAll('[data-choice]'))b.onclick=()=>{
   if(!saveChoice(storage,b.dataset.choice==='preferences')){box.querySelector('[role="status"]').textContent='Deine Auswahl konnte nicht gespeichert werden. Komfortspeicherung bleibt ausgeschaltet. Du kannst weiter stöbern.';return;}
-  box.hidden=true;reopen.setAttribute('aria-expanded','false');reopen.focus();
+  box.hidden=true;reopen.setAttribute('aria-expanded','false');reopen.focus({preventScroll:true});
   w.dispatchEvent(new w.CustomEvent('bringness:cookie-choice'));
  };
  box.hidden=Boolean(readChoice(storage));reopen.setAttribute('aria-expanded',String(!box.hidden));
