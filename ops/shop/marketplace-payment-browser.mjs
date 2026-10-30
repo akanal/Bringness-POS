@@ -76,6 +76,10 @@ try{
  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);
  await returnInBrowser(replacement,'connected');
  assert.equal((await f.db.query('SELECT status FROM shop_market_mollie_connections')).rows[0].status,'pending');
+ // Exercise explicit revocation before the original fresh-connect UI flow.
+ await page.getByRole('button',{name:'Verbindungsstatus laden',exact:true}).click();
+ await page.getByRole('button',{name:'Verbindung für Bringness sperren',exact:true}).click();
+ await page.waitForFunction(()=>document.body.textContent.includes('Verbindung für Bringness gesperrt'));
  await page.getByRole('button',{name:'Verbindungsstatus laden',exact:true}).click();await page.getByRole('button',{name:'Mollie-Konto für Test verbinden',exact:true}).waitFor({state:'visible'});
  await page.getByRole('button',{name:'Mollie-Konto für Test verbinden',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Rückkehr von Mollie. Bitte den gespeicherten Verbindungsstatus laden.'));
  await page.getByRole('button',{name:'Verbindungsstatus laden',exact:true}).click();await page.getByLabel('Mollie-Profil-ID',{exact:true}).fill('pfl_browserfixture');await page.getByRole('button',{name:'Händlerprofil prüfen',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Händlerprofil für Testzahlungen geprüft'));
