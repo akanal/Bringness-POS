@@ -126,3 +126,9 @@ Netcup bleibt der aktive Anwendungs- und PostgreSQL-Standort. IDrive e2 ist Obje
 - Merge65a310c6bc4900b38fac2ae17d025257ffbd6d5b deployed successfully through Netcup41090321341/job124182206928; exact revision and retained prior container/database backup verified in logs.
 - server/marketplace-home.js serves existing shop HTML at / and /index.html only for bringness.de/www in POS mode. Base /shop/ resolves existing relative assets/modules, fragment links use root; no duplicated catalogue, iframe or redirect to /shop/. Original POS marketing remains at /pos-info.html. /shop/, /pos/, /service/, API and other hosts/modes remain routed as before; separate POS/AI domain routing changes are not part of this release.
 - Live browser at https://bringness.de/ showed marketplace, loaded products/images, emerald header and white background; cart opened/closed correctly while root URL remained. This is website routing only, no financial activation.
+
+
+## POS domain correction — verified live 30.10.2026
+- Owner reiterated bringness-pos.de must show POS, never marketplace. PR192 exempts POS-domain / and /index.html (www, HEAD and query strings included) from the legacy redirect. Existing original POS marketing is served directly on its own domain; deep routes/API continue their existing behavior. bringness.de/www remain marketplace.
+- Featuree1458a3a88ea90a761a8ac7ce78bb167d958c345 passed all four applicable workflows: checks41091596474, release41091596381, isolated41091596437, POS/AI41091596545. Eight local runtime/marketplace-root tests passed. Backup41091552728 reported Database backups validated.
+- Merge2fcfb7d9c143eb790c731964f7d0ed36c144cab8 deployed through41092009286/job124188022921; exact revision and retained previous container/database backup verified. Live browser https://bringness-pos.de/ showed POS/QR restaurant product homepage and remained on that domain. No DNS/mail/payment changes.
