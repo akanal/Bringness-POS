@@ -7,7 +7,10 @@ const fail=code=>{throw Error(code);};
 const cents=n=>Number.isSafeInteger(n)&&n>=0;
 export const marketplaceSettlementDigest=value=>digestShopDocument(value).digest;
 const digest=marketplaceSettlementDigest;
-export async function migrateMarketplaceSettlement(db){
+export async function migrateMarketplaceSettlement(pool){
+ const db=await pool.connect();
+ try{
+ await db.query('BEGIN');
  await db.query(`CREATE TABLE IF NOT EXISTS shop_market_live_settlements(
  order_id uuid PRIMARY KEY REFERENCES shop_market_seller_orders(id),seller_company_id uuid NOT NULL REFERENCES companies(id),
  provider_id text NOT NULL UNIQUE,merchant_id text NOT NULL,profile_id text NOT NULL,connection_id uuid NOT NULL,
@@ -35,6 +38,8 @@ export async function migrateMarketplaceSettlement(db){
   await db.query(`DROP TRIGGER IF EXISTS shop_market_live_immutable ON ${table}`);
   await db.query(`CREATE TRIGGER shop_market_live_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION shop_market_live_accounting_immutable()`);
  }
+ await db.query('COMMIT');
+ }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
 }
 function binding(value,seller){
  if(!value||value.mode!=='live'||value.status!=='verified'||value.sellerCompanyId!==seller||!uuid(value.connectionId)||!/^org_[A-Za-z0-9]{1,100}$/.test(value.merchantId||'')||!/^pfl_[A-Za-z0-9]{1,100}$/.test(value.profileId||''))fail('LIVE_MERCHANT_NOT_VERIFIED');
@@ -64,7 +69,7 @@ export function createMarketplaceSettlement(pool,{loadBinding,loadAcceptance,fet
   return {b,a,p};
  }
  function proof(p,b,orderId,providerId,amount){
-  if(!p||p.mode!=='live'||p.status!=='paid'||p.id!==providerId||!/^tr_[A-Za-z0-9]{1,100}$/.test(providerId)||p.orderId!==orderId||p.sellerCompanyId!==b.sellerCompanyId||p.merchantId!==b.merchantId||p.profileId!==b.profileId||p.currency!=='EUR'||p.amountCents!==amount||!cents(p.amountRefundedCents)||p.amountRefundedCents>amount||!cents(p.amountChargedBackCents)||p.amountChargedBackCents!==0||p.feeCents!==null&&(!cents(p.feeCents)||p.feeCents>amount))fail('LIVE_PAYMENT_MISMATCH');
+  if(!p||p.mode!=='live'||p.status!=='paid'||p.id!==providerId||!/^tr_[A-Za-z0-9]{1,100}$/.test(providerId)||p.orderId!==orderId||p.sellerCompanyId!==b.sellerCompanyId||p.merchantId!==b.merchantId||p.profileId!==b.profileId||p.currency!=='EUR'||p.amountCents!==amount||!cents(p.amountRefundedCents)||p.amountRefundedCents>amount||!cents(p.amountChargedBackCents)||p.amountChargedBackCents!==0||p.feeCents!==null&&!cents(p.feeCents))fail('LIVE_PAYMENT_MISMATCH');
  }
  return {enabled,
   async settle({sellerCompanyId:seller,orderId,providerId}){

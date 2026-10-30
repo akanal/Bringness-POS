@@ -39,7 +39,7 @@ test('disabled service, TEST proof, wrong merchant/profile/currency/amount and c
  const f=await setup();try{
   await assert.rejects(createMarketplaceSettlement(f.pool).settle(f.args),/LIVE_SETTLEMENT_DISABLED/);
   const original={...f.payment};
-  for(const change of [{mode:'test'},{merchantId:'org_other'},{profileId:'pfl_other'},{sellerCompanyId:f.b},{currency:'USD'},{amountCents:1189},{status:'open'},{amountChargedBackCents:1},{feeCents:-1},{feeCents:1191},{amountRefundedCents:1}]){
+  for(const change of [{mode:'test'},{merchantId:'org_other'},{profileId:'pfl_other'},{sellerCompanyId:f.b},{currency:'USD'},{amountCents:1189},{status:'open'},{amountChargedBackCents:1},{feeCents:-1},{feeCents:1.2},{amountRefundedCents:1}]){
    Object.assign(f.payment,original,change);await assert.rejects(f.service.settle(f.args),/LIVE_PAYMENT_MISMATCH|LIVE_REFUND_RECONCILIATION_REQUIRED/);
   }
   assert.equal((await f.pool.query('SELECT count(*)::int n FROM shop_market_live_settlements')).rows[0].n,0);
@@ -128,4 +128,25 @@ test('TEST orders, canceled orders and acceptance changes cannot reach live acco
   await assert.rejects(f.service.settle(f.args),/LIVE_TEST_ORDER_FORBIDDEN/);
   assert.equal((await f.pool.query('SELECT count(*)::int n FROM shop_market_live_settlements')).rows[0].n,0);
  }finally{await f.close();}
+});
+
+
+test('confirmed provider fees are separate expenses and may exceed a small order without changing revenue',async()=>{
+ const f=await setup();try{
+  f.payment.feeCents=1200;await f.service.settle(f.args);
+  const r=(await f.pool.query('SELECT gross_cents,fee_cents FROM shop_market_live_settlements')).rows[0];
+  assert.equal(Number(r.gross_cents),1190);assert.equal(Number(r.fee_cents),1200);
+ }finally{await f.close();}
+});
+
+
+test('failed settlement migration rolls back all new structures and a repeat succeeds',async()=>{
+ const f=await fixture();try{
+  await migrateMarketplace(f.pool);
+  const broken={connect:async()=>{const db=await f.pool.connect();return {release:()=>db.release(),query:async(sql,args)=>{if(sql.startsWith('CREATE TABLE IF NOT EXISTS shop_market_live_refunds'))throw Error('fixture migration failure');return db.query(sql,args);}};}};
+  await assert.rejects(migrateMarketplaceSettlement(broken),/fixture migration failure/);
+  assert.equal((await f.pool.query("SELECT to_regclass('shop_market_live_settlements') AS name")).rows[0].name,null);
+  await migrateMarketplaceSettlement(f.pool);await migrateMarketplaceSettlement(f.pool);
+  assert.ok((await f.pool.query("SELECT to_regclass('shop_market_live_settlements') AS name")).rows[0].name);
+ }finally{await f.db.close();}
 });
