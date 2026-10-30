@@ -1,0 +1,177 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID,createHash} from 'node:crypto';
+import pg from 'pg';
+import {migrateMarketplace} from './shop-marketplace.js';
+import {createMarketplaceCheckout} from './shop-payment-marketplace-checkout.js';
+import {createMarketplaceMollieTestResolver} from './shop-mollie-marketplace-test-adapter.js';
+
+const connectionString=process.env.MARKET_CHECKOUT_TEST_DATABASE_URL;
+test('real PostgreSQL simultaneous checkout attempts and shared request IDs remain single-dispatch', {skip:!connectionString},async()=>{
+ const url=new URL(connectionString);
+ if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.pathname!=='/bringness_checkout_test')throw Error('ISOLATED_CHECKOUT_DATABASE_REQUIRED');
+ const schema='checkout_'+randomUUID().replaceAll('-',''),admin=new pg.Pool({connectionString});
+ let pool;
+ try{
+  await admin.query('CREATE SCHEMA '+schema);
+  pool=new pg.Pool({connectionString,max:10,options:'-c search_path='+schema});
+  await pool.query(`CREATE TABLE companies(id uuid PRIMARY KEY);
+   CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
+   CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz)`);
+  await migrateMarketplace(pool);
+  const seller=randomUUID(),buyer=randomUUID(),user=randomUUID(),orderId=randomUUID(),second=randomUUID();
+  await pool.query('INSERT INTO companies VALUES($1),($2)',[seller,buyer]);
+  await pool.query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[user,buyer]);
+  await pool.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[user,createHash('sha256').update('buyer-fixture').digest('hex')]);
+  await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved','{}')",[seller]);
+  for(const id of [orderId,second]){
+   const request=randomUUID();
+   await pool.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[id,seller,request,{grossCents:1190,currency:'EUR'},{method:'shipping'}]);
+   await pool.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[buyer,request,'test',id,{}]);
+  }
+  let calls=0;
+  const binding={kind:'mollie-oauth',mode:'test',status:'verified',sellerCompanyId:seller,connectionId:randomUUID(),merchantId:'org_fixture',profileId:'pfl_fixture'};
+  const resolver=createMarketplaceMollieTestResolver({publicOrigin:'https://bringness.de',
+   loadConnection:async()=>binding,withAccessToken:async(sellerId,revision,fn)=>{assert.equal(sellerId,seller);assert.equal(revision,binding.connectionId);return fn('access_postgres_isolated_fixture');},
+   fetcher:async(url,options)=>{
+    const path=new URL(url).pathname;let value;
+    if(path==='/v2/organizations/me')value={id:binding.merchantId};
+    else if(path==='/v2/profiles/'+binding.profileId)value={id:binding.profileId,status:'verified'};
+    else{
+     assert.equal(options.method,'POST');calls++;const body=JSON.parse(options.body);
+     assert.equal(body.testmode,true);assert.equal(body.amount.value,'11.90');
+     await new Promise(r=>setTimeout(r,50));
+     value={resource:'payment',id:'tr_'+body.metadata.marketOrderId.replaceAll('-',''),mode:'test',profileId:binding.profileId,
+      status:'open',sequenceType:'oneoff',amount:body.amount,metadata:body.metadata,_links:{checkout:{href:'https://checkout.mollie.com/test'}}};
+    }
+    return Response.json(value);
+   }});
+  const checkout=createMarketplaceCheckout(pool,{resolveProvider:resolver});
+  const requests=await Promise.all(Array.from({length:8},()=>checkout.start({token:'buyer-fixture',orderId,requestId:randomUUID()})));
+  assert.equal(calls,1);assert.ok(requests.every(r=>['open','uncertain'].includes(r.paymentStatus)));
+  const count=await pool.query('SELECT count(*)::int AS n FROM shop_market_test_checkouts');assert.equal(count.rows[0].n,1);
+  const shared=randomUUID();
+  const competing=await Promise.allSettled([orderId,second].map(id=>checkout.start({token:'buyer-fixture',orderId:id,requestId:shared})));
+  assert.equal(competing.filter(r=>r.status==='fulfilled').length,1);
+  assert.equal(competing.find(r=>r.status==='rejected').reason.code,'REQUEST_CONFLICT');
+  assert.ok(calls<=2);
+ }finally{
+  if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();
+ }
+});
+
+test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are single-use and test-only',{skip:!connectionString},async()=>{
+ const {migrateMarketplaceConnections}=await import('./shop-mollie-marketplace-connection.js');
+ const {createMarketplaceTestIntegration}=await import('./shop-mollie-marketplace-integration.js');
+ const url=new URL(connectionString);if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.pathname!=='/bringness_checkout_test')throw Error('ISOLATED_CHECKOUT_DATABASE_REQUIRED');
+ const schema='merchant_'+randomUUID().replaceAll('-',''),admin=new pg.Pool({connectionString});let pool;
+ try{
+  await admin.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString,max:12,application_name:schema,options:'-c search_path='+schema});
+  await pool.query(`CREATE TABLE companies(id uuid PRIMARY KEY);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz)`);
+  await migrateMarketplace(pool);await migrateMarketplaceConnections(pool);
+  const seller=randomUUID(),buyer=randomUUID(),orderId=randomUUID();
+  for(const [id,token]of [[seller,'merchant-fixture'],[buyer,'buyer-fixture']]){const user=randomUUID();await pool.query('INSERT INTO companies VALUES($1)',[id]);await pool.query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[user,id]);await pool.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[user,createHash('sha256').update(token).digest('hex')]);}
+  await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved','{}')",[seller]);
+  let refreshes=0,posts=0,payment;
+  const integration=createMarketplaceTestIntegration(pool,{publicOrigin:'https://bringness.de',clientId:'app_fixture',clientSecret:'fixture_not_real_secret',tokenKey:'ab'.repeat(32),fetcher:async(url,options)=>{
+   const u=new URL(url);if(u.pathname==='/oauth2/tokens'){
+    if(new URLSearchParams(options.body).get('grant_type')==='refresh_token'){refreshes++;await new Promise(r=>setTimeout(r,50));}
+    return Response.json({access_token:'access_postgres_fixture_'+refreshes,refresh_token:'refresh_postgres_fixture_'+refreshes,expires_in:3600,token_type:'bearer',scope:'organizations.read profiles.read payments.read payments.write'});
+   }
+   if(u.pathname==='/v2/organizations/me')return Response.json({id:'org_fixture'});
+   if(u.pathname==='/v2/profiles/pfl_fixture')return Response.json({id:'pfl_fixture',status:'verified'});
+   if(options.method==='POST'){posts++;const body=JSON.parse(options.body);payment={resource:'payment',id:'tr_pgmerchant',mode:'test',profileId:'pfl_fixture',sequenceType:'oneoff',status:'open',amount:body.amount,metadata:body.metadata,_links:{checkout:{href:'https://checkout.mollie.com/test'}}};throw Error('lost reply');}
+   if(u.pathname==='/v2/payments')return Response.json({count:1,_embedded:{payments:[payment]},_links:{next:null}});
+   return Response.json(payment);
+  }});
+  const s=integration.merchantConnections,b=await s.begin({token:'merchant-fixture'});await s.complete({state:new URL(b.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:b.browserNonce});await s.verify({token:'merchant-fixture',profileId:'pfl_fixture'});
+  const binding=await s.loadConnection(seller);await pool.query("UPDATE shop_market_mollie_connections SET expires_at=now()-interval '1 second'");
+  await Promise.all(Array.from({length:8},()=>s.withAccessToken(seller,binding.connectionId,async token=>assert.equal(token,'access_postgres_fixture_1'))));assert.equal(refreshes,1);
+  await pool.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[orderId,seller,randomUUID(),{grossCents:1190,currency:'EUR'},{method:'shipping'}]);await pool.query('INSERT INTO shop_market_orders VALUES($1,$2,$3,$4,$5)',[buyer,randomUUID(),'fixture',orderId,{}]);
+  const c=()=>createMarketplaceCheckout(pool,{resolveProvider:integration.checkoutProviderResolver}),args={token:'buyer-fixture',orderId,requestId:randomUUID()};
+  // Deterministically stage the lock order: consent holds the company lock and
+  // waits for seller UPDATE, while checkout-style work holds seller SHARE then
+  // acquires a company foreign-key KEY SHARE lock. FOR UPDATE deadlocks here;
+  // NO KEY UPDATE must let the FK insert finish before consent can continue.
+  await pool.query('CREATE TABLE merchant_fk_probe(company_id uuid REFERENCES companies(id))');
+  const blocker=await pool.connect();let consent;
+  try{
+   await blocker.query('BEGIN');await blocker.query("SET LOCAL statement_timeout='750ms'");
+   await blocker.query('SELECT company_id FROM shop_market_sellers WHERE company_id=$1 FOR SHARE',[seller]);
+   consent=s.begin({token:'merchant-fixture'}).then(value=>({value}),error=>({error}));
+   let waiting=false;
+   for(let i=0;i<100;i++){
+    const rows=(await pool.query("SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query LIKE 'SELECT 1 FROM shop_market_sellers%'",[schema])).rows;
+    if(rows.length){waiting=true;break;}await new Promise(resolve=>setTimeout(resolve,10));
+   }
+   assert.equal(waiting,true,'merchant consent must reach the staged seller lock');
+   await blocker.query('INSERT INTO merchant_fk_probe VALUES($1)',[seller]);
+   await blocker.query('COMMIT');
+   const result=await consent;assert.equal(result.error,undefined);assert.ok(result.value.authorizationUrl);
+  }finally{await blocker.query('ROLLBACK');blocker.release();if(consent)await consent;}
+  const race=await Promise.allSettled([s.begin({token:'merchant-fixture'}),c().start(args)]);
+  assert.equal(race[1].status,'rejected');assert.match(race[1].reason.message,/MARKET_PAYMENT_UNCERTAIN/);assert.equal(posts,1);
+  if(race[0].status==='fulfilled'){const attempt=race[0].value;await assert.rejects(s.complete({state:new URL(attempt.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:attempt.browserNonce}),/MARKET_CONNECTION_IN_USE/);}
+  else assert.match(race[0].reason.message,/MARKET_CONNECTION_IN_USE/);
+  assert.equal((await s.loadConnection(seller)).connectionId,binding.connectionId);
+  const results=await Promise.all([c().reconcileBatch(),c().reconcileBatch()]);assert.equal(results.reduce((n,r)=>n+r.checked,0),1);
+  await pool.query("UPDATE shop_market_test_checkouts SET reconcile_after=clock_timestamp()-interval '1 second'");
+  const manual=await Promise.allSettled(Array.from({length:8},()=>c().merchantRecheck({token:'merchant-fixture',orderId})));
+  assert.equal(manual.filter(r=>r.status==='fulfilled'&&r.value.confirmed).length,1);
+  for(const r of manual.filter(r=>r.status==='rejected'))assert.match(r.reason.message,/MARKET_RECHECK_BUSY/);
+  assert.equal(posts,1);
+  payment={...payment,status:'paid'};await Promise.all(Array.from({length:8},()=>c().reconcilePayment(payment.id)));
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);
+  assert.equal((await c().status(args)).canFulfil,false);assert.equal(posts,1);
+ }finally{if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();}
+});
+
+test('real PostgreSQL durable consent claims reject duplicate, replaced, revoked and expired callbacks',{skip:!connectionString,timeout:30000},async()=>{
+ const {migrateMarketplaceConnections,createMarketplaceConnections}=await import('./shop-mollie-marketplace-connection.js');
+ const url=new URL(connectionString);if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.pathname!=='/bringness_checkout_test')throw Error('ISOLATED_CHECKOUT_DATABASE_REQUIRED');
+ const schema='consent_'+randomUUID().replaceAll('-',''),admin=new pg.Pool({connectionString});let pool,release=()=>{},pending;
+ try{
+  await admin.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString,max:12,options:'-c search_path='+schema});
+  await pool.query(`CREATE TABLE companies(id uuid PRIMARY KEY);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz)`);
+  await migrateMarketplace(pool);await migrateMarketplaceConnections(pool);await migrateMarketplaceConnections(pool);
+  const seller=randomUUID(),user=randomUUID();
+  await pool.query('INSERT INTO companies VALUES($1)',[seller]);await pool.query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[user,seller]);
+  await pool.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[user,createHash('sha256').update('merchant-fixture').digest('hex')]);
+  await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved','{}')",[seller]);
+  let hold=async()=>{},exchanges=0;
+  const config={publicOrigin:'https://bringness.de',clientId:'app_fixture',clientSecret:'fixture_not_real_secret',tokenKey:'ab'.repeat(32),fetcher:async(url,options)=>{
+   assert.equal(new URL(url).pathname,'/oauth2/tokens');assert.equal(options.method,'POST');exchanges++;await hold();
+   return Response.json({access_token:'access_postgres_consent_fixture',refresh_token:'refresh_postgres_consent_fixture',expires_in:3600,token_type:'bearer',scope:'organizations.read profiles.read payments.read payments.write'});
+  }};
+  const service=()=>createMarketplaceConnections(pool,config),args=b=>({state:new URL(b.authorizationUrl).searchParams.get('state'),browserNonce:b.browserNonce,code:'fixture'});
+  const start=async()=>{
+   const b=await service().begin({token:'merchant-fixture'});let enter;
+   const entered=new Promise(r=>{enter=r;}),held=new Promise(r=>{release=r;});hold=async()=>{enter();await held;};
+   pending=service().complete(args(b)).then(value=>({value}),error=>({error}));await entered;return b;
+  };
+  // Distinct pool sessions race the same callback. Only the durable claimant
+  // reaches OAuth, including a newly constructed service after process restart.
+  const b=await start(),count=exchanges;
+  const duplicates=await Promise.allSettled(Array.from({length:8},()=>service().complete(args(b))));
+  assert.ok(duplicates.every(r=>r.status==='rejected'&&r.reason.code==='MARKET_CONNECT_STATE'));assert.equal(exchanges,count);
+  release();assert.equal((await pending).error,undefined);hold=async()=>{};
+  const initial=(await pool.query('SELECT * FROM shop_market_mollie_connections')).rows[0];
+  assert.equal(initial.status,'pending');assert.equal((await pool.query('SELECT * FROM shop_market_mollie_states')).rows.length,0);
+  // A newer explicit begin survives an older callback's response and can finish.
+  await start();const replacement=await service().begin({token:'merchant-fixture'});release();
+  assert.equal((await pending).error?.code,'MARKET_CONNECT_STATE');
+  assert.equal((await pool.query('SELECT connection_id FROM shop_market_mollie_connections')).rows[0].connection_id,initial.connection_id);
+  hold=async()=>{};await service().complete(args(replacement));
+  const replaced=(await pool.query('SELECT * FROM shop_market_mollie_connections')).rows[0];assert.notEqual(replaced.connection_id,initial.connection_id);
+  // Revocation cannot be undone by an older remote exchange.
+  await start();await service().disconnect({token:'merchant-fixture'});release();
+  assert.equal((await pending).error?.code,'MARKET_CONNECT_STATE');
+  const revoked=(await pool.query('SELECT * FROM shop_market_mollie_connections')).rows[0];
+  assert.equal(revoked.status,'revoked');assert.equal(revoked.token_envelope,null);assert.equal(revoked.connection_id,replaced.connection_id);
+  // The original deadline is checked again when committing returned tokens.
+  await start();await pool.query("UPDATE shop_market_mollie_states SET expires_at=clock_timestamp()-interval '1 second'");release();
+  assert.equal((await pending).error?.code,'MARKET_CONNECT_STATE');
+  assert.equal((await pool.query('SELECT status FROM shop_market_mollie_connections')).rows[0].status,'revoked');
+  assert.equal(exchanges,5);
+ }finally{release();if(pending)await pending;if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();}
+});
