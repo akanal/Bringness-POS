@@ -69,7 +69,7 @@ export function createMarketplaceSettlement(pool,{loadBinding,loadAcceptance,fet
   return {b,a,p};
  }
  function proof(p,b,orderId,providerId,amount){
-  if(!p||p.mode!=='live'||p.status!=='paid'||p.id!==providerId||!/^tr_[A-Za-z0-9]{1,100}$/.test(providerId)||p.orderId!==orderId||p.sellerCompanyId!==b.sellerCompanyId||p.merchantId!==b.merchantId||p.profileId!==b.profileId||p.currency!=='EUR'||p.amountCents!==amount||!cents(p.amountRefundedCents)||p.amountRefundedCents>amount||!cents(p.amountChargedBackCents)||p.amountChargedBackCents!==0||p.feeCents!==null&&!cents(p.feeCents))fail('LIVE_PAYMENT_MISMATCH');
+  if(!p||p.mode!=='live'||p.status!=='paid'||p.id!==providerId||!/^tr_[A-Za-z0-9]{1,100}$/.test(providerId)||p.orderId!==orderId||p.sellerCompanyId!==b.sellerCompanyId||p.connectionId!==b.connectionId||p.merchantId!==b.merchantId||p.profileId!==b.profileId||p.currency!=='EUR'||p.amountCents!==amount||!cents(p.amountRefundedCents)||p.amountRefundedCents>amount||!cents(p.amountChargedBackCents)||p.amountChargedBackCents!==0||p.feeCents!==null&&!cents(p.feeCents))fail('LIVE_PAYMENT_MISMATCH');
  }
  return {enabled,
   async settle({sellerCompanyId:seller,orderId,providerId}){
@@ -104,7 +104,7 @@ export function createMarketplaceSettlement(pool,{loadBinding,loadAcceptance,fet
     if(!(await db.query("SELECT 1 FROM shop_market_sellers WHERE company_id=$1 AND status='approved' FOR SHARE",[seller])).rows.length)fail('LIVE_MERCHANT_NOT_VERIFIED');
     const b=binding(await loadBinding(seller,db),seller);if(b.connectionId!==row.connection_id||b.merchantId!==row.merchant_id||b.profileId!==row.profile_id||JSON.stringify(b)!==JSON.stringify(e.b))fail('LIVE_MERCHANT_CHANGED');
     const a=accepted(await loadAcceptance(seller,orderId,db),b,orderId);if(a.reference!==row.acceptance_reference||a.fiscalReference!==row.fiscal_reference||a.orderDigest!==row.order_digest)fail('LIVE_ACCEPTANCE_CHANGED');proof(e.p,b,orderId,row.provider_id,Number(row.gross_cents));
-    if(!r||r.mode!=='live'||r.status!=='refunded'||r.id!==refundId||r.paymentId!==row.provider_id||r.orderId!==orderId||r.sellerCompanyId!==seller||r.merchantId!==b.merchantId||r.profileId!==b.profileId||r.currency!=='EUR'||!cents(r.amountCents)||r.amountCents<=0)fail('LIVE_REFUND_MISMATCH');
+    if(!r||r.mode!=='live'||r.status!=='refunded'||r.id!==refundId||r.paymentId!==row.provider_id||r.orderId!==orderId||r.sellerCompanyId!==seller||r.connectionId!==b.connectionId||r.merchantId!==b.merchantId||r.profileId!==b.profileId||r.currency!=='EUR'||!cents(r.amountCents)||r.amountCents<=0)fail('LIVE_REFUND_MISMATCH');
     const previous=(await db.query('SELECT * FROM shop_market_live_refunds WHERE refund_id=$1',[refundId])).rows[0];if(previous){if(previous.order_id!==orderId||Number(previous.amount_cents)!==r.amountCents)fail('LIVE_REFUND_CONFLICT');const h=(await db.query('SELECT state FROM shop_market_live_handoffs WHERE order_id=$1',[orderId])).rows[0];return {orderId,replay:true,canFulfil:false,fulfilmentReviewRequired:h?.state==='consumed'};}
     const total=Number((await db.query('SELECT COALESCE(sum(amount_cents),0) AS n FROM shop_market_live_refunds WHERE order_id=$1',[orderId])).rows[0].n)+r.amountCents;
     if(!Number.isSafeInteger(total)||total>Number(row.gross_cents)||total>e.p.amountRefundedCents)fail('LIVE_REFUND_EXCEEDS_PAID');

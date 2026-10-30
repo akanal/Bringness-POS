@@ -35,6 +35,7 @@ import fs from "node:fs";
 import {handleCenter,migrateCenter} from "./center.js";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
+import {serveMarketplaceHome} from './marketplace-home.js';
 assertPreviewEntrypoint();
 const appMode = runtimeMode();
 configurePosOrigin(process.env, appMode);
@@ -104,6 +105,7 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
+      if (serveMarketplaceHome(req,res,appMode,()=>fs.readFileSync(new URL('../apps/web/public/shop/index.html',import.meta.url),'utf8'))) return;
       if(appMode!=='ai' && req.method==='GET' && new URL(req.url,'http://local').pathname==='/health/fiskaly-test'){
         const row=(await platformGatewayPool.query('SELECT state,phase,last_error FROM fiskaly_test_setup WHERE request_id=$1',[onboardingRequest.requestId])).rows[0];
         res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});

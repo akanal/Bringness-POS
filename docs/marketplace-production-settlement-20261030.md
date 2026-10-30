@@ -42,3 +42,22 @@ Do not add the service/migration to startup, enable live checkout, manufacture a
 The separate LIVE reader uses fixed GET organizations/me, profiles/{id}, payments/{id} and payments/{id}/refunds/{id} endpoints. It validates LIVE response mode, exact seller/order/profile binding, distinct market-live intent metadata, one-off payment type and parent-payment identity before returning normalized facts without raw customer/bank details. Platform API keys and TEST tokens/bindings are rejected. Existing TEST OAuth scopes are not silently expanded; productive refund reads require actual refunds.read consent. No new consent was granted.
 
 Provider reference (checked 30 October 2026): https://docs.mollie.com/reference/get-payment and https://docs.mollie.com/reference/get-refund . Organization OAuth calls use the LIVE default, not testmode=true. Processing fees are not inferred from applicationFee, which is a separate platform charge. Mollie can support refunds beyond original payment for some compensation scenarios; this journal intentionally blocks such amounts pending a separate expense/tax allocation rather than guessing one.
+
+## Next connected block: current release integration — 30 October 2026
+
+Existing marketplace/POS domain separation and emerald header are retained from main. A review found that the journal's normalized payment/refund proof checked merchant/profile but did not explicitly require the OAuth connection ID. It now rejects missing or foreign connection IDs before settlement, refund recording or handoff consumption. Regression coverage checks that rejected evidence leaves the refund journal empty and handoff unconsumed. Trusted adapters must include the original connectionId; the read-only LIVE reader already does.
+
+| Original ten-point plan | Current result |
+|---|---|
+| 1 Code and checks | PR187 production TEST flow retained; PR188 integrated with current main and tested again. |
+| 2 Missing production prerequisites | Actual LIVE OAuth acceptance, fiscal and fulfilment adapters remain explicitly absent; source presence does not enable them. |
+| 3 Merchant/restaurant/payment identity | Stored order/company/provider/profile and now explicit OAuth connection ID checked. Real ownership acceptance remains external. |
+| 4 TEST/LIVE separation | Distinct LIVE intent metadata, OAuth-only reader, no startup/HTTP import or schema migration. |
+| 5 Return/webhook addresses | Existing deployed TEST validation retained. Provider dashboard LIVE registration still unverified without account access. |
+| 6 Release reasons | Existing private TEST readiness report retained. Missing merchant/accounting/fiscal/fulfilment acceptance fails closed with fixed codes, never a fabricated green status. |
+| 7 Merchant acceptance | Exact order digest, fiscal reference and four trusted acceptance gates required. No real acceptance performed by tests. |
+| 8 Reconciliation/accounting | Immutable payment/refund allocation, original net/VAT/gross, separate nullable fees. Actual fiscal/fee source remains to integrate. |
+| 9 Single handoff | Atomic reservation and receipt replay rules retained; foreign connection proof cannot consume it. Downstream durable receipt deduplication still required. |
+| 10 Failures/concurrency/GitHub | Regression tests plus isolated provider and actual PostgreSQL competing-writer CI; preserve deployment evidence in handoff after successful release. |
+
+Release scope remains dormant internal source only. This block does not activate real payments, apply the journal migration, write production acceptance data, grant provider consent or connect goods/kitchen/shipping. Those remaining prerequisites cannot be completed by inventing provider or merchant approvals.

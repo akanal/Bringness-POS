@@ -15,8 +15,8 @@ async function setup(external){
  const binding={mode:'live',status:'verified',sellerCompanyId:f.a,connectionId,merchantId:'org_fixture',profileId:'pfl_fixture'};
  const snapshot=(await f.pool.query('SELECT snapshot FROM shop_market_seller_orders WHERE id=$1',[orderId])).rows[0].snapshot;
  const acceptance={orderDigest:marketplaceSettlementDigest(snapshot),mode:'live',sellerCompanyId:f.a,connectionId,merchantId:binding.merchantId,profileId:binding.profileId,orderId,reference:'acceptance-fixture',fiscalReference:'fiscal-fixture',merchantAccepted:true,accountingAccepted:true,fiscalAccepted:true,fulfilmentAccepted:true};
- const payment={mode:'live',status:'paid',id:'tr_fixture',orderId,sellerCompanyId:f.a,merchantId:binding.merchantId,profileId:binding.profileId,amountCents:1190,currency:'EUR',amountRefundedCents:0,amountChargedBackCents:0,feeCents:null};
- const refund={mode:'live',status:'refunded',id:'re_fixture',paymentId:payment.id,orderId,sellerCompanyId:f.a,merchantId:binding.merchantId,profileId:binding.profileId,currency:'EUR',amountCents:500};
+ const payment={connectionId,mode:'live',status:'paid',id:'tr_fixture',orderId,sellerCompanyId:f.a,merchantId:binding.merchantId,profileId:binding.profileId,amountCents:1190,currency:'EUR',amountRefundedCents:0,amountChargedBackCents:0,feeCents:null};
+ const refund={connectionId,mode:'live',status:'refunded',id:'re_fixture',paymentId:payment.id,orderId,sellerCompanyId:f.a,merchantId:binding.merchantId,profileId:binding.profileId,currency:'EUR',amountCents:500};
  const deps={loadBinding:async()=>({...binding}),loadAcceptance:async()=>({...acceptance}),fetchPayment:async()=>({...payment}),fetchRefund:async()=>({...refund})};
  const service=createMarketplaceSettlement(f.pool,deps),args={sellerCompanyId:f.a,orderId,providerId:payment.id};
  return {...f,binding,acceptance,payment,refund,deps,service,args,close:()=>external?Promise.resolve():f.db.close()};
@@ -40,7 +40,7 @@ test('disabled service, TEST proof, wrong merchant/profile/currency/amount and c
  const f=await setup();try{
   await assert.rejects(createMarketplaceSettlement(f.pool).settle(f.args),/LIVE_SETTLEMENT_DISABLED/);
   const original={...f.payment};
-  for(const change of [{mode:'test'},{merchantId:'org_other'},{profileId:'pfl_other'},{sellerCompanyId:f.b},{currency:'USD'},{amountCents:1189},{status:'open'},{amountChargedBackCents:1},{feeCents:-1},{feeCents:1.2},{amountRefundedCents:1}]){
+  for(const change of [{connectionId:randomUUID()},{connectionId:undefined},{mode:'test'},{merchantId:'org_other'},{profileId:'pfl_other'},{sellerCompanyId:f.b},{currency:'USD'},{amountCents:1189},{status:'open'},{amountChargedBackCents:1},{feeCents:-1},{feeCents:1.2},{amountRefundedCents:1}]){
    Object.assign(f.payment,original,change);await assert.rejects(f.service.settle(f.args),/LIVE_PAYMENT_MISMATCH|LIVE_REFUND_RECONCILIATION_REQUIRED/);
   }
   assert.equal((await f.pool.query('SELECT count(*)::int n FROM shop_market_live_settlements')).rows[0].n,0);
@@ -166,5 +166,25 @@ test('read-only live OAuth composition verifies provider facts before atomic jou
   }});
   assert.equal((await service.settle(f.args)).replay,false);f.payment.amountRefundedCents=500;assert.equal((await service.refund({...f.args,refundId:f.refund.id})).replay,false);
   await assert.rejects(service.consume({...f.args,receiptId:randomUUID()}),/LIVE_HANDOFF_BLOCKED/);assert.ok(methods.every(method=>method==='GET'));
+ }finally{await f.close();}
+});
+
+
+test('foreign or missing OAuth connection evidence cannot record refunds or consume a handoff',async()=>{
+ const f=await setup();try{
+  await f.service.settle(f.args);
+  const original=f.payment.connectionId;
+  for(const id of [randomUUID(),undefined]){
+   f.payment.connectionId=id;
+   await assert.rejects(f.service.consume({...f.args,receiptId:randomUUID()}),/LIVE_PAYMENT_MISMATCH/);
+  }
+  f.payment.connectionId=original;f.payment.amountRefundedCents=500;
+  for(const id of [randomUUID(),undefined]){
+   f.refund.connectionId=id;
+   await assert.rejects(f.service.refund({...f.args,refundId:f.refund.id}),/LIVE_REFUND_MISMATCH/);
+  }
+  assert.equal((await f.pool.query('SELECT count(*)::int n FROM shop_market_live_refunds')).rows[0].n,0);
+  const handoff=(await f.pool.query('SELECT state,receipt_id FROM shop_market_live_handoffs')).rows[0];
+  assert.equal(handoff.state,'ready');assert.equal(handoff.receipt_id,null);
  }finally{await f.close();}
 });

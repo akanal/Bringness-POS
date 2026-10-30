@@ -1,0 +1,57 @@
+/* First trial is scoped to the marketplace homepage only. */
+.portal-home .preview{background:#f8faf8;color:#617168;border-bottom:1px solid #e5ebe7;padding:5px 20px;font-size:11px}
+.portal-home .shop-masthead{background:#fff;border-bottom:1px solid #dae5de;box-shadow:0 5px 22px #123c2710;--shop-link:#234b38;margin-bottom:20px}
+.portal-home .shop-masthead header{display:grid;grid-template-areas:"brand location search account orders cart";grid-template-columns:auto auto minmax(220px,1fr) auto auto auto;max-width:1560px;padding:22px 32px 18px;gap:22px}
+.portal-home .shop-masthead .brand{grid-area:brand;color:#17583c;display:flex;flex-direction:column;align-items:flex-start;gap:1px;font-size:30px;letter-spacing:-1.3px}
+.portal-home .shop-masthead .brand-wordmark{color:#17583c;-webkit-text-fill-color:#17583c;background:none;text-shadow:none;filter:none}
+.portal-home .shop-masthead .brand-shop{color:#697e70;font-size:9px;letter-spacing:2.3px;margin-left:1px;text-transform:uppercase}
+.portal-home .shop-masthead .brand-arrow{stroke:#17583c;border-color:#d8e8dc;background:#eff7f1;width:25px;height:25px}
+.portal-home .shop-masthead .home-location{grid-area:location;display:flex;align-items:center;gap:8px;color:#204b36;background:transparent;border:0;border-radius:9px;padding:9px 5px;text-align:left;min-width:0}
+.home-location svg{width:22px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;flex-shrink:0}
+.home-location span,.home-action-copy{display:flex;flex-direction:column;gap:1px}
+.home-location small,.home-action-copy small{color:#738176;font-size:10px;font-weight:400;white-space:nowrap}
+.home-location strong{font-size:12px;max-width:125px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.portal-home .shop-masthead .header-search{grid-area:search;order:0;min-width:0;border:1.5px solid #aabfb0;border-radius:11px;min-height:49px;box-shadow:none;overflow:hidden;background:#fff;align-items:center}
+.portal-home .shop-masthead .header-search:focus-within{outline:3px solid #a8d6b9;outline-offset:2px;border-color:#17583c}
+.portal-home .shop-masthead .header-search select{align-self:stretch;max-width:112px;min-width:68px;border-right:1px solid #dde7df;padding:0 10px;color:#3d5d48;background:#f3f7f3;font-size:12px;cursor:pointer}
+.portal-home .shop-masthead .header-search input{flex:1;min-width:40px;font-size:13px;padding:12px;color:#253f30}
+.portal-home .shop-masthead .header-search input::placeholder{color:#8b978f}
+.portal-home .shop-masthead .header-search button[type=submit]{display:grid;place-items:center;align-self:stretch;flex:0 0 49px;width:49px;border:0;border-radius:0;margin:0;padding:12px;background:#17583c;color:#fff;min-height:47px}
+.header-search button[type=submit] svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.portal-home .shop-masthead .header-search #visual-search-open{margin-right:8px;flex:0 0 28px;width:28px;color:#536e5d}
+.portal-home .shop-masthead .account-link,.portal-home .shop-masthead .orders-link{flex-direction:row;gap:8px;color:#214631;text-align:left;font-size:12px;padding:8px 0}
+.portal-home .shop-masthead .account-link{grid-area:account}.portal-home .shop-masthead .orders-link{grid-area:orders}
+.portal-home .shop-masthead .account-link strong,.portal-home .shop-masthead .orders-link strong{font-weight:650;font-size:12px}
+.portal-home .shop-masthead .account-link svg,.portal-home .shop-masthead .orders-link svg{width:21px;height:24px;stroke-width:1.6}
+.portal-home .shop-masthead .cart-header{grid-area:cart;flex-direction:row;gap:11px;color:#17583c;min-width:105px;min-height:43px;padding:7px}
+.portal-home .shop-masthead .cart-label{font-size:12px;font-weight:650}
+.portal-home .shop-masthead .cart-picture #cart-count{color:#fff;background:#17583c;top:-5px;right:-5px;font-size:10px}
+.portal-home .shop-masthead .shop-nav{max-width:1560px;padding:11px 32px 13px;gap:5px;border-top:1px solid #edf1ed;min-height:48px;scrollbar-color:#bfcec1 transparent;align-items:center}
+.portal-home .shop-masthead .shop-nav a,.portal-home .shop-masthead .shop-nav button{color:#4a6253;background:transparent;border:1px solid transparent;border-radius:7px;padding:6px 10px;font-size:12px;min-height:32px}
+.portal-home .shop-masthead .shop-nav .all-categories{color:#17583c;font-weight:700;border-right:1px solid #e0e8e1;border-radius:0;padding-left:0;padding-right:18px;margin-right:6px}
+.portal-home .shop-masthead .shop-nav button span{color:#17583c;background:#eef5ef}
+.portal-home .shop-masthead .shop-nav a:hover,.portal-home .shop-masthead .shop-nav button:hover,.portal-home .shop-masthead .home-location:hover,.portal-home .shop-masthead .cart-header:hover{background:#f0f6f0;color:#17583c}
+@media(min-width:1151px) and (max-width:1350px){.portal-home .shop-masthead header{gap:14px;padding-right:24px;padding-left:24px}.portal-home .shop-masthead .brand{font-size:27px}.home-action-copy small{font-size:9px}.portal-home .shop-masthead .orders-link svg{display:none}.portal-home .shop-masthead .cart-header{min-width:90px}}
+@media(max-width:1150px){.portal-home .shop-masthead header{grid-template-areas:"brand location account orders cart" "search search search search search";grid-template-columns:auto 1fr auto auto auto;gap:16px;padding:18px 24px}.portal-home .shop-masthead .header-search{width:100%}.portal-home .shop-masthead .shop-nav{padding-left:24px;padding-right:24px}.home-location strong{max-width:180px}}
+@media(max-width:640px){.portal-home .shop-masthead header{grid-template-areas:"brand account cart" "search search search" "location location orders";grid-template-columns:1fr auto auto;gap:12px;padding:16px}.portal-home .shop-masthead .brand{font-size:27px}.portal-home .shop-masthead .account-link{padding:6px}.portal-home .shop-masthead .account-link .home-action-copy,.portal-home .shop-masthead .orders-link svg{display:none}.portal-home .shop-masthead .cart-header{min-width:0;gap:7px;padding:5px}.portal-home .shop-masthead .cart-label{font-size:11px}.portal-home .shop-masthead .home-location{padding:2px 0;gap:5px}.home-location svg{width:16px;height:19px}.home-location span{flex-direction:row;align-items:baseline;gap:5px}.home-location small{font-size:10px}.home-location strong{font-size:11px;max-width:145px}.portal-home .shop-masthead .orders-link{padding:0;justify-content:flex-end}.portal-home .orders-link .home-action-copy small{display:none}.portal-home .shop-masthead .orders-link strong{font-size:11px}.portal-home .shop-masthead .header-search select{max-width:88px;font-size:11px}.portal-home .shop-masthead .header-search input{padding:10px;font-size:12px}.portal-home .shop-masthead .header-search #visual-search-open{margin-right:5px}.portal-home .shop-masthead .shop-nav{padding:8px 16px 10px}.portal-home .shop-masthead{margin-bottom:14px}}
+@media(forced-colors:active){.portal-home .shop-masthead .brand-wordmark{-webkit-text-fill-color:LinkText;color:LinkText}.portal-home .shop-masthead .header-search button[type=submit]{border:1px solid ButtonText}.portal-home .shop-masthead .cart-picture #cart-count{border:1px solid ButtonText}}
+.portal-home .shop-masthead .home-action-copy{display:flex;flex-direction:column;gap:2px}
+@media(max-width:640px){.portal-home .shop-masthead .account-link .home-action-copy{display:none}}
+@media(max-width:640px){.portal-home .home-location span{min-width:0;flex:1}.portal-home .home-location small{flex-shrink:0}.portal-home .home-location strong{min-width:0;flex:1}}
+@media(max-width:380px){.portal-home .shop-masthead .cart-label{display:none}.portal-home .shop-masthead .brand{font-size:25px}}
+/* Owner correction: coloured header, white page background. */
+body.portal-home{background:#fff}
+.portal-home .preview{background:#124a39;color:#dcece3;border-bottom:1px solid #ffffff18}
+.portal-home .shop-masthead{background:linear-gradient(115deg,#1c624c,#103f33);border-bottom:1px solid #164c3b;--shop-link:#fff;box-shadow:0 5px 18px #103f3314}
+.portal-home .shop-masthead .brand,.portal-home .shop-masthead .brand-wordmark{color:#fff;-webkit-text-fill-color:#fff}
+.portal-home .shop-masthead .brand-shop,.portal-home .home-location small,.portal-home .home-action-copy small{color:#d1e5d8}
+.portal-home .shop-masthead .brand-arrow{stroke:#d0f0db;border-color:#ffffff35;background:#ffffff10}
+.portal-home .shop-masthead .home-location,.portal-home .shop-masthead .account-link,.portal-home .shop-masthead .orders-link,.portal-home .shop-masthead .cart-header{color:#fff}
+.portal-home .shop-masthead .cart-picture #cart-count{background:#d1edcf;color:#163e2c}
+.portal-home .shop-masthead .shop-nav{border-top-color:#ffffff20;scrollbar-color:#8db49d transparent}
+.portal-home .shop-masthead .shop-nav a,.portal-home .shop-masthead .shop-nav button,.portal-home .shop-masthead .shop-nav .all-categories{color:#f4faf6}
+.portal-home .shop-masthead .shop-nav .all-categories{border-right-color:#ffffff30}
+.portal-home .shop-masthead .shop-nav a:hover,.portal-home .shop-masthead .shop-nav button:hover,.portal-home .shop-masthead .home-location:hover,.portal-home .shop-masthead .cart-header:hover{background:#ffffff16;color:#fff}
+@media(forced-colors:active){.portal-home .shop-masthead .brand-wordmark{-webkit-text-fill-color:LinkText;color:LinkText}}
+.portal-home .shop-masthead .home-action-copy{color:#fff}
+.portal-home #portal-picker button[aria-pressed=true]{background:#17583c;border-color:#17583c;color:#fff}
