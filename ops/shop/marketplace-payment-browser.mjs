@@ -64,10 +64,17 @@ try{
  const nonce=(await context.cookies(base)).find(c=>c.name==='__Host-market-connect');
  assert.ok(nonce?.httpOnly&&nonce.secure);assert.equal(nonce.sameSite,'Lax');
  const callbackUrl=value=>base+'/api/v1/shop/marketplace/merchant-callback?'+new URLSearchParams({state:new URL(value.authorizationUrl).searchParams.get('state'),code:'fixture_browser_code'});
- await page.goto(callbackUrl(obsolete));assert.ok(page.url().endsWith('merchantConnection=failed'));
+ // The page intentionally scrubs the outcome query after loading. Assert the
+ // actual redirect response instead of racing its privacy cleanup.
+ const returnInBrowser=async(value,outcome)=>{
+  const returned=page.waitForResponse(r=>r.url()===callbackUrl(value));
+  await page.goto(callbackUrl(value));const response=await returned;
+  assert.equal(response.status(),303);assert.equal((await response.allHeaders()).location,'/shop/marketplace-seller.html?merchantConnection='+outcome);
+ };
+ await returnInBrowser(obsolete,'failed');
  assert.equal((await context.cookies(base)).find(c=>c.name==='__Host-market-connect')?.value,nonce.value);
  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);
- await page.goto(callbackUrl(replacement));assert.ok(page.url().endsWith('merchantConnection=connected'));
+ await returnInBrowser(replacement,'connected');
  assert.equal((await f.db.query('SELECT status FROM shop_market_mollie_connections')).rows[0].status,'pending');
  await page.getByRole('button',{name:'Verbindungsstatus laden',exact:true}).click();await page.getByRole('button',{name:'Mollie-Konto für Test verbinden',exact:true}).waitFor({state:'visible'});
  await page.getByRole('button',{name:'Mollie-Konto für Test verbinden',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Rückkehr von Mollie. Bitte den gespeicherten Verbindungsstatus laden.'));
