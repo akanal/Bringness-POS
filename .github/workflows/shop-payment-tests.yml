@@ -1,5 +1,7 @@
 name: Shop payment safety tests
 on:
+  push:
+    branches: ['audit/payment-acceptance-*']
   pull_request:
     paths:
       - 'server/shop-payment-*.js'
