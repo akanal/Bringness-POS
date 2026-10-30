@@ -125,3 +125,53 @@ test('real PostgreSQL encrypted merchant refresh and parallel reconciliation are
   assert.equal((await c().status(args)).canFulfil,false);assert.equal(posts,1);
  }finally{if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();}
 });
+
+test('real PostgreSQL durable consent claims reject duplicate, replaced, revoked and expired callbacks',{skip:!connectionString,timeout:30000},async()=>{
+ const {migrateMarketplaceConnections,createMarketplaceConnections}=await import('./shop-mollie-marketplace-connection.js');
+ const url=new URL(connectionString);if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.pathname!=='/bringness_checkout_test')throw Error('ISOLATED_CHECKOUT_DATABASE_REQUIRED');
+ const schema='consent_'+randomUUID().replaceAll('-',''),admin=new pg.Pool({connectionString});let pool,release=()=>{},pending;
+ try{
+  await admin.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString,max:12,options:'-c search_path='+schema});
+  await pool.query(`CREATE TABLE companies(id uuid PRIMARY KEY);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz)`);
+  await migrateMarketplace(pool);await migrateMarketplaceConnections(pool);await migrateMarketplaceConnections(pool);
+  const seller=randomUUID(),user=randomUUID();
+  await pool.query('INSERT INTO companies VALUES($1)',[seller]);await pool.query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[user,seller]);
+  await pool.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[user,createHash('sha256').update('merchant-fixture').digest('hex')]);
+  await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved','{}')",[seller]);
+  let hold=async()=>{},exchanges=0;
+  const config={publicOrigin:'https://bringness.de',clientId:'app_fixture',clientSecret:'fixture_not_real_secret',tokenKey:'ab'.repeat(32),fetcher:async(url,options)=>{
+   assert.equal(new URL(url).pathname,'/oauth2/tokens');assert.equal(options.method,'POST');exchanges++;await hold();
+   return Response.json({access_token:'access_postgres_consent_fixture',refresh_token:'refresh_postgres_consent_fixture',expires_in:3600,token_type:'bearer',scope:'organizations.read profiles.read payments.read payments.write'});
+  }};
+  const service=()=>createMarketplaceConnections(pool,config),args=b=>({state:new URL(b.authorizationUrl).searchParams.get('state'),browserNonce:b.browserNonce,code:'fixture'});
+  const start=async()=>{
+   const b=await service().begin({token:'merchant-fixture'});let enter;
+   const entered=new Promise(r=>{enter=r;}),held=new Promise(r=>{release=r;});hold=async()=>{enter();await held;};
+   pending=service().complete(args(b)).then(value=>({value}),error=>({error}));await entered;return b;
+  };
+  // Distinct pool sessions race the same callback. Only the durable claimant
+  // reaches OAuth, including a newly constructed service after process restart.
+  const b=await start(),count=exchanges;
+  const duplicates=await Promise.allSettled(Array.from({length:8},()=>service().complete(args(b))));
+  assert.ok(duplicates.every(r=>r.status==='rejected'&&r.reason.code==='MARKET_CONNECT_STATE'));assert.equal(exchanges,count);
+  release();assert.equal((await pending).error,undefined);hold=async()=>{};
+  const initial=(await pool.query('SELECT * FROM shop_market_mollie_connections')).rows[0];
+  assert.equal(initial.status,'pending');assert.equal((await pool.query('SELECT * FROM shop_market_mollie_states')).rows.length,0);
+  // A newer explicit begin survives an older callback's response and can finish.
+  await start();const replacement=await service().begin({token:'merchant-fixture'});release();
+  assert.equal((await pending).error?.code,'MARKET_CONNECT_STATE');
+  assert.equal((await pool.query('SELECT connection_id FROM shop_market_mollie_connections')).rows[0].connection_id,initial.connection_id);
+  hold=async()=>{};await service().complete(args(replacement));
+  const replaced=(await pool.query('SELECT * FROM shop_market_mollie_connections')).rows[0];assert.notEqual(replaced.connection_id,initial.connection_id);
+  // Revocation cannot be undone by an older remote exchange.
+  await start();await service().disconnect({token:'merchant-fixture'});release();
+  assert.equal((await pending).error?.code,'MARKET_CONNECT_STATE');
+  const revoked=(await pool.query('SELECT * FROM shop_market_mollie_connections')).rows[0];
+  assert.equal(revoked.status,'revoked');assert.equal(revoked.token_envelope,null);assert.equal(revoked.connection_id,replaced.connection_id);
+  // The original deadline is checked again when committing returned tokens.
+  await start();await pool.query("UPDATE shop_market_mollie_states SET expires_at=clock_timestamp()-interval '1 second'");release();
+  assert.equal((await pending).error?.code,'MARKET_CONNECT_STATE');
+  assert.equal((await pool.query('SELECT status FROM shop_market_mollie_connections')).rows[0].status,'revoked');
+  assert.equal(exchanges,5);
+ }finally{release();if(pending)await pending;if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();}
+});

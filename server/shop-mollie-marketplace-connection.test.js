@@ -124,3 +124,147 @@ test('HTTP consent cookie, callback, exact input, cross-site guards and untruste
   const fake=await fetch(base+'/checkout-notification',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id=tr_connectionfixture&status=paid'});assert.equal(fake.status,400);assert.equal(f.posts,1);
  }finally{if(server)await new Promise(r=>server.close(r));await f.db.close();}
 });
+
+// Hold only synthetic OAuth I/O; database work can finish before releasing it.
+function heldExchange(f){
+ let enter,release;
+ const entered=new Promise(r=>{enter=r;}),held=new Promise(r=>{release=r;});
+ let exchanges=0;
+ const service=createMarketplaceConnections(f.pool,{...f.config,fetcher:async(...args)=>{
+  if(new URL(args[0]).pathname==='/oauth2/tokens'){exchanges++;enter();await held;}
+  return f.config.fetcher(...args);
+ }});
+ return {service,entered,release,get exchanges(){return exchanges;}};
+}
+function callback(begin){return {state:new URL(begin.authorizationUrl).searchParams.get('state'),code:'fixture',browserNonce:begin.browserNonce};}
+test('disconnect during OAuth exchange cannot be undone by a late callback',async()=>{
+ const f=await setup(),h=heldExchange(f);let pending;
+ try{
+  const b=await h.service.begin({token:'owner-a'});
+  pending=h.service.complete(callback(b)).then(value=>({value}),error=>({error}));await h.entered;
+  await f.service.disconnect({token:'owner-a'});h.release();
+  const result=await pending;assert.match(result.error?.message||'',/MARKET_CONNECT_STATE/);
+  assert.equal((await f.service.status({token:'owner-a'})).status,'not_connected');
+  assert.equal(h.exchanges,1);assert.equal(f.posts,0);
+ }finally{h.release();if(pending)await pending;await f.db.close();}
+});
+test('new consent supersedes an already claimed callback without losing the new state',async()=>{
+ const f=await setup(),h=heldExchange(f);let pending;
+ try{
+  const first=await h.service.begin({token:'owner-a'});
+  pending=h.service.complete(callback(first)).then(value=>({value}),error=>({error}));await h.entered;
+  const next=await f.service.begin({token:'owner-a'});h.release();
+  const result=await pending;assert.match(result.error?.message||'',/MARKET_CONNECT_STATE/);
+  assert.equal((await f.service.status({token:'owner-a'})).status,'not_connected');
+  await f.service.complete(callback(next));assert.equal((await f.service.status({token:'owner-a'})).status,'pending');
+  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_states')).rows.length,0);
+ }finally{h.release();if(pending)await pending;await f.db.close();}
+});
+test('consent expiring during OAuth exchange cannot install credentials',async()=>{
+ const f=await setup(),h=heldExchange(f);let pending;
+ try{
+  const b=await h.service.begin({token:'owner-a'});
+  pending=h.service.complete(callback(b)).then(value=>({value}),error=>({error}));await h.entered;
+  await f.db.exec("UPDATE shop_market_mollie_states SET expires_at=clock_timestamp()-interval '1 second'");h.release();
+  const result=await pending;assert.match(result.error?.message||'',/MARKET_CONNECT_STATE/);
+  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);
+ }finally{h.release();if(pending)await pending;await f.db.close();}
+});
+test('claimed code cannot be exchanged twice while the first callback is in flight or after restart',async()=>{
+ const f=await setup(),h=heldExchange(f);let pending;
+ try{
+  const b=await h.service.begin({token:'owner-a'}),args=callback(b);
+  pending=h.service.complete(args).then(value=>({value}),error=>({error}));await h.entered;
+  const restarted=createMarketplaceConnections(f.pool,f.config);
+  await assert.rejects(restarted.complete(args),/MARKET_CONNECT_STATE/);assert.equal(h.exchanges,1);
+  assert.ok((await f.db.query('SELECT claimed_at FROM shop_market_mollie_states')).rows[0].claimed_at);
+  h.release();assert.equal((await pending).error,undefined);
+  await assert.rejects(restarted.complete(args),/MARKET_CONNECT_STATE/);assert.equal(h.exchanges,1);
+ }finally{h.release();if(pending)await pending;await f.db.close();}
+});
+test('failed exchange retains its claim across migration and requires fresh explicit consent',async()=>{
+ const f=await setup();try{
+  f.badToken=true;const b=await f.service.begin({token:'owner-a'}),args=callback(b);
+  await assert.rejects(f.service.complete(args),/MARKET_CONNECT_FAILED/);const count=f.calls.length;
+  await migrateMarketplaceConnections(f.pool);await migrateMarketplaceConnections(f.pool);
+  const restarted=createMarketplaceConnections(f.pool,f.config);
+  await assert.rejects(restarted.complete(args),/MARKET_CONNECT_STATE/);assert.equal(f.calls.length,count);
+  f.badToken=false;const next=await restarted.begin({token:'owner-a'});
+  assert.equal((await f.db.query('SELECT claimed_at FROM shop_market_mollie_states')).rows[0].claimed_at,null);
+  await restarted.complete(callback(next));assert.equal((await restarted.status({token:'owner-a'})).status,'pending');
+ }finally{await f.db.close();}
+});
+test('migration preserves unclaimed legacy consent without changing its original deadline',async()=>{
+ const f=await setup();try{
+  const b=await f.service.begin({token:'owner-a'});
+  await f.db.exec('ALTER TABLE shop_market_mollie_states DROP COLUMN claimed_at');
+  const before=(await f.db.query('SELECT * FROM shop_market_mollie_states')).rows[0];
+  await migrateMarketplaceConnections(f.pool);await migrateMarketplaceConnections(f.pool);
+  const after=(await f.db.query('SELECT * FROM shop_market_mollie_states')).rows[0];
+  assert.deepEqual(after,{...before,claimed_at:null});
+  await f.service.complete(callback(b));assert.equal((await f.service.status({token:'owner-a'})).status,'pending');
+ }finally{await f.db.close();}
+});
+test('late consent cannot undo revocation of an existing verified binding',async()=>{
+ const f=await setup(),h=heldExchange(f);let pending;
+ try{
+  await f.connect();const binding=await f.service.loadConnection(f.a);
+  const b=await h.service.begin({token:'owner-a'});
+  pending=h.service.complete(callback(b)).then(value=>({value}),error=>({error}));await h.entered;
+  await f.service.disconnect({token:'owner-a'});h.release();
+  assert.match((await pending).error?.message||'',/MARKET_CONNECT_STATE/);
+  const row=(await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows[0];
+  assert.equal(row.connection_id,binding.connectionId);assert.equal(row.status,'revoked');assert.equal(row.token_envelope,null);
+  let invoked=false;await assert.rejects(f.service.withAccessToken(f.a,binding.connectionId,()=>{invoked=true;}),/MARKET_MERCHANT_NOT_CONNECTED/);assert.equal(invoked,false);
+ }finally{h.release();if(pending)await pending;await f.db.close();}
+});
+test('session revocation or seller suspension during exchange cannot install credentials',async()=>{
+ for(const mutation of ["UPDATE users SET status='inactive' WHERE company_id=$1","UPDATE shop_market_sellers SET status='suspended' WHERE company_id=$1"]){
+  const f=await setup(),h=heldExchange(f);let pending;
+  try{
+   const b=await h.service.begin({token:'owner-a'});
+   pending=h.service.complete(callback(b)).then(value=>({value}),error=>({error}));await h.entered;
+   await f.db.query(mutation,[f.a]);h.release();assert.match((await pending).error?.message||'',/UNAUTHORIZED|SELLER_NOT_APPROVED/);
+   assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);
+  }finally{h.release();if(pending)await pending;await f.db.close();}
+ }
+});
+test('failed binding write rolls back state deletion but never permits replay of its claimed code',async()=>{
+ const f=await setup();try{
+  let broken=true;
+  const service=createMarketplaceConnections({...f.pool,connect:async()=>{
+   const db=await f.pool.connect();return {...db,query:async(sql,params)=>{
+    if(broken&&sql.startsWith('INSERT INTO shop_market_mollie_connections'))throw Error('synthetic write failure');
+    return db.query(sql,params);
+   }};
+  }},f.config);
+  const b=await service.begin({token:'owner-a'}),args=callback(b);
+  await assert.rejects(service.complete(args),/synthetic write failure/);
+  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_connections')).rows.length,0);
+  assert.ok((await f.db.query('SELECT claimed_at FROM shop_market_mollie_states')).rows[0].claimed_at);
+  const count=f.calls.length;broken=false;
+  await assert.rejects(service.complete(args),/MARKET_CONNECT_STATE/);assert.equal(f.calls.length,count);
+  await service.complete(callback(await service.begin({token:'owner-a'})));
+  assert.equal((await f.db.query('SELECT * FROM shop_market_mollie_states')).rows.length,0);
+ }finally{await f.db.close();}
+});
+test('late HTTP callback cannot erase the browser cookie of a newer consent attempt',async()=>{
+ const f=await setup(),h=heldExchange(f);let server,pending;
+ try{
+  const runtime=createMarketplaceRuntime(f.pool,{enabled:true,merchantConnections:h.service});await runtime.migrate();
+  server=http.createServer(async(req,res)=>{if(!await runtime.handle(req,res)){res.statusCode=404;res.end();}});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port+'/api/v1/shop/marketplace';
+  const begin=async()=>{
+   const r=await fetch(base+'/merchant-connect',{method:'POST',headers:{Origin:'https://bringness.de','Content-Type':'application/json',Authorization:'Bearer owner-a'},body:'{}'});
+   assert.equal(r.status,200);return {value:await r.json(),cookie:r.headers.get('set-cookie').split(';')[0]};
+  };
+  const complete=b=>fetch(base+'/merchant-callback?'+new URLSearchParams({state:new URL(b.value.authorizationUrl).searchParams.get('state'),code:'fixture'}),{headers:{cookie:b.cookie},redirect:'manual'});
+  const first=await begin();pending=complete(first);await h.entered;
+  const next=await begin();assert.notEqual(next.cookie,first.cookie);h.release();
+  const stale=await pending;assert.equal(stale.status,303);assert.equal(stale.headers.get('location'),'/shop/marketplace-seller.html?merchantConnection=failed');
+  assert.equal(stale.headers.get('set-cookie'),null,'an old response must not expire the new browser nonce');
+  assert.equal(stale.headers.get('cache-control'),'no-store');assert.equal(stale.headers.get('referrer-policy'),'no-referrer');
+  const current=await complete(next);assert.equal(current.status,303);assert.equal(current.headers.get('location'),'/shop/marketplace-seller.html?merchantConnection=connected');
+  assert.equal(current.headers.get('set-cookie'),null);assert.equal((await f.service.status({token:'owner-a'})).status,'pending');assert.equal(f.posts,0);
+ }finally{h.release();if(pending)await pending;if(server)await new Promise(r=>server.close(r));await f.db.close();}
+});
