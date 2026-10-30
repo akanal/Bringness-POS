@@ -1,3 +1,5 @@
+import {composeMarketplaceTestHost} from './shop-mollie-marketplace-host.js';
+import {createMarketplaceTestIntegration} from './shop-mollie-marketplace-integration.js';
 import {migrateMerchantCustomerNumbers} from './merchant-customer-numbers.js';
 import {configuredIdriveDocumentStore} from './idrive-document-store.js';
 import {createShopDocumentsRuntime} from './shop-documents-http.js';
@@ -76,7 +78,10 @@ const shopRuntime=createShopRuntime(platformGatewayPool,{enabled:appMode!=='ai'&
 let shopAssistant={migrate:async()=>{},handle:async()=>false};
 try{shopAssistant=createShopAssistant(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_ASSISTANT_ENABLED!=='false',key:process.env.SHOP_ASSISTANT_API_KEY||process.env.OPENAI_API_KEY,model:process.env.SHOP_ASSISTANT_MODEL||process.env.OPENAI_MODEL,publicOrigin:process.env.SHOP_PUBLIC_ORIGIN||'https://bringness.de'});}catch{console.error('Shop assistant configuration unavailable; guided help remains available.');}
 const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_SELLER_DRAFTS_ENABLED!=='false'});
-const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)});
+const marketHost=composeMarketplaceTestHost(platformGatewayPool,{env:process.env,appMode,isolated:isolatedPreview(),marketplaceEnabled:marketplaceEnabled(process.env,appMode),createIntegration:createMarketplaceTestIntegration});
+const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode),checkoutProviderResolver:marketHost.checkoutProviderResolver,merchantConnections:marketHost.merchantConnections,checkoutReadiness:marketHost.report});
+let marketScheduler=null;
+
 let documentStore=null;
 if(appMode!=='ai'&&!isolatedPreview())try{documentStore=await configuredIdriveDocumentStore(process.env);}catch{console.error('Private document storage unavailable; document uploads remain closed.');}
 const documentsRuntime=createShopDocumentsRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&!isolatedPreview(),store:documentStore});
@@ -251,7 +256,7 @@ async function migrateWithRetry(){
       try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
       try{await shopAssistant.migrate();}catch{console.error('Shop assistant unavailable; guided help remains available.');}
       try{await sellerRuntime.migrate();}catch{console.error('Seller draft migrations unavailable; seller routes remain closed.');}
-      try{await marketplaceRuntime.migrate();}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
+      try{await marketplaceRuntime.migrate();if(marketHost.schedulerEnabled&&!marketScheduler)marketScheduler=marketplaceRuntime.startReconciliation({onResult:r=>{if(!r.ok||r.failed)console.error('Marketplace test reconciliation needs review.');}});}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
       try{await shopRegistrationRuntime.migrate();}catch{console.error('Shop registration migrations unavailable; registration remains closed.');}
       if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
@@ -319,6 +324,7 @@ async function applyAvailabilityRules() {
 }
 setTimeout(applyAvailabilityRules, 3000);
 setInterval(applyAvailabilityRules, 60000).unref();
+
 
 
 
