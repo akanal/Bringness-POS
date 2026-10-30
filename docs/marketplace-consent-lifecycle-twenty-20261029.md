@@ -59,20 +59,28 @@ and secret-free responses are preserved.
 
 ## Verification record
 
-- Original three regressions: 3 failures before the fix, all passed after it.
-- Focused connection suite before HTTP cookie coverage: 16 passed,
-  zero failures/skips, using isolated PGlite and synthetic transport only.
-- Focused connection/preflight check before the final six regression tests:
-  17 passed, zero failures/skips.
-- Final connection/preflight suite including actual HTTP stale-callback recovery:
-  24 passed, zero failures/skips.
+- The original three service regressions failed before the claim fix. The actual
+  HTTP newer-cookie regression failed before the response-header fix.
+- Final focused connection/preflight suite: 24 passed, zero failures/skips.
 - Final general local suite: 669 passed, zero failures/skips.
-- Local Shop suite: 705 passed, zero failures/skips before the final HTTP-only fix.
-- Previous application head f02b5e20dd48ba03d78d3478350533cd90b510ff passed
-  GitHub payment run41012221826/job123920425531, including real PostgreSQL.
-  This does not accept the later browser cookie fix; final checks are pending.
-- Full local payment and Shop suites and real PostgreSQL/GitHub/browser runs:
-  pending final results; update this record before claiming acceptance.
+- Final local payment suite: 130 passed, zero failures; three PostgreSQL-only
+  tests skipped locally and covered by the real PostgreSQL GitHub run below.
+- Local Shop suite: 705 passed before the final HTTP-only fix. Final GitHub Shop
+  suite passed all705 tests, zero failures/skips, on the final application tree.
+- Application/test head52f4f091d6cd0b304519602ad45c5e6a3ef60506,
+  tree3a63600f08b1dfb8de70287dd1c75576be24b5bd.
+- GitHub payment41012852604/job123922413032: all133 passed, zero failures/skips,
+  including real PostgreSQL duplicate callbacks, replacement, disconnect, expiry,
+  original consent/checkout deadlock regression and parallel refresh/rechecks.
+- Shop41012852698/job123922413297: native HTTPS merchant/customer browser step
+  passed, including stale return/new-cookie recovery, explicit revocation,
+  reconnect, profile verification, lost payment reply, single test handoff and
+  390/768/1280 layouts. The full705-test Shop suite and actual application
+  entrypoint with real PostgreSQL/native browser also passed.
+- POS/AI41012852603/job123922413029 and isolated-preview41012852610/
+  job123922413843 passed, including the isolated encrypted backup/restore.
+- All four applicable GitHub workflows succeeded on the exact application/test
+  head above. A subsequent verification/handoff commit changes documentation only.
 
 ## Limits and release conditions
 
