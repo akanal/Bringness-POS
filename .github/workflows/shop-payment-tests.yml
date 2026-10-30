@@ -2,6 +2,9 @@ name: Shop payment safety tests
 on:
   pull_request:
     paths:
+      - 'server/merchant-customer-numbers*.js'
+      - 'server/billing-mail.js'
+      - 'ops/sql/verify-merchant-customer-numbers.sql'
       - 'server/shop-payment-*.js'
       - 'server/shop-mollie-*.js'
       - 'server/shop-document-*.js'
@@ -26,4 +29,4 @@ jobs:
       # PGlite is test-only; keep it out of the production dependency graph.
       - run: npm install --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.3.14
       - name: Payment and refund safety suites
-        run: node --test server/shop-payment-*.test.js server/shop-mollie-*.test.js server/shop-document-*.test.js server/shop-credit-note-*.test.js server/shop-invoice-*.test.js
+        run: node --test server/merchant-customer-numbers.test.js server/shop-payment-*.test.js server/shop-mollie-*.test.js server/shop-document-*.test.js server/shop-credit-note-*.test.js server/shop-invoice-*.test.js
