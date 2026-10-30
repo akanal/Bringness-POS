@@ -53,3 +53,5 @@ body.portal-home{background:#fff}
 .portal-home .shop-masthead .shop-nav .all-categories{border-right-color:#ffffff30}
 .portal-home .shop-masthead .shop-nav a:hover,.portal-home .shop-masthead .shop-nav button:hover,.portal-home .shop-masthead .home-location:hover,.portal-home .shop-masthead .cart-header:hover{background:#ffffff16;color:#fff}
 @media(forced-colors:active){.portal-home .shop-masthead .brand-wordmark{-webkit-text-fill-color:LinkText;color:LinkText}}
+.portal-home .shop-masthead .home-action-copy{color:#fff}
+.portal-home #portal-picker button[aria-pressed=true]{background:#17583c;border-color:#17583c;color:#fff}
