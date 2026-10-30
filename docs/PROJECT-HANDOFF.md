@@ -117,3 +117,12 @@ Netcup bleibt der aktive Anwendungs- und PostgreSQL-Standort. IDrive e2 ist Obje
 - Netcup backup41079575919/job124144779184 validated databases. Mergeb72b6ae473f5f7337da7e41ad1210ca3637807c3 deployed successfully through41080410145/job124147677347; prior container/database backup retained.
 - Fresh live cloud browser at https://bringness.de/shop/ confirmed body background rgb255/255/255, background-image none, emerald header gradient rgb28/98/76 to16/63/51. This is the current approved trial direction; do not restore the white header from historical notes.
 - Financial PR188 remains separate and unmerged. No provider credentials, payments or other marketplace-page headers changed.
+
+
+## Domain homepage — verified live 30.10.2026
+- Owner confirmed bringness.de opens marketplace directly; bringness.com will also serve marketplace after its later transfer from All-inkl to Netcup (transfer excluded now). bringness-pos.de is reserved for POS; bringness-ai.de/.com for AI. Do not restore the superseded bringness.com-to-POS mapping.
+- Netcup owner screenshots confirm @ and www A records to152.53.196.43, no AAAA entry, existing Brevo TXT/DKIM preserved. No DNS changes necessary or made.
+- PR191 feature a6e8f6294ff5cae4cfaf53ea4b365b2fbf71a229 passed all six applicable workflows, including708 Shop tests without failures/skips and actual PostgreSQL/production entrypoint/browser. Seven local marketplace-home/runtime tests passed. Backup41089326673/job124178728793 reported Database backups validated.
+- Merge65a310c6bc4900b38fac2ae17d025257ffbd6d5b deployed successfully through Netcup41090321341/job124182206928; exact revision and retained prior container/database backup verified in logs.
+- server/marketplace-home.js serves existing shop HTML at / and /index.html only for bringness.de/www in POS mode. Base /shop/ resolves existing relative assets/modules, fragment links use root; no duplicated catalogue, iframe or redirect to /shop/. Original POS marketing remains at /pos-info.html. /shop/, /pos/, /service/, API and other hosts/modes remain routed as before; separate POS/AI domain routing changes are not part of this release.
+- Live browser at https://bringness.de/ showed marketplace, loaded products/images, emerald header and white background; cart opened/closed correctly while root URL remained. This is website routing only, no financial activation.
