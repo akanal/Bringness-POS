@@ -16,5 +16,7 @@ test('invalid/legacy choices and unavailable storage never authorize optional pr
  const dom=new JSDOM('',{url:'https://fixture.test'}),s=dom.window.localStorage;
  for(const value of ['all','{}','null','{"version":1,"preferences":"true"}','{"version":2,"preferences":true}']){s.setItem(consentKey,value);assert.equal(readChoice(s),null);assert.equal(preferencesAllowed(s),false);}
  const blocked={getItem(){throw Error('denied')},setItem(){throw Error('denied')},removeItem(){throw Error('denied')}};
- assert.equal(preferencesAllowed(blocked),false);assert.equal(saveChoice(blocked,true),false);dom.window.close();
+ assert.equal(preferencesAllowed(blocked),false);assert.equal(saveChoice(blocked,true),false);
+ const readonly={getItem(){return JSON.stringify({version:1,preferences:true})},setItem(){throw Error('readonly')},removeItem(){throw Error('readonly')}};
+ assert.equal(preferencesAllowed(readonly),true);assert.equal(saveChoice(readonly,false),false);assert.equal(preferencesAllowed(readonly),false);dom.window.close();
 });
