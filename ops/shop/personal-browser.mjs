@@ -3,6 +3,7 @@ export async function personalBrowserChecks({page,base,artifacts}){
  for(const width of [1280,390]){
   await page.setViewportSize({width,height:900});await page.goto(base+'/shop/?view=grid');
   await page.evaluate(()=>{sessionStorage.removeItem('bringness.shop.personal.v1');sessionStorage.removeItem('bringness.shop.saved.v1');localStorage.removeItem('bringness.shop.browse.v1');});await page.reload();
+  if(!await page.locator('#shop-cookie-banner').isVisible())await page.locator('.shop-cookie-reopen').click();await page.getByRole('button',{name:'Komfortspeicherung erlauben',exact:true}).click();
   await page.locator('#search').fill('Windows');await page.locator('#search-form').evaluate(form=>form.requestSubmit());
   await page.locator('.personal-tools').first().locator('summary').click();await page.locator('#search-save-name').fill('Windows wiederfinden');await page.getByRole('button',{name:'Aktuelle Suche speichern',exact:true}).click();
   assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('bringness.shop.personal.v1')).searches[0].name),'Windows wiederfinden');
