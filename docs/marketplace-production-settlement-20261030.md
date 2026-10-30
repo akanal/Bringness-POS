@@ -32,6 +32,13 @@ Owner requested completing the next ten production-prerequisite points and relea
 
 ## Integration prerequisites before activation
 
-A production provider adapter must fetch authoritative facts through the seller's dedicated LIVE OAuth connection and verify organization/profile. A protected durable acceptance source must bind legal merchant/restaurant ownership, exact order digest and fiscal reference. A fiscal adapter must provide validated receipt/credit-note/fees/refund allocation. A downstream receiver must durably deduplicate receipt IDs and have explicit production acceptance. Existing TEST credentials and platform subscription keys cannot fill these roles.
+The new read-only `createMarketplaceLiveAccounting` composition fetches authoritative LIVE payment and completed-refund facts through the seller's dedicated LIVE OAuth connection and verify organization/profile. It verifies organization/profile and distinct market-live intent metadata, never uses platform API keys, never posts a payment/refund and leaves processing fees unknown. Actual OAuth credentials/refresh binding and a protected durable acceptance source must bind legal merchant/restaurant ownership, exact order digest and fiscal reference. A fiscal adapter must provide validated receipt/credit-note/fees/refund allocation. A downstream receiver must durably deduplicate receipt IDs and have explicit production acceptance. Existing TEST credentials and platform subscription keys cannot fill these roles.
 
 Do not add the service/migration to startup, enable live checkout, manufacture account/acceptance fixtures in production or bypass the forced-SSH configuration boundary to finish this block. The owner can sign in through the secure browser authentication flow; passwords/tokens never belong in chat.
+
+
+## Read-only provider contract
+
+The separate LIVE reader uses fixed GET organizations/me, profiles/{id}, payments/{id} and payments/{id}/refunds/{id} endpoints. It validates LIVE response mode, exact seller/order/profile binding, distinct market-live intent metadata, one-off payment type and parent-payment identity before returning normalized facts without raw customer/bank details. Platform API keys and TEST tokens/bindings are rejected. Existing TEST OAuth scopes are not silently expanded; productive refund reads require actual refunds.read consent. No new consent was granted.
+
+Provider reference (checked 30 October 2026): https://docs.mollie.com/reference/get-payment and https://docs.mollie.com/reference/get-refund . Organization OAuth calls use the LIVE default, not testmode=true. Processing fees are not inferred from applicationFee, which is a separate platform charge. Mollie can support refunds beyond original payment for some compensation scenarios; this journal intentionally blocks such amounts pending a separate expense/tax allocation rather than guessing one.

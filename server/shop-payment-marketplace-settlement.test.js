@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import pg from 'pg';
+import {createMarketplaceLiveAccounting} from './shop-mollie-marketplace-live-integration.js';
 import {fixture} from '../ops/shop/fixture.mjs';
 import {migrateMarketplace} from './shop-marketplace.js';
 import {createMarketplaceSettlement,migrateMarketplaceSettlement,marketplaceSettlementDigest} from './shop-payment-marketplace-settlement.js';
@@ -149,4 +150,21 @@ test('failed settlement migration rolls back all new structures and a repeat suc
   await migrateMarketplaceSettlement(f.pool);await migrateMarketplaceSettlement(f.pool);
   assert.ok((await f.pool.query("SELECT to_regclass('shop_market_live_settlements') AS name")).rows[0].name);
  }finally{await f.db.close();}
+});
+
+
+test('read-only live OAuth composition verifies provider facts before atomic journal/refund writes',async()=>{
+ const f=await setup();try{
+  const key='market-live:'+randomUUID(),methods=[];
+  const service=createMarketplaceLiveAccounting(f.pool,{...f.deps,withAccessToken:async(_seller,_id,fn)=>fn('fixture_oauth_access'),fetcher:async(url,options)=>{
+   methods.push(options.method);let raw;const path=new URL(url).pathname;
+   if(path.endsWith('/organizations/me'))raw={id:f.binding.merchantId};
+   else if(path.endsWith('/profiles/'+f.binding.profileId))raw={id:f.binding.profileId,status:'verified'};
+   else if(path.includes('/refunds/'))raw={resource:'refund',mode:'live',id:f.refund.id,paymentId:f.payment.id,status:'refunded',amount:{currency:'EUR',value:'5.00'}};
+   else raw={resource:'payment',mode:'live',id:f.payment.id,profileId:f.binding.profileId,sequenceType:'oneoff',status:'paid',amount:{currency:'EUR',value:'11.90'},amountRefunded:{currency:'EUR',value:(f.payment.amountRefundedCents/100).toFixed(2)},metadata:{marketOrderId:f.args.orderId,marketSellerCompanyId:f.a,marketCheckoutKey:key}};
+   return new Response(JSON.stringify(raw),{headers:{'Content-Type':'application/hal+json'}});
+  }});
+  assert.equal((await service.settle(f.args)).replay,false);f.payment.amountRefundedCents=500;assert.equal((await service.refund({...f.args,refundId:f.refund.id})).replay,false);
+  await assert.rejects(service.consume({...f.args,receiptId:randomUUID()}),/LIVE_HANDOFF_BLOCKED/);assert.ok(methods.every(method=>method==='GET'));
+ }finally{await f.close();}
 });
