@@ -1,5 +1,8 @@
 export function mountGuidedOffer({window}){
  const d=window.document,host=d.getElementById('guided-start');if(!host)return;
+ const panel=d.createElement('div');panel.id='guided-offer-content';while(host.firstChild)panel.append(host.firstChild);
+ const toggle=d.createElement('button');toggle.type='button';toggle.className='guided-offer-toggle';toggle.id='guided-offer-toggle';toggle.setAttribute('aria-controls',panel.id);toggle.setAttribute('aria-expanded','true');toggle.textContent='Hilfe ausblenden';
+ toggle.addEventListener('click',()=>{const collapsed=!panel.hidden;panel.hidden=collapsed;host.classList.toggle('guided-offer-collapsed',collapsed);toggle.setAttribute('aria-expanded',String(!collapsed));toggle.textContent=collapsed?'Schritt-für-Schritt-Hilfe anzeigen':'Hilfe ausblenden';});host.append(toggle,panel);
  let index=0;
  const steps=()=>[
   {title:'Was möchtest du anbieten?',text:'Wähle Ware, digitales Produkt oder Dienstleistung. Gib einen klaren Titel und eine passende Kategorie ein.',target:'offer-title',action:'Zu Titel und Kategorie'},
