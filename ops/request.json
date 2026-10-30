@@ -1,5 +1,5 @@
 {
-  "operation": "backup",
+  "operation": "status",
   "target": "all",
-  "requestId": "shop-release-backup-20261027"
+  "requestId": "continuity-status-20261030"
 }
