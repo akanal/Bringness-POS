@@ -36,6 +36,13 @@ try{
   await page.setViewportSize({width,height:900});await page.goto(origin+'/shop/');await page.evaluate(()=>sessionStorage.clear());await page.reload();
   await page.locator('.card').first().waitFor();assert.equal(await page.locator('.card').count(),3);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`catalog overflow at ${width}`);
+  const assistantArrow=page.getByRole('link',{name:'Bringness-Assistent öffnen',exact:true});
+  assert.equal(await assistantArrow.count(),1,'single assistant entry');
+  assert.equal(await page.locator('.assistant-entry').count(),0,'floating entry removed');
+  assert.equal(await assistantArrow.getAttribute('href'),'/shop/assistant.html#buy');
+  const arrowBox=await assistantArrow.boundingBox();assert.ok(arrowBox.width>=44&&arrowBox.height>=44,'accessible touch target');
+  await assistantArrow.focus();assert.equal(await assistantArrow.evaluate(el=>el===document.activeElement),true,'arrow keyboard focus');
+  assert.equal(await page.getByRole('link',{name:'Bringness Startseite',exact:true}).getAttribute('href'),'/shop/');
   if(artifacts)await page.screenshot({path:path.join(artifacts,`catalog-${width}.png`),fullPage:true});
   await page.locator('.card-actions button').first().click();await page.locator('#detail-dialog[open]').waitFor();
   assert.equal(await page.locator('#detail-dialog').evaluate(e=>e.scrollWidth>e.clientWidth),false,`detail overflow at ${width}`);
