@@ -172,6 +172,6 @@ test('real PostgreSQL durable consent claims reject duplicate, replaced, revoked
   await start();await pool.query("UPDATE shop_market_mollie_states SET expires_at=clock_timestamp()-interval '1 second'");release();
   assert.equal((await pending).error?.code,'MARKET_CONNECT_STATE');
   assert.equal((await pool.query('SELECT status FROM shop_market_mollie_connections')).rows[0].status,'revoked');
-  assert.equal(exchanges,4);
+  assert.equal(exchanges,5);
  }finally{release();if(pending)await pending;if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+schema+' CASCADE');await admin.end();}
 });
