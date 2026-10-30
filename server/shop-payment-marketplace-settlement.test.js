@@ -78,7 +78,7 @@ test('revocation after settlement blocks handoff; refunds after consumption expl
   await f.service.settle(f.args);await f.pool.query("UPDATE shop_market_sellers SET status='suspended' WHERE company_id=$1",[f.a]);
   await assert.rejects(f.service.consume({...f.args,receiptId:randomUUID()}),/LIVE_MERCHANT_NOT_VERIFIED/);
   await f.pool.query("UPDATE shop_market_sellers SET status='approved' WHERE company_id=$1",[f.a]);await f.service.consume({...f.args,receiptId:randomUUID()});
-  f.payment.amountRefundedCents=500;assert.equal((await f.service.refund({...f.args,refundId:f.refund.id})).fulfilmentReviewRequired,true);
+  f.payment.amountRefundedCents=500;assert.equal((await f.service.refund({...f.args,refundId:f.refund.id})).fulfilmentReviewRequired,true);assert.equal((await f.service.refund({...f.args,refundId:f.refund.id})).fulfilmentReviewRequired,true);
  }finally{await f.close();}
 });
 const connectionString=process.env.MARKET_CHECKOUT_TEST_DATABASE_URL;
