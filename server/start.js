@@ -1,3 +1,7 @@
+import {marketplaceImageKey} from './shop-marketplace-images.js';
+import {createMarketplaceImagesRuntime} from './shop-marketplace-images-http.js';
+import {composeMarketplaceTestHost} from './shop-mollie-marketplace-host.js';
+import {createMarketplaceTestIntegration} from './shop-mollie-marketplace-integration.js';
 import {migrateMerchantCustomerNumbers} from './merchant-customer-numbers.js';
 import {configuredIdriveDocumentStore} from './idrive-document-store.js';
 import {createShopDocumentsRuntime} from './shop-documents-http.js';
@@ -33,6 +37,7 @@ import fs from "node:fs";
 import {handleCenter,migrateCenter} from "./center.js";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
+import {serveMarketplaceHome} from './marketplace-home.js';
 assertPreviewEntrypoint();
 const appMode = runtimeMode();
 configurePosOrigin(process.env, appMode);
@@ -76,10 +81,16 @@ const shopRuntime=createShopRuntime(platformGatewayPool,{enabled:appMode!=='ai'&
 let shopAssistant={migrate:async()=>{},handle:async()=>false};
 try{shopAssistant=createShopAssistant(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_ASSISTANT_ENABLED!=='false',key:process.env.SHOP_ASSISTANT_API_KEY||process.env.OPENAI_API_KEY,model:process.env.SHOP_ASSISTANT_MODEL||process.env.OPENAI_MODEL,publicOrigin:process.env.SHOP_PUBLIC_ORIGIN||'https://bringness.de'});}catch{console.error('Shop assistant configuration unavailable; guided help remains available.');}
 const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_SELLER_DRAFTS_ENABLED!=='false'});
-const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)});
+const marketHost=composeMarketplaceTestHost(platformGatewayPool,{env:process.env,appMode,isolated:isolatedPreview(),marketplaceEnabled:marketplaceEnabled(process.env,appMode),createIntegration:createMarketplaceTestIntegration});
+const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode),checkoutProviderResolver:marketHost.checkoutProviderResolver,merchantConnections:marketHost.merchantConnections,checkoutReadiness:marketHost.report});
+let marketScheduler=null;
+
 let documentStore=null;
 if(appMode!=='ai'&&!isolatedPreview())try{documentStore=await configuredIdriveDocumentStore(process.env);}catch{console.error('Private document storage unavailable; document uploads remain closed.');}
 const documentsRuntime=createShopDocumentsRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&!isolatedPreview(),store:documentStore});
+let imageStore=null;
+if(appMode!=='ai'&&!isolatedPreview())try{imageStore=await configuredIdriveDocumentStore(process.env,{objectKey:marketplaceImageKey});}catch{console.error('Product image storage unavailable.');}
+const imageRuntime=createMarketplaceImagesRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)&&!isolatedPreview(),store:imageStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
@@ -99,6 +110,7 @@ http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
       if (redirectLegacyPosDomain(req,res,appMode)) return;
+      if (serveMarketplaceHome(req,res,appMode,()=>fs.readFileSync(new URL('../apps/web/public/shop/index.html',import.meta.url),'utf8'))) return;
       if(appMode!=='ai' && req.method==='GET' && new URL(req.url,'http://local').pathname==='/health/fiskaly-test'){
         const row=(await platformGatewayPool.query('SELECT state,phase,last_error FROM fiskaly_test_setup WHERE request_id=$1',[onboardingRequest.requestId])).rows[0];
         res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
@@ -148,6 +160,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await documentsRuntime.handle(req,res)) return;
       if (await shopRuntime.handle(req,res)) return;
       if (await sellerRuntime.handle(req,res)) return;
+      if (await imageRuntime.handle(req,res)) return;
       if (await marketplaceRuntime.handle(req,res)) return;
       if (await shopAssistant.handle(req,res)) return;
       if (await handleTableSettlement(req,res)) return;
@@ -177,7 +190,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
     try {
       let html = fs.readFileSync(filePath, "utf8");
       if (/\/(admin|pos|service|tisch)\/index\.html$/.test(normalized) || normalized.endsWith('/accountant.html')) html=html.replace('</head>','<meta name="robots" content="noindex, nofollow"></head>');
-      if (!normalized.includes('/ai') && !normalized.includes('/apps/web/public/shop/') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
+      if (!normalized.includes('/ai') && !normalized.includes('/apps/web/public/shop/') && !/\/apps\/web\/public\/(impressum|datenschutz)\/index\.html$/.test(normalized) && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=checkout-recovery-20261017"></script></body>');
@@ -251,7 +264,7 @@ async function migrateWithRetry(){
       try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
       try{await shopAssistant.migrate();}catch{console.error('Shop assistant unavailable; guided help remains available.');}
       try{await sellerRuntime.migrate();}catch{console.error('Seller draft migrations unavailable; seller routes remain closed.');}
-      try{await marketplaceRuntime.migrate();}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
+      try{await marketplaceRuntime.migrate();await imageRuntime.migrate();if(marketHost.schedulerEnabled&&!marketScheduler)marketScheduler=marketplaceRuntime.startReconciliation({onResult:r=>{if(!r.ok||r.failed)console.error('Marketplace test reconciliation needs review.');}});}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
       try{await shopRegistrationRuntime.migrate();}catch{console.error('Shop registration migrations unavailable; registration remains closed.');}
       if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();
@@ -319,6 +332,7 @@ async function applyAvailabilityRules() {
 }
 setTimeout(applyAvailabilityRules, 3000);
 setInterval(applyAvailabilityRules, 60000).unref();
+
 
 
 

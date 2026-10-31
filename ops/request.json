@@ -1,5 +1,5 @@
 {
-  "operation": "status",
+  "operation": "backup",
   "target": "all",
-  "requestId": "continuity-status-20261030"
+  "requestId": "shared-emerald-header-20261101"
 }

@@ -48,6 +48,9 @@ export function redirectLegacyPosDomain(req, res, mode, env = process.env) {
   const path = String(req.url || "/");
   if (!path.startsWith("/") || /[\r\n]/.test(path)) return false;
   const pathname = new URL(path, "https://bringness.de").pathname;
+  // This domain owns the POS product homepage. Only bringness.de owns the marketplace root.
+  // Serve the existing POS index here, keeping the visitor on bringness-pos.de.
+  if (pathname === "/" || pathname === "/index.html") return false;
   if (pathname === "/api" || pathname.startsWith("/api/")) return false;
   res.writeHead(308, {location: "https://bringness.de" + path, "cache-control": "no-store"});
   res.end();
