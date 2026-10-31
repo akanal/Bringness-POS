@@ -1,3 +1,4 @@
+import {mountMarketCredit} from './market-credit-ui.js';
 import {mountMarketPaymentReview} from './market-payment-review-ui.js';
 import {mountMarketMerchant} from './market-merchant-ui.js';
 import {mountMarketOrderViews} from './market-order-ui.js';
@@ -17,6 +18,7 @@ export function mountMarketplaceSeller({window:w,document:d=w.document,client:pr
  $('publish-form').addEventListener('submit',e=>{e.preventDefault();write('publish');});$('publish-withdraw').addEventListener('click',()=>write('withdraw'));
  $('publish-retry').addEventListener('click',async()=>{if(busy)return;busy=true;try{const r=await client.retry('publish');source=null;current=null;$('publish-form').hidden=true;status('Anfrage bestätigt: '+r.state+'. Aktuellen Stand vor weiteren Änderungen laden.');}catch(e){status(marketError(e),true);}finally{busy=false;}});
  const paymentHost=d.getElementById('seller-payment-connection');if(paymentHost){mountMarketMerchant({window:w,host:paymentHost,client});mountMarketPaymentReview({window:w,host:paymentHost,client});}
+ const creditHost=d.getElementById('seller-credit');if(creditHost)mountMarketCredit({window:w,host:creditHost,client});
  mountMarketOrderViews({window:w,document:d,client,seller:true});
  return {client};
 }
