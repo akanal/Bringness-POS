@@ -190,7 +190,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
     try {
       let html = fs.readFileSync(filePath, "utf8");
       if (/\/(admin|pos|service|tisch)\/index\.html$/.test(normalized) || normalized.endsWith('/accountant.html')) html=html.replace('</head>','<meta name="robots" content="noindex, nofollow"></head>');
-      if (!normalized.includes('/ai') && !normalized.includes('/apps/web/public/shop/') && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
+      if (!normalized.includes('/ai') && !normalized.includes('/apps/web/public/shop/') && !/\/apps\/web\/public\/(impressum|datenschutz)\/index\.html$/.test(normalized) && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
         if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=checkout-recovery-20261017"></script></body>');
