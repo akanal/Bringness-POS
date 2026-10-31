@@ -1,3 +1,5 @@
+import {marketplaceImageKey} from './shop-marketplace-images.js';
+import {createMarketplaceImagesRuntime} from './shop-marketplace-images-http.js';
 import {composeMarketplaceTestHost} from './shop-mollie-marketplace-host.js';
 import {createMarketplaceTestIntegration} from './shop-mollie-marketplace-integration.js';
 import {migrateMerchantCustomerNumbers} from './merchant-customer-numbers.js';
@@ -86,6 +88,9 @@ let marketScheduler=null;
 let documentStore=null;
 if(appMode!=='ai'&&!isolatedPreview())try{documentStore=await configuredIdriveDocumentStore(process.env);}catch{console.error('Private document storage unavailable; document uploads remain closed.');}
 const documentsRuntime=createShopDocumentsRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&!isolatedPreview(),store:documentStore});
+let imageStore=null;
+if(appMode!=='ai'&&!isolatedPreview())try{imageStore=await configuredIdriveDocumentStore(process.env,{objectKey:marketplaceImageKey});}catch{console.error('Product image storage unavailable.');}
+const imageRuntime=createMarketplaceImagesRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)&&!isolatedPreview(),store:imageStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
@@ -155,6 +160,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await documentsRuntime.handle(req,res)) return;
       if (await shopRuntime.handle(req,res)) return;
       if (await sellerRuntime.handle(req,res)) return;
+      if (await imageRuntime.handle(req,res)) return;
       if (await marketplaceRuntime.handle(req,res)) return;
       if (await shopAssistant.handle(req,res)) return;
       if (await handleTableSettlement(req,res)) return;
@@ -258,7 +264,7 @@ async function migrateWithRetry(){
       try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
       try{await shopAssistant.migrate();}catch{console.error('Shop assistant unavailable; guided help remains available.');}
       try{await sellerRuntime.migrate();}catch{console.error('Seller draft migrations unavailable; seller routes remain closed.');}
-      try{await marketplaceRuntime.migrate();if(marketHost.schedulerEnabled&&!marketScheduler)marketScheduler=marketplaceRuntime.startReconciliation({onResult:r=>{if(!r.ok||r.failed)console.error('Marketplace test reconciliation needs review.');}});}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
+      try{await marketplaceRuntime.migrate();await imageRuntime.migrate();if(marketHost.schedulerEnabled&&!marketScheduler)marketScheduler=marketplaceRuntime.startReconciliation({onResult:r=>{if(!r.ok||r.failed)console.error('Marketplace test reconciliation needs review.');}});}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
       try{await shopRegistrationRuntime.migrate();}catch{console.error('Shop registration migrations unavailable; registration remains closed.');}
       if(appMode!=='ai'&&!isolatedPreview()){const billing=createBillingMail(platformGatewayPool);const deliver=createMailWorker(platformGatewayPool,{renderReceipt:renderMailReceipt,resolveBilling:billing.resolve});setInterval(()=>billing.tick().catch(()=>console.error('Billing mail check unavailable')).then(()=>deliver()).catch(()=>console.error('Transactional mail worker unavailable')),15000).unref();}
       await migrateSupport();

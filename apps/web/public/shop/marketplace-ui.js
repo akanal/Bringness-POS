@@ -51,6 +51,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   const host=$('market-results');host.replaceChildren();
   for(const p of rows){
    const box=el('article');box.dataset.offerId=p.id;
+   if(typeof p.imageUrl==='string'&&/^\/api\/v1\/shop\/marketplace\/images\/public\/[a-f0-9-]{36}$/.test(p.imageUrl)){const img=el('img');img.src=p.imageUrl;img.alt=p.title;img.loading='lazy';img.width=240;img.height=180;img.className='market-product-image';box.append(img);}
    const heading=el('h3');heading.append(link(p.title,{offer:p.id}));box.append(heading,el('p','Anzeige '+p.listingNumber+' · '+p.category));
    box.append(link('Händlerprofil: '+p.seller.name,{seller:p.sellerId}),el('p',detailId?p.description:p.description.slice(0,240)+(p.description.length>240?' …':'')),el('p',p.seller.street+', '+p.seller.postalCode+' '+p.seller.city+' · '+p.seller.country));
    if(detailId){box.append(el('p','Geschäftlicher Kontakt: '+p.seller.email),el('p','Zustand: '+({new:'Neu',used:'Gebraucht',refurbished:'Generalüberholt'}[p.condition]||p.condition)));if(p.gtin)box.append(el('p','GTIN: '+p.gtin));}
