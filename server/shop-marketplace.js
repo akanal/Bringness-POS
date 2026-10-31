@@ -1,5 +1,6 @@
 import {migrateMarketplaceCheckout} from './shop-payment-marketplace-checkout.js';
 import crypto from 'node:crypto';
+import {marketplaceCommission} from './shop-marketplace-commission.js';
 import {migrateMarketplaceSellers} from './shop-marketplace-sellers.js';
 import {shopActor,sessionHash,shopError} from './shop-account.js';
 import {uuid} from './shop-drafts.js';
@@ -63,7 +64,7 @@ async function calculate(db,lines,method,shipping,lock=false){
 export async function quoteMarketplace(pool,{lines,method,shippingNetCents}){lines=marketLines(lines);marketInteger(shippingNetCents);const db=await pool.connect();try{await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');const q=await calculate(db,lines,method,shippingNetCents);await db.query('COMMIT');return {...q.snapshot,seller:q.seller,sellerId:q.sellerId,method:q.method,delivery:q.delivery,...flags};}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
 export async function submitMarketplace(pool,{token,command:c}){exactMarket(c,['requestId','lines','method','shippingNetCents','recipient']);if(!uuid(c.requestId))fail('INVALID_MARKET_INPUT');const lines=marketLines(c.lines),recipient=sellerProfile(c.recipient);marketInteger(c.shippingNetCents);const digest=crypto.createHash('sha256').update(JSON.stringify({lines,recipient,method:c.method,shipping:c.shippingNetCents})).digest('hex');return tx(pool,token,async(db,buyer)=>{
  const old=(await db.query('SELECT digest,result FROM shop_market_orders WHERE buyer_company_id=$1 AND request_id=$2',[buyer,c.requestId])).rows[0];if(old){if(old.digest!==digest)fail('REQUEST_CONFLICT');return {...old.result,replay:true};}
- const q=await calculate(db,lines,c.method,c.shippingNetCents,true),id=crypto.randomUUID(),reference='M-'+id;const snapshot={reference,recipient,...q.snapshot};
+ const q=await calculate(db,lines,c.method,c.shippingNetCents,true),id=crypto.randomUUID(),reference='M-'+id;const snapshot={reference,recipient,...q.snapshot,commission:marketplaceCommission(q.snapshot.netCents-c.shippingNetCents)};
  for(const [offerId,r] of q.publications){const document=structuredClone(r.document);for(const l of lines.filter(l=>l.id===offerId))document.variants.find(v=>v.sku===l.sku).stock-=l.quantity;await db.query('UPDATE shop_market_publications SET document=$2,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1',[offerId,document]);}
  await db.query('INSERT INTO shop_market_seller_orders(id,company_id,source_id,snapshot,shipment) VALUES($1,$2,$3,$4,$5)',[id,q.company,c.requestId,snapshot,{method:q.method,delivery:q.delivery,paymentStatus:'unpaid',seller:q.seller,sellerId:q.sellerId}]);
  for(const l of lines)await db.query('INSERT INTO shop_market_allocations VALUES($1,$2,$3,$4)',[id,l.id,l.sku,l.quantity]);
