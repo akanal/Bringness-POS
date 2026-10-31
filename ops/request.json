@@ -1,5 +1,5 @@
 {
-  "operation": "status",
+  "operation": "backup",
   "target": "all",
-  "requestId": "payment-acceptance-audit-20261030"
+  "requestId": "shop-account-assistant-navigation-20261030"
 }
