@@ -20,3 +20,8 @@ Dies dokumentiert die Produktentscheidung. Keine technische Gebührenaktivierung
 Neue Händlerbestellungen speichern die versionierte Nettoprovision im unveränderlichen Auftragssnapshot. Bestehende Aufträge werden nicht nachberechnet. Versand wird anhand des servergeprüften Versandbetrags abgezogen, nicht anhand einer Artikelnummer. Die Rückrechnungsfunktion verarbeitet kumulierte bestätigte Nettowaren-Erstattungen mit centgenauen Differenzen und begrenzt sie auf den ursprünglichen Warenwert.
 
 Noch kein automatischer Mollie-Geldfluss: Der bestehende Testadapter und der Live-Leseadapter akzeptieren bislang keine Application Fee. Vor tatsächlichem Gebührenabzug und Provisionserstattung sind Anbieteranbindung, transaktionale Zuordnung bestätigter Erstattungen zu Warenpositionen, dauerhafte Deduplizierung und Anbieterprüfung erforderlich. Ein Brutto-Erstattungsbetrag allein genügt bei gemischten Steuersätzen und Versand nicht. Keine echten Zahlungen oder Rückzahlungen ausgelöst.
+
+
+## Präzisierung Provisionsguthaben, 31.10.2026
+
+Die Rückgabe der Provision erfolgt als Händlerguthaben zur ausschließlichen Verrechnung mit künftigen Verkaufsprovisionen. Auszahlung erst nach wirksamer Vertragsbeendigung durch Kündigung, kein Verfall. Ausbleibende Verkäufe allein lösen keine Auszahlung aus. Käufererstattungen sind unabhängig davon. Siehe [Guthabenentscheidung, AGB-Entwurf und technische Grenzen](marketplace-credit-policy-20261031.md). Keine bereits erfolgte Mollie-Aktivierung oder Rechtsprüfung daraus ableiten.
