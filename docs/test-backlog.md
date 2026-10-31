@@ -1,5 +1,7 @@
 # Gemeinsame Testliste Bringness POS / AI
 
+Aktueller gebündelter Ablauf und frische automatisierte Nachweise vom 31.10.2026: [Gesamttest mit Soll-Ergebnissen](full-system-acceptance-20261031.md). Die nachstehenden älteren Entwicklungs-/Branchhinweise sind historische Detailfälle und kein verlässlicher aktueller Veröffentlichungsstatus. Für den aktuellen Stand zuerst PROJECT-HANDOFF.md lesen; Geräteabnahmen bleiben gesondert offen.
+
 Stand: 21.10.2026. Die automatisierten Entwicklungsprüfungen wurden nach erneuter Zustimmung ausgeführt; die praktischen Geräteabnahmen bleiben offen. Diese Liste bündelt die restlichen Fälle ohne doppelte Einträge. Bis zur erforderlichen Abnahme bleiben ungeprüfte Entwicklungsänderungen unveröffentlicht.
 
 Bereits bestätigt: Mollie-Testzahlung und Aktivierung durch den Inhaber; DWD-Liveabruf und gespeicherte PLZ-Zuordnung im Restaurant-Testkonto. Keine erneute offene Mollie-Grundeinrichtung daraus ableiten. Aktuelle automatisierte Nachweise stehen in development-validation-20261021.md; frühere Nachweise in acceptance-progress-20261021.md. Beide ersetzen die nachfolgende praktische Abnahme nicht.

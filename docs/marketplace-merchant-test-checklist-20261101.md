@@ -1,7 +1,7 @@
 # Händler- und Mollie-Test für den nächsten gemeinsamen Termin
 
 ## Voraussetzungen
-Nur eine isolierte TEST-Installation und synthetische Händler/Käufer nutzen. Keine echten Kundendaten, Bestellungen oder Auszahlungen. Der neue Entwurf muss dafür zuerst in die Testinstallation übernommen werden; ein GitHub-Upload allein veröffentlicht keine Seite. Ein Mollie-Dashboard-Login ersetzt nicht die technische Händlerfreigabe.
+Nur eine isolierte TEST-Installation und synthetische Händler/Käufer nutzen. Keine echten Kundendaten, Bestellungen oder Auszahlungen. Den tatsächlich bereitgestellten Versionsstand der TEST-Installation vor Beginn dokumentieren; die Codeveröffentlichung in Produktion ersetzt diese getrennte Testinstallation nicht. Ein Mollie-Dashboard-Login ersetzt nicht die technische Händlerfreigabe.
 
 Zwei getrennte Konten: Händler und Käufer. Händlerfreigabe erfolgt ausdrücklich durch den bestehenden Superadmin. Sichere Hostkonfiguration mit vorhandener Test-Integration und korrekten OAuth-Rückkehr-/Webhook-Adressen; Geheimwerte ausschließlich in geschützter Konfiguration. Der Bereitschaftsbericht muss verbleibende Blocker anzeigen. Keine Live-Schlüssel und keine Änderung der Produktions-Zahlungsschalter.
 
@@ -9,7 +9,7 @@ Zwei getrennte Konten: Händler und Käufer. Händlerfreigabe erfolgt ausdrückl
 
 1. **Registrierung und Login:** Testbetrieb registrieren, abmelden und erneut anmelden. Bei vorhandenen Betrieben das bestehende Konto nutzen. Ungültige/fehlende Pflichtfelder werden abgelehnt. Ein Kellnerkonto erhält keine Händlerverwaltung.
 2. **Händlerprofil:** Geschäftsname, Straße, PLZ, Ort, Land und öffentliche E-Mail speichern, neu laden und vergleichen. Ohne Kontaktzustimmung keine Einreichung; ohne manuelle Prüfung keine Freigabe. Anderes Konto sieht diese privaten Daten nicht.
-3. **Produktentwurf:** Physische Testware mit Kategorie, Beschreibung, Nettopreis 100,00 EUR, 19 % Waren-USt., Artikelnummer und Bestand 3 anlegen. Im Betriebskonto speichern und erneut laden. Bilder sind derzeit eine offene Erweiterung; private Dokumente niemals ersatzweise veröffentlichen.
+3. **Produktentwurf:** Physische Testware mit Kategorie, Beschreibung, Nettopreis 100,00 EUR, 19 % Waren-USt., Artikelnummer und Bestand 3 anlegen. Im Betriebskonto speichern und erneut laden. Produktbilder sind inzwischen implementiert; den gesonderten Bildablauf unten prüfen. Private Dokumente niemals ersatzweise veröffentlichen.
 4. **Veröffentlichung und Lieferung:** Standardvariante, Versand 10,00 EUR netto mit 19 % USt. sowie Abholung und Lieferzeit angeben. Erst ausdrücklich veröffentlichen. Preis und Daten nach Neuladen identisch. Keine Lieferart und negative Preise/Bestände ablehnen.
 5. **Käuferbestellung:** Vom getrennten Käuferkonto ein Stück bestellen: Warenwert 100,00 EUR netto + 19,00 EUR USt.; Versand 10,00 EUR netto + 1,90 EUR USt.; Gesamt 130,90 EUR. Bestand fällt auf 2. Identische Wiederholung erzeugt keine zweite Bestellung und keinen weiteren Bestandsabzug.
 6. **Händlerübersicht:** Dieselbe Bestellung mit Empfänger, Menge, Lieferung und Status laden. Vorgesehene Provision 5,00 EUR netto auf 100,00 EUR Nettowarenwert, 0 EUR monatliche Grundgebühr; Versand und Waren-USt. gehören nicht zur Provisionsbasis. Diese Anzeige bestätigt keinen tatsächlichen Gebührenabzug.
