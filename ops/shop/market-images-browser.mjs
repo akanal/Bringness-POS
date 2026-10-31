@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';import http from 'node:http';import crypto from 'node:crypto';import {readFile,mkdir} from 'node:fs/promises';import {createCanvas} from '@napi-rs/canvas';
 import {shopActor,sessionHash} from '../../server/shop-account.js';import {writeSellerDraft} from '../../server/shop-seller-drafts.js';import {publishMarketplace} from '../../server/shop-marketplace.js';import {createMarketplaceImagesRuntime} from '../../server/shop-marketplace-images-http.js';import {createMarketplaceRuntime} from '../../server/shop-marketplace-http.js';
 export async function marketplaceImageBrowserChecks({page,pool,token,otherToken,artifacts}){
+ const ownDialogHandler=page.listenerCount('dialog')===0?dialog=>dialog.accept():null;if(ownDialogHandler)page.on('dialog',ownDialogHandler);
  const company=(await shopActor(pool,sessionHash(token))).company_id,id='offer-'+crypto.randomUUID();
  await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved',$2) ON CONFLICT(company_id) DO UPDATE SET status='approved',profile=excluded.profile",[company,{name:'Synthetic image seller',street:'Test 1',postalCode:'10115',city:'Berlin',country:'DE',email:'image@example.test'}]);
  await writeSellerDraft(pool,{token,command:{id,requestId:crypto.randomUUID(),action:'save',expectedRevision:0,offer:{title:'Synthetic image acceptance',category:'Hardware',kind:'physical',price:'1,00',tax:'19',stock:'5',gtin:'',condition:'new',sku:'S',description:'Synthetic image acceptance only',delivery:'3 days',fulfilment:''}}});
@@ -21,10 +22,10 @@ export async function marketplaceImageBrowserChecks({page,pool,token,otherToken,
   await page.route(canonical+'/**',handler);
   for(const width of [390,768,1280]){
    await page.setViewportSize({width,height:960});await page.goto(canonical+'/shop/image-acceptance.html');await page.evaluate(t=>localStorage.setItem('bringness-pos-token',t),token);await page.reload();await page.waitForFunction(()=>!document.querySelector('#image button').disabled);
-   await page.locator('#image input').setInputFiles({name:'Synthetic.png',mimeType:'image/png',buffer:bytes});page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Bild hochladen / Anfrage wiederholen',exact:true}).click();await page.waitForFunction(()=>document.getElementById('image').textContent.includes('Produktbild gespeichert'));
+   await page.locator('#image input').setInputFiles({name:'Synthetic.png',mimeType:'image/png',buffer:bytes});await page.getByRole('button',{name:'Bild hochladen / Anfrage wiederholen',exact:true}).click();await page.waitForFunction(()=>document.getElementById('image').textContent.includes('Produktbild gespeichert'));
    await page.goto(canonical+'/shop/marketplace.html?offer='+id);const img=page.locator('#market-results img');await img.waitFor();await img.scrollIntoViewIfNeeded();await page.waitForFunction(()=>{const img=document.querySelector('#market-results img');return img?.complete&&img.naturalWidth===32;});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Image page overflow '+width);
    if(artifacts){await mkdir(artifacts,{recursive:true});await page.screenshot({path:artifacts+'/market-images-'+width+'.png',fullPage:true});}
   }
   console.log('Product images: real PostgreSQL identical/competing uploads, tenant isolation and native upload/render390/768/1280 passed; synthetic storage only.');
- }finally{await page.unroute(canonical+'/**',handler);await new Promise(r=>server.close(r));}
+ }finally{if(ownDialogHandler)page.off('dialog',ownDialogHandler);await page.unroute(canonical+'/**',handler);await new Promise(r=>server.close(r));}
 }
