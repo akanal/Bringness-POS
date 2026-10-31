@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';import http from 'node:http';import crypto from 'node:crypto';import {readFile,mkdir} from 'node:fs/promises';import {createCanvas} from '@napi-rs/canvas';
+import {shopActor,sessionHash} from '../../server/shop-account.js';import {writeSellerDraft} from '../../server/shop-seller-drafts.js';import {publishMarketplace} from '../../server/shop-marketplace.js';import {createMarketplaceImagesRuntime} from '../../server/shop-marketplace-images-http.js';import {createMarketplaceRuntime} from '../../server/shop-marketplace-http.js';
+export async function marketplaceImageBrowserChecks({page,pool,token,otherToken,artifacts}){
+ const company=(await shopActor(pool,sessionHash(token))).company_id,id='offer-'+crypto.randomUUID();
+ await pool.query("INSERT INTO shop_market_sellers(company_id,status,profile) VALUES($1,'approved',$2) ON CONFLICT(company_id) DO UPDATE SET status='approved',profile=excluded.profile",[company,{name:'Synthetic image seller',street:'Test 1',postalCode:'10115',city:'Berlin',country:'DE',email:'image@example.test'}]);
+ await writeSellerDraft(pool,{token,command:{id,requestId:crypto.randomUUID(),action:'save',expectedRevision:0,offer:{title:'Synthetic image acceptance',category:'Hardware',kind:'physical',price:'1,00',tax:'19',stock:'5',gtin:'',condition:'new',sku:'S',description:'Synthetic image acceptance only',delivery:'3 days',fulfilment:''}}});
+ const objects=new Map(),store={async putExact(r,b){const key=r.company+'/'+r.id;if(objects.has(key))assert.deepEqual(objects.get(key),b);else objects.set(key,Buffer.from(b));},async getExact(r){return objects.get(r.company+'/'+r.id);}};
+ const runtime=createMarketplaceImagesRuntime(pool,{enabled:true,store}),market=createMarketplaceRuntime(pool,{enabled:true});await market.migrate();await runtime.migrate();
+ const server=http.createServer(async(req,res)=>{try{if(await runtime.handle(req,res)||await market.handle(req,res))return;const path=new URL(req.url,'http://local').pathname;
+  if(path==='/shop/image-acceptance.html'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><html><head><link rel="stylesheet" href="/shop/style.css"></head><body><section id="image"></section><script type="module" src="/shop/image-acceptance.js"></script></body></html>');return;}
+  if(path==='/shop/image-acceptance.js'){res.writeHead(200,{'Content-Type':'text/javascript'});res.end("import {mountMarketImage} from './market-image-ui.js';mountMarketImage({window,host:document.getElementById('image')}).setOffer("+JSON.stringify(id)+");");return;}
+  if(!/^\/shop\/[a-z0-9.-]+$/i.test(path))throw Error();const body=await readFile(new URL('../../apps/web/public'+path,import.meta.url));res.writeHead(200,{'Content-Type':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html'});res.end(body);
+ }catch{res.writeHead(500);res.end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port,canonical='https://bringness.de',prefix='/api/v1/shop/marketplace/images',bytes=createCanvas(32,24).toBuffer('image/png');
+ const handler=async route=>{const u=new URL(route.request().url());if(u.origin!==canonical)return route.abort();const response=await route.fetch({url:base+u.pathname+u.search,maxRedirects:0});await route.fulfill({response});};
+ try{
+  const requestId=crypto.randomUUID(),headers={Authorization:'Bearer '+token,Origin:canonical,'Content-Type':'image/png','X-Image-Id':requestId,'X-Image-Revision':'0'};
+  const copies=await Promise.all([fetch(base+prefix+'/'+id,{method:'POST',headers,body:bytes}),fetch(base+prefix+'/'+id,{method:'POST',headers,body:bytes})]);assert.deepEqual(copies.map(x=>x.status),[200,200]);const results=await Promise.all(copies.map(x=>x.json()));assert.deepEqual(results.map(x=>x.replay).sort(),[false,true]);assert.equal(objects.size,1);
+  const compete=await Promise.all([1,2].map(()=>fetch(base+prefix+'/'+id,{method:'POST',headers:{...headers,'X-Image-Id':crypto.randomUUID(),'X-Image-Revision':'1'},body:bytes})));assert.deepEqual(compete.map(x=>x.status).sort(),[200,409]);
+  assert.equal((await fetch(base+prefix+'/'+id,{headers:{Authorization:'Bearer '+otherToken}})).status,404);
+  await publishMarketplace(pool,{token,command:{id,requestId:crypto.randomUUID(),action:'publish',expectedRevision:0,sourceRevision:1,publication:{variants:[{sku:'S',label:'Standard',netCents:100,vatBasisPoints:1900,stock:5}],shipping:true,pickup:false,shippingNetCents:0,shippingVatBasisPoints:1900,delivery:'3 days',pickupAddress:''}}});
+  await page.route(canonical+'/**',handler);
+  for(const width of [390,768,1280]){
+   await page.setViewportSize({width,height:960});await page.goto(canonical+'/shop/image-acceptance.html');await page.evaluate(t=>localStorage.setItem('bringness-pos-token',t),token);await page.reload();await page.waitForFunction(()=>!document.querySelector('#image button').disabled);
+   await page.locator('#image input').setInputFiles({name:'Synthetic.png',mimeType:'image/png',buffer:bytes});page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Bild hochladen / Anfrage wiederholen',exact:true}).click();await page.waitForFunction(()=>document.getElementById('image').textContent.includes('Produktbild gespeichert'));
+   await page.goto(canonical+'/shop/marketplace.html?offer='+id);const img=page.locator('#market-results img');await img.waitFor();await img.scrollIntoViewIfNeeded();await page.waitForFunction(()=>{const img=document.querySelector('#market-results img');return img?.complete&&img.naturalWidth===32;});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Image page overflow '+width);
+   if(artifacts){await mkdir(artifacts,{recursive:true});await page.screenshot({path:artifacts+'/market-images-'+width+'.png',fullPage:true});}
+  }
+  console.log('Product images: real PostgreSQL identical/competing uploads, tenant isolation and native upload/render390/768/1280 passed; synthetic storage only.');
+ }finally{await page.unroute(canonical+'/**',handler);await new Promise(r=>server.close(r));}
+}

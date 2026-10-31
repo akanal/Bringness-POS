@@ -20,3 +20,13 @@ Zwei getrennte Konten: Händler und Käufer. Händlerfreigabe erfolgt ausdrückl
 
 ## Abnahmeprotokoll
 Für jeden Punkt Ergebnis PASS / FEHLER / BLOCKIERT, Testumgebung und Versionsstand, erwarteten/tatsächlichen Betrag und anonymisierte Referenz festhalten. Keine Zugangsdaten oder Tokens ins Protokoll aufnehmen. Ein blockierter Punkt ist kein bestandener Test. Keine produktive Veröffentlichung aus dieser Liste ableiten.
+
+## Ergänzung: Produktbilder und Rechtstext-Verlinkung
+
+- Im freigegebenen Händlerkonto ein eigenes Kontoangebot öffnen. PNG/JPEG bis 5 MiB auswählen und die ausdrückliche Sichtbarkeitsbestätigung prüfen. Nicht veröffentlichter Entwurf darf keine öffentliche Bilddatei ausliefern.
+- Nach ausdrücklicher Angebotsveröffentlichung muss das aktuelle Bild in Liste und Detailansicht erscheinen. Auf Mobil-/Tablet-/Desktopbreite auf abgeschnittene Inhalte prüfen.
+- Bild ersetzen: vorherige öffentliche URL liefert keine Datei mehr. Bei verlorener Antwort dieselbe Anfrage im offenen Editor wiederholen; kein zusätzlicher Bildstand. Nach Neuladen erst den gespeicherten Stand laden.
+- Mit einem zweiten Betrieb dürfen Bildverwaltung, Austausch und Entfernen des ersten Betriebs nicht möglich sein. Konto-/Offline-/Ansichtswechsel schließen die private Bildverwaltung.
+- Bildzuordnung entfernen, Angebot zurückziehen oder Händler sperren: Bild darf nicht weiter ausgeliefert werden. Entfernen der Zuordnung ist noch keine physische Löschung im Objektspeicher.
+- Footerlinks und /shop/legal.html prüfen. Impressum/Datenschutz und zusätzliche Rechtstexte bleiben klar als unvollständiger Entwurf markiert; keine erfundenen Firmenangaben und keine Zustimmung zu Platzhaltern.
+- Mollie-Testzahlungen prüfen nur simulierte Zahlungszustände. Sie bestätigen keinen echten Transfer einer Application Fee. Produktiver Gebühren-/Guthaben-/Bankablauf bleibt bis zu verbundenen vertrauenswürdigen Adaptern und gesonderter Abnahme gesperrt.

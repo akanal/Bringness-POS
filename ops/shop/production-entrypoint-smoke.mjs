@@ -1,3 +1,4 @@
+import {marketplaceImageBrowserChecks} from './market-images-browser.mjs';
 import {documentBrowserChecks} from './documents-browser.mjs';
 import {marketplaceApprovalChecks} from './market-approval-browser.mjs';
 import {marketplaceConcurrencyChecks} from './marketplace-concurrency.mjs';
@@ -119,6 +120,7 @@ try{
   await marketplaceBrowserChecks({page,base,pool,sellerToken:a.token,buyerToken:b.token,sellerCompany:owner.company_id,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceConcurrencyChecks({base,pool,sellerToken:a.token,buyerToken:b.token});
   await documentBrowserChecks({page,pool,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
+  await marketplaceImageBrowserChecks({page,pool,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   assert.deepEqual(errors,[]);await context.close();
  }
  console.log('Actual entrypoint + PostgreSQL: registration/replay, real login, quote, draft/replay, prepared checkout, account isolation, history, seller persistence/concurrency/archive/version reads and no financial grants passed.');
