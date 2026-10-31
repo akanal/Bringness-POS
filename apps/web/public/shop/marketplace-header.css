@@ -16,3 +16,12 @@ body:not(.portal-home) .preview{background:#124a39;color:#dcece3;border-bottom-c
 @media(max-width:640px){body:not(.portal-home) header{flex-wrap:wrap;gap:16px}body:not(.portal-home) header nav{display:flex;flex-wrap:wrap;gap:12px;min-width:0;max-width:100%}}
 @media(forced-colors:active){body:not(.portal-home)>header,body:not(.portal-home) .account-masthead{background:Canvas;color:CanvasText}body:not(.portal-home) header .brand,body:not(.portal-home) header .brand-wordmark,body:not(.portal-home) header .brand a,body:not(.portal-home) header nav a{color:LinkText;-webkit-text-fill-color:LinkText}}
 @media print{body:not(.portal-home)>header,body:not(.portal-home) .account-masthead{background:#fff;color:#000}body:not(.portal-home) header .brand,body:not(.portal-home) header .brand-wordmark,body:not(.portal-home) header .brand a,body:not(.portal-home) header nav a{color:#000;-webkit-text-fill-color:#000}}
+
+/* Legal pages reuse the homepage wordmark without the legacy POS typography. */
+.marketplace-legal header .brand{font-family:Inter,Arial,sans-serif;font-size:30px;font-weight:800;letter-spacing:-1.3px;line-height:1.55;display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+.marketplace-legal header .brand-wordmark{display:inline-flex;align-items:center;gap:8px;font:inherit;letter-spacing:inherit}
+.marketplace-legal header .brand-shop{font-size:9px;font-weight:500;letter-spacing:2.3px;margin-left:1px;text-transform:uppercase}
+.marketplace-legal header .brand-arrow{position:static;display:inline-block;flex:0 0 25px;width:25px;height:25px;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;border:1px solid #ffffff35;border-radius:7px;padding:3px;box-sizing:border-box}
+@media(max-width:640px){.marketplace-legal header .brand{font-size:27px}}
+@media(max-width:560px){.marketplace-legal header .brand-shop{display:none}}
+@media(max-width:380px){.marketplace-legal header .brand{font-size:25px}}
