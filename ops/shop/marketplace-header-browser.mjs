@@ -5,7 +5,7 @@ export async function marketplaceHeaderBrowserChecks({page,base,artifacts}){
  for(const width of [390,1280]){
   await page.setViewportSize({width,height:900});
   for(const path of pages){
-   await page.goto(base+path);
+   const response=await page.goto(base+path);assert.equal(response.status(),200,path+' reachable');
    const header=page.locator('header').first();await header.waitFor();
    const state=await header.evaluate(el=>{const shell=el.closest('.account-masthead,.shop-masthead')||el,brand=el.querySelector('.brand');return {background:getComputedStyle(shell).backgroundImage,brand:getComputedStyle(brand).color,width:document.documentElement.scrollWidth,viewport:innerWidth};});
    assert.match(state.background,/linear-gradient/,path+' header '+width);
