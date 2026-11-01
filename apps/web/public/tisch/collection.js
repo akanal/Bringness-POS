@@ -39,7 +39,7 @@
       host.appendChild(row);
     }
     host.style.background=visible.some(o=>o.ready)?"#dcfce7":"#fff3e7";
-    if(visible.some(o=>o.ready))host.scrollIntoView?.({behavior:'smooth',block:'center'});
+
   }
   window.addEventListener("bringness-guest-order",event=>{
     const d=event.detail;if(!d?.orderId||!d?.requestId)return;
@@ -51,7 +51,7 @@
     if(busy||document.hidden)return;busy=true;
     try{
       for(const o of orders){
-        if(o.notified&&o.closed)continue;
+        if(o.collected||o.closed&&!o.ready)continue;
         const r=await fetch("/api/v1/guest/collection?orderId="+encodeURIComponent(o.orderId)+"&requestId="+encodeURIComponent(o.requestId),{cache:"no-store"});
         if(!r.ok)continue;
         const j=await r.json();Object.assign(o,j);

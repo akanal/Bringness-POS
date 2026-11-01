@@ -12,6 +12,7 @@ export async function migrateQrService(){
     ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS qr_service_mode text NOT NULL DEFAULT 'restaurant' CHECK(qr_service_mode IN ('restaurant','pickup'));
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_service_mode text NOT NULL DEFAULT 'restaurant' CHECK(qr_service_mode IN ('restaurant','pickup'));
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_ready_at timestamptz;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_collected_at timestamptz;
     CREATE INDEX IF NOT EXISTS orders_qr_queue_idx ON orders(restaurant_id,created_at,id) WHERE source='qr';
   `);
   await migrateOrderNumbers(pool);
