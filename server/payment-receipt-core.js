@@ -128,6 +128,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
     doc.moveDown().text('Lieferdatum: '+new Date(receipt.issued_at).toLocaleDateString('de-DE',{timeZone:'Europe/Berlin'}));
     doc.text('Alle Einzelpreise sind Bruttopreise. Steueraufschlüsselung siehe unten.');
   }else doc.moveDown().text("Beleg: " + receipt.receipt_number);
+  if(receipt.order_id)doc.text("Bestellnummer: " + String(receipt.order_id).slice(0,8).toUpperCase());
   doc.text("Datum: " + new Date(receipt.issued_at).toLocaleString("de-DE", { timeZone: "Europe/Berlin" }) + " Uhr");
   doc.moveDown();
 

@@ -15,7 +15,7 @@ async function run(fiscalStatus,{authenticated=true,found=true,qrFails=false,url
  if(sql.includes('FROM sessions')){assert.match(sql,/coalesce\(u.must_change_password,false\)=false/);return {rows:authenticated?[{id:receiptId,company_id:company,role:'owner'}]:[]};}
  if(sql.includes('FROM receipts rc')){
  assert.match(sql,/rc.id=\$1 AND c.id=\$2/);assert.deepEqual(args,[receiptId,company]);
- return {rowCount:found?1:0,rows:found?[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,order_id:'order',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
+ return {rowCount:found?1:0,rows:found?[{receipt_number:'BN-2026-000042',issued_at:'2026-10-06T12:00:00Z',public_token:publicToken,fiscal_status:fiscalStatus,order_id:'abcdef12-1111-4111-8111-111111111111',total_cents:1190,restaurant_name:'Current name',company_name:'Company',merchant_snapshot:{restaurantName:'Historisches Restaurant',businessName:'Historischer Betrieb'}}]:[]};
  }
  if(sql.includes('FROM order_items'))return {rows:[{product_name_snapshot:'Gericht',unit_price_cents:1190,tax_rate_snapshot:19,quantity:1}]};
  if(sql.includes('FROM payments'))return {rows:[{method:'mollie_center',amount_cents:1190}]};
@@ -35,7 +35,7 @@ for(const fiscalStatus of ['pending','prepared','needs_review','signed']){
  assert.equal(doc.images.length,1);assert.equal(doc.images[0].x,(doc.page.width-doc.images[0].width)/2);assert.equal(doc.x,doc.page.margins.left);
  const label=doc.textPositions.find(t=>t.value==="QR: Digitalen Beleg öffnen");assert.ok(label.y>=doc.images[0].y+doc.images[0].height+8);
  const footer=doc.textPositions.find(t=>t.value.includes("Nicht TSE-signiert"));if(footer)assert.ok(footer.y>=label.y);
- assert.match(text,/Gesamt: 11,90 EUR/);assert.match(text,/Steuer: 1,90 EUR/);assert.match(text,/Online-Zahlung/);assert.doesNotMatch(text,/mollie_center/);
+ assert.match(text,/Bestellnummer: ABCDEF12/);assert.match(text,/Gesamt: 11,90 EUR/);assert.match(text,/Steuer: 1,90 EUR/);assert.match(text,/Online-Zahlung/);assert.doesNotMatch(text,/mollie_center/);
  assert.equal(text.includes('Nicht TSE-signiert'),fiscalStatus!=='signed');assert.doesNotMatch(text,/Eine TSE ist nicht angeschlossen/);
  });
 }
