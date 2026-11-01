@@ -127,3 +127,28 @@ test('actual POS document loads the display editor without a fixture-injected sc
   assert.equal(await page.evaluate(()=>typeof window.showModule),'function');
  }finally{await browser.close();}
 });
+
+test('fixed counter player shows the ordering QR and live pickup numbers in landscape and portrait',async()=>{
+ const browser=await engine.launch({headless:true});
+ try{
+  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));let ready=false,removed=false,orientation='landscape';
+  // Fixed QR fixture; real encoder output is covered by the database integration test.
+  const qr='data:image/png;base64,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';
+  await page.route('https://counter.test/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path.startsWith('/api/v1/display-player/'))return route.fulfill({contentType:'application/json',body:JSON.stringify({mode:'pickup',restaurantName:'Testbetrieb',counterName:'Theke 1',orientation,qr,orders:removed?[]:[{number:'AB123456',ready}]})});
+   const files={'/display/index.html':'index.html','/display/player.js':'player.js','/display/player.css':'player.css'};
+   if(files[path])return route.fulfill({contentType:path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html',body:await readFile(new URL('../apps/web/public/display/'+files[path],import.meta.url),'utf8')});
+   return route.abort();
+  });
+  for(const size of [{width:1280,height:720},{width:720,height:1280}]){
+   orientation=size.width<size.height?'portrait':'landscape';await page.setViewportSize(size);await page.goto('https://counter.test/display/index.html#'+'a'.repeat(48));
+   await page.locator('.pickup-numbers strong').waitFor();assert.equal(await page.locator('.pickup-columns section').first().getByText('AB123456').count(),1);
+   assert.equal(await page.locator('.pickup aside img').evaluate(img=>img.complete&&img.naturalWidth>0),true);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  }
+  ready=true;await page.locator('.pickup-columns section').nth(1).getByText('AB123456').waitFor({timeout:10000});
+  removed=true;await page.waitForFunction(()=>!document.querySelector('.pickup-numbers strong'),{},{timeout:10000});
+  assert.equal(await page.locator('.pickup aside img').count(),1);assert.deepEqual(errors,[]);
+ }finally{await browser.close()}
+});
