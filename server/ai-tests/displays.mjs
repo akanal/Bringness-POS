@@ -86,6 +86,36 @@ assert.equal(assigned.mode,'pickup');assert.equal(assigned.counterTableId,newCou
 const generated=(await query('SELECT qr_token FROM dining_tables WHERE id=$1',[newCounter])).rows[0].qr_token;assert.match(generated,/^[a-f0-9]{48}$/);
 assert.equal((await call('/api/v1/display-player/'+first.token,{publicCall:true})).result.mode,'pickup');w.close();
 w=await browser();assert.equal(w.document.querySelector('[name=mode]').value,'pickup');await new Promise(r=>setTimeout(r,0));assert.equal(w.document.querySelector('[name=counterTableId]').value,newCounter);w.close();
+// A slow save must not let navigation apply the old response to another screen.
+w=await browser();await new Promise(r=>setTimeout(r,0));
+const fetchBefore=w.fetch;let releaseSave,saveStarted;
+const started=new Promise(r=>saveStarted=r),gate=new Promise(r=>releaseSave=r);
+w.fetch=async(path,options={})=>{if(options.method==='PUT'){saveStarted();await gate}return fetchBefore(path,options)};
+const switching=w.document.querySelector('#displaySelect'),newScreen=w.document.querySelector('#displayNew');
+const modeField=w.document.querySelector('[name=mode]');modeField.value='content';modeField.dispatchEvent(new w.Event('change',{bubbles:true}));
+await started;
+assert.equal(switching.disabled,true,'screen selection is locked until its save finishes');
+assert.equal(newScreen.disabled,true,'new screen cannot replace an in-flight selection');
+releaseSave();await new Promise(r=>setTimeout(r,30));
+assert.equal(switching.disabled,false);assert.equal(newScreen.disabled,false);
+assert.equal((await call('/api/v1/display-player/'+first.token,{publicCall:true})).result.mode,undefined);
+w.close();
+// Native submit event: all configuration controls stay stable until the server answers.
+w=await browser();await new Promise(r=>setTimeout(r,0));
+const submitFetch=w.fetch;let releaseSubmit,submitStarted;
+const submitGate=new Promise(r=>releaseSubmit=r),submitted=new Promise(r=>submitStarted=r);
+w.fetch=async(path,options={})=>{if(options.method==='PUT'){submitStarted();await submitGate}return submitFetch(path,options)};
+const submitForm=w.document.querySelector('#displayForm');
+submitForm.elements.mode.value='pickup';await submitForm.elements.mode.onchange();
+submitForm.elements.counterTableId.value=newCounter;
+submitForm.requestSubmit();await submitted;
+for(const control of [submitForm.elements.mode,submitForm.elements.counterTableId,w.document.querySelector('#displaySelect'),w.document.querySelector('#displayNew')])assert.equal(control.disabled,true);
+releaseSubmit();await new Promise(r=>setTimeout(r,30));
+assert.match(w.document.querySelector('#displayStatus').textContent,/Dauerhaft auf dem Server gespeichert/);
+assert.equal(submitForm.elements.mode.disabled,false);w.close();
+w=await browser();await new Promise(r=>setTimeout(r,0));
+assert.equal(w.document.querySelector('[name=mode]').value,'pickup');assert.equal(w.document.querySelector('[name=counterTableId]').value,newCounter);
+const stable=(await call('/api/v1/display-player/'+first.token,{publicCall:true})).result;assert.equal(stable.mode,'pickup');assert.equal(stable.counterName,'Neue Theke');w.close();
 // Never unlock paid modules or rotate an existing counter capability.
 await query("UPDATE company_features SET status='inactive' WHERE feature_code='counter_qr'");
 const deniedCounter=id();await query("INSERT INTO dining_tables VALUES($1,$2,'Gesperrte Theke',NULL)",[deniedCounter,rid]);
