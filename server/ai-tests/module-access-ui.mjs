@@ -25,3 +25,29 @@ v.eval(source.slice(source.indexOf('const moduleInfo='),source.indexOf('async fu
 await v.showModule('einstellungen');assert.equal(v.document.getElementById('openDisplaySettings').textContent,'Displaysteuerung öffnen');await v.document.getElementById('openDisplaySettings').onclick();assert.equal(rendered,1);assert.match(v.document.getElementById('moduleBody').textContent,/Bildschirme/);
 unlocked=false;await v.showModule('displays');assert.equal(rendered,1,'administrative unlock cannot be bypassed');unlocked=true;v.posPackageFeatures.display_control=false;await v.showModule('displays');assert.equal(rendered,1);assert.equal(licensing,1);await v.showModule('einstellungen');assert.equal(v.document.getElementById('openDisplaySettings').textContent,'Displaymodul ansehen');await v.document.getElementById('openDisplaySettings').onclick();assert.equal(licensing,2);v.close();
 console.log('Module access UI passed: included/owned/unowned states, canceled paid period, explicit eligible booking, prerequisites, stale-tab duplicate prevention, settings display entry, actual editor dispatch and administrative/module guards. No external payment or mail.');
+
+// Use the real PIN gate, navigation hook, fetch wrapper and display editor together.
+const a=new JSDOM('<select id="restaurant"><option value="r">Testbetrieb</option></select><button id="personnelBtn"></button><nav id="mainnav"><div id="moreMenu"></div></nav><div id="kasseView"></div><div id="moduleView"></div>',{url:'https://fixture.test/pos/',runScripts:'outside-only'}).window;
+a.Headers=Headers;a.URL.revokeObjectURL=()=>{};a.URL.createObjectURL=()=> 'blob:fixture';a.$=id=>a.document.getElementById(id);a.isRestaurantMode=()=>false;a.posPackageFeatures={display_control:true};a.renderRestaurantBranding=async()=>{};a.localStorage.setItem('bringness-pos-token','fixture-session');let now=1000000,tick,unlocks=0,locks=0,accessChecks=0;const displayHeaders=[];
+a.Date.now=()=>now;a.setInterval=fn=>{tick=fn;return 1};a.alert=message=>{throw Error(message)};
+a.fetch=async(input,init={})=>{
+ const path=new URL(input,a.location.href).pathname,headers=new Headers(init.headers);let body={},status=200;
+ if(path==='/api/v1/personnel/access'){accessChecks++;body={canManage:true,configured:true};}
+ else if(path==='/api/v1/personnel/unlock'){unlocks++;body={unlockToken:'fixture-unlock'};}
+ else if(path==='/api/v1/personnel/lock'){locks++;}
+ else if(path.startsWith('/api/v1/displays')){displayHeaders.push(headers.get('x-personnel-unlock'));if(headers.get('x-personnel-unlock')!=='fixture-unlock'){status=403;body={error:'Verwaltungs-PIN erforderlich'};}else body=path.endsWith('/media')?{media:[]}:{displays:[]};}
+ else if(path==='/api/v1/bootstrap')body={restaurants:[{id:'r',name:'Testbetrieb'}],categories:[],products:[]};
+ return {ok:status<400,status,json:async()=>body};
+};
+a.eval(source.slice(source.indexOf('const moduleInfo='),source.indexOf('async function downloadReceipt')));
+a.eval(await readFile(new URL('../../apps/web/public/pos/personnel.js',import.meta.url),'utf8'));
+a.eval(await readFile(new URL('../../apps/web/public/pos/displays.js',import.meta.url),'utf8'));
+async function authorize(){const opening=a.showModule('einstellungen');await new Promise(r=>setTimeout(r,0));const form=a.document.querySelector('.personnel-dialog form');assert(form);form.querySelector('[name="pin"]').value='123456';await form.onsubmit({preventDefault(){},currentTarget:form});await opening;}
+await authorize();assert.equal(unlocks,1);assert.equal(accessChecks,1);
+await a.showModule('displays');assert(a.document.getElementById('displayForm'),a.document.getElementById('moduleBody').textContent);assert.equal(locks,0);assert.deepEqual(displayHeaders,['fixture-unlock','fixture-unlock']);
+await a.showModule('einstellungen');await a.showModule('displays');assert.equal(unlocks,1);assert.equal(accessChecks,1);assert.equal(locks,0);
+// Timeout still expires the administrative workspace and clears editor previews.
+now+=180001;tick();await new Promise(r=>setTimeout(r,0));assert.equal(locks,1);assert.equal(a.document.getElementById('displayForm'),null);assert.match(a.document.getElementById('moduleBody').textContent,/abgelaufen/);
+await authorize();assert.equal(unlocks,2);await a.showModule('displays');await a.showModule('kasse');await new Promise(r=>setTimeout(r,0));assert.equal(locks,2,'leaving settings and subpages still locks');
+const reopening=a.showModule('einstellungen');await new Promise(r=>setTimeout(r,0));assert(a.document.querySelector('.personnel-dialog'));a.document.querySelector('[data-close]').click();await reopening;assert.equal(unlocks,2);a.close();
+console.log('Administrative navigation passed: one PIN unlock survives settings/display/back transitions with real request headers; timeout and workspace exit revoke access and require a new explicit unlock.');
