@@ -55,7 +55,7 @@ async function saveSelection(){
 if(saving||!selected)return;
 if(form.elements.mode.value==='pickup'&&!form.elements.counterTableId.value){status.textContent='Bitte eine Theke wählen. Die Abholanzeige ist noch nicht gespeichert.';return}
 if(!form.reportValidity())return;
-saving=true;const controls=[...form.querySelectorAll('button,input,select')],states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);
+saving=true;const controls=[...area.querySelectorAll('button,input,select')],states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);
 try{await persist()}catch(err){status.textContent='Nicht gespeichert. Der Bildschirm zeigt weiterhin den bisherigen Inhalt. '+err.message;status.setAttribute('role','alert');status.scrollIntoView?.({block:'nearest'})}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}
 }
 
@@ -78,7 +78,7 @@ try{const result=await api('/media/'+encodeURIComponent(id)+q,{method:'DELETE'})
 }
 area.querySelector('#displayMediaDelete').onclick=()=>{const id=area.querySelector('#displayMedia').value;if(id)return deleteMedia(id);else status.textContent='Bitte eine Datei aus dem Serverspeicher wählen.'};
 area.querySelector('#displayReuse').onclick=async()=>{const m=library.media.find(m=>m.id===area.querySelector('#displayMedia').value);if(m)await assign(m);else status.textContent='Bitte ein gespeichertes Bild oder Video wählen.'};
-form.oninput=preview;form.onsubmit=async e=>{e.preventDefault();if(saving)return;saving=true;const button=form.querySelector('[type=submit]');button.disabled=true;try{await persist()}catch(err){status.textContent='Nicht gespeichert. Der Bildschirm zeigt weiterhin den bisherigen Inhalt. '+err.message;status.setAttribute('role','alert');status.scrollIntoView?.({block:'nearest'})}finally{button.disabled=false;saving=false}};
+form.oninput=preview;form.onsubmit=async e=>{e.preventDefault();if(saving)return;saving=true;const controls=[...area.querySelectorAll('button,input,select')],states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);try{await persist()}catch(err){status.textContent='Nicht gespeichert. Der Bildschirm zeigt weiterhin den bisherigen Inhalt. '+err.message;status.setAttribute('role','alert');status.scrollIntoView?.({block:'nearest'})}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}};
 area.querySelector('#displayDelete').onclick=async()=>{if(!selected||!confirm('Diese Bildschirmverbindung entfernen? Der Verbindungslink wird ungültig.'))return;try{await api('/'+selected.id+q,{method:'DELETE'});await render(options)}catch(err){status.textContent=err.message}};let lastId='';try{lastId=localStorage.getItem(selectionKey)||''}catch{}const restored=saved.displays.find(d=>d.id===lastId)||saved.displays[0];if(restored){area.querySelector('#displaySelect').value=restored.id;select(restored)}else list();
 }
 window.clearDisplayPreviews=()=>{generation++;previewUrls.forEach(URL.revokeObjectURL);previewUrls=[]};

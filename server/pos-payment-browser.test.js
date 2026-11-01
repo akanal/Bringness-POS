@@ -159,3 +159,42 @@ test('fixed counter player shows the ordering QR and live pickup numbers in land
   assert.equal(await page.locator('.pickup aside img').count(),1);assert.deepEqual(errors,[]);
  }finally{await browser.close()}
 });
+
+test('display editor saves pickup selection and restores the same player after a delayed reply',async()=>{
+ const browser=await engine.launch({headless:true}),page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const counter='33333333-3333-4333-8333-333333333333',screen='44444444-4444-4444-8444-444444444444',token='a'.repeat(48);
+ let saved={id:screen,token,name:'Theke',mode:'content',counterTableId:null,orientation:'landscape',fit:'contain',playlist:[]},release,started;
+ const gate=new Promise(r=>release=r),saving=new Promise(r=>started=r);
+ await page.route('https://display-save.test/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path==='/pos/')return route.fulfill({contentType:'text/html',body:'<select id="restaurant"><option value="'+restaurant+'">Betrieb</option></select><div id="moduleBody"></div><script src="/pos/displays.js"></script><script>renderDisplaySettings()</script>'});
+  if(path==='/pos/displays.js')return route.fulfill({contentType:'text/javascript',body:await readFile(new URL('../apps/web/public/pos/displays.js',import.meta.url),'utf8')});
+  let body;
+  if(path==='/api/v1/bootstrap')body={restaurants:[{id:restaurant,name:'Betrieb'}],products:[],categories:[]};
+  else if(path.endsWith('/branding'))body={restaurant:{name:'Betrieb'}};
+  else if(path==='/api/v1/displays/counters')body={counters:[{id:counter,name:'Theke 1'}]};
+  else if(path==='/api/v1/displays/media')body={media:[]};
+  else if(path==='/api/v1/displays/pickup')body={orders:[]};
+  else if(path==='/api/v1/displays/'+screen){started();await gate;saved={...JSON.parse(route.request().postData()),id:screen,token};body={id:screen,token};}
+  else if(path==='/api/v1/displays')body={displays:[saved]};
+  else if(path==='/api/v1/display-player/'+token)body={...saved,restaurantName:'Betrieb',counterName:'Theke 1',orders:[],products:[]};
+  else if(path.startsWith('/display/')){const file=path.split('/').pop();if(['index.html','player.js','player.css'].includes(file))return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html',body:await readFile(new URL('../apps/web/public/display/'+file,import.meta.url),'utf8')});}
+  if(body!==undefined)return route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+  return route.abort();
+ });
+ try{
+  await page.goto('https://display-save.test/pos/');await page.locator('#displayForm').waitFor();
+  // Submit initiates a delayed content save. Editing or changing screens during it must be impossible.
+  await page.getByRole('button',{name:'Anzeigen',exact:true}).click();await saving;
+  for(const selector of ['[name=mode]','[name=counterTableId]','#displaySelect','#displayNew'])assert.equal(await page.locator(selector).isDisabled(),true);
+  release();await page.getByText(/Dauerhaft auf dem Server gespeichert/).waitFor();
+  await page.locator('[name=mode]').selectOption('pickup');await page.locator('[name=counterTableId] option[value="'+counter+'"]').waitFor({state:'attached'});
+  await page.locator('[name=counterTableId]').selectOption(counter);
+  await page.waitForFunction(()=>document.querySelector('[name=mode]').disabled===false&&document.querySelector('#displayStatus').textContent.includes('Dauerhaft'));
+  assert.equal(saved.mode,'pickup');assert.equal(saved.counterTableId,counter);assert.equal(saved.token,token);
+  await page.reload();await page.locator('[name=counterTableId] option[value="'+counter+'"]').waitFor({state:'attached'});
+  assert.equal(await page.locator('[name=mode]').inputValue(),'pickup');assert.equal(await page.locator('[name=counterTableId]').inputValue(),counter);
+  const url=await page.locator('#displayLink a').getAttribute('href');assert.equal(url,'/display/index.html#'+token);
+  await page.goto('https://display-save.test'+url);await page.locator('.pickup').waitFor();assert.equal(await page.locator('.pickup h1').innerText(),'Betrieb');assert.deepEqual(errors,[]);
+ }finally{release();await browser.close()}
+});
