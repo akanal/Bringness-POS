@@ -47,7 +47,7 @@ export function createDisplays(pool){
  return send(res,200,{name:d.name,restaurantName:d.restaurant_name,orientation:d.orientation,fit:d.fit,playlist:d.playlist,products,updatedAt:d.updated_at});
  }
  const rid=url.searchParams.get('restaurantId');const u=platform?await systemActor(pool,req,res,rid):await owner(req,res);if(!u)return true;if(!uuid(rid)||!(await pool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[rid,u.company_id])).rowCount)return send(res,404,{error:'Betrieb nicht gefunden'});if(!await displayAccess(pool,u.company_id))return send(res,403,{error:'Displaysteuerung nicht aktiv. Bitte unter Lizenz & Abo buchen.',code:'MODULE_REQUIRED'});
- if(p==='/api/v1/displays/counters'&&req.method==='GET')return send(res,200,{counters:(await pool.query("SELECT t.id,t.name FROM dining_tables t JOIN restaurants r ON r.id=t.restaurant_id WHERE t.restaurant_id=$1 ORDER BY t.name",[rid])).rows});
+ if(p==='/api/v1/displays/counters'&&req.method==='GET')return send(res,200,{counters:(await pool.query("SELECT t.id,t.name,t.area FROM dining_tables t WHERE t.restaurant_id=$1 ORDER BY t.name,t.area,t.id",[rid])).rows});
  const action=p.match(/^\/api\/v1\/displays\/pickup\/([a-f0-9-]{36})\/(ready|collected)$/);
  if(action&&req.method==='POST'){
  if(!uuid(action[1]))return send(res,404,{error:'Bestellung nicht gefunden'});
