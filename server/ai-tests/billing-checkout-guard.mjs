@@ -34,6 +34,14 @@ try{
  await query("UPDATE company_entitlements SET status='active'");assert.equal((await reserveCheckout(pool,user,plan,yes)).code,'ALREADY_ACTIVE','overdue recurring contract must not create another subscription');await query("UPDATE company_entitlements SET status='canceled'");
  await query("INSERT INTO billing_transactions(company_id,plan_id,status,paid_at) VALUES($1,$2,'pending',NULL)",[user.company_id,plan.id]);assert.equal((await reserveCheckout(pool,user,plan,yes)).code,'CHECKOUT_PENDING','old unresolved checkout retained');await query('DELETE FROM billing_transactions');
  await query("INSERT INTO company_features VALUES($1,'ean_scanner','active',now()-interval '1 day',now()+interval '1 day')",[user.company_id]);assert.equal((await reserveCheckout(pool,user,plan,yes)).code,'ALREADY_ACTIVE','grace period not rebilled');await query('DELETE FROM company_features');
+ // Legacy restaurant access includes these modules; direct checkout must not rebill them.
+ const includedPlans=['table_management_monthly','personnel_monthly','kitchen_monthly','center_monthly','display_control_monthly'].map(code=>({id:crypto.randomUUID(),code}));
+ for(const included of includedPlans)await query('INSERT INTO billing_plans(id,code) VALUES($1,$2)',[included.id,included.code]);
+ await query("INSERT INTO company_features VALUES($1,'restaurant','active',NULL,NULL)",[user.company_id]);
+ let approvals=0;for(const included of includedPlans)assert.equal((await reserveCheckout(pool,user,included,async()=>{approvals++;return true})).code,'ALREADY_ACTIVE');assert.equal(approvals,0,'included access blocks before consuming approval');
+ const standalone=await reserveCheckout(pool,other,includedPlans.at(-1),yes);assert(standalone.id,'other company may book its own display module');
+ await query("UPDATE company_features SET ends_at=now()-interval '1 day',grace_until=now()+interval '1 day'");assert.equal((await reserveCheckout(pool,user,includedPlans.at(-1),yes)).code,'ALREADY_ACTIVE');
+ await query("UPDATE company_features SET grace_until=now()-interval '1 second'");assert((await reserveCheckout(pool,user,includedPlans.at(-1),yes)).id,'expired legacy access permits a new module');await query('DELETE FROM company_features');
  if(postgresUrl){const results=await Promise.all(Array.from({length:8},()=>reserveCheckout(pool,user,plan,yes)));assert.equal(results.filter(r=>r.id).length,1);assert.equal(results.filter(r=>r.code==='CHECKOUT_PENDING').length,7);}
 
  await query("UPDATE billing_checkout_guards SET status='resolved'");

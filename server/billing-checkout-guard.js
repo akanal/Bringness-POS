@@ -24,7 +24,7 @@ export async function reserveCheckout(pool,user,plan,approve){
    WHERE ce.company_id=$1 AND (bp.id=$2 OR ($3 AND bp.code IN ('pos_base_monthly','download_license','restaurant_monthly')))
    AND (ce.status='active' OR (ce.status='canceled' AND (ce.current_period_end IS NULL OR ce.current_period_end>now()))) LIMIT 1`,[user.company_id,plan.id,base(plan.code)]);
   const feature=moduleCatalog[plan.code]?.feature;
-  const granted=feature?await c.query(`SELECT 1 FROM company_features WHERE company_id=$1 AND feature_code=$2 AND status='active' AND (ends_at IS NULL OR ends_at>now() OR grace_until>now())`,[user.company_id,feature]):{rowCount:0};
+  const granted=feature?await c.query(`SELECT 1 FROM company_features WHERE company_id=$1 AND (feature_code=$2 OR ($3 AND feature_code='restaurant')) AND status='active' AND (ends_at IS NULL OR ends_at>now() OR grace_until>now())`,[user.company_id,feature,['table_management','personnel','kitchen','center','display_control'].includes(feature)]):{rowCount:0};
   if(owned.rowCount||granted.rowCount){await c.query('ROLLBACK');return conflict('Dieses Modul ist bereits aktiv, auch bei Kündigung bis zum Ende des bezahlten Zeitraums.','ALREADY_ACTIVE')}
   const existing=await c.query(`SELECT 1 FROM billing_checkout_guards WHERE company_id=$1 AND slot=$2 AND status<>'resolved'`,[user.company_id,slot]);
   const pending=await c.query(`SELECT 1 FROM billing_transactions bt JOIN billing_plans bp ON bp.id=bt.plan_id WHERE bt.company_id=$1
