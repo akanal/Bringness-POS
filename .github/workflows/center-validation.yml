@@ -79,3 +79,11 @@ jobs:
         run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node --test server/center-browser.test.js
       - name: Verify POS cash and table payment recovery in browser
         run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node --test server/pos-payment-browser.test.js
+
+      - name: Save module overview previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pos-module-previews-${{ matrix.browser }}
+          path: ${{ runner.temp }}/module-previews
+          if-no-files-found: ignore

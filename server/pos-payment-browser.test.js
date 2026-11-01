@@ -59,3 +59,42 @@ test('cash and table screens refuse unverified card confirmation without contact
   await f.page.click('#settle');await f.page.waitForFunction(()=>document.querySelector('#tableMsg').textContent.includes('serverseitig'));assert.equal(calls,0);assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });
+
+test('module overview exposes booking states and opens the real display editor from settings',async()=>{
+ const app=await readFile(new URL('../apps/web/public/pos/app.js',import.meta.url),'utf8');
+ const css=await readFile(new URL('../apps/web/public/pos/licensing.css',import.meta.url),'utf8');
+ const index=await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8');
+ const display=await readFile(new URL('../apps/web/public/pos/displays.js',import.meta.url),'utf8');
+ const {moduleCatalog}=await import('./module-catalog.js');
+ const baseStyles=(await Promise.all(['styles.css','category-colors.css','pos/sale-tools.css','pos/trade.css','pos/colors.css'].map(path=>readFile(new URL('../apps/web/public/'+path,import.meta.url),'utf8'))));
+ const navigation=app.slice(app.indexOf('const moduleInfo='),app.indexOf('async function downloadReceipt'));
+ const licensing=app.split('\n').find(line=>line.startsWith('async function renderLicensing'));
+ const bootstrap={restaurants:[{id:restaurant,name:'Testbetrieb'}],categories:[],products:[]};
+ const state={features:{pos_base:true,display_control:true},featureRows:[],plans:[{code:'pos_base_monthly',active:true,eligible:false,amount:34.99},...Object.entries(moduleCatalog).map(([code,plan])=>({code,active:false,eligible:!plan.requires.includes('table_management'),requires:plan.requires,amount:plan.netCents/100})),{code:'display_control_monthly',active:true,included:true,eligible:false,amount:14.99},{code:'personnel_monthly',active:false,eligible:true,amount:9.99},{code:'table_qr_monthly',active:false,eligible:false,requires:['pos_base','table_management'],amount:29.99}]};
+ const fixtureScript=`const $=id=>document.getElementById(id);function isRestaurantMode(){return false}function applyBusinessMode(){}function money(n){return n.toFixed(2)+' EUR'}function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}window.ensurePersonnelAccess=async()=>true;window.posPackageFeatures=${JSON.stringify(state.features)};async function renderRestaurantBranding(){}async function api(path){if(path==='/billing/status')return ${JSON.stringify(state)};if(path==='/licensing')return {plans:[]};if(path==='/billing/invoices')return {invoices:[]};if(path==='/billing/profile')return {profile:{}};if(path==='/license/status')return {};if(path==='/billing/owner-email')return {email:'owner@example.test',verified:true};throw Error('Unexpected fixture request: '+path)};${navigation}\n${licensing}\nshowModule('einstellungen');`;
+ for(const width of [390,1280]){
+  const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width,height:900}}),errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.route('https://modules.test/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path==='/pos/')return route.fulfill({contentType:'text/html',body:'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+'<style>'+baseStyles[0]+'</style>'+[...index.matchAll(/<style>[\s\S]*?<\/style>/g)].map(match=>match[0]).join('')+'<style>'+baseStyles.slice(1).join('\n')+'\n'+css+'</style><div class="posapp"><select id="restaurant"><option value="'+restaurant+'">Testbetrieb</option></select><nav id="mainnav"><div id="moreMenu"></div></nav><div id="kasseView"></div><div id="moduleView" class="modulepage"></div></div><script src="/displays.js"></script><script src="/fixture.js"></script>'});
+   if(path==='/displays.js')return route.fulfill({contentType:'text/javascript',body:display});
+   if(path==='/fixture.js')return route.fulfill({contentType:'text/javascript',body:fixtureScript});
+   if(path==='/api/v1/displays')return route.fulfill({json:{displays:[]}});
+   if(path==='/api/v1/displays/media')return route.fulfill({json:{media:[]}});
+   if(path==='/api/v1/bootstrap')return route.fulfill({json:bootstrap});
+   if(path==='/pos/licensing.css')return route.fulfill({contentType:'text/css',body:css});
+   return route.abort();
+  });
+  try{
+   await page.goto('https://modules.test/pos/');assert(await page.locator('#openDisplaySettings').isVisible());
+   await page.getByRole('button',{name:'Module verwalten',exact:true}).click();
+   const owned=page.locator('[data-license-plan="display_control_monthly"]');await owned.waitFor();
+   assert.match(await owned.innerText(),/Bereits enthalten/);assert.equal(await owned.locator('[data-buy-plan]').count(),0);
+   assert(await page.locator('[data-buy-plan="personnel_monthly"]').isVisible());assert.equal(await page.locator('[data-buy-plan="table_qr_monthly"]').isEnabled(),false);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'module cards must fit viewport');
+   if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}
+   await page.locator('#openOwnedDisplay').click();await page.locator('#displayForm').waitFor();assert(await page.getByRole('heading',{name:'Bildschirme',exact:true}).isVisible());assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+ }
+});
