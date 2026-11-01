@@ -13,3 +13,10 @@ Implemented on feature/counter-pickup-display:
 Local verification: display database/JSDOM lifecycle, cross-counter rejection, invalid assignment, paid-order retention, ready/collected transitions, preserved order count, QR PNG generation, restored editor selection and escaped player output. Existing display persistence/window independence tests and pickup-notify/guest-push regression passed. Focused 36 unit/PDF tests passed without skips with PDFKit/QRCode enabled.
 
 No physical Fire TV or handset test performed. Deployment status must be established separately from code upload/CI. The production counter must be explicitly selected in the editor; no production order/configuration mutated during development.
+
+
+## Verified release
+
+PR206 merged as 028c43dbb203140774dd63138131b5bee6c7f097. Final feature 2d7be176706b82405b8f0b80083f7b97cf28e6ed passed all nine checks. Native Chromium/WebKit jobs 124861851430/124861851659 each passed seven POS browser tests including actual pickup player QR/landscape/portrait/live readiness/removal. Integration job 124861851340 passed the display/walk-in/notification regressions.
+
+Netcup run 41311512912, job 124862716297 succeeded; authenticated log confirms exact merge revision deployed, Previous container retained, Database backup retained. Fresh public checks: player JS, display editor JS and player CSS return HTTP200 byte-identical to tested sources; player HTML returns200 with pickup-20261101 version (existing server brand-logo injection explains HTML byte difference). No real restaurant mode, screen assignment, orders, handset registration or payments changed during verification. Owner reloads POS, opens Einstellungen > Displaysteuerung, selects Bildschirmfunktion Theke / Abholanzeige and an existing configured pickup counter, then Anzeigen. Optional new tableless POS routing must be explicitly checked. Physical Fire TV/handset test remains owner's next acceptance step.
