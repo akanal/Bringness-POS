@@ -16,3 +16,9 @@
 #moduleBody .license-group-legacy .license-row{grid-template-columns:minmax(0,1fr)}
 @media(max-width:900px){#moduleBody .license-addon{padding:12px}#moduleBody .license-row{gap:9px}}
 @media(max-width:650px){#moduleBody .license-row,#moduleBody .license-group-base .license-row{grid-template-columns:1fr}#moduleBody .license-base{min-height:0;padding:20px}#moduleBody .license-overview{gap:22px}}
+/* Clearly separate existing access from optional bookings. */
+#moduleBody [data-license-plan][data-license-active="true"]{background:#edfbf1;border-color:#188d46;border-width:2px}
+#moduleBody [data-license-plan][data-license-active="true"]>p strong{color:#146c35}
+#moduleBody .license-addon [data-buy-plan]:not(:disabled){background:#ff7628;color:#10263c;font-weight:800;border:1px solid #b64a00}
+#moduleBody [data-buy-plan]:disabled{opacity:1;background:#e6edf3;color:#526477;cursor:not-allowed}
+#moduleBody .license-open{display:block;margin-top:12px;background:#146c35;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer}
