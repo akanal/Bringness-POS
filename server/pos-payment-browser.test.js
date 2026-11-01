@@ -65,6 +65,7 @@ test('module overview exposes booking states and opens the real display editor f
  const css=await readFile(new URL('../apps/web/public/pos/licensing.css',import.meta.url),'utf8');
  const index=await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8');
  const display=await readFile(new URL('../apps/web/public/pos/displays.js',import.meta.url),'utf8');
+ assert.match(index,/<script\b[^>]*src="\/pos\/displays\.js(?:\?[^"]*)?"/, 'actual POS document must load the editor');
  const {moduleCatalog}=await import('./module-catalog.js');
  const baseStyles=(await Promise.all(['styles.css','category-colors.css','pos/sale-tools.css','pos/trade.css','pos/colors.css'].map(path=>readFile(new URL('../apps/web/public/'+path,import.meta.url),'utf8'))));
  const navigation=app.slice(app.indexOf('const moduleInfo='),app.indexOf('async function downloadReceipt'));
@@ -97,4 +98,25 @@ test('module overview exposes booking states and opens the real display editor f
    await page.locator('#openOwnedDisplay').click();await page.locator('#displayForm').waitFor();assert(await page.getByRole('heading',{name:'Bildschirme',exact:true}).isVisible());assert.deepEqual(errors,[]);
   }finally{await browser.close();}
  }
+});
+
+
+test('actual POS document loads the display editor without a fixture-injected script',async()=>{
+ const index=await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8');
+ const browser=await engine.launch({headless:true}),page=await browser.newPage();const loaded=[];
+ await page.route('https://entrypoint.test/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path==='/pos/')return route.fulfill({contentType:'text/html',body:index});
+  if(path.startsWith('/api/'))return route.fulfill({status:401,json:{error:'Fixture: not signed in'}});
+  if(/\.(js|css)$/.test(path)){
+   try{const body=await readFile(new URL('../apps/web/public'+path,import.meta.url),'utf8');loaded.push(path);return route.fulfill({contentType:path.endsWith('.js')?'text/javascript':'text/css',body});}catch{return route.abort();}
+  }
+  return route.abort();
+ });
+ try{
+  await page.goto('https://entrypoint.test/pos/');
+  assert(loaded.includes('/pos/displays.js'),'real HTML requested the editor asset');
+  assert.equal(await page.evaluate(()=>typeof window.renderDisplaySettings),'function');
+  assert.equal(await page.evaluate(()=>typeof window.showModule),'function');
+ }finally{await browser.close();}
 });
