@@ -15,7 +15,7 @@ CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid,waiter_employe
 CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,table_id uuid,status text,source text,guest_request_id uuid,qr_service_mode text,qr_ready_at timestamptz);`);
 await db.query("INSERT INTO users VALUES($1,$2,'waiter','active',false)",[user,company]);await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[user,crypto.createHash('sha256').update('waiter').digest('hex')]);
 await db.query("INSERT INTO restaurants VALUES($1,$2,'pickup')",[restaurant,company]);await db.query('INSERT INTO employees VALUES($1,$2,$3,true)',[employee,user,restaurant]);await db.query("INSERT INTO dining_tables VALUES($1,$2,$3,'{}',$4)",[table,restaurant,employee,'a'.repeat(48)]);await db.query("INSERT INTO orders VALUES($1,$2,$3,'paid','qr',$4,'pickup',NULL)",[order,restaurant,table,key]);
-await db.exec("ALTER TABLE orders ADD COLUMN pickup_number bigint;UPDATE orders SET pickup_number=42");
+await db.exec("ALTER TABLE orders ADD COLUMN pickup_collected_at timestamptz;ALTER TABLE orders ADD COLUMN pickup_number bigint;UPDATE orders SET pickup_number=42");
 const pool={query:async(sql,args)=>{const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}}};pool.connect=async()=>({query:pool.query,release(){}});const route=createQrService(pool);
 async function request(url,options={}){const req=Readable.from(options.body?[options.body]:[]);req.url=url;req.method=options.method||'GET';req.headers=options.headers||{};let status,result;const res={writeHead(s){status=s},end(text){result=JSON.parse(text)}};assert(await route(req,res));return {ok:status<400,status,json:async()=>result}}
 // Guest has no app, permission or usable sessionStorage: the return URL recovers it.
@@ -29,4 +29,6 @@ assert(waiter.document.querySelector('#qrOrders [data-collection-ready]'));await
 const saved=(await db.query('SELECT status,qr_ready_at FROM orders')).rows[0];assert.equal(saved.status,'paid');assert(saved.qr_ready_at);
 await timers[0]();await timers[0]();assert.match(guest.document.getElementById('guestCollection').textContent,/Bitte am Tresen abholen/);assert.equal(vibrations,1);assert.equal(tones,3);assert.equal(guest.navigator.serviceWorker,undefined);assert.equal(guest.Notification,undefined);
 assert.match(guest.document.getElementById('guestCollection').textContent,/042/);
+const collected=await request('/api/v1/orders/'+order+'/collection-collected',{method:'POST',headers:{authorization:'Bearer waiter'}});assert.equal(collected.status,200);
+await timers[0]();assert.doesNotMatch(guest.document.getElementById('guestCollection').textContent,/Bitte am Tresen abholen/);assert.equal(vibrations,1);assert.equal((await db.query('SELECT status FROM orders')).rows[0].status,'paid');
 waiter.close();guest.close();await db.close();console.log('Pickup round trip passed: paid order remains actionable, waiter ready button commits, guest return URL survives blocked storage, collection message and one signal without app or notification permission, financial status unchanged.');
