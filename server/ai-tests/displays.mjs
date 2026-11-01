@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';import crypto from 'node:crypto';import 
 const db=new PGlite();await db.waitReady;
 const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows||r.rows.length}};
 const pool={query,connect:async()=>({query,release(){}})},id=()=>crypto.randomUUID(),company=id(),owner=id(),rid=id(),hash=s=>crypto.createHash('sha256').update(s).digest('hex');
-await db.exec(`CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,table_id uuid,source text DEFAULT 'pos',qr_ready_at timestamptz,status text,created_at timestamptz DEFAULT now());CREATE TABLE pos_trade_sales(order_id uuid);CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid,name text,qr_token text);CREATE TABLE company_features(company_id uuid,feature_code text,status text,ends_at timestamptz,grace_until timestamptz);CREATE TABLE company_entitlements(company_id uuid,plan_id uuid,status text);CREATE TABLE billing_plans(id uuid,code text);CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text,qr_service_mode text,logo_data text);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);CREATE TABLE personnel_unlocks(token_hash text,session_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE categories(id uuid PRIMARY KEY,restaurant_id uuid,name text,sort_order int);CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,name text,price_cents int,category_id uuid,active boolean,ai_stock_available boolean);`);
+await db.exec(`CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,table_id uuid,source text DEFAULT 'pos',qr_ready_at timestamptz,status text,created_at timestamptz DEFAULT now());CREATE TABLE pos_trade_sales(order_id uuid);CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid,name text,qr_token text,area text);CREATE TABLE company_features(company_id uuid,feature_code text,status text,ends_at timestamptz,grace_until timestamptz);CREATE TABLE company_entitlements(company_id uuid,plan_id uuid,status text);CREATE TABLE billing_plans(id uuid,code text);CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text,qr_service_mode text,logo_data text);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);CREATE TABLE personnel_unlocks(token_hash text,session_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE categories(id uuid PRIMARY KEY,restaurant_id uuid,name text,sort_order int);CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,name text,price_cents int,category_id uuid,active boolean,ai_stock_available boolean);`);
 await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Testbetrieb')",[rid,company]);await query("INSERT INTO users(id,company_id,role,status) VALUES($1,$2,'owner','active')",[owner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[owner,hash('owner')]);await query("INSERT INTO personnel_unlocks VALUES($1,$2,$3,now()+interval '1 hour')",[hash('unlock'),hash('owner'),owner]);
 await query("INSERT INTO company_features VALUES($1,'pos_base','active',NULL,NULL),($1,'display_control','active',NULL,NULL)",[company]);
 await migrateDisplays(pool);let handler=createDisplays(pool);
@@ -72,10 +72,23 @@ await query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS qr_service_mode te
 await query("UPDATE restaurants SET qr_service_mode='pickup' WHERE id=$1",[rid]);
 await query("INSERT INTO company_features VALUES($1,'counter_qr','active',NULL,NULL),($1,'table_management','active',NULL,NULL)",[company]);
 const counter=id(),otherCounter=id(),qrOrder=id(),posOrder=id(),otherOrder=id();
-await query("INSERT INTO dining_tables VALUES($1,$3,'Theke 1',$4),($2,$3,'Andere Theke',$5)",[counter,otherCounter,rid,'a'.repeat(48),'b'.repeat(48)]);
+await query("INSERT INTO dining_tables(id,restaurant_id,name,qr_token) VALUES($1,$3,'Theke 1',$4),($2,$3,'Andere Theke',$5)",[counter,otherCounter,rid,'a'.repeat(48),'b'.repeat(48)]);
 await query("INSERT INTO orders(id,restaurant_id,table_id,status) VALUES($1,$4,$5,'preparing'),($2,$4,$5,'paid'),($3,$4,$6,'preparing')",[qrOrder,posOrder,otherOrder,rid,counter,otherCounter]);
+// Duplicate labels represent distinct existing tables; preserve IDs and distinguish areas.
+const duplicateA=id(),duplicateB=id(),duplicateC=id();
+await query("INSERT INTO dining_tables(id,restaurant_id,name,area) VALUES($1,$4,'1','Innen'),($2,$4,'1','Terrasse'),($3,$4,'1','Innen')",[duplicateA,duplicateB,duplicateC,rid]);
+w=await browser();let modeForm=w.document.querySelector('#displayForm');
+assert([...modeForm.querySelectorAll('[data-pickup-control]')].every(el=>el.hidden&&el.style.display==='none'));
+modeForm.elements.mode.value='pickup';await modeForm.elements.mode.onchange();
+assert([...modeForm.querySelectorAll('[data-pickup-control]')].every(el=>!el.hidden));
+const duplicateOptions=[...modeForm.elements.counterTableId.options].filter(o=>[duplicateA,duplicateB,duplicateC].includes(o.value));
+assert.equal(duplicateOptions.length,3);assert.equal(new Set(duplicateOptions.map(o=>o.text)).size,3);
+assert(duplicateOptions.some(o=>o.text==='1 · Terrasse'));assert(duplicateOptions.some(o=>o.text==='1 · Innen (1 von 2)'));
+modeForm.elements.mode.value='content';await modeForm.elements.mode.onchange();
+assert([...modeForm.querySelectorAll('[data-pickup-control]')].every(el=>el.hidden));
+w.close();
 // Existing screen: selecting a counter without a QR saves immediately and retains its URL/media.
-const newCounter=id();await query("INSERT INTO dining_tables VALUES($1,$2,'Neue Theke',NULL)",[newCounter,rid]);
+const newCounter=id();await query("INSERT INTO dining_tables(id,restaurant_id,name,qr_token) VALUES($1,$2,'Neue Theke',NULL)",[newCounter,rid]);
 w=await browser();const editor=w.document.querySelector('#displayForm');
 editor.elements.mode.value='pickup';await editor.elements.mode.onchange();
 assert.match(w.document.querySelector('#displayStatus').textContent,/noch nicht gespeichert/);
@@ -118,7 +131,7 @@ assert.equal(w.document.querySelector('[name=mode]').value,'pickup');assert.equa
 const stable=(await call('/api/v1/display-player/'+first.token,{publicCall:true})).result;assert.equal(stable.mode,'pickup');assert.equal(stable.counterName,'Neue Theke');w.close();
 // Never unlock paid modules or rotate an existing counter capability.
 await query("UPDATE company_features SET status='inactive' WHERE feature_code='counter_qr'");
-const deniedCounter=id();await query("INSERT INTO dining_tables VALUES($1,$2,'Gesperrte Theke',NULL)",[deniedCounter,rid]);
+const deniedCounter=id();await query("INSERT INTO dining_tables(id,restaurant_id,name,qr_token) VALUES($1,$2,'Gesperrte Theke',NULL)",[deniedCounter,rid]);
 await query("UPDATE company_features SET status='inactive' WHERE feature_code='table_management'");
 await query("UPDATE restaurants SET qr_service_mode='restaurant' WHERE id=$1",[rid]);
 assert.equal((await call(base+'/'+first.id+q,{method:'PUT',body:{...payload,playlist:[],mode:'pickup',counterTableId:deniedCounter}})).status,200);
