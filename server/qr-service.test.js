@@ -32,10 +32,10 @@ test("queue is oldest first with deterministic ties and intact table tickets",()
 test("guest lookup requires exact order and request IDs; only minimal collection data escapes",async()=>{
   const pool=db((sql,args)=>{
     assert.match(sql,/guest_request_id=\$2/);
-    return args[1]===key?rows({id:oid,qr_service_mode:"pickup",qr_ready_at:"now",status:"open"}):rows();
+    return args[1]===key?rows({id:oid,pickup_number:"7",qr_service_mode:"pickup",qr_ready_at:"now",status:"open"}):rows();
   });
   const ok=await request(pool,"/api/v1/guest/collection?orderId="+oid+"&requestId="+key,{auth:false});
-  assert.equal(ok.data.ready,true);assert.equal(ok.data.number,oid.slice(0,8).toUpperCase());
+  assert.equal(ok.data.ready,true);assert.equal(ok.data.number,"007");
   assert.equal("requestId" in ok.data,false);assert.equal(ok.headers["cache-control"],"no-store");
   const bad=await request(pool,"/api/v1/guest/collection?orderId="+oid+"&requestId="+rid,{auth:false});
   assert.equal(bad.status,404);
@@ -136,11 +136,11 @@ test("both service models close ordering until a fresh QR URL is opened; failed 
 });
 
 test("base guest page locks without enhancement scripts and stays locked on reload",async()=>{
-  async function page(collection=false){
+  async function page(collection=false, failure=null){
     const requests=[],listeners={},events=[],replaced=[],code="a".repeat(48);
     const elements=new Map();
     for(const id of ["language","heading","restaurant","guestBrandName","guestLogo","status","menu","basket","total","send"]){
-      elements.set(id,{textContent:"",innerHTML:"",hidden:false,disabled:false,options:[{value:"de"}],parentElement:{hidden:false},querySelectorAll:()=>[],removeAttribute(){}});
+      elements.set(id,{textContent:"",innerHTML:"",hidden:false,disabled:false,options:[{value:"de"}],parentElement:{hidden:false},querySelectorAll:()=>[],scrollIntoView(){this.scrolled=true},removeAttribute(){}});
     }
     const context={
       URL,URLSearchParams,Map,CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail}},
@@ -153,6 +153,7 @@ test("base guest page locks without enhancement scripts and stays locked on relo
       setInterval(){},
       async fetch(url){
         requests.push(url);
+        if(failure&&url.includes("/guest/order"))return {ok:false,async json(){return {error:failure}}};
         return {ok:true,async json(){return url.includes("/guest/order")?{orderId:oid}:{table:"1",restaurant:"Test",products:[]}}};
       }
     };
@@ -161,6 +162,13 @@ test("base guest page locks without enhancement scripts and stays locked on relo
     await new Promise(resolve=>setImmediate(resolve));
     return {context,elements,requests,listeners,events,replaced};
   }
+  const failed=await page(false,"Zu viele Bestellungen für diesen Tisch. Bitte eine Minute warten.");
+  vm.runInContext('cart.set("product",1)',failed.context);
+  await failed.elements.get("send").onclick();
+  assert.match(failed.elements.get("status").textContent,/Bestellung nicht bestätigt.*eine Minute/);
+  assert.equal(failed.elements.get("status").scrolled,true);
+  assert.equal(failed.elements.get("send").disabled,false);
+  assert.equal(failed.elements.get("menu").hidden,false);
   const first=await page();
   vm.runInContext('cart.set("product",1)',first.context);
   await first.elements.get("send").onclick();

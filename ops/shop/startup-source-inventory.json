@@ -36,9 +36,9 @@
     },
     {
       "path": "server/module-catalog.js",
-      "bytes": 3594,
-      "sha256": "a5c90d45acc6411a1d724af8156cff92c6bbcf9455269e3a05ab9fb84d79468f",
-      "gitBlob": "99243cab3a79344a413926bac954b9990a680842",
+      "bytes": 3637,
+      "sha256": "95ff0f6ef1071c276459015e697d0a40dd3aae70e05673129c79edf011d302a3",
+      "gitBlob": "c5e6d3c53181d11ef1b86f55a8803c6fc80b538c",
       "kind": "shared-review-required",
       "imports": []
     },

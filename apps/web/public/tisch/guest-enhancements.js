@@ -79,7 +79,7 @@
       const r=await originalFetch("/api/v1/guest/order-v2",{...init,body:JSON.stringify(body)});
       if(r.ok){
         const order=await r.clone().json();
-        window.dispatchEvent(new CustomEvent("bringness-guest-order",{detail:{orderId:order.orderId,requestId:body.requestId}}));
+        window.dispatchEvent(new CustomEvent("bringness-guest-order",{detail:{orderId:order.orderId,number:order.number,requestId:body.requestId}}));
         chosen.clear();
         lockAfterOrder();
       }

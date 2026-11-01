@@ -1,3 +1,4 @@
+import {orderNumber} from './order-number.js';
 import {orderingModuleAccess} from './module-catalog.js';
 import {legacyGuestItems} from './guest-cart-input.js';
 import {readJsonObject} from './http-body.js';
@@ -144,8 +145,8 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
       if(!tq.rowCount){await c.query("ROLLBACK");return json(res,404,{error:"QR-Code ungültig"})}
       const t=tq.rows[0];
       if(!await orderingModuleAccess(c,t.company_id,t.qr_service_mode)){await c.query("ROLLBACK");return json(res,402,{error:"Passendes QR-System und Tischsystem sind nicht aktiviert"})}
-      const existing=await c.query("SELECT id,total_cents FROM orders WHERE table_id=$1 AND guest_request_id=$2",[t.id,requestId]);
-      if(existing.rowCount){await c.query("COMMIT");return json(res,200,{orderId:existing.rows[0].id,totalCents:existing.rows[0].total_cents,alreadyReceived:true})}
+      const existing=await c.query("SELECT id,total_cents,to_jsonb(orders)->>'pickup_number' pickup_number FROM orders WHERE table_id=$1 AND guest_request_id=$2",[t.id,requestId]);
+      if(existing.rowCount){await c.query("COMMIT");return json(res,200,{orderId:existing.rows[0].id,number:orderNumber(existing.rows[0]),totalCents:existing.rows[0].total_cents,alreadyReceived:true})}
       const recent=await c.query("SELECT count(*)::int n FROM orders WHERE table_id=$1 AND source='qr' AND created_at>now()-interval '60 seconds'",[t.id]);
       if(recent.rows[0].n>=3){await c.query("ROLLBACK");return json(res,429,{error:"Zu viele Bestellungen für diesen Tisch. Bitte eine Minute warten oder das Personal ansprechen."})}
       const pq=await c.query("SELECT id,name,price_cents,tax_rate FROM products WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND active=true AND ai_stock_available=true",[ids,t.restaurant_id]);
@@ -169,14 +170,14 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
       if(total<=0||total>100000000){await c.query("ROLLBACK");return json(res,400,{error:"Ungültiger Betrag"})}
       const email=String(b.email||"").trim().toLowerCase();
       if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){await c.query("ROLLBACK");return json(res,400,{error:"E-Mail-Adresse ist ungültig"})}
-      const o=(await c.query("INSERT INTO orders(restaurant_id,table_id,source,status,total_cents,guest_request_id,guest_email,qr_service_mode) VALUES($1,$2,'qr','open',$3,$4,$5,$6) RETURNING id",[t.restaurant_id,t.id,total,requestId,email||null,t.qr_service_mode])).rows[0];
+      const o=(await c.query("INSERT INTO orders(restaurant_id,table_id,source,status,total_cents,guest_request_id,guest_email,qr_service_mode) VALUES($1,$2,'qr','open',$3,$4,$5,$6) RETURNING id,pickup_number",[t.restaurant_id,t.id,total,requestId,email||null,t.qr_service_mode])).rows[0];
       for(const item of cleaned){
         const snapshot=item.extras.map(x=>({id:x.id,name:x.name,price_cents:Number(x.price_cents)}));
         await c.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,guest_note,extras_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[o.id,item.pr.id,item.pr.name,item.unitPrice,item.pr.tax_rate,item.qty,item.note||null,JSON.stringify(snapshot)]);
       }
       await c.query("UPDATE dining_tables SET status='open' WHERE id=$1",[t.id]);
       await c.query("COMMIT");
-      json(res,201,{orderId:o.id,totalCents:total,emailReceiptRequested:!!email,emailDeliveryConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM)});
+      json(res,201,{orderId:o.id,number:orderNumber(o),totalCents:total,emailReceiptRequested:!!email,emailDeliveryConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM)});
       return true;
     }catch(error){await c.query("ROLLBACK");if(error.code==="22P02")return json(res,400,{error:"Ungültiger Artikel oder Beilage"});throw error}finally{c.release()}
   }

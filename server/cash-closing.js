@@ -1,3 +1,4 @@
+import {requestOrderNumberReset} from './order-number.js';
 import crypto from 'node:crypto';
 import {readJsonObject} from './http-body.js';
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -60,7 +61,7 @@ export function createCashClosing(pool,authenticate){return async(req,res)=>{
  if(b.action==='close'){
  const report={...await details(session),countedCents:b.amountCents,closedBy:actor.id,reason:b.reason};report.differenceCents=b.amountCents-report.expectedCents;
  if(report.differenceCents!==0&&!b.reason)throw fail(400,'Bitte Kassendifferenz begründen');
- const closed=(await c.query('UPDATE pos_cash_sessions SET closed_at=clock_timestamp(),report=$2 WHERE id=$1 RETURNING closed_at',[session.id,report])).rows[0];result={session:{...report,...closed}};
+ const closed=(await c.query('UPDATE pos_cash_sessions SET closed_at=clock_timestamp(),report=$2 WHERE id=$1 RETURNING closed_at',[session.id,report])).rows[0];await requestOrderNumberReset(c,b.restaurantId,session.opened_at);result={session:{...report,...closed}};
  }else{
  const current=await details(session);if(b.action==='withdraw'&&b.amountCents>current.expectedCents)throw fail(409,'Entnahme übersteigt den rechnerischen Bargeldbestand');
  await c.query('INSERT INTO pos_cash_movements(id,session_id,action,amount_cents,reason,created_by) VALUES($1,$2,$3,$4,$5,$6)',[crypto.randomUUID(),session.id,b.action,b.amountCents,b.reason,actor.id]);result={session:await details(session)};
