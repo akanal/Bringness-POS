@@ -35,3 +35,13 @@ POS/AI job124831609042 bestätigt neue Modul-UI, bestehende Displaypersistenz un
 Authentifiziertes Vorab-Backup41300675069/job124830738699 erfolgreich: Database backups validated. PR203 ist als `965b74832cc5e71d4b2fb8af510994c234574d93` gemergt. Der ältere Teilansatz PR202 wurde mit Verweis auf PR203 geschlossen; Branch bleibt als Referenz erhalten.
 
 Netcup41301245082/job124832418584 bestätigt exakt `965b74832cc5e71d4b2fb8af510994c234574d93` bereitgestellt; vorheriger Container und Datenbanksicherung erhalten. Frische Live-Prüfung: /pos/ HTTP200 ohne doppelten Benutzermenü-Lizenzlink; /pos/app.js und /pos/licensing.css?v=module-status-20261101 HTTP200 und bytegleich mit geprüftem Quellstand. Die private Inhabersitzung wurde nicht verwendet; Modul-/Editorfunktionen sind mit isolierten Browser-/Datenbankfixtures geprüft. Physischer Bildschirm-/Player-Test erfolgt anschließend beim Eigentümer.
+
+## Nachkorrektur der tatsächlichen POS-Einbindung (PR204)
+
+Der Eigentümer meldete anschließend per Screenshot: `window.renderDisplaySettings is not a function`. Ursache: Die echte apps/web/public/pos/index.html enthielt keinen Script-Eintrag für den vorhandenen Displayeditor. Der frühere native Test hatte diese Datei selbst in die Fixture eingebunden und deshalb den Fehler im tatsächlichen Dokument nicht erkannt.
+
+PR204 lädt /pos/displays.js?v=entrypoint-20261101 vor app.js. Der neue Chromium-/WebKit-Test lädt die tatsächliche POS-HTML-Datei mit ihren eigenen lokalen Skripten ohne zusätzlich injizierten Editor und prüft Dateianforderung sowie initialisierte renderDisplaySettings/showModule-Funktionen. Der bestehende Editor-/Modulablauf bleibt ebenfalls abgedeckt.
+
+Feature3b60afc881966093b185f1dd617b29a608b66fdb bestand alle sechs Workflows: release41303680672, checks41303680686, Farben41303680667, isolated41303680714, Center41303680753 und POS/AI41303680737. Native Jobs124839630522/124839630820 bestätigen jeweils6 POS-Browsertests ohne Fehler; darunter der neue tatsächliche HTML-Ladetest. Bestehende Displaypersistenz und Modulzugang lokal weiterhin bestanden. Backup41303702196/job124839694537 erfolgreich: Database backups validated. Merge979408cf3a8678bc2a7ed1b01139ee12560c2595.
+
+Netcup41303993774/job124840548214 bestätigt exakt979408cf3a8678bc2a7ed1b01139ee12560c2595 bereitgestellt, vorherigen Container und Datenbanksicherung erhalten. Anschließende öffentliche Live-Prüfung: /pos/200 bindet displays.js?v=entrypoint-20261101 vor app.js ein; dieser Editor-Asset liefert200, ist bytegleich mit dem geprüften Quellstand und definiert renderDisplaySettings. Die erste PR203-Meldung allein war damit kein ausreichender Nachweis der echten Seitenintegration; diese Nachkorrektur ersetzt sie für den Ladefehler.
