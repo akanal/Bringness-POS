@@ -1,0 +1,11 @@
+# Pickup numbering and guest submission feedback — released 2026-11-01
+
+PR214 merged as 340de9c6d4a3db6d18139ee4108a14e805053a51. Seven final GitHub workflows passed after refreshing stale startup inventory for the already merged table QR policy. Netcup run41331734090/job124923097926 successfully deployed that exact revision; previous container and database backup retained. Fresh HTTP200 checks confirmed /tisch/app.js and /tisch/guest-enhancements.js byte-identical to tested source.
+
+New orders have durable restaurant-scoped 001,002,... public numbers across handset/POS/kitchen/display and enhanced v2 submit/replay responses. Internal UUIDs/capabilities and fiscal invoice numbers remain separate. Existing orders retain old labels.
+
+Daily reset is tied to the existing cash-session closing, using the session OPENING date in Europe/Berlin, including after-midnight closing. Next insertion restarts at001 only once per completed day and after outstanding numbered orders are collected/served/cancelled or outside the existing24h display window. Without cash closing numbering continues. Period-scoped uniqueness preserves old labels. Concurrent numbering is serialized by restaurant; reset requests use a separate table to avoid reversing cash/counter lock order.
+
+Owner reports intermittent submit failure depending on table. Root cause in the actual account is NOT confirmed. Verified existing policy rejects further QR orders after three within60s per table (HTTP429). Actual-handler synthetic fixture confirms429 vs201 depending on table history. Error feedback could be above the viewport; submission status and errors now scroll into view, and request UUID creation is inside error handling. Request IDs remain for retries. Do not claim the production table defect is fully fixed. A full affected table link or actual returned error is still needed; ask owner to reload guest page and provide that evidence. No private account/physical handset/TV acceptance was performed.
+
+Local687 general tests,9 QR tests, cash-closing, counter reset/rollback/tenant/restart, pickup notifications and shared-display persistence passed. CI also covers60 simultaneous PostgreSQL inserts and browser regressions. All seven final PR workflows succeeded. Owner explicitly authorized upload and tested deployment; standing Bringness authorization remains applicable.
