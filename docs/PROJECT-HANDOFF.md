@@ -256,4 +256,4 @@ ACHTUNG: Automatische Freigabeprüfung verweigerte git push auch nach Nachweis d
 
 
 ## Fixed counter pickup display — implementation 2026-11-01
-Owner explicitly requested dedicated counter pickup display and retained handset alert. Feature branch feature/counter-pickup-display implements scoped counter QR/numbers/readiness/collection, existing thermal receipt order number and regression coverage. See docs/counter-pickup-display-20261101.md for actual scope, limits and verification. Ordinary tableless quick sales are not guessed into a counter. Upload/CI/deployment must be verified separately.
+Owner explicitly requested dedicated counter pickup display and retained handset alert. Feature branch feature/counter-pickup-display implements scoped counter QR/numbers/readiness/collection, existing thermal receipt order number and regression coverage. See docs/counter-pickup-display-20261101.md for actual scope, limits and verification. New tableless POS sales can be explicitly opted into one display per restaurant from activation onward; historical sales and trade invoices excluded. Upload/CI/deployment must be verified separately.
