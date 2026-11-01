@@ -272,3 +272,7 @@ Owner explicitly requested dedicated counter pickup display and retained handset
 - Authenticated backup41317862571/job124881632123: Database backups validated. Merge1fcedd6913bafde0c68c56251c91ee1ffd3d16f8 successfully deployed by Netcup41318157824/job124882512438; exact revision, previous container and database backup confirmed. POS and Superadmin editor version pickup-save-lock-20261101.
 
 - Fresh public checks after deployment: /pos/ and /superadmin/ HTTP200 include pickup-save-lock-20261101; versioned /pos/displays.js HTTP200 byte-identical to the tested source. This verifies delivered code, not the owner's private settings or physical Fire TV.
+
+
+## Shared pickup display owner decision — 2026-11-01
+The owner rejected area/table/counter selection as unnecessary and explicitly authorized implementation plus live deployment. Use one restaurant-wide pickup queue for all areas and identical numbers on any number of displays. Dedicated editor only; preserve POS/waiter, payment and ordering module policies. See docs/counter-pickup-display-20261101.md for exact inclusion, migration and validation. CI/deployment must be confirmed before claiming live.

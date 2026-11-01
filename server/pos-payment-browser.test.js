@@ -186,14 +186,14 @@ test('display editor saves pickup selection and restores the same player after a
   await page.goto('https://display-save.test/pos/');await page.locator('#displayForm').waitFor();
   // Submit initiates a delayed content save. Editing or changing screens during it must be impossible.
   await page.getByRole('button',{name:'Anzeigen',exact:true}).click();await saving;
-  for(const selector of ['[name=mode]','[name=counterTableId]','#displaySelect','#displayNew'])assert.equal(await page.locator(selector).isDisabled(),true);
+  for(const selector of ['[name=mode]','#displaySelect','#displayNew'])assert.equal(await page.locator(selector).isDisabled(),true);
   release();await page.getByText(/Dauerhaft auf dem Server gespeichert/).waitFor();
-  await page.locator('[name=mode]').selectOption('pickup');await page.locator('[name=counterTableId] option[value="'+counter+'"]').waitFor({state:'attached'});
-  await page.locator('[name=counterTableId]').selectOption(counter);
+  await page.locator('[name=mode]').selectOption('pickup');
+  assert.equal(await page.locator('[name=counterTableId]').count(),0);
   await page.waitForFunction(()=>document.querySelector('[name=mode]').disabled===false&&document.querySelector('#displayStatus').textContent.includes('Dauerhaft'));
-  assert.equal(saved.mode,'pickup');assert.equal(saved.counterTableId,counter);assert.equal(saved.token,token);
-  await page.reload();await page.locator('[name=counterTableId] option[value="'+counter+'"]').waitFor({state:'attached'});
-  assert.equal(await page.locator('[name=mode]').inputValue(),'pickup');assert.equal(await page.locator('[name=counterTableId]').inputValue(),counter);
+  assert.equal(saved.mode,'pickup');assert.equal(saved.counterTableId,undefined);assert.equal(saved.token,token);
+  await page.reload();await page.locator('#displayForm').waitFor();
+  assert.equal(await page.locator('[name=mode]').inputValue(),'pickup');assert.equal(await page.locator('[name=counterTableId]').count(),0);
   const url=await page.locator('#displayLink a').getAttribute('href');assert.equal(url,'/display/index.html#'+token);
   await page.goto('https://display-save.test'+url);await page.locator('.pickup').waitFor();assert.equal(await page.locator('.pickup h1').innerText(),'Betrieb');assert.deepEqual(errors,[]);
  }finally{release();await browser.close()}
