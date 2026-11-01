@@ -16,3 +16,10 @@
 #moduleBody .license-group-legacy .license-row{grid-template-columns:minmax(0,1fr)}
 @media(max-width:900px){#moduleBody .license-addon{padding:12px}#moduleBody .license-row{gap:9px}}
 @media(max-width:650px){#moduleBody .license-row,#moduleBody .license-group-base .license-row{grid-template-columns:1fr}#moduleBody .license-base{min-height:0;padding:20px}#moduleBody .license-overview{gap:22px}}
+
+#moduleBody .license-state{display:inline-block;align-self:flex-start;padding:5px 8px;border-radius:6px;background:#e5ebf0;color:#173148;font-size:12px;font-weight:800;margin-top:8px}
+#moduleBody [data-license-active="true"]{border-color:#267854;background:#eff8f2}
+#moduleBody [data-license-active="true"] .license-state{background:#d5eedf;color:#155134}
+#moduleBody [data-license-active="false"] .pay{background:#173148;color:#fff}
+#moduleBody .license-requirements{font-weight:650}
+#moduleBody button:disabled{cursor:not-allowed;opacity:.65}
