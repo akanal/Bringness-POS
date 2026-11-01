@@ -21,7 +21,7 @@
     "scope": "individual blobs only, not a pinned whole-tree or deployed revision",
     "files": {
       "server/billing-quote.js": "76ca9bb489eebb71ee8a1e0bd5c125ffafb8e04d",
-      "server/module-catalog.js": "99243cab3a79344a413926bac954b9990a680842",
+      "server/module-catalog.js": "c5e6d3c53181d11ef1b86f55a8803c6fc80b538c",
       "server/password-policy.js": "c495311da2c0b35365233d7aea0f4a1a35a7cc45",
       "server/secret-derivation.js": "edf9c4530ee91a8034bea8e6e0228748daf8c115"
     }
