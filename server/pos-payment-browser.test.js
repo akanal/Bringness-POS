@@ -127,3 +127,27 @@ test('actual POS document loads the display editor without a fixture-injected sc
   assert.equal(await page.evaluate(()=>typeof window.showModule),'function');
  }finally{await browser.close();}
 });
+
+test('fixed counter player shows the ordering QR and live pickup numbers in landscape and portrait',async()=>{
+ const browser=await engine.launch({headless:true});
+ try{
+  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));let ready=false,removed=false,orientation='landscape';
+  const {default:QRCode}=await import('qrcode');const qr=await QRCode.toDataURL('https://counter.test/tisch/?code='+'b'.repeat(48));
+  await page.route('https://counter.test/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path.startsWith('/api/v1/display-player/'))return route.fulfill({contentType:'application/json',body:JSON.stringify({mode:'pickup',restaurantName:'Testbetrieb',counterName:'Theke 1',orientation,qr,orders:removed?[]:[{number:'AB123456',ready}]})});
+   const files={'/display/index.html':'index.html','/display/player.js':'player.js','/display/player.css':'player.css'};
+   if(files[path])return route.fulfill({contentType:path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html',body:await readFile(new URL('../apps/web/public/display/'+files[path],import.meta.url),'utf8')});
+   return route.abort();
+  });
+  for(const size of [{width:1280,height:720},{width:720,height:1280}]){
+   orientation=size.width<size.height?'portrait':'landscape';await page.setViewportSize(size);await page.goto('https://counter.test/display/index.html#'+'a'.repeat(48));
+   await page.locator('.pickup-numbers strong').waitFor();assert.equal(await page.locator('.pickup-columns section').first().getByText('AB123456').count(),1);
+   assert.equal(await page.locator('.pickup aside img').evaluate(img=>img.complete&&img.naturalWidth>0),true);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  }
+  ready=true;await page.locator('.pickup-columns section').nth(1).getByText('AB123456').waitFor({timeout:10000});
+  removed=true;await page.waitForFunction(()=>!document.querySelector('.pickup-numbers strong'),{},{timeout:10000});
+  assert.equal(await page.locator('.pickup aside img').count(),1);assert.deepEqual(errors,[]);
+ }finally{await browser.close()}
+});
