@@ -119,10 +119,17 @@ const stable=(await call('/api/v1/display-player/'+first.token,{publicCall:true}
 // Never unlock paid modules or rotate an existing counter capability.
 await query("UPDATE company_features SET status='inactive' WHERE feature_code='counter_qr'");
 const deniedCounter=id();await query("INSERT INTO dining_tables VALUES($1,$2,'Gesperrte Theke',NULL)",[deniedCounter,rid]);
-assert.equal((await call(base+'/'+first.id+q,{method:'PUT',body:{...payload,mode:'pickup',counterTableId:deniedCounter}})).status,402);
+await query("UPDATE company_features SET status='inactive' WHERE feature_code='table_management'");
+await query("UPDATE restaurants SET qr_service_mode='restaurant' WHERE id=$1",[rid]);
+assert.equal((await call(base+'/'+first.id+q,{method:'PUT',body:{...payload,playlist:[],mode:'pickup',counterTableId:deniedCounter}})).status,200);
+assert.equal((await call('/api/v1/display-player/'+first.token,{publicCall:true})).result.qr,null);
+w=await browser();assert.equal(w.document.querySelector('[name=mode]').value,'pickup');await new Promise(r=>setTimeout(r,0));assert.equal(w.document.querySelector('[name=counterTableId]').value,deniedCounter);w.close();
+assert.equal((await query("SELECT count(*)::int n FROM company_features WHERE feature_code IN ('counter_qr','table_management') AND status='active'")).rows[0].n,0);
+await query("UPDATE company_features SET status='active' WHERE feature_code='table_management'");
+await query("UPDATE restaurants SET qr_service_mode='pickup' WHERE id=$1",[rid]);
 assert.equal((await query('SELECT qr_token FROM dining_tables WHERE id=$1',[deniedCounter])).rows[0].qr_token,null);
 await query("UPDATE company_features SET status='active' WHERE feature_code='counter_qr'");
-await call(base+'/'+first.id+q,{method:'PUT',body:{...payload,mode:'pickup',counterTableId:newCounter}});
+await call(base+'/'+first.id+q,{method:'PUT',body:{...payload,playlist:[],mode:'pickup',counterTableId:newCounter}});
 assert.equal((await query('SELECT qr_token FROM dining_tables WHERE id=$1',[newCounter])).rows[0].qr_token,generated);
 const pickupPayload={...payload,playlist:[],mode:'pickup',counterTableId:counter,includeWalkIn:true};
 assert.equal((await call(base+q,{method:'POST',body:{...pickupPayload,counterTableId:id()}})).status,400);
@@ -141,7 +148,7 @@ assert.equal((await call(endpoint,{publicCall:true})).result.orders.length,1);
 assert.equal((await query('SELECT count(*)::int n FROM orders')).rows[0].n,4);
 await query("UPDATE orders SET status='cancelled' WHERE id=$1",[posOrder]);assert.equal((await call(endpoint,{publicCall:true})).result.orders.length,0);
 const walkin=id(),trade=id();await query("INSERT INTO orders(id,restaurant_id,status) VALUES($1,$3,'paid'),($2,$3,'paid')",[walkin,trade,rid]);await query('INSERT INTO pos_trade_sales VALUES($1)',[trade]);assert.equal((await call(endpoint,{publicCall:true})).result.orders.length,1);assert.equal((await call(base+'/pickup/'+walkin+'/ready'+q,{method:'POST'})).status,200);assert.equal((await call(base+'/pickup/'+walkin+'/collected'+q,{method:'POST'})).status,200);assert.equal((await call(endpoint,{publicCall:true})).result.orders.length,0);
-await query("UPDATE restaurants SET qr_service_mode='restaurant' WHERE id=$1",[rid]);assert.equal((await call(endpoint,{publicCall:true})).status,409);assert.equal((await call(base+'/pickup/'+otherOrder+'/ready'+q,{method:'POST'})).status,404);
+await query("UPDATE restaurants SET qr_service_mode='restaurant' WHERE id=$1",[rid]);assert.equal((await call(endpoint,{publicCall:true})).status,200);assert.equal((await call(endpoint,{publicCall:true})).result.qr,null);assert.equal((await call(base+'/pickup/'+otherOrder+'/ready'+q,{method:'POST'})).status,404);
 await query("UPDATE restaurants SET qr_service_mode='pickup' WHERE id=$1",[rid]);
 w=await browser();w.document.querySelector('#displaySelect').value=pickup.id;w.document.querySelector('#displaySelect').dispatchEvent(new w.Event('change'));await new Promise(r=>setTimeout(r,0));assert.equal(w.document.querySelector('[name=mode]').value,'pickup');assert.equal(w.document.querySelector('[name=counterTableId]').value,counter);let previewModel;w.document.querySelector('iframe').contentWindow.postMessage=message=>{previewModel=message.model};w.document.querySelector('#displayForm').oninput();assert.equal(previewModel.restaurantLogo,'data:image/png;base64,'+png.toString('base64'));w.close();
 const pickupWindow=new JSDOM('<div id="screen"></div><div id="connection"></div><button id="fullscreen"></button>',{url:'https://bringness.de/display/index.html?preview=1',runScripts:'outside-only'}).window;
