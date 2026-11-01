@@ -52,7 +52,7 @@ test("model switch locks the restaurant and rejects unfinished orders, including
   const result=await request(pool,"/api/v1/restaurants/"+rid+"/qr-service",{method:"PUT",payload:{mode:"pickup"}});
   assert.equal(result.status,409);
   assert.ok(pool.calls.some(x=>x.sql.includes("FOR UPDATE")));
-  assert.ok(pool.calls.some(x=>x.sql.includes("qr_ready_at IS NULL")));
+  assert.ok(pool.calls.some(x=>x.sql.includes("pickup_collected_at IS NULL")));
   assert.ok(pool.calls.some(x=>x.sql==="ROLLBACK"));
   assert.equal(pool.calls.some(x=>x.sql.startsWith("UPDATE")),false);
 });
@@ -166,7 +166,7 @@ test("base guest page locks without enhancement scripts and stays locked on relo
   vm.runInContext('cart.set("product",1)',failed.context);
   await failed.elements.get("send").onclick();
   assert.match(failed.elements.get("status").textContent,/Bestellung nicht bestätigt.*eine Minute/);
-  assert.equal(failed.elements.get("status").scrolled,true);
+  assert.equal(failed.elements.get("status").scrolled,undefined);
   assert.equal(failed.elements.get("send").disabled,false);
   assert.equal(failed.elements.get("menu").hidden,false);
   const first=await page();
@@ -186,4 +186,18 @@ test("base guest page locks without enhancement scripts and stays locked on relo
   const scan=await page();
   assert.ok(scan.requests.some(u=>u.includes("/guest/menu")));
   assert.equal(scan.elements.get("menu").hidden,false);
+});
+
+test('staff collection requires readiness, is repeatable, and cannot mark payments',async()=>{
+ for(const [ready,collected,expected] of [[null,null,409],['now',null,200],['now','now',200]]){
+  const pool=db(sql=>sql.includes('FROM sessions')?rows(user):sql.startsWith('SELECT o.id')?rows({id:oid,restaurant_id:rid,table_id:rid,status:'paid',qr_service_mode:'pickup',qr_ready_at:ready,pickup_collected_at:collected}):rows());
+  const result=await request(pool,'/api/v1/orders/'+oid+'/collection-collected',{method:'POST'});
+  assert.equal(result.status,expected);
+  for(const {sql} of pool.calls.filter(x=>x.sql.startsWith('UPDATE')))assert.equal(sql,'UPDATE orders SET pickup_collected_at=coalesce(pickup_collected_at,now()) WHERE id=$1');
+ }
+});
+test('collected guest order no longer announces readiness',async()=>{
+ const pool=db(()=>rows({id:oid,qr_service_mode:'pickup',qr_ready_at:'now',pickup_collected_at:'now',status:'open'}));
+ const result=await request(pool,'/api/v1/guest/collection?orderId='+oid+'&requestId='+key,{auth:false});
+ assert.equal(result.data.ready,false);assert.equal(result.data.closed,true);assert.equal(result.data.collected,true);
 });

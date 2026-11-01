@@ -1,0 +1,15 @@
+# QR deposit ordering and pickup completion — 1 November 2026
+
+The owner reported that Cheeseburger and Chili-Cheeseburger ordered successfully while Cheeseburger Menü and Cola failed, and ready numbers remained on the pickup display.
+
+Production browser reproduction of Cheeseburger Menü returned: “Bestellung nicht bestätigt: Pfandartikel nur über die Online-POS-Kasse mit Pfandberechnung verkaufen”. That attempt was rejected and did not create a successful order. The database deposit guard explains this observed menu failure; Cola was not separately submitted by this session. Preserve configured deposit rules rather than infer from product names or disable the guard.
+
+Implementation: guest menu includes configured per-product deposit; guest prices distinguish deposit and basket totals include it. Both guest order paths validate the displayed deposit against locked server rules, persist deposit lines plus receipt item snapshots atomically, and retain exact-request retry. Changed/missing deposit causes reload/review, never silent undercharging. Responses now mark the owner-feature request as handled to avoid fallthrough after rejection. Submission status sits by the button without scrolling; recurring collection polling no longer pulls the page to an old ready order.
+
+Staff can mark ready QR pickup orders as collected in the normal POS order board and table details. The tenant/assigned-table permission check and order lock apply; only pickup_collected_at changes. Unpaid orders remain unpaid. Paid ready orders remain available until collected; order-list data includes collection state so controls do not reappear on refresh. Existing display queries already exclude collected orders. Guest polling now observes collection even after paid readiness.
+
+Verification: 689 general tests passed, zero failures/skips; 11 QR tests passed. PGlite regression executes the actual deposit trigger, rollback, exact 3300-cent total for two 1600-cent products with four 25-cent deposits, snapshots, identical retry, readiness and collection APIs, public display removal and unchanged payment status. JSDOM exercises the actual guest script (1650-cent basket, no scroll, successful submission) and actual POS table-button function through the SQL-backed handler. Existing display and order-number integration checks passed; source-inventory checks passed.
+
+Release state: local implementation only. Automatic approval review rejected git push because it did not recognize explicit end-user authorization and repository trust. No alternative publication attempted. GitHub CI, merge, Netcup deployment and live acceptance are outstanding. Existing durable user skill records authorization for this repository, but the rejection must be resolved before publication. Do not report this repair as live.
+
+The owner subsequently explicitly confirmed upload to akanal/Bringness-POS and deployment after successful GitHub checks. Authorization blocker resolved; publication and verification follow through the existing connected GitHub and Netcup path.

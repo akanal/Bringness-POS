@@ -1,3 +1,4 @@
+import {depositQuote} from './pos-deposit.js';
 import {orderNumber} from './order-number.js';
 import {orderingModuleAccess} from './module-catalog.js';
 import {legacyGuestItems} from './guest-cart-input.js';
@@ -15,7 +16,7 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
 
-const json=(res,status,data)=>{res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(data))};
+const json=(res,status,data)=>{res.writeHead(status,{"content-type":"application/json","cache-control":"no-store"});res.end(JSON.stringify(data));return true};
 const readBody=req=>readJsonObject(req,{maxBytes:65536});
 const bearer=req=>String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
 async function user(req,db=pool){
@@ -133,7 +134,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     json(res,200,{extras:q.rows}); return true;
   }
 
-  if(p==="/api/v1/guest/order-v2" && req.method==="POST"){
+  if(["/api/v1/guest/order-v2","/api/v1/guest/order"].includes(p) && req.method==="POST"){
     const b=await readBody(req),items=legacyGuestItems(b.items),code=String(b.code||""),requestId=String(b.requestId||"");
     if(!/^[a-f0-9]{48}$/.test(code)||!items.length||items.length>20||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))return json(res,400,{error:"Ungültiger Tisch oder Warenkorb"});
     const ids=items.map(i=>String(i.productId||"")); if(new Set(ids).size!==ids.length)return json(res,400,{error:"Doppelte Artikel im Warenkorb"});
@@ -149,7 +150,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
       if(existing.rowCount){await c.query("COMMIT");return json(res,200,{orderId:existing.rows[0].id,number:orderNumber(existing.rows[0]),totalCents:existing.rows[0].total_cents,alreadyReceived:true})}
       const recent=await c.query("SELECT count(*)::int n FROM orders WHERE table_id=$1 AND source='qr' AND created_at>now()-interval '60 seconds'",[t.id]);
       if(recent.rows[0].n>=3){await c.query("ROLLBACK");return json(res,429,{error:"Zu viele Bestellungen für diesen Tisch. Bitte eine Minute warten oder das Personal ansprechen."})}
-      const pq=await c.query("SELECT id,name,price_cents,tax_rate FROM products WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND active=true AND ai_stock_available=true",[ids,t.restaurant_id]);
+      const pq=await c.query("SELECT id,name,price_cents,tax_rate FROM products WHERE id=ANY($1::uuid[]) AND restaurant_id=$2 AND active=true AND ai_stock_available=true ORDER BY id FOR SHARE",[ids,t.restaurant_id]);
       if(pq.rowCount!==ids.length){await c.query("ROLLBACK");return json(res,400,{error:"Artikel nicht verfügbar"})}
       const pm=new Map(pq.rows.map(z=>[z.id,z])); let total=0; const cleaned=[];
       for(const item of items){
@@ -167,13 +168,22 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
         total+=(Number(pr.price_cents)+extraPerUnit)*qty;
         cleaned.push({pr,qty,note,extras,unitPrice:Number(pr.price_cents)+extraPerUnit});
       }
+      const depositRules=(await c.query('SELECT * FROM pos_deposit_rules WHERE product_id=ANY($1::uuid[]) ORDER BY product_id FOR SHARE',[ids])).rows;
+      const depositLines=depositQuote(depositRules,items),depositCents=depositLines.reduce((sum,l)=>sum+l.totalCents,0);
+      if(depositCents!==(b.depositCents??0)){await c.query("ROLLBACK");return json(res,409,{error:"Pfandbetrag geändert. Bitte die Speisekarte neu laden und die Bestellung prüfen."})}
+      total+=depositCents;
       if(total<=0||total>100000000){await c.query("ROLLBACK");return json(res,400,{error:"Ungültiger Betrag"})}
       const email=String(b.email||"").trim().toLowerCase();
       if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){await c.query("ROLLBACK");return json(res,400,{error:"E-Mail-Adresse ist ungültig"})}
       const o=(await c.query("INSERT INTO orders(restaurant_id,table_id,source,status,total_cents,guest_request_id,guest_email,qr_service_mode) VALUES($1,$2,'qr','open',$3,$4,$5,$6) RETURNING id,pickup_number",[t.restaurant_id,t.id,total,requestId,email||null,t.qr_service_mode])).rows[0];
+      await c.query("SELECT set_config('bringness.deposit_checkout','yes',true)");
       for(const item of cleaned){
         const snapshot=item.extras.map(x=>({id:x.id,name:x.name,price_cents:Number(x.price_cents)}));
         await c.query("INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,guest_note,extras_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[o.id,item.pr.id,item.pr.name,item.unitPrice,item.pr.tax_rate,item.qty,item.note||null,JSON.stringify(snapshot)]);
+      }
+      for(const l of depositLines){
+        await c.query('INSERT INTO pos_deposit_lines(order_id,product_id,label,unit_cents,tax_rate,quantity) VALUES($1,$2,$3,$4,$5,$6)',[o.id,l.productId,l.label,l.unitCents,l.taxRate,l.qty]);
+        await c.query('INSERT INTO order_items(order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5)',[o.id,'Pfand: '+l.label,l.unitCents,l.taxRate,l.qty]);
       }
       await c.query("UPDATE dining_tables SET status='open' WHERE id=$1",[t.id]);
       await c.query("COMMIT");
@@ -194,10 +204,10 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     if(!t.rowCount)return json(res,404,{error:"Tisch nicht gefunden"});
     if(!['owner','admin','manager','kitchen','waiter'].includes(u.role))return json(res,403,{error:'Kein Zugriff auf Tischbestellungen'});
     if(u.role==='waiter'&&!(await pool.query("SELECT 1 FROM employees e WHERE e.user_id=$1 AND e.restaurant_id=$2 AND e.active AND (e.id=$3 OR e.id=ANY($4::uuid[]))",[u.id,t.rows[0].restaurant_id,t.rows[0].waiter_employee_id,t.rows[0].waiter_employee_ids||[]])).rowCount)return json(res,403,{error:'Tisch nicht zugeordnet'});
-    const q=await pool.query(`SELECT o.id,o.status,o.total_cents,o.created_at,o.closed_at,o.source,o.guest_email,o.qr_service_mode,o.qr_ready_at,
+    const q=await pool.query(`SELECT o.id,o.status,o.total_cents,o.created_at,o.closed_at,o.source,o.guest_email,o.qr_service_mode,o.qr_ready_at,o.pickup_collected_at,
       (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity,'note',oi.guest_note,'extras',oi.extras_snapshot)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
       FROM orders o WHERE o.table_id=$1 AND o.restaurant_id=$2
-      AND o.status<>'cancelled' AND (o.status<>'paid' OR (o.qr_service_mode='pickup' AND o.qr_ready_at IS NULL))
+      AND o.status<>'cancelled' AND (o.status<>'paid' OR (o.qr_service_mode='pickup' AND o.pickup_collected_at IS NULL))
       ORDER BY o.created_at DESC LIMIT 80`,[tableDetails[1],t.rows[0].restaurant_id]);
     json(res,200,{table:t.rows[0],orders:q.rows,historyWindowHours:0});return true;
   }

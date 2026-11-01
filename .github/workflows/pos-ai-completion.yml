@@ -82,6 +82,7 @@ jobs:
         env:
           CHECKOUT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/order-numbers.mjs
+      - run: node server/ai-tests/qr-pickup-deposit.mjs
       - run: node server/ai-tests/order-numbers-postgres.mjs
         env:
           ORDER_NUMBER_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
