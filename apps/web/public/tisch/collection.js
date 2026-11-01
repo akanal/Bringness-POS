@@ -44,7 +44,7 @@
   window.addEventListener("bringness-guest-order",event=>{
     const d=event.detail;if(!d?.orderId||!d?.requestId)return;
     try{const next=new URL(location.href);next.searchParams.set('orderId',d.orderId);next.searchParams.set('requestId',d.requestId);history.replaceState(null,'',next.pathname+next.search+next.hash)}catch{}
-    if(!orders.some(o=>o.orderId===d.orderId))orders.push({...d,number:d.orderId.slice(0,8).toUpperCase(),mode});
+    if(!orders.some(o=>o.orderId===d.orderId))orders.push({...d,number:d.number||d.orderId.slice(0,8).toUpperCase(),mode});
     orders=orders.slice(-40);save();poll();
   });
   async function poll(){

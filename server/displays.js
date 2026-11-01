@@ -1,3 +1,4 @@
+import {orderNumber} from './order-number.js';
 import {singleByteRange} from './byte-range.js';
 import {matchesDisplayMedia} from './display-media-type.js';
 import {readRequestBytes,readJsonObject} from './http-body.js';
@@ -36,8 +37,8 @@ export function createDisplays(pool){
  const d=(await pool.query('SELECT d.*,r.company_id,r.name restaurant_name,r.logo_data restaurant_logo FROM pos_displays d JOIN restaurants r ON r.id=d.restaurant_id WHERE d.token=$1',[player[1]])).rows[0];if(!d)return send(res,404,{error:'Bildschirm nicht verbunden'});if(!await displayAccess(pool,d.company_id))return send(res,403,{error:'Displaysteuerung nicht aktiv',code:'MODULE_REQUIRED'});
  if(player[2]){if(!d.playlist.some(x=>x.mediaId===player[2]))return send(res,404,{error:'Medium nicht freigegeben'});const m=(await pool.query('SELECT mime,content FROM pos_display_media WHERE id=$1 AND restaurant_id=$2',[player[2],d.restaurant_id])).rows[0];if(!m)return send(res,404,{error:'Medium nicht gefunden'});const length=m.content.length,range=singleByteRange(req.headers['if-range']?'':req.headers.range,length);if(range.status===416){res.writeHead(416,{'content-range':'bytes */'+length,'accept-ranges':'bytes','content-length':0});res.end();return true}const {start,end,status}=range;res.writeHead(status,{'content-type':m.mime,'content-length':end-start+1,'accept-ranges':'bytes',...(status===206?{'content-range':`bytes ${start}-${end}/${length}`} : {}),'cache-control':'private, max-age=60','x-content-type-options':'nosniff'});res.end(req.method==='HEAD'?undefined:m.content.subarray(start,end+1));return true}
  if(d.mode==='pickup'){
- const orders=(await pool.query(`SELECT o.id,o.qr_ready_at,o.status FROM orders o WHERE o.restaurant_id=$1 AND ${pickupOrders} ORDER BY o.created_at,o.id LIMIT 100`,[d.restaurant_id])).rows;
- return send(res,200,{mode:'pickup',name:d.name,restaurantName:d.restaurant_name,restaurantLogo:typeof d.restaurant_logo==='string'&&d.restaurant_logo.length<=200000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(d.restaurant_logo)?d.restaurant_logo:null,orientation:d.orientation,counterName:'Abholung',qr:null,orders:orders.map(o=>({number:o.id.slice(0,8).toUpperCase(),ready:!!o.qr_ready_at||o.status==='ready'}))});
+ const orders=(await pool.query(`SELECT o.id,to_jsonb(o)->>'pickup_number' pickup_number,o.qr_ready_at,o.status FROM orders o WHERE o.restaurant_id=$1 AND ${pickupOrders} ORDER BY o.created_at,o.id LIMIT 100`,[d.restaurant_id])).rows;
+ return send(res,200,{mode:'pickup',name:d.name,restaurantName:d.restaurant_name,restaurantLogo:typeof d.restaurant_logo==='string'&&d.restaurant_logo.length<=200000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(d.restaurant_logo)?d.restaurant_logo:null,orientation:d.orientation,counterName:'Abholung',qr:null,orders:orders.map(o=>({number:orderNumber(o),ready:!!o.qr_ready_at||o.status==='ready'}))});
  }
  const products=(await pool.query('SELECT p.id,p.name,p.price_cents,p.category_id,c.name category FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.restaurant_id=$1 AND p.active=true AND p.ai_stock_available=true ORDER BY c.sort_order,c.name,p.name LIMIT 250',[d.restaurant_id])).rows;
  return send(res,200,{name:d.name,restaurantName:d.restaurant_name,orientation:d.orientation,fit:d.fit,playlist:d.playlist,products,updatedAt:d.updated_at});
@@ -47,14 +48,14 @@ export function createDisplays(pool){
  const action=p.match(/^\/api\/v1\/displays\/pickup\/([a-f0-9-]{36})\/(ready|collected)$/);
  if(action&&req.method==='POST'){
  if(!uuid(action[1]))return send(res,404,{error:'Bestellung nicht gefunden'});
- const order=(await pool.query(`SELECT o.id,o.qr_ready_at,o.status FROM orders o WHERE o.id=$1 AND o.restaurant_id=$2 AND ${pickupOrders} AND EXISTS(SELECT 1 FROM pos_displays d WHERE d.restaurant_id=o.restaurant_id AND d.mode='pickup')`,[action[1],rid])).rows[0];
+ const order=(await pool.query(`SELECT o.id,to_jsonb(o)->>'pickup_number' pickup_number,o.qr_ready_at,o.status FROM orders o WHERE o.id=$1 AND o.restaurant_id=$2 AND ${pickupOrders} AND EXISTS(SELECT 1 FROM pos_displays d WHERE d.restaurant_id=o.restaurant_id AND d.mode='pickup')`,[action[1],rid])).rows[0];
  if(!order)return send(res,404,{error:'Keine offene Abholbestellung'});
  if(action[2]==='ready'&&!['preparing','ready','paid'].includes(order.status))return send(res,409,{error:'Zuerst Annahme und Zubereitungsstart bestätigen'});
  if(action[2]==='collected'&&!order.qr_ready_at&&order.status!=='ready')return send(res,409,{error:'Bestellung ist noch nicht abholbereit'});
  const result=await pool.query(action[2]==='ready'?"UPDATE orders SET qr_ready_at=coalesce(qr_ready_at,now()) WHERE id=$1 AND restaurant_id=$2 AND pickup_collected_at IS NULL AND status IN ('preparing','ready','paid') RETURNING id":"UPDATE orders SET pickup_collected_at=now() WHERE id=$1 AND restaurant_id=$2 AND pickup_collected_at IS NULL AND status NOT IN ('cancelled','served') AND (qr_ready_at IS NOT NULL OR status='ready') RETURNING id",[order.id,rid]);
  return send(res,result.rowCount?200:409,result.rowCount?{ok:true}:{error:'Bestellstatus geändert. Bitte aktualisieren.'});
  }
- if(p==='/api/v1/displays/pickup'&&req.method==='GET')return send(res,200,{orders:(await pool.query(`SELECT o.id,o.status,o.qr_ready_at,'Abholung' counter_name FROM orders o WHERE o.restaurant_id=$1 AND ${pickupOrders} AND EXISTS(SELECT 1 FROM pos_displays d WHERE d.restaurant_id=o.restaurant_id AND d.mode='pickup') ORDER BY o.created_at,o.id LIMIT 100`,[rid])).rows});
+ if(p==='/api/v1/displays/pickup'&&req.method==='GET')return send(res,200,{orders:(await pool.query(`SELECT o.id,to_jsonb(o)->>'pickup_number' pickup_number,o.status,o.qr_ready_at,'Abholung' counter_name FROM orders o WHERE o.restaurant_id=$1 AND ${pickupOrders} AND EXISTS(SELECT 1 FROM pos_displays d WHERE d.restaurant_id=o.restaurant_id AND d.mode='pickup') ORDER BY o.created_at,o.id LIMIT 100`,[rid])).rows});
  if(platform&&p==='/api/v1/displays/catalog'&&req.method==='GET'){
  const [restaurants,categories,products]=await Promise.all([
  pool.query('SELECT id,name FROM restaurants WHERE id=$1',[rid]),

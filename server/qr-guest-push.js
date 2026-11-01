@@ -1,3 +1,4 @@
+import {orderNumber} from './order-number.js';
 import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 import webpush from 'web-push';
@@ -43,11 +44,11 @@ export function createQrGuestPush(pool,{env=process.env,sender=(sub,payload)=>we
           ORDER BY s.created_at LIMIT 10 FOR UPDATE OF s SKIP LOCKED
         ), claimed AS (UPDATE qr_guest_push s SET state='sending',attempts=attempts+1,claimed_at=now()
           FROM candidates c WHERE s.order_id=c.order_id AND s.endpoint_hash=c.endpoint_hash RETURNING s.*)
-        SELECT s.*,o.guest_request_id,t.qr_token,r.name restaurant_name FROM claimed s JOIN orders o ON o.id=s.order_id
+        SELECT s.*,to_jsonb(o)->>'pickup_number' pickup_number,o.guest_request_id,t.qr_token,r.name restaurant_name FROM claimed s JOIN orders o ON o.id=s.order_id
         JOIN dining_tables t ON t.id=o.table_id JOIN restaurants r ON r.id=o.restaurant_id`)).rows;
         for(const job of jobs){try{
           if(!(await pool.query('SELECT 1 FROM qr_guest_push WHERE order_id=$1 AND endpoint_hash=$2',[job.order_id,job.endpoint_hash])).rows.length)continue;
-          await sender(validateGuestSubscription(job.subscription),JSON.stringify({title:job.restaurant_name+' · Abholbereit',body:'Ihre Bestellung '+job.order_id.slice(0,8).toUpperCase()+' ist fertig. Bitte am Tresen abholen.',tag:'qr-pickup-'+job.order_id,url:returnUrl({...job,id:job.order_id})}));
+          await sender(validateGuestSubscription(job.subscription),JSON.stringify({title:job.restaurant_name+' · Abholbereit',body:'Ihre Bestellung '+orderNumber(job)+' ist fertig. Bitte am Tresen abholen.',tag:'qr-pickup-'+job.order_id,url:returnUrl({...job,id:job.order_id})}));
           await pool.query("UPDATE qr_guest_push SET state='sent',sent_at=now() WHERE order_id=$1 AND endpoint_hash=$2 AND state='sending'",[job.order_id,job.endpoint_hash]);
         }catch(error){if([404,410].includes(error.statusCode))await pool.query('DELETE FROM qr_guest_push WHERE order_id=$1 AND endpoint_hash=$2',[job.order_id,job.endpoint_hash]);else await pool.query("UPDATE qr_guest_push SET state=CASE WHEN attempts>=5 THEN 'failed' ELSE 'pending' END WHERE order_id=$1 AND endpoint_hash=$2",[job.order_id,job.endpoint_hash])}}
         return jobs.length;

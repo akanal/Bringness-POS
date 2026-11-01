@@ -1,3 +1,4 @@
+import {migrateOrderNumbers} from './order-number.js';
 import {isolatedPreview} from './preview-policy.js';
 import {createQrGuestPush,migrateQrGuestPush} from './qr-guest-push.js';
 import pg from "pg";
@@ -13,5 +14,6 @@ export async function migrateQrService(){
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_ready_at timestamptz;
     CREATE INDEX IF NOT EXISTS orders_qr_queue_idx ON orders(restaurant_id,created_at,id) WHERE source='qr';
   `);
+  await migrateOrderNumbers(pool);
   await migrateQrGuestPush(pool);
 }

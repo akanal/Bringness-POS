@@ -140,4 +140,7 @@ pickupWindow.eval(fs.readFileSync(new URL('../../apps/web/public/display/player.
 pickupWindow.dispatchEvent(new pickupWindow.MessageEvent('message',{origin:pickupWindow.location.origin,source:pickupWindow.parent,data:{type:'bringness-display-preview',model:{...output,orders:[{number:'<script>bad</script>',ready:false},{number:'AB123456',ready:true}]}}}));
 assert.match(pickupWindow.document.querySelector('#screen').textContent,/In Zubereitung/);assert.match(pickupWindow.document.querySelector('#screen').textContent,/AB123456/);assert.equal(pickupWindow.document.querySelector('#screen script'),null);pickupWindow.close();
 console.log('Unified pickup passed: save without table/modules, identical multi-screen queues, all areas, tenant boundaries, legacy migration, trade/history exclusion, readiness/collection, stable links and save locks.');
+await query('ALTER TABLE orders ADD COLUMN pickup_number bigint');
+await query("INSERT INTO orders(id,restaurant_id,table_id,status,pickup_number) VALUES($1,$2,$3,'preparing',42)",[id(),rid,counter]);
+assert((await numbers(pickup.token)).some(o=>o.number==='042'));
 await db.close();
