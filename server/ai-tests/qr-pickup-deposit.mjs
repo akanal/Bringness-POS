@@ -52,21 +52,31 @@ assert.equal((await call(display,player)).data.orders.length,0);
 assert.equal((await db.query('SELECT status,total_cents FROM orders WHERE id=$1',[order])).rows[0].status,'open');
 assert.equal((await call(service,'/api/v1/guest/collection?orderId='+order+'&requestId='+requestId)).data.collected,true);
 const html=fs.readFileSync(new URL('../../apps/web/public/tisch/index.html',import.meta.url),'utf8');
-const w=new JSDOM(html,{url:'https://fixture.test/tisch/?code='+code,runScripts:'outside-only'}).window;
-let scrolls=0;w.HTMLElement.prototype.scrollIntoView=()=>{scrolls++};
+const w=new JSDOM(html,{url:'https://fixture.test/tisch/?code='+code,runScripts:'outside-only',pretendToBeVisual:true}).window;
+const guestFlights=[],guestTimers=[];w.setInterval=fn=>{guestTimers.push(fn);return 0};let scrolls=0;w.HTMLElement.prototype.scrollIntoView=()=>{scrolls++};
 w.fetch=async(path,init)=>{
  if(path.startsWith('/api/v1/guest/menu'))return {ok:true,json:async()=>({restaurant:'Fixture',table:'1',products:[{id:pid,name:'Menü',price_cents:1600,deposit_cents:50}]})};
+ if(path.startsWith('/api/v1/guest/service-mode'))return {ok:true,json:async()=>({mode:'pickup'})};
+ if(path.startsWith('/api/v1/guest/collection')){const task=call(service,path);guestFlights.push(task);const result=await task;return {ok:result.status<400,json:async()=>result.data};}
  if(path==='/api/v1/guest/order'){
   const result=await call(handleRestaurantOwnerFeature,path,JSON.parse(init.body));return {ok:result.status<400,json:async()=>result.data};
  }
  return {ok:true,json:async()=>({})};
 };
 w.eval(fs.readFileSync(new URL('../../apps/web/public/tisch/app.js',import.meta.url),'utf8'));
+w.eval(fs.readFileSync(new URL('../../apps/web/public/tisch/collection.js',import.meta.url),'utf8'));
 await new Promise(resolve=>setImmediate(resolve));
 assert.match(w.document.getElementById('menu').textContent,/0,50.*Pfand/);
 w.document.querySelector('[data-add]').click();assert.match(w.document.getElementById('total').textContent,/16,50/);
 await w.document.getElementById('send').onclick();assert.equal(scrolls,0);assert.match(w.document.getElementById('heading').textContent,/Bestellung übermittelt/);
-assert.equal(w.document.getElementById('status').previousElementSibling.id,'send');w.close();
+assert.equal(w.document.getElementById('status').previousElementSibling.id,'guestCheckoutContents');
+await Promise.all(guestFlights);await new Promise(resolve=>setImmediate(resolve));
+assert.equal(w.document.getElementById('status').closest('[hidden]'),null);
+assert.equal(w.document.getElementById('guestCollection').closest('[hidden]'),null);
+const guestOrder=(await db.query('SELECT id FROM orders WHERE id<>$1',[order])).rows[0].id;
+await call(service,'/api/v1/orders/'+guestOrder+'/collection-ready',{});
+await guestTimers[1]();assert.match(w.document.getElementById('guestCollection').textContent,/Bitte am Tresen abholen/);
+assert.equal(w.document.getElementById('guestCollection').closest('[hidden]'),null);w.close();
 // Exercise the actual POS table button against the SQL-backed pickup handler.
 const pos=new JSDOM('<div id="tableFeedback"></div>',{url:'https://fixture.test/pos/',runScripts:'outside-only'}).window;
 pos.HTMLElement.prototype.scrollIntoView=()=>{};
