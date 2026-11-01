@@ -74,6 +74,26 @@ await query("INSERT INTO company_features VALUES($1,'counter_qr','active',NULL,N
 const counter=id(),otherCounter=id(),qrOrder=id(),posOrder=id(),otherOrder=id();
 await query("INSERT INTO dining_tables VALUES($1,$3,'Theke 1',$4),($2,$3,'Andere Theke',$5)",[counter,otherCounter,rid,'a'.repeat(48),'b'.repeat(48)]);
 await query("INSERT INTO orders(id,restaurant_id,table_id,status) VALUES($1,$4,$5,'preparing'),($2,$4,$5,'paid'),($3,$4,$6,'preparing')",[qrOrder,posOrder,otherOrder,rid,counter,otherCounter]);
+// Existing screen: selecting a counter without a QR saves immediately and retains its URL/media.
+const newCounter=id();await query("INSERT INTO dining_tables VALUES($1,$2,'Neue Theke',NULL)",[newCounter,rid]);
+w=await browser();const editor=w.document.querySelector('#displayForm');
+editor.elements.mode.value='pickup';await editor.elements.mode.onchange();
+assert.match(w.document.querySelector('#displayStatus').textContent,/noch nicht gespeichert/);
+editor.elements.counterTableId.value=newCounter;await editor.elements.counterTableId.onchange();
+assert.match(w.document.querySelector('#displayStatus').textContent,/Dauerhaft auf dem Server gespeichert/);
+const assigned=(await call(base+q)).result.displays.find(d=>d.id===first.id);
+assert.equal(assigned.mode,'pickup');assert.equal(assigned.counterTableId,newCounter);assert.equal(assigned.token,first.token);
+const generated=(await query('SELECT qr_token FROM dining_tables WHERE id=$1',[newCounter])).rows[0].qr_token;assert.match(generated,/^[a-f0-9]{48}$/);
+assert.equal((await call('/api/v1/display-player/'+first.token,{publicCall:true})).result.mode,'pickup');w.close();
+w=await browser();assert.equal(w.document.querySelector('[name=mode]').value,'pickup');await new Promise(r=>setTimeout(r,0));assert.equal(w.document.querySelector('[name=counterTableId]').value,newCounter);w.close();
+// Never unlock paid modules or rotate an existing counter capability.
+await query("UPDATE company_features SET status='inactive' WHERE feature_code='counter_qr'");
+const deniedCounter=id();await query("INSERT INTO dining_tables VALUES($1,$2,'Gesperrte Theke',NULL)",[deniedCounter,rid]);
+assert.equal((await call(base+'/'+first.id+q,{method:'PUT',body:{...payload,mode:'pickup',counterTableId:deniedCounter}})).status,402);
+assert.equal((await query('SELECT qr_token FROM dining_tables WHERE id=$1',[deniedCounter])).rows[0].qr_token,null);
+await query("UPDATE company_features SET status='active' WHERE feature_code='counter_qr'");
+await call(base+'/'+first.id+q,{method:'PUT',body:{...payload,mode:'pickup',counterTableId:newCounter}});
+assert.equal((await query('SELECT qr_token FROM dining_tables WHERE id=$1',[newCounter])).rows[0].qr_token,generated);
 const pickupPayload={...payload,playlist:[],mode:'pickup',counterTableId:counter,includeWalkIn:true};
 assert.equal((await call(base+q,{method:'POST',body:{...pickupPayload,counterTableId:id()}})).status,400);
 const historical=id();await query("INSERT INTO orders(id,restaurant_id,status,created_at) VALUES($1,$2,'paid',now()-interval '1 hour')",[historical,rid]);
