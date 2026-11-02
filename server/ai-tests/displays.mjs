@@ -150,4 +150,44 @@ console.log('Unified pickup passed: save without table/modules, identical multi-
 await query('ALTER TABLE orders ADD COLUMN pickup_number bigint');
 await query("INSERT INTO orders(id,restaurant_id,table_id,status,pickup_number) VALUES($1,$2,$3,'preparing',42)",[id(),rid,counter]);
 assert((await numbers(pickup.token)).some(o=>o.number==='042'));
+// Readiness expiry is display-only, shared by every screen and the editor queue.
+const expired=id(),recent=id(),pending=id(),legacyReady=id();
+await query("INSERT INTO orders(id,restaurant_id,table_id,status,created_at,qr_ready_at) VALUES($1,$5,$6,'paid',now()-interval '2 days',now()-interval '30 minutes'),($2,$5,$6,'paid',now()-interval '2 days',now()-interval '29 minutes'),($3,$5,$6,'preparing',now()-interval '2 days',NULL),($4,$5,$6,'ready',now()-interval '31 minutes',NULL)",[expired,recent,pending,legacyReady,rid,counter]);
+const beforeExpiry=(await query('SELECT * FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[expired,recent,pending,legacyReady]])).rows;
+const visible=(await numbers(pickup.token)).map(o=>o.number);
+assert(!visible.includes(expired.slice(0,8).toUpperCase()));assert(!visible.includes(legacyReady.slice(0,8).toUpperCase()));
+assert(visible.includes(recent.slice(0,8).toUpperCase()));assert(visible.includes(pending.slice(0,8).toUpperCase()));
+assert.deepEqual(await numbers(first.token),await numbers(pickup.token));
+const queueIds=(await call(base+'/pickup'+q)).result.orders.map(o=>o.id);assert(!queueIds.includes(expired));assert(queueIds.includes(recent));
+const expiry=(await numbers(pickup.token)).find(o=>o.number===recent.slice(0,8).toUpperCase()).expiresAt;assert(Number.isFinite(Date.parse(expiry)));
+assert.equal((await numbers(pickup.token)).find(o=>o.number===pending.slice(0,8).toUpperCase()).expiresAt,null);
+w=await browser();const panel=[...w.document.querySelectorAll('section')].find(el=>el.querySelector('h3')?.textContent==='Abholbestellungen');await panel.querySelector('button').onclick();
+assert(![...panel.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));assert.match(panel.textContent,/30 Minuten/);w.close();
+assert.deepEqual((await query('SELECT * FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[expired,recent,pending,legacyReady]])).rows,beforeExpiry,'display expiry never marks collected, paid or deletes orders');
+// Real POS order-board rendering offers one readiness action, without a collected command.
+w=new JSDOM('<div id="moduleBody"></div>',{runScripts:'outside-only'}).window;
+const board=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8').split('async function renderOrderBoard(')[1].split('function updateHeaderClock')[0];
+w.eval("const $=id=>document.getElementById(id),esc=s=>String(s??''),euro=n=>String(n);let kitchenBoardSignature='';async function renderOrderBoard("+board);
+await w.renderOrderBoard('bestellungen',rid,{orders:[{id:recent,source:'qr',qr_service_mode:'pickup',status:'paid',qr_ready_at:new Date().toISOString(),created_at:new Date().toISOString(),items:[]},{id:pending,source:'qr',qr_service_mode:'pickup',status:'preparing',qr_ready_at:null,created_at:new Date().toISOString(),items:[]}]});
+assert.equal(w.document.querySelectorAll('[data-collection-ready]').length,1);assert.equal(w.document.querySelector('[data-collection-ready]').dataset.collectionReady,pending);assert(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));w.close();
+console.log('Pickup display expiry passed: 30-minute boundary, pending retained, shared screens, queue, no order mutations and no collected buttons.');
+
+const cleanupRid=id(),cleanupOther=id(),stale='e2569e58-0000-4000-8000-000000000001',foreign='e2569e58-0000-4000-8000-000000000002',readyCleanup='1132b4a1-0000-4000-8000-000000000001';
+await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$3,'Bringness Testbetrieb'),($2,$3,'Other')",[cleanupRid,cleanupOther,company]);
+await query("INSERT INTO orders(id,restaurant_id,status,created_at,qr_ready_at) VALUES($1,$4,'preparing','2026-11-01',NULL),($2,$5,'preparing','2026-11-01',NULL),($3,$4,'paid','2026-11-01','2026-11-01')",[stale,foreign,readyCleanup,cleanupRid,cleanupOther]);
+const cleanupBefore=(await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[stale,foreign,readyCleanup]])).rows;
+await migrateDisplays(pool);
+assert((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[stale])).rows[0].pickup_display_hidden_at);
+for(const key of [foreign,readyCleanup])assert.equal((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[key])).rows[0].pickup_display_hidden_at,null);
+assert.deepEqual((await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[stale,foreign,readyCleanup]])).rows,cleanupBefore);
+const photographed=['e2569e58','1132b4a1','6f0517bf','c91f2746','de4d9b0e','d2b6469c','ae0a0c9a','b0185bf5','965ec2af','4308bc4d'];
+const photographedRid=id();await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Bringness Testbetrieb')",[photographedRid,company]);
+for(const prefix of photographed)await query("INSERT INTO orders(id,restaurant_id,status,created_at) VALUES($1,$2,'preparing','2026-11-01')",[prefix+'-0000-4000-8000-000000000099',photographedRid]);
+await migrateDisplays(pool);
+assert.equal((await query('SELECT count(*)::int n FROM orders WHERE restaurant_id=$1 AND pickup_display_hidden_at IS NOT NULL',[photographedRid])).rows[0].n,10);
+console.log('Targeted stale display cleanup preserves orders, readiness and other restaurants.');
+
+// Displays migrate before QR readiness columns on a fresh installation.
+await query('ALTER TABLE orders DROP COLUMN qr_ready_at');await migrateDisplays(pool);
+console.log('Fresh startup display migration tolerates QR migration running later.');
 await db.close();

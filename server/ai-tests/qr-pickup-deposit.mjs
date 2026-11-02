@@ -93,7 +93,13 @@ const source=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.m
 const details=source.slice(source.indexOf('async function openTableDetails('),source.indexOf('function showTableOrderForm('));
 pos.eval('const $=id=>document.getElementById(id),esc=s=>String(s??""),euro=c=>String(c);'+details);
 await pos.openTableDetails({id:tid,name:'1'},rid);
-const button=pos.document.querySelector('[data-table-collection-ready="'+newer+'"]');assert.equal(button.textContent,'Abgeholt');
-await button.onclick();assert.equal(pos.document.querySelector('[data-table-collection-ready="'+newer+'"]'),null);
-assert.equal((await call(display,player)).data.orders.length,0);pos.close();
-await db.close();console.log('PASS: actual deposit trigger, exact totals, rollback, replay, staff pickup and display removal');
+assert.equal(pos.document.querySelector('[data-table-collection-ready="'+newer+'"]'),null,'no second staff action after readiness');
+assert.equal((await call(display,player)).data.orders.length,1,'ready number remains visible before its deadline');
+await db.exec('CREATE TABLE employees(id uuid,user_id uuid,active boolean)');
+assert((await call(service,'/api/v1/qr-service/queue?restaurantId='+rid)).data.orders.some(o=>o.id===newer),'unpaid ready order remains available for settlement');
+await db.query("UPDATE orders SET status='paid' WHERE id=$1",[newer]);
+assert(!(await call(service,'/api/v1/qr-service/queue?restaurantId='+rid)).data.orders.some(o=>o.id===newer),'paid ready order needs no collected action in the active work queue');
+assert.equal((await call(display,player)).data.orders.length,1,'payment does not hide the ready display number early');
+await db.query("UPDATE orders SET qr_ready_at=now()-interval '30 minutes' WHERE id=$1",[newer]);
+assert.equal((await call(display,player)).data.orders.length,0);assert.equal((await db.query('SELECT pickup_collected_at FROM orders WHERE id=$1',[newer])).rows[0].pickup_collected_at,null,'expiry is not collection');pos.close();
+await db.close();console.log('PASS: actual deposit trigger, exact totals, rollback, replay, single readiness action and display-only expiry');

@@ -199,3 +199,48 @@ test('display editor saves pickup selection and restores the same player after a
   await page.goto('https://display-save.test'+url);await page.locator('.pickup').waitFor();assert.equal(await page.locator('.pickup h1').innerText(),'Betrieb');assert.deepEqual(errors,[]);
  }finally{release();await browser.close()}
 });
+
+test('ready pickup numbers expire offline using server time while preparation remains',async()=>{
+ const browser=await engine.launch({headless:true}),page=await browser.newPage();let first=true;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('https://pickup-expiry.test/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.startsWith('/api/v1/display-player/')){
+   if(!first)return route.abort();first=false;
+   const serverNow=Date.now()+86400000;
+   return route.fulfill({contentType:'application/json',body:JSON.stringify({mode:'pickup',restaurantName:'Testbetrieb',serverTime:new Date(serverNow).toISOString(),orders:[{number:'002',ready:true,expiresAt:new Date(serverNow+1500).toISOString()},{number:'001',ready:false,expiresAt:null}]})});
+  }
+  const file=path.split('/').pop();if(['index.html','player.js','player.css'].includes(file))return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html',body:await readFile(new URL('../apps/web/public/display/'+file,import.meta.url),'utf8')});
+  return route.abort();
+ });
+ try{await page.goto('https://pickup-expiry.test/display/index.html#'+'b'.repeat(48));await page.locator('.pickup-ready').getByText('002',{exact:true}).waitFor();
+  await page.locator('.pickup-ready').getByText('002',{exact:true}).waitFor({state:'detached',timeout:6000});
+  assert.equal(await page.locator('.pickup-preparing').getByText('001',{exact:true}).count(),1);assert.deepEqual(errors,[]);
+ }finally{await browser.close()}
+});
+
+test('pickup statuses fill down the left column then down the right on resize',async()=>{
+ const browser=await engine.launch({headless:true}),page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('https://column-flow.test/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.startsWith('/api/v1/display-player/'))return route.fulfill({contentType:'application/json',body:JSON.stringify({mode:'pickup',restaurantName:'Testbetrieb',orders:[false,true].flatMap(ready=>Array.from({length:30},(_,i)=>({number:(ready?'R':'P')+String(30-i).padStart(3,'0'),ready})))})});
+  const file=path.split('/').pop();if(['index.html','player.js','player.css'].includes(file))return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html',body:await readFile(new URL('../apps/web/public/display/'+file,import.meta.url),'utf8')});
+  return route.abort();
+ });
+ try{await page.goto('https://column-flow.test/display/index.html#'+'c'.repeat(48));await page.locator('.pickup-numbers strong').first().waitFor();
+  for(const size of [{width:1280,height:720},{width:720,height:1280},{width:1920,height:1080}]){
+   await page.setViewportSize(size);
+   await page.waitForFunction(()=>[...document.querySelectorAll('.pickup-numbers')].every(grid=>{const cards=[...grid.querySelectorAll('strong')],gap=parseFloat(getComputedStyle(grid).rowGap)||0,rows=Math.max(1,Math.floor((grid.clientHeight+gap)/(cards[0].getBoundingClientRect().height+gap)));return cards.every((card,i)=>Number(card.style.gridRow)===Math.floor(i/(2*rows))*rows+i%rows+1&&Number(card.style.gridColumn)===Math.floor(i/rows)%2+1)}));
+   for(const selector of ['.pickup-preparing','.pickup-ready']){
+    const grid=page.locator(selector+' .pickup-numbers');
+    const geometry=await grid.evaluate(el=>({height:el.clientHeight,scroll:el.scrollHeight,cards:[...el.querySelectorAll('strong')].map(c=>({x:c.offsetLeft,y:c.offsetTop,col:Number(c.style.gridColumn),row:Number(c.style.gridRow)}))}));
+    assert.equal(geometry.cards.length,30,'older active numbers remain available');assert.equal(geometry.cards[0].col,1);assert.equal(geometry.cards[0].row,1);
+    const right=geometry.cards.findIndex(c=>c.col===2);assert(right>1,'visible left column holds several numbers');
+    assert.equal(geometry.cards[1].x,geometry.cards[0].x);assert(geometry.cards[1].y>geometry.cards[0].y);
+    assert(geometry.cards[right].x>geometry.cards[0].x);assert.equal(geometry.cards[right].y,geometry.cards[0].y);
+    assert(geometry.scroll>geometry.height,'overflow remains scrollable rather than discarded');
+   }
+   if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pickup-column-flow-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+size.width+'.png'});}
+  }
+  assert.deepEqual(errors,[]);
+ }finally{await browser.close()}
+});

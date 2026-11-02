@@ -207,7 +207,7 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     const q=await pool.query(`SELECT o.id,o.status,o.total_cents,o.created_at,o.closed_at,o.source,o.guest_email,o.qr_service_mode,o.qr_ready_at,o.pickup_collected_at,
       (SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity,'note',oi.guest_note,'extras',oi.extras_snapshot)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items
       FROM orders o WHERE o.table_id=$1 AND o.restaurant_id=$2
-      AND o.status<>'cancelled' AND (o.status<>'paid' OR (o.qr_service_mode='pickup' AND o.pickup_collected_at IS NULL))
+      AND o.status<>'cancelled' AND (o.status<>'paid' OR (o.qr_service_mode='pickup' AND o.qr_ready_at IS NULL))
       ORDER BY o.created_at DESC LIMIT 80`,[tableDetails[1],t.rows[0].restaurant_id]);
     json(res,200,{table:t.rows[0],orders:q.rows,historyWindowHours:0});return true;
   }
