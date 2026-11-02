@@ -171,4 +171,16 @@ w.eval("const $=id=>document.getElementById(id),esc=s=>String(s??''),euro=n=>Str
 await w.renderOrderBoard('bestellungen',rid,{orders:[{id:recent,source:'qr',qr_service_mode:'pickup',status:'paid',qr_ready_at:new Date().toISOString(),created_at:new Date().toISOString(),items:[]},{id:pending,source:'qr',qr_service_mode:'pickup',status:'preparing',qr_ready_at:null,created_at:new Date().toISOString(),items:[]}]});
 assert.equal(w.document.querySelectorAll('[data-collection-ready]').length,1);assert.equal(w.document.querySelector('[data-collection-ready]').dataset.collectionReady,pending);assert(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));w.close();
 console.log('Pickup display expiry passed: 30-minute boundary, pending retained, shared screens, queue, no order mutations and no collected buttons.');
+
+const cleanupRid=id(),cleanupOther=id(),stale='e2569e58-0000-4000-8000-000000000001',foreign='e2569e58-0000-4000-8000-000000000002',readyCleanup='1132b4a1-0000-4000-8000-000000000001';
+await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$3,'Bringness Testbetrieb'),($2,$3,'Other')",[cleanupRid,cleanupOther,company]);
+await query("INSERT INTO orders(id,restaurant_id,status,created_at,qr_ready_at) VALUES($1,$4,'preparing','2026-11-01',NULL),($2,$5,'preparing','2026-11-01',NULL),($3,$4,'paid','2026-11-01','2026-11-01')",[stale,foreign,readyCleanup,cleanupRid,cleanupOther]);
+const cleanupBefore=(await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[stale,foreign,readyCleanup]])).rows;
+await migrateDisplays(pool);
+assert((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[stale])).rows[0].pickup_display_hidden_at);
+for(const key of [foreign,readyCleanup])assert.equal((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[key])).rows[0].pickup_display_hidden_at,null);
+assert.deepEqual((await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[stale,foreign,readyCleanup]])).rows,cleanupBefore);
+await migrateDisplays(pool);
+console.log('Targeted stale display cleanup preserves orders, readiness and other restaurants.');
+
 await db.close();
