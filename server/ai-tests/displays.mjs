@@ -187,4 +187,7 @@ await migrateDisplays(pool);
 assert.equal((await query('SELECT count(*)::int n FROM orders WHERE restaurant_id=$1 AND pickup_display_hidden_at IS NOT NULL',[photographedRid])).rows[0].n,10);
 console.log('Targeted stale display cleanup preserves orders, readiness and other restaurants.');
 
+// Displays migrate before QR readiness columns on a fresh installation.
+await query('ALTER TABLE orders DROP COLUMN qr_ready_at');await migrateDisplays(pool);
+console.log('Fresh startup display migration tolerates QR migration running later.');
 await db.close();
