@@ -206,7 +206,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       }
       if (normalized.endsWith("/apps/web/public/tisch/index.html")) {
         if (!html.includes('/tisch/push.js')) html = html.replace('</body>', '<script src="/tisch/push.js"></script></body>');
-        if (!html.includes("/tisch/collection.js")) html = html.replace("</body>", '<script src="/tisch/collection.js?v=pickup-deposit-20261101"></script></body>');
+        if (!html.includes("/tisch/collection.js")) html = html.replace("</body>", '<script src="/tisch/collection.js?v=pickup-clear-deposit-20261102"></script></body>');
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {

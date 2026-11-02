@@ -190,4 +190,18 @@ console.log('Targeted stale display cleanup preserves orders, readiness and othe
 // Displays migrate before QR readiness columns on a fresh installation.
 await query('ALTER TABLE orders DROP COLUMN qr_ready_at');await migrateDisplays(pool);
 console.log('Fresh startup display migration tolerates QR migration running later.');
+
+await query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_ready_at timestamptz');
+const currentPhoto=id(),photoOther=id(),fingerprint=['0b116d4d','b9acc7ec','0b54b9a5','1f90751a','5ddcae4f','d57ea032','e5a70d14','7f2834ec'];
+await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$3,'Bringness Testbetrieb'),($2,$3,'Other')",[currentPhoto,photoOther,company]);
+for(const prefix of fingerprint)await query("INSERT INTO orders(id,restaurant_id,status,created_at) VALUES($1,$2,'preparing','2026-11-01')",[prefix+'-0000-4000-8000-000000000001',currentPhoto]);
+const photoReady=id(),photoFuture=id(),photoForeign=id();await query("INSERT INTO orders(id,restaurant_id,status,created_at,qr_ready_at) VALUES($1,$4,'ready','2026-11-02T18:59:00Z','2026-11-02T19:00:00Z'),($2,$4,'preparing','2026-11-03',NULL),($3,$5,'preparing','2026-11-01',NULL)",[photoReady,photoFuture,photoForeign,currentPhoto,photoOther]);
+const photoBefore=(await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE restaurant_id=ANY($1::uuid[]) ORDER BY id',[[currentPhoto,photoOther]])).rows;
+await migrateDisplays(pool);assert.equal((await query('SELECT count(*)::int n FROM orders WHERE restaurant_id=$1 AND pickup_display_hidden_at IS NOT NULL',[currentPhoto])).rows[0].n,9);assert.equal((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[photoForeign])).rows[0].pickup_display_hidden_at,null);assert.equal((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[photoFuture])).rows[0].pickup_display_hidden_at,null);
+const afterCleanup=id();await query("INSERT INTO orders(id,restaurant_id,status,created_at) VALUES($1,$2,'preparing','2026-11-01')",[afterCleanup,currentPhoto]);await migrateDisplays(pool);assert.equal((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[afterCleanup])).rows[0].pickup_display_hidden_at,null,'photo cleanup is not repeated');assert.deepEqual((await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE restaurant_id=ANY($1::uuid[]) AND id<>$2 ORDER BY id',[[currentPhoto,photoOther],afterCleanup])).rows,photoBefore);
+
+const clearBefore=(await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE restaurant_id=$1 ORDER BY id',[rid])).rows;
+w=await browser();w.confirm=()=>true;const clearPanel=[...w.document.querySelectorAll('section')].find(el=>el.querySelector('h3')?.textContent==='Abholbestellungen');await clearPanel.querySelector('[data-clear]').onclick();assert.match(w.document.querySelector('#displayStatus').textContent,/Nummern ausgeblendet/);assert.equal((await numbers(pickup.token)).length,0);assert.deepEqual((await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE restaurant_id=$1 ORDER BY id',[rid])).rows,clearBefore);w.close();
 await db.close();
+
+// Current photograph: clear all old numbers once, only for the uniquely fingerprinted venue.
