@@ -3,7 +3,7 @@ import {createCanvas} from '@napi-rs/canvas';
 import {fixture} from './fixture.mjs';
 import {migrateMarketplace,publishMarketplace,listMarketplace} from '../../server/shop-marketplace.js';
 import {writeSellerDraft} from '../../server/shop-seller-drafts.js';
-import {createMarketplaceImages,normalizeMarketplaceImage,marketplaceImageKey} from '../../server/shop-marketplace-images.js';
+import {createMarketplaceImages,migrateMarketplaceImages,normalizeMarketplaceImage,marketplaceImageKey} from '../../server/shop-marketplace-images.js';
 import {documentObjectKey} from '../../server/idrive-document-store.js';
 const png=()=>createCanvas(3,2).toBuffer('image/png');
 const profile={name:'Synthetic seller',street:'Test 1',postalCode:'10115',city:'Berlin',country:'DE',email:'seller@example.test'};
@@ -69,3 +69,5 @@ test('IDrive image adapter uses separate namespace and never changes private doc
  const imageStore=createIdriveDocumentStore({client,PutObjectCommand:Put,GetObjectCommand:Get,GetBucketPolicyCommand:Policy,objectKey:marketplaceImageKey}),privateStore=createIdriveDocumentStore({client,PutObjectCommand:Put,GetObjectCommand:Get,GetBucketPolicyCommand:Policy});
  await imageStore.putExact(record,bytes);assert.deepEqual(await imageStore.getExact(record),bytes);await privateStore.putExact(record,bytes);assert.equal(objects.size,2);assert.ok(keys[0].startsWith('marketplace/product-images/'));assert.ok(keys.at(-1).startsWith('documents/accounts/'));assert.notEqual(keys[0],keys.at(-1));
 });
+
+test('one company can keep separate images for multiple products after upgrading the old unique-company schema',run(async f=>{const first=await f.api.upload(f.command);await f.db.query('ALTER TABLE shop_market_images ADD CONSTRAINT shop_market_images_company_id_key UNIQUE(company_id)');await migrateMarketplaceImages(f.pool);await migrateMarketplaceImages(f.pool);const id='offer-'+crypto.randomUUID(),offer=(await f.db.query('SELECT payload FROM shop_seller_offers WHERE company_id=$1 AND id=$2',[f.a,f.id])).rows[0].payload;await writeSellerDraft(f.pool,{token:'owner-a',command:{id,requestId:crypto.randomUUID(),expectedRevision:0,action:'save',offer:{...offer,title:'Second product',sku:'SECOND'}}});const second=await f.api.upload({...f.command,id,requestId:crypto.randomUUID()});assert.notEqual(first.imageId,second.imageId);assert.equal((await f.api.own({token:'owner-a',id:f.id})).imageId,first.imageId);assert.equal((await f.api.own({token:'owner-a',id})).imageId,second.imageId);await f.api.remove({token:'owner-a',id,expectedRevision:1});assert.equal((await f.api.own({token:'owner-a',id:f.id})).imageId,first.imageId);assert.equal((await f.db.query('SELECT * FROM shop_market_images WHERE company_id=$1',[f.a])).rows.length,2);}));
