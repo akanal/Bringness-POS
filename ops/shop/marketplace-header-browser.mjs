@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 export async function marketplaceHeaderBrowserChecks({page,base,artifacts}){
- const pages=["/shop/merchant-terms.html", "/shop/seller.html", "/shop/marketplace-seller.html", "/shop/download-history.html", "/shop/assistant.html", "/shop/download-review.html", "/shop/legal.html", "/shop/order-history.html", "/shop/account.html", "/shop/licences.html", "/shop/documents.html", "/shop/marketplace-payment-return.html", "/shop/my-shop.html", "/shop/payment-return.html", "/shop/help.html", "/shop/marketplace-review.html", "/shop/register.html", "/shop/marketplace.html", "/shop/seller-cloud.html", "/shop/index.html", "/impressum/", "/datenschutz/"];
+ const pages=["/shop/store.html", "/shop/storefront.html", "/shop/merchant-terms.html", "/shop/seller.html", "/shop/marketplace-seller.html", "/shop/download-history.html", "/shop/assistant.html", "/shop/download-review.html", "/shop/legal.html", "/shop/order-history.html", "/shop/account.html", "/shop/licences.html", "/shop/documents.html", "/shop/marketplace-payment-return.html", "/shop/my-shop.html", "/shop/payment-return.html", "/shop/help.html", "/shop/marketplace-review.html", "/shop/register.html", "/shop/marketplace.html", "/shop/seller-cloud.html", "/shop/index.html", "/impressum/", "/datenschutz/"];
  for(const width of [390,1280]){
   await page.setViewportSize({width,height:900});
   await page.goto(base+'/shop/index.html');
@@ -14,6 +14,11 @@ export async function marketplaceHeaderBrowserChecks({page,base,artifacts}){
    assert.match(state.background,/28, 98, 76/,path+' emerald '+width);
    assert.equal(state.brand,'rgb(255, 255, 255)',path+' white brand '+width);
    assert.ok(state.width<=state.viewport+2,path+' overflow '+width);
+   if(['/shop/store.html','/shop/storefront.html'].includes(path)){
+    const arrow=await header.locator('.brand-arrow').boundingBox();assert.ok(arrow.width<=30&&arrow.height<=30,path+' bounded assistant icon '+width);
+    const brandBox=await header.locator('.brand').boundingBox(),navBox=await header.locator('nav').boundingBox();
+    assert.ok(brandBox.x+brandBox.width<=navBox.x+1||brandBox.y+brandBox.height<=navBox.y+1,path+' navigation avoids brand '+width);
+   }
    if(['/impressum/','/datenschutz/'].includes(path)){
     const legalBrand=await header.locator('.brand').evaluate(el=>({html:el.innerHTML,font:getComputedStyle(el).font,spacing:getComputedStyle(el).letterSpacing}));
     assert.deepEqual(legalBrand,homepageBrand,path+' exact homepage wordmark '+width);

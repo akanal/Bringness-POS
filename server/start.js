@@ -82,7 +82,7 @@ let shopAssistant={migrate:async()=>{},handle:async()=>false};
 try{shopAssistant=createShopAssistant(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_ASSISTANT_ENABLED!=='false',key:process.env.SHOP_ASSISTANT_API_KEY||process.env.OPENAI_API_KEY,model:process.env.SHOP_ASSISTANT_MODEL||process.env.OPENAI_MODEL,publicOrigin:process.env.SHOP_PUBLIC_ORIGIN||'https://bringness.de'});}catch{console.error('Shop assistant configuration unavailable; guided help remains available.');}
 const sellerRuntime=createSellerRuntime(platformGatewayPool,{enabled:appMode!=='ai'&&process.env.SHOP_SELLER_DRAFTS_ENABLED!=='false'});
 const marketHost=composeMarketplaceTestHost(platformGatewayPool,{env:process.env,appMode,isolated:isolatedPreview(),marketplaceEnabled:marketplaceEnabled(process.env,appMode),createIntegration:createMarketplaceTestIntegration});
-const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode),checkoutProviderResolver:marketHost.checkoutProviderResolver,merchantConnections:marketHost.merchantConnections,checkoutReadiness:marketHost.report});
+const marketplaceRuntime=createMarketplaceRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode),checkoutProviderResolver:marketHost.checkoutProviderResolver,merchantConnections:marketHost.merchantConnections,checkoutReadiness:marketHost.report,storefrontStore:()=>imageStore});
 let marketScheduler=null;
 
 let documentStore=null;

@@ -381,9 +381,9 @@
     },
     {
       "path": "server/shop-request-body.js",
-      "bytes": 2356,
-      "sha256": "0ac2c702dc46a8741762b4892b91406e95040d835eddbd0b5b60455908ac038f",
-      "gitBlob": "5122e4247832f0e6ea6d87b2372d2adf71cc5348",
+      "bytes": 2903,
+      "sha256": "7ce25efce12ea57118ede4ea12c1e6376f03c9cf2a373330f7530fbf0802aaad",
+      "gitBlob": "8913df6f4ad35d3404b335824d42d6234c0fde5b",
       "kind": "shop-candidate",
       "imports": []
     },
