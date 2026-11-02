@@ -1,0 +1,11 @@
+# Complete seller-shop setup in Bringness
+
+The existing storefront editor now combines four setup steps: merchant contacts/application, private branding and stable address, private product creation/management, and an authenticated catalogue checklist. Existing accounts, seller drafts, publications, images, prices, order handling and provider gates are reused.
+
+Physical products can be created and edited inline, with category, condition, price/VAT, stock, SKU/GTIN and description. Approved merchants can upload each product's image through the existing IDrive provider and explicitly publish variants (size/colour), available stock, shipping fees/tax, delivery and pickup conditions. Current public stock is reloaded before editing. Private edits require saving before publication; unsaved changes prompt before discarding. Exact lost-response retry and archive/restore use existing receipt/revision guards. Digital/service drafts remain in their existing editor and cannot be silently converted or released.
+
+`GET /api/v1/shop/marketplace/storefront-readiness` is owner/admin and company scoped, no-store, and reports only catalogue setup/counts/blockers. A ready catalogue is never a payment/legal release. The existing approval process remains manual. Public storefront search/category filters keep the fixed merchant scope and bounded pagination. Existing orders and payment restrictions remain unchanged.
+
+A pre-existing `UNIQUE(company_id)` on product-image mappings incorrectly restricted a seller to one product image. The migration removes only this named uniqueness constraint, preserving the composite company/product key, foreign keys and all rows. Fresh install and upgrade are tested with two independent product images and removal of only one mapping. No stored object is deleted or moved.
+
+Acceptance uses isolated SQL fixtures and a full native browser journey: merchant application and manual approval, private shop/product before approval, image after approval, two sizes with independent stocks/prices, delivery fee, explicit product/shop publication, responsive public catalogue search and archive/restore without republishing. No production user shop, merchant approval, real logo/product image upload, order or payment is created by acceptance. Final CI/deployment evidence is recorded after successful release.

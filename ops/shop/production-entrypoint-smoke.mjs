@@ -123,7 +123,7 @@ try{
   await marketplaceConcurrencyChecks({base,pool,sellerToken:a.token,buyerToken:b.token});
   await documentBrowserChecks({page,pool,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceImageBrowserChecks({page,pool,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
-  await storefrontBrowserChecks({page,pool,token:a.token,company:owner.company_id,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
+  await storefrontBrowserChecks({page,pool,token:a.token,company:owner.company_id,adminToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceHeaderBrowserChecks({page,base,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   assert.deepEqual(errors,[]);await context.close();
  }
