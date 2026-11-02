@@ -24,7 +24,7 @@ export async function displayAccess(pool,companyId){
  if(!f.has('display_control'))return false;
  return f.has('pos_base')||Boolean((await pool.query("SELECT 1 FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code='download_license' AND ce.status='active'",[companyId])).rowCount);
 }
-const pickupOrders = `o.pickup_display_hidden_at IS NULL AND o.pickup_collected_at IS NULL AND o.status NOT IN ('cancelled','served') AND NOT EXISTS(SELECT 1 FROM pos_trade_sales ts WHERE ts.order_id=o.id) AND (o.table_id IS NOT NULL OR (o.source='pos' AND o.created_at>=(SELECT pickup_display_since FROM restaurants WHERE id=o.restaurant_id)))`;
+const pickupOrders = `(to_jsonb(o)->>'pickup_display_hidden_at') IS NULL AND o.pickup_collected_at IS NULL AND o.status NOT IN ('cancelled','served') AND NOT EXISTS(SELECT 1 FROM pos_trade_sales ts WHERE ts.order_id=o.id) AND (o.table_id IS NOT NULL OR (o.source='pos' AND o.created_at>=(SELECT pickup_display_since FROM restaurants WHERE id=o.restaurant_id)))`;
 const pickupVisible = `(${pickupOrders}) AND ((o.qr_ready_at IS NULL AND o.status<>'ready') OR coalesce(o.qr_ready_at,o.created_at)>now()-interval '30 minutes')`;
 export function createDisplays(pool){
  async function owner(req,res){const raw=String(req.headers.authorization||'').replace(/^Bearer /,'');const u=raw?(await pool.query("SELECT u.id,u.company_id,u.role,s.token_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)",[hash(raw)])).rows[0]:null;
