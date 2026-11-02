@@ -553,3 +553,8 @@ Owner supplied an Amazon header reference and requested an independent Bringness
 
 ## Owner header/background correction — 2026-10-30
 Supersedes the white-header interpretation: the HEADER should have a beautiful Bringness colour; the PAGE BACKGROUND should be white. Use an emerald-green header with contrasting white/mint text, and white homepage background. Keep the trial limited to /shop/ until owner approves rollout to other marketplace pages. Preserve existing controls and colourful content cards.
+
+
+## Owner correction 2026-11-02: pickup removal and marketplace partner scope
+- Waiter Anzeige entfernen must now persist removal from every TV display as well as the local card; supersedes local-only dismissal. Display-only state, safe undo and explicit owner Anzeige leeren preserve orders/receipts/payments. Thirty-minute ready expiry is a fallback, not a required wait. Existing paid-ready numbers must stay reachable as display controls without rejoining the active work queue. See current PROJECT-HANDOFF and docs/pickup-clear-deposit-20261102.md for verified deployment.
+- Marketplace licence partners cover the marketplace only. Rights, territory, economics and central-admin workflow remain for explicit discussion; do not invent final splits or auto-activate partner permissions/billing, or apply these licences to POS/QR/AI. Existing separate merchant approval remains until authorized integration is implemented.
