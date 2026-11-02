@@ -24,7 +24,7 @@ export function mountStoreEditor({window:w,document:d=w.document,client:provided
   try{await client.write('storefront',command);if(e!==epoch)return;render(await client.call('/storefront',{auth:true}));}catch(err){if(e===epoch)status(marketError(err));}finally{if(e===epoch){controls.forEach((x,i)=>x.disabled=states[i]);$('store-publish').disabled=!current?.merchantApproved;$('store-withdraw').disabled=current?.state!=='published';}busy=false;}}
  $('store-form').onsubmit=e=>{e.preventDefault();write('save');};$('store-publish').onclick=()=>write('publish');$('store-withdraw').onclick=()=>write('withdraw');
  $('store-retry').onclick=async()=>{if(busy)return;busy=true;const e=epoch;try{await client.retry('storefront');if(e!==epoch)return;render(await client.call('/storefront',{auth:true}));}catch(err){if(e===epoch)status(marketError(err));}finally{busy=false;}};
- return {client};
+ return {client,setMerchantApproved(approved){if(!current||typeof approved!=='boolean')return;current.merchantApproved=approved;if(!busy)$('store-publish').disabled=!approved;$('store-approval').textContent=approved?'Händlerfreigabe bestätigt. Du kannst deinen Shop veröffentlichen.':'Du kannst deinen Shop privat vorbereiten. Für die Veröffentlichung zuerst die Händlerfreigabe beantragen.';}};
 }
 export function mountStorefront({window:w,document:d=w.document,client:provided}){
  const $=id=>d.getElementById(id),client=provided||createMarketClient({window:w});let shop=null,cursor=null,busy=false,epoch=0,query='',category='';
