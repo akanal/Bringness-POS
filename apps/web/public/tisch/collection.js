@@ -26,7 +26,14 @@
     }catch{}
     try{navigator.vibrate?.([300,100,300])}catch{}
   }
+  function renderDeposit(){
+    let host=document.getElementById('guestDepositSummary');const deposited=orders.filter(o=>Number.isSafeInteger(o.depositCents)&&o.depositCents>0).slice(-10);
+    if(!host&&!deposited.length)return;
+    if(!host){host=document.createElement('div');host.id='guestDepositSummary';host.setAttribute('aria-live','polite');host.style.cssText='margin:16px 0;padding:16px;border:1px solid #d6dde5;border-radius:12px';(document.getElementById('status')?.parentElement||document.body).appendChild(host)}
+    host.replaceChildren();for(const o of deposited){const p=document.createElement('p');p.textContent='Bestellung '+o.number+' · Pfand: '+(o.depositCents/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'})+' (im Bestellbetrag enthalten)';host.appendChild(p)}host.hidden=!deposited.length;
+  }
   function render(){
+    renderDeposit();
     let host=document.getElementById("guestCollection");
     if(mode!=="pickup"&&!orders.some(o=>o.mode==="pickup"))return;
     if(!host){host=document.createElement("div");host.id="guestCollection";host.setAttribute("aria-live","polite");host.style.cssText="margin:16px 0;padding:18px;background:#fff3e7;border-radius:14px;font-size:20px;font-weight:700";(document.getElementById("status")?.parentElement||document.body).appendChild(host)}

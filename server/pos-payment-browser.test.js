@@ -244,3 +244,34 @@ test('pickup statuses fill down the left column then down the right on resize',a
   assert.deepEqual(errors,[]);
  }finally{await browser.close()}
 });
+
+test('waiter removal reaches shared TV immediately and guest deposit survives checkout and reload',async()=>{
+ const browser=await engine.launch({headless:true}),context=await browser.newContext({viewport:{width:390,height:900}}),errors=[];
+ const waiter=await context.newPage(),tv=await context.newPage(),guest=await context.newPage();for(const p of [waiter,tv,guest])p.on('pageerror',e=>errors.push(e.message));
+ const order='33333333-3333-4333-8333-333333333333',request='44444444-4444-4444-8444-444444444444',table='55555555-5555-4555-8555-555555555555';let hidden=false,fail=false;const mutations=[];
+ const files=new Map();for(const path of ['/service/index.html','/service/app.js','/service/style.css','/personnel-report.js','/display/index.html','/display/player.js','/display/player.css','/tisch/index.html','/tisch/app.js','/tisch/collection.js','/tisch/guest-enhancements.js'])try{files.set(path,await readFile(new URL('../apps/web/public'+path,import.meta.url),'utf8'));}catch{}
+ await context.addInitScript(()=>{if(location.hostname==='pickup.test')localStorage.setItem('bringness-waiter-token','waiter')});
+ await context.route('https://pickup.test/**',async route=>{const u=new URL(route.request().url()),p=u.pathname;const json=body=>route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+  if(p.endsWith('/display-visibility')){const b=route.request().postDataJSON();mutations.push(b);if(fail)return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Offline fixture'})});hidden=b.hidden;return json({ok:true,hidden,undoAllowed:hidden});}
+  if(p.startsWith('/api/v1/display-player/'))return json({mode:'pickup',restaurantName:'Fixture',orientation:'landscape',counterName:'Abholung',serverTime:new Date().toISOString(),orders:hidden?[]:[{number:'077',ready:true,expiresAt:new Date(Date.now()+1800000).toISOString()}]});
+  if(p==='/api/v1/waiter/bootstrap')return json({name:'Ada',employee:{id:restaurant,restaurant_id:restaurant,restaurant_name:'Fixture',duty_state:'working',stamp_pin_digits:4},products:[],tables:[]});
+  if(p==='/api/v1/waiter/qr-orders')return json({orders:[]});
+  if(p==='/api/v1/qr-service/display-queue')return json({orders:hidden?[]:[{id:order,pickup_number:77,source:'qr',status:'paid',qr_service_mode:'pickup',qr_ready_at:new Date().toISOString(),displayOnly:true,table_name:'Tisch 1',total_cents:1650,items:[]}]});
+  if(p==='/api/v1/guest/menu')return json({restaurant:'Fixture',table:'1',products:[{id:product,name:'Getränk',category:'Getränke',price_cents:1600,deposit_cents:50}]});
+  if(p==='/api/v1/guest/service-mode')return json({mode:'pickup'});
+  if(p==='/api/v1/guest/order-v2'){const b=route.request().postDataJSON();assert.equal(b.depositCents,50);return json({orderId:order,number:'077',totalCents:1650});}
+  if(p==='/api/v1/guest/collection')return json({orderId:order,number:'077',depositCents:50,mode:'pickup',ready:false,collected:false,closed:false});
+  if(p==='/api/v1/guest/extras'||p==='/api/v1/waiter/extras')return json({extras:[]});
+  if(p.startsWith('/api/'))return json({orders:[]});
+  const file=p==='/service/'?'/service/index.html':p==='/tisch/'?'/tisch/index.html':p;let body=files.get(file);if(body!==undefined){if(file==='/tisch/index.html')body=body.replace('</body>','<script src="/tisch/collection.js"></script><script src="/tisch/guest-enhancements.js"></script></body>');return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html',body});}return route.abort();
+ });
+ try{
+  await waiter.goto('https://pickup.test/service/');await waiter.locator('[data-dismiss]').waitFor();await tv.goto('https://pickup.test/display/index.html#'+'a'.repeat(48));await tv.getByText('077',{exact:true}).waitFor();
+  await waiter.locator('[data-dismiss]').click();await waiter.waitForFunction(()=>!document.querySelector('[data-qr-card]'));await tv.waitForFunction(()=>!document.getElementById('screen').textContent.includes('077'));assert.equal(mutations.length,1);assert.equal(mutations[0].hidden,true);
+  await waiter.getByRole('button',{name:'Rückgängig',exact:true}).click();await waiter.locator('[data-dismiss]').waitFor();await tv.getByText('077',{exact:true}).waitFor();assert.equal(mutations[1].hidden,false);assert.equal(mutations[1].requestId,mutations[0].requestId);
+  fail=true;await waiter.locator('[data-dismiss]').click();await waiter.waitForFunction(()=>document.getElementById('message').textContent.includes('Anzeige nicht entfernt'));assert.equal(await waiter.locator('[data-qr-card]').count(),1);assert.equal(hidden,false);
+  await guest.goto('https://pickup.test/tisch/?code='+'a'.repeat(48));await guest.locator('#menu [data-add]').click();await guest.getByText(/Davon Pfand:.*0,50/).first().waitFor();assert.match(await guest.locator('#total').textContent(),/16,50/);await guest.locator('#send').click();await guest.locator('#guestDepositSummary').waitFor();assert.match(await guest.locator('#guestDepositSummary').textContent(),/Pfand:.*0,50/);await guest.reload();await guest.locator('#guestDepositSummary').waitFor();assert.match(await guest.locator('#guestDepositSummary').textContent(),/Pfand:.*0,50/);assert(await guest.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+  if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await guest.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/guest-deposit-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'.png'});}
+  assert.deepEqual(errors,[]);
+ }finally{await context.close();await browser.close();}
+});
