@@ -60,7 +60,7 @@ export function createQrService(pool) {
         if(!r.rowCount){await c.query("ROLLBACK");return send(res,404,{error:"Betrieb nicht gefunden"})}
         if(r.rows[0].qr_service_mode!==b.mode) {
           if(!await orderingModuleAccess(c,u.company_id,b.mode)){await c.query('ROLLBACK');return send(res,402,{error:'Bitte zuerst das passende QR-System und das Tischsystem buchen'})}
-          const open=await c.query("SELECT 1 FROM orders WHERE restaurant_id=$1 AND source='qr' AND status<>'cancelled' AND (status<>'paid' OR (qr_service_mode='pickup' AND pickup_collected_at IS NULL)) LIMIT 1",[setting[1]]);
+          const open=await c.query("SELECT 1 FROM orders WHERE restaurant_id=$1 AND source='qr' AND status<>'cancelled' AND (status<>'paid' OR (qr_service_mode='pickup' AND qr_ready_at IS NULL)) LIMIT 1",[setting[1]]);
           if(open.rowCount){await c.query("ROLLBACK");return send(res,409,{error:"Offene QR-Bestellungen zuerst abschließen"})}
           await c.query("UPDATE restaurants SET qr_service_mode=$2 WHERE id=$1",[setting[1],b.mode]);
         }
@@ -94,7 +94,7 @@ export function createQrService(pool) {
       (SELECT coalesce(json_agg(json_build_object('name',i.product_name_snapshot,'quantity',i.quantity,'note',i.guest_note,'extras',i.extras_snapshot) ORDER BY i.id),'[]'::json) FROM order_items i WHERE i.order_id=o.id) items
       FROM orders o JOIN dining_tables t ON t.id=o.table_id
       WHERE o.restaurant_id=$1 AND o.source='qr' AND o.status<>'cancelled'
-      AND (o.status<>'paid' OR (o.qr_service_mode='pickup' AND o.pickup_collected_at IS NULL))
+      AND (o.status<>'paid' OR (o.qr_service_mode='pickup' AND o.qr_ready_at IS NULL))
       AND ($2::text<>'waiter' OR EXISTS(SELECT 1 FROM employees e WHERE (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) AND e.user_id=$3 AND e.active=true))
       ORDER BY o.created_at,o.id`,[rid,u.role,u.id]);
     return send(res,200,{mode:r.rows[0].qr_service_mode,orders:queueOrder(q.rows)});
