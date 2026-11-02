@@ -199,3 +199,21 @@ test('display editor saves pickup selection and restores the same player after a
   await page.goto('https://display-save.test'+url);await page.locator('.pickup').waitFor();assert.equal(await page.locator('.pickup h1').innerText(),'Betrieb');assert.deepEqual(errors,[]);
  }finally{release();await browser.close()}
 });
+
+test('ready pickup numbers expire offline using server time while preparation remains',async()=>{
+ const browser=await engine.launch({headless:true}),page=await browser.newPage();let first=true;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('https://pickup-expiry.test/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.startsWith('/api/v1/display-player/')){
+   if(!first)return route.abort();first=false;
+   const serverNow=Date.now()+86400000;
+   return route.fulfill({contentType:'application/json',body:JSON.stringify({mode:'pickup',restaurantName:'Testbetrieb',serverTime:new Date(serverNow).toISOString(),orders:[{number:'002',ready:true,expiresAt:new Date(serverNow+1500).toISOString()},{number:'001',ready:false,expiresAt:null}]})});
+  }
+  const file=path.split('/').pop();if(['index.html','player.js','player.css'].includes(file))return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html',body:await readFile(new URL('../apps/web/public/display/'+file,import.meta.url),'utf8')});
+  return route.abort();
+ });
+ try{await page.goto('https://pickup-expiry.test/display/index.html#'+'b'.repeat(48));await page.locator('.pickup-ready').getByText('002',{exact:true}).waitFor();
+  await page.locator('.pickup-ready').getByText('002',{exact:true}).waitFor({state:'detached',timeout:6000});
+  assert.equal(await page.locator('.pickup-preparing').getByText('001',{exact:true}).count(),1);assert.deepEqual(errors,[]);
+ }finally{await browser.close()}
+});

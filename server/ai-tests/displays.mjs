@@ -150,4 +150,25 @@ console.log('Unified pickup passed: save without table/modules, identical multi-
 await query('ALTER TABLE orders ADD COLUMN pickup_number bigint');
 await query("INSERT INTO orders(id,restaurant_id,table_id,status,pickup_number) VALUES($1,$2,$3,'preparing',42)",[id(),rid,counter]);
 assert((await numbers(pickup.token)).some(o=>o.number==='042'));
+// Readiness expiry is display-only, shared by every screen and the editor queue.
+const expired=id(),recent=id(),pending=id(),legacyReady=id();
+await query("INSERT INTO orders(id,restaurant_id,table_id,status,created_at,qr_ready_at) VALUES($1,$5,$6,'paid',now()-interval '2 days',now()-interval '30 minutes'),($2,$5,$6,'paid',now()-interval '2 days',now()-interval '29 minutes'),($3,$5,$6,'preparing',now()-interval '2 days',NULL),($4,$5,$6,'ready',now()-interval '31 minutes',NULL)",[expired,recent,pending,legacyReady,rid,counter]);
+const beforeExpiry=(await query('SELECT * FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[expired,recent,pending,legacyReady]])).rows;
+const visible=(await numbers(pickup.token)).map(o=>o.number);
+assert(!visible.includes(expired.slice(0,8).toUpperCase()));assert(!visible.includes(legacyReady.slice(0,8).toUpperCase()));
+assert(visible.includes(recent.slice(0,8).toUpperCase()));assert(visible.includes(pending.slice(0,8).toUpperCase()));
+assert.deepEqual(await numbers(first.token),await numbers(pickup.token));
+const queueIds=(await call(base+'/pickup'+q)).result.orders.map(o=>o.id);assert(!queueIds.includes(expired));assert(queueIds.includes(recent));
+const expiry=(await numbers(pickup.token)).find(o=>o.number===recent.slice(0,8).toUpperCase()).expiresAt;assert(Number.isFinite(Date.parse(expiry)));
+assert.equal((await numbers(pickup.token)).find(o=>o.number===pending.slice(0,8).toUpperCase()).expiresAt,null);
+w=await browser();const panel=[...w.document.querySelectorAll('section')].find(el=>el.querySelector('h3')?.textContent==='Abholbestellungen');await panel.querySelector('button').onclick();
+assert(![...panel.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));assert.match(panel.textContent,/30 Minuten/);w.close();
+assert.deepEqual((await query('SELECT * FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[expired,recent,pending,legacyReady]])).rows,beforeExpiry,'display expiry never marks collected, paid or deletes orders');
+// Real POS order-board rendering offers one readiness action, without a collected command.
+w=new JSDOM('<div id="moduleBody"></div>',{runScripts:'outside-only'}).window;
+const board=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8').split('async function renderOrderBoard(')[1].split('function updateHeaderClock')[0];
+w.eval("const $=id=>document.getElementById(id),esc=s=>String(s??''),euro=n=>String(n);let kitchenBoardSignature='';async function renderOrderBoard("+board);
+await w.renderOrderBoard('bestellungen',rid,{orders:[{id:recent,source:'qr',qr_service_mode:'pickup',status:'paid',qr_ready_at:new Date().toISOString(),created_at:new Date().toISOString(),items:[]},{id:pending,source:'qr',qr_service_mode:'pickup',status:'preparing',qr_ready_at:null,created_at:new Date().toISOString(),items:[]}]});
+assert.equal(w.document.querySelectorAll('[data-collection-ready]').length,1);assert.equal(w.document.querySelector('[data-collection-ready]').dataset.collectionReady,pending);assert(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));w.close();
+console.log('Pickup display expiry passed: 30-minute boundary, pending retained, shared screens, queue, no order mutations and no collected buttons.');
 await db.close();
