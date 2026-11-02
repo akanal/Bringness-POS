@@ -52,7 +52,7 @@ test("model switch locks the restaurant and rejects unfinished orders, including
   const result=await request(pool,"/api/v1/restaurants/"+rid+"/qr-service",{method:"PUT",payload:{mode:"pickup"}});
   assert.equal(result.status,409);
   assert.ok(pool.calls.some(x=>x.sql.includes("FOR UPDATE")));
-  assert.ok(pool.calls.some(x=>x.sql.includes("pickup_collected_at IS NULL")));
+  assert.ok(pool.calls.some(x=>x.sql.includes("qr_ready_at IS NULL")));
   assert.ok(pool.calls.some(x=>x.sql==="ROLLBACK"));
   assert.equal(pool.calls.some(x=>x.sql.startsWith("UPDATE")),false);
 });
