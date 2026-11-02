@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 export async function marketplaceHeaderBrowserChecks({page,base,artifacts}){
- const pages=["/shop/merchant-terms.html", "/shop/seller.html", "/shop/marketplace-seller.html", "/shop/download-history.html", "/shop/assistant.html", "/shop/download-review.html", "/shop/legal.html", "/shop/order-history.html", "/shop/account.html", "/shop/licences.html", "/shop/documents.html", "/shop/marketplace-payment-return.html", "/shop/my-shop.html", "/shop/payment-return.html", "/shop/help.html", "/shop/marketplace-review.html", "/shop/register.html", "/shop/marketplace.html", "/shop/seller-cloud.html", "/shop/index.html", "/impressum/", "/datenschutz/"];
+ const pages=["/shop/store.html", "/shop/storefront.html", "/shop/merchant-terms.html", "/shop/seller.html", "/shop/marketplace-seller.html", "/shop/download-history.html", "/shop/assistant.html", "/shop/download-review.html", "/shop/legal.html", "/shop/order-history.html", "/shop/account.html", "/shop/licences.html", "/shop/documents.html", "/shop/marketplace-payment-return.html", "/shop/my-shop.html", "/shop/payment-return.html", "/shop/help.html", "/shop/marketplace-review.html", "/shop/register.html", "/shop/marketplace.html", "/shop/seller-cloud.html", "/shop/index.html", "/impressum/", "/datenschutz/"];
  for(const width of [390,1280]){
   await page.setViewportSize({width,height:900});
   await page.goto(base+'/shop/index.html');

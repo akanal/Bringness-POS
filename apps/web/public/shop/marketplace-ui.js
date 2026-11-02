@@ -84,6 +84,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
    if(!Array.isArray(result.offers)||!result.offers.every(p=>publicId(p.sellerId)&&Array.isArray(p.variants)))throw Object.assign(Error(),{code:'INVALID_RESPONSE'});
    rows=append?[...rows,...result.offers]:result.offers;updateCategories();render();
    const context=$('market-context');context.replaceChildren();if(profile){context.append(el('h2',profile.profile.name),el('p',profile.profile.street+', '+profile.profile.postalCode+' '+profile.profile.city+' · '+profile.profile.country),el('p',profile.profile.email),el('p','Geschäftliche Kontaktdaten des freigegebenen Händlers. Onlinezahlung ist nicht freigeschaltet.'));}
+   if(profile?.shopUrl&&/^\/shop\/store\.html\?shop=[a-z0-9-]{3,60}$/.test(profile.shopUrl)){const shopLink=el('a','Zum Verkäufer-Shop');shopLink.href=profile.shopUrl;context.append(shopLink);}
    if(profile||detailId)context.append(link('Alle Händlerangebote',{}));
    nextCursor=result.nextCursor||'';$('market-next').hidden=!nextCursor;
   }catch(e){if(current===searchEpoch){rows=[];nextCursor='';render();$('market-context').replaceChildren();$('market-next').hidden=true;status(marketError(e),true);}}
