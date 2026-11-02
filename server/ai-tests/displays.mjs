@@ -180,7 +180,11 @@ await migrateDisplays(pool);
 assert((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[stale])).rows[0].pickup_display_hidden_at);
 for(const key of [foreign,readyCleanup])assert.equal((await query('SELECT pickup_display_hidden_at FROM orders WHERE id=$1',[key])).rows[0].pickup_display_hidden_at,null);
 assert.deepEqual((await query('SELECT id,status,qr_ready_at,pickup_collected_at FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[stale,foreign,readyCleanup]])).rows,cleanupBefore);
+const photographed=['e2569e58','1132b4a1','6f0517bf','c91f2746','de4d9b0e','d2b6469c','ae0a0c9a','b0185bf5','965ec2af','4308bc4d'];
+const photographedRid=id();await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Bringness Testbetrieb')",[photographedRid,company]);
+for(const prefix of photographed)await query("INSERT INTO orders(id,restaurant_id,status,created_at) VALUES($1,$2,'preparing','2026-11-01')",[prefix+'-0000-4000-8000-000000000099',photographedRid]);
 await migrateDisplays(pool);
+assert.equal((await query('SELECT count(*)::int n FROM orders WHERE restaurant_id=$1 AND pickup_display_hidden_at IS NOT NULL',[photographedRid])).rows[0].n,10);
 console.log('Targeted stale display cleanup preserves orders, readiness and other restaurants.');
 
 await db.close();
