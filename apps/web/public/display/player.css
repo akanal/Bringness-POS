@@ -17,7 +17,7 @@ body.pickup-mode{background:#f5f5ef;color:#203630}
 .pickup-status-dot{width:clamp(9px,1vw,18px);height:clamp(9px,1vw,18px);border-radius:50%;background:#bf7a1a;flex-shrink:0}
 .pickup-ready .pickup-status-dot{background:#26724a}
 .pickup h2{margin:0;font-size:clamp(19px,2.3vw,46px);line-height:1.2}
-.pickup-numbers{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:1.5vh 1.2vw;align-content:start}
+.pickup-numbers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.5vh 1.2vw;align-content:start}
 .pickup-numbers strong{display:block;padding:1.5vh 1vw;border:1px solid #e5dfd0;border-radius:12px;background:#fff;color:#343d36;font-size:clamp(24px,3.2vw,70px);line-height:1.15;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.025em;text-align:center;overflow-wrap:anywhere}
 .pickup-ready .pickup-numbers strong{border-color:#bdd6c4;color:#154e31}
 .pickup-empty{grid-column:1/-1;margin:1vh 0;color:#5b6c63;font-size:clamp(14px,1.6vw,28px)}

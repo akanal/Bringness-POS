@@ -149,6 +149,7 @@ test('fixed counter player shows the ordering QR and live pickup numbers in land
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
    assert.equal(await page.locator('.pickup-logo').count(),0);assert.equal(await page.locator('body').innerText().then(text=>text.includes('Bringness')),false);
    assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(245, 245, 239)');
+   for(const grid of await page.locator('.pickup-numbers').all())assert.equal(await grid.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),2,'each status has exactly two number columns');
    if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pickup-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+orientation+'.png'});}
   }
   restaurantLogo=businessLogo;await page.reload();await page.locator('.pickup-logo img').waitFor();assert.equal(await page.locator('.pickup-logo img').evaluate(img=>img.complete&&img.naturalWidth>0),true);assert.equal(await page.locator('.pickup h1').innerText(),'Café Linden');
