@@ -38,3 +38,7 @@ Description drafts (at most90 characters each):
 
 Sitelink drafts: Funktionen → /#produkt; Preise → /preise/; QR-Bestellungen → /qr-bestellungen.html; Über Bringness POS → /ueber-uns/.
 No unverified fiscal readiness, guaranteed savings, free pilot, blanket availability or discounts advertised. Prepare only; activating paid ads requires the owner's concrete budget.
+
+## Dedicated POS legal presentation
+
+Final audit found the existing imprint/privacy pages use marketplace navigation and contain draft placeholders, not final legal texts. Dedicated /rechtliches/impressum/ and /rechtliches/datenschutz/ preserve the original main content exactly, use POS-only navigation and noindex,follow. POS marketing links point there; original marketplace legal pages are untouched. Regression compares legal main content byte-for-byte. Final operator/privacy texts remain a concrete launch blocker for paid campaigns; no legal compliance claim is made.

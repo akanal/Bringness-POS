@@ -43,3 +43,13 @@ test('public POS product canonicals no longer identify the marketplace',()=>{
     assert(!/Ahmet|Kanal/.test(html));
   }
 });
+
+test('dedicated POS legal presentation preserves original legal content without marketplace navigation',()=>{
+  for(const name of ['impressum','datenschutz']) {
+    const source=fs.readFileSync(new URL('../apps/web/public/'+name+'/index.html',import.meta.url),'utf8');
+    const pos=fs.readFileSync(new URL('../apps/web/public/rechtliches/'+name+'/index.html',import.meta.url),'utf8');
+    assert.equal(pos.match(/<main>[\s\S]*?<\/main>/)[0],source.match(/<main>[\s\S]*?<\/main>/)[0]);
+    assert(!pos.includes('/shop/'));
+    assert(pos.includes('noindex,follow'));
+  }
+});

@@ -19,3 +19,12 @@ test('actual production static dispatcher resolves POS introduction links and bo
  for(const url of ['/demo','/demo/','/demo/?from=vorfuehrung']){assert.equal(routeFile(url),path.join(root,'demo/index.html'));assert(fs.statSync(routeFile(url)).isFile());}
  assert.equal(routeFile('/pos/'),path.join(root,'pos/index.html'));assert.equal(routeFile('/shop/'),path.join(root,'shop/index.html'));
 });
+
+test('actual static dispatcher resolves about and dedicated POS legal directory URLs',()=>{
+ for(const section of ['ueber-uns','rechtliches/impressum','rechtliches/datenschutz']){
+  for(const url of ['/'+section,'/'+section+'/','/'+section+'/?source=pos']){
+   const file=routeFile(url);assert.equal(file,path.join(root,section,'index.html'));assert(fs.statSync(file).isFile());
+   assert.equal(redirectLegacyPosDomain({method:'GET',headers:{host:'bringness-pos.de'},url},{writeHead(){throw Error(url)}},'pos',{NODE_ENV:'production'}),false);
+  }
+ }
+});
