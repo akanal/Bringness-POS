@@ -38,6 +38,7 @@ import {handleCenter,migrateCenter} from "./center.js";
 import {handleQrService,migrateQrService} from "./qr-service.js";
 import {runtimeMode, configurePosOrigin, redirectLegacyPosDomain, loadAiFeatures, blockAiRequest} from "./runtime-mode.js";
 import {serveMarketplaceHome} from './marketplace-home.js';
+import {servePublicSearch} from './public-search.js';
 assertPreviewEntrypoint();
 const appMode = runtimeMode();
 configurePosOrigin(process.env, appMode);
@@ -109,6 +110,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (servePublicSearch(req,res,appMode)) return;
       if (redirectLegacyPosDomain(req,res,appMode)) return;
       if (serveMarketplaceHome(req,res,appMode,()=>fs.readFileSync(new URL('../apps/web/public/shop/index.html',import.meta.url),'utf8'))) return;
       if(appMode!=='ai' && req.method==='GET' && new URL(req.url,'http://local').pathname==='/health/fiskaly-test'){
