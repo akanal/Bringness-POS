@@ -9,3 +9,10 @@ POS contact copy remains brand-only. Existing homepage cards now explicitly incl
 Public searches could not independently verify exact current official social profiles. No guessed Facebook/LinkedIn/Instagram URL or fabricated sameAs structured data was published. Exact owner-confirmed profile URLs or authenticated profile evidence remain needed. Google Search Console ownership/index submission was not accessed; search ranking changes are not claimed.
 
 Local verification: 693 root unit tests pass with no failures/skips; 12 focused routing, host separation, method/HEAD, sitemap, canonical identity and legacy route checks pass. `server/start.js` syntax and patch whitespace checks pass. GitHub checks and deployment are recorded separately after completion.
+
+
+## Verified release
+
+Feature 3a4cefecc1942060e51d160b42c8d82e4f49927a (PR225) passed all six GitHub workflows: checks41849400718, release41849400955, isolated41849400721, Center41849400735, POS/AI41849400738 and Shop41849401089. Authenticated pre-release backup41849492973/job126641650331 reports Database backups validated. Merge e1a3343ea81e0de4638464f8c3d1f72acd0cbe65 deployed exactly through Netcup41855859471/job126664163398; previous container and database backup retained.
+
+Fresh public HTTP checks: both homepages200 with correct own-domain canonical; both robots and sitemaps200 on their own domains with exact expected URLs and no cross-brand redirects. Native Chrome confirms new POS title and personnel/receipt/report/display cards render correctly; screenshot inspected. All-inkl secure sign-in request timed out, and a fresh KAS tab still shows the login screen. Old bringness.com still returns its food-delivery page200 at /en. No old-site content or provider settings were changed; secure All-inkl authentication remains the blocker.
