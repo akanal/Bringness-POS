@@ -92,7 +92,7 @@ test("legacy pages redirect to Bringness with tokens and query intact; APIs rema
 // Public product browsing stays on POS; authenticated operations retain their established origin.
 test('POS product pages and assets stay on-domain without changing operational redirects', () => {
   for (const method of ['GET','HEAD']) {
-    for (const url of ['/preise/','/preise/app.js?v=1','/ueber-uns/','/qr-bestellungen.html','/demo/','/rechtliches/impressum/','/rechtliches/datenschutz/','/styles.css','/cookie.js','/assets/bringness-logo.png']) {
+    for (const url of ['/preise/','/preise/app.js?v=1','/ueber-uns/','/qr-bestellungen.html','/demo/','/rechtliches/impressum/','/rechtliches/datenschutz/','/styles.css','/cookie.js','/brand-logo.js','/assets/bringness-logo.png']) {
       assert.equal(redirectLegacyPosDomain({method,headers:{host:'bringness-pos.de'},url},{writeHead(){throw Error(url);}},'pos',{NODE_ENV:'production'}),false);
     }
     for (const url of ['/pos/','/service/','/tisch/?code=a%2Bb','/shop/','/preise-private','/demo-admin']) {

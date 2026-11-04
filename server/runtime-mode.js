@@ -50,7 +50,7 @@ export function redirectLegacyPosDomain(req, res, mode, env = process.env) {
   const pathname = new URL(path, "https://bringness.de").pathname;
   // This domain owns the POS product homepage. Only bringness.de owns the marketplace root.
   // Serve the existing POS index here, keeping the visitor on bringness-pos.de.
-  const publicFiles = new Set(['/', '/index.html', '/styles.css', '/preview-motion.css', '/preview-motion.js', '/cookie.js', '/qr-bestellungen.html', '/assets/bringness-logo.png']);
+  const publicFiles = new Set(['/', '/index.html', '/styles.css', '/preview-motion.css', '/preview-motion.js', '/cookie.js', '/brand-logo.js', '/qr-bestellungen.html', '/assets/bringness-logo.png']);
   const publicSections = ['/vorfuehrung', '/preise', '/ueber-uns', '/demo', '/rechtliches'];
   if (publicFiles.has(pathname) || publicSections.some(section => pathname === section || pathname.startsWith(section + '/'))) return false;
   if (pathname === "/api" || pathname.startsWith("/api/")) return false;
