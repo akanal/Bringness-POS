@@ -275,3 +275,25 @@ test('waiter removal reaches shared TV immediately and guest deposit survives ch
   assert.deepEqual(errors,[]);
  }finally{await context.close();await browser.close();}
 });
+
+test('POS introduction presents the complete system and prepares a private mail draft at mobile and desktop widths',async()=>{
+ const document=await readFile(new URL('../apps/web/public/vorfuehrung/index.html',import.meta.url),'utf8');
+ const assets={};for(const name of ['style.css','app.js'])assets[name]=await readFile(new URL('../apps/web/public/vorfuehrung/'+name,import.meta.url),'utf8');
+ const browser=await engine.launch({headless:true});
+ try{for(const width of [390,1280]){
+  const page=await browser.newPage({viewport:{width,height:900}}),requests=[],errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.route('https://pos-intro.test/**',route=>{const path=new URL(route.request().url()).pathname;requests.push(path);if(path==='/vorfuehrung/')return route.fulfill({contentType:'text/html',body:document});const name=path.split('/').pop();if(assets[name])return route.fulfill({contentType:name.endsWith('.js')?'text/javascript':'text/css',body:assets[name]});return route.abort()});
+  await page.goto('https://pos-intro.test/vorfuehrung/');
+  for(const name of ['Kasse & Artikel','Tische & QR-Bestellung','Kellnerbestellungen','Küchenübersicht','Personal & Dienstplan','Belege & Rechnungen','Schicht & Auswertungen','Bildschirme & Abholung'])assert(await page.getByRole('heading',{name,exact:true}).isVisible());
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'content fits viewport');
+  if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pos-introduction-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}
+  await page.getByRole('tab',{name:'Tisch & Küche',exact:true}).click();assert.match(await page.locator('#example').innerText(),/Küche verfolgen/);
+  await page.getByRole('tab',{name:'Team & Schicht',exact:true}).click();assert.match(await page.locator('#example').innerText(),/Stempel-PIN/);
+  await page.getByLabel('Betrieb *',{exact:true}).fill('Café Beispiel & Co');await page.getByLabel('Dein Name *',{exact:true}).fill('<Demo Person>');
+  await page.getByLabel('E-Mail für die Rückmeldung *',{exact:true}).fill('kein-email');await page.getByRole('button',{name:'E-Mail-Anfrage vorbereiten',exact:true}).click();assert.equal(await page.locator('#draftbox').isVisible(),false);
+  await page.getByLabel('E-Mail für die Rückmeldung *',{exact:true}).fill('demo+test@example.test');await page.getByRole('button',{name:'E-Mail-Anfrage vorbereiten',exact:true}).click();assert(await page.locator('#draftbox').isVisible());
+  const href=await page.locator('#mailLink').getAttribute('href'),mail=new URL(href);assert.equal(mail.protocol,'mailto:');assert.equal(mail.pathname,'info@bringness.de');assert.match(mail.searchParams.get('body'),/Gesamtsystem kennenlernen/);assert.match(mail.searchParams.get('body'),/<Demo Person>/);assert.equal(await page.locator('#draftbox script').count(),0);
+  assert.deepEqual(requests.filter(p=>p.startsWith('/api/')),[],'no personal information is sent to an API');assert.deepEqual(errors,[]);await page.close();
+ }}finally{await browser.close()}
+});

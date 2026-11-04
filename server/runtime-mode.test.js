@@ -61,7 +61,7 @@ test('production POS moves legacy public links to bringness.de and preserves oth
 const { redirectLegacyPosDomain } = await import("./runtime-mode.js");
 test('POS domain homepage is never redirected to the marketplace, including www, HEAD and query strings', () => {
   for (const host of ['bringness-pos.de','www.bringness-pos.de','BRINGNESS-POS.DE:443']) {
-    for (const method of ['GET','HEAD']) for (const url of ['/','/?campaign=pos','/index.html','/index.html?lang=tr']) {
+    for (const method of ['GET','HEAD']) for (const url of ['/','/?campaign=pos','/index.html','/index.html?lang=tr','/vorfuehrung/','/vorfuehrung/?utm_source=flyer','/vorfuehrung/style.css?v=20261104','/vorfuehrung/app.js?v=20261104']) {
       const req={method,headers:{host},url};
       assert.equal(redirectLegacyPosDomain(req,{writeHead(){throw Error('POS homepage must stay on POS domain');}},'pos',{NODE_ENV:'production'}),false);
       assert.equal(req.url,url);
