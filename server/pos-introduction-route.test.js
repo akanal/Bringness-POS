@@ -16,5 +16,6 @@ test('actual production static dispatcher resolves POS introduction links and bo
   for(const host of ['bringness-pos.de','www.bringness-pos.de'])assert.equal(redirectLegacyPosDomain({method:'GET',headers:{host},url},{writeHead(){throw Error('must stay on POS domain')}},'pos',{NODE_ENV:'production'}),false);
  }
  for(const name of ['app.js','style.css'])assert(fs.statSync(routeFile('/vorfuehrung/'+name+'?v=20261104')).isFile());
+ for(const url of ['/demo','/demo/','/demo/?from=vorfuehrung']){assert.equal(routeFile(url),path.join(root,'demo/index.html'));assert(fs.statSync(routeFile(url)).isFile());}
  assert.equal(routeFile('/pos/'),path.join(root,'pos/index.html'));assert.equal(routeFile('/shop/'),path.join(root,'shop/index.html'));
 });
