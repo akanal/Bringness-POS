@@ -8,7 +8,7 @@ export function servePublicSearch(req, res, mode) {
   const pathname = new URL(req.url, 'https://bringness.de').pathname;
   if (!['/robots.txt', '/sitemap.xml'].includes(pathname)) return false;
   const origin = pos ? 'https://bringness-pos.de' : 'https://bringness.de';
-  const urls = pos ? ['/', '/vorfuehrung/'] : ['/', '/shop/marketplace.html'];
+  const urls = pos ? ['/', '/vorfuehrung/', '/preise/', '/ueber-uns/', '/qr-bestellungen.html'] : ['/', '/shop/marketplace.html'];
   const sitemap = pathname === '/sitemap.xml';
   const body = sitemap
     ? '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls.map(p => '<url><loc>' + origin + p + '</loc></url>').join('') + '</urlset>\n'

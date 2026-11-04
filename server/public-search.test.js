@@ -7,7 +7,7 @@ function request(host, url, method='GET', mode='pos') {
   return {handled:servePublicSearch({headers:{host},url,method},res,mode),res};
 }
 test('each brand host publishes its own sitemap and robots without cross-domain or private links',()=>{
-  for(const [host,origin,paths] of [['bringness-pos.de','https://bringness-pos.de',['/','/vorfuehrung/']],['bringness.de','https://bringness.de',['/','/shop/marketplace.html']]]) {
+  for(const [host,origin,paths] of [['bringness-pos.de','https://bringness-pos.de',['/','/vorfuehrung/','/preise/','/ueber-uns/','/qr-bestellungen.html']],['bringness.de','https://bringness.de',['/','/shop/marketplace.html']]]) {
     for(const name of [host,'www.'+host,host.toUpperCase()+':443']) {
       const {handled,res}=request(name,'/sitemap.xml?probe=1');assert.equal(handled,true);assert.equal(res.status,200);
       assert.deepEqual([...res.body.matchAll(/<loc>(.*?)<\/loc>/g)].map(x=>x[1]),paths.map(p=>origin+p));
@@ -34,4 +34,12 @@ test('POS and marketplace homepage identities match their own domains; POS descr
   const schema=JSON.parse(pos.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);assert.equal(schema.url,'https://bringness-pos.de/');
   assert.match(market,/<link rel="canonical" href="https:\/\/bringness.de\/">/);
   for(const text of ['Personal & Rechte','Belege & Auswertungen','Dienstplanung','Abholnummern','/vorfuehrung/'])assert(pos.includes(text));
+});
+
+test('public POS product canonicals no longer identify the marketplace',()=>{
+  for(const [file,path] of [['preise/index.html','/preise/'],['ueber-uns/index.html','/ueber-uns/'],['qr-bestellungen.html','/qr-bestellungen.html']]) {
+    const html=fs.readFileSync(new URL('../apps/web/public/'+file,import.meta.url),'utf8');
+    assert(html.includes('<link rel="canonical" href="https://bringness-pos.de'+path+'">'));
+    assert(!/Ahmet|Kanal/.test(html));
+  }
 });
