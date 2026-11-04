@@ -561,3 +561,6 @@ Supersedes the white-header interpretation: the HEADER should have a beautiful B
 
 ## Owner POS marketing scope confirmed 2026-11-04
 The public demonstration page must introduce the whole POS system, including register, catalogue, tables/QR, waiter ordering, kitchen, personnel, receipts/invoices and reports. Pickup/display is one optional area, not the primary marketing proposition. `/vorfuehrung/` belongs on the POS product domain; preserve legacy application routing. No new pilot discounts, commercial commitments or unverified fiscal/Center readiness claims. See docs/pos-introduction-20261104.md.
+
+## Public brand wording confirmed 2026-11-04
+The owner requests that personal founder names be omitted from marketing and product copy. Use Bringness or Bringness-Team as the public contact and salutation, including demo pages, flyers and sales drafts. Do not infer changes to stored identities or legal records from this copy preference.
