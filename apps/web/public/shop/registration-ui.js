@@ -21,7 +21,8 @@ export function mountShopRegistration({host,request=requestShopRegistration,hash
  hint.id='shop-registration-password-help';hint.textContent=passwordFeedback('');hint.setAttribute('aria-live','polite');inputs.password.setAttribute('aria-describedby',hint.id+' '+errors.password.id);inputs.password.parentElement.after(hint);placePasswordEye(inputs.password,toggle);
  cancel.type='button';cancel.textContent='Anfrage in dieser Ansicht beenden';cancel.hidden=true;
  recovery.href='/shop/account.html'+(hash==='#review'||hash==='#licences'?hash:'');recovery.referrerPolicy='no-referrer';recovery.textContent='Schon ein Konto oder unklare Antwort? Im Shop anmelden';
- function clearPassword(){inputs.password.value='';hint.textContent=passwordFeedback('');inputs.password.type='password';paintPasswordEye(toggle,false);}
+ function maskPassword(){inputs.password.type='password';paintPasswordEye(toggle,false);}
+ function clearPassword(){inputs.password.value='';hint.textContent=passwordFeedback('');maskPassword();}
  function setBusy(busy){for(const input of Object.values(inputs))input.disabled=busy;ack.disabled=busy;toggle.disabled=busy;cancel.hidden=!busy;form.setAttribute('aria-busy',String(busy));const waiting=now()<cooldownUntil;submit.disabled=busy||waiting;submit.textContent=busy?'Wird geprüft …':waiting?'Bitte warten':requestId?'Erneut prüfen':'Konto anlegen';}
  function waitBeforeRetry(seconds){if(!Number.isInteger(seconds)||seconds<1||seconds>900)return;cooldownUntil=now()+seconds*1000;w.clearTimeout(cooldownTimer);cooldownTimer=w.setTimeout(()=>{if(!disposed){setBusy(Boolean(active));if(available()&&!active)note.textContent='Die Wartezeit ist beendet. Bitte Angaben prüfen und ausdrücklich erneut absenden.';}},seconds*1000);note.textContent=`Zu viele Versuche. Bitte etwa ${seconds} Sekunden warten und danach ausdrücklich erneut absenden.`;}
  toggle.onclick=()=>{if(!available()||active)return;const reveal=inputs.password.type==='password';inputs.password.type=reveal?'text':'password';paintPasswordEye(toggle,reveal);};
@@ -29,10 +30,10 @@ export function mountShopRegistration({host,request=requestShopRegistration,hash
  const edit=e=>{const name=e.target.name;if(name==='password'&&!active)hint.textContent=passwordFeedback(inputs.password.value);if(inputs[name]&&!active){inputs[name].removeAttribute('aria-invalid');errors[name].hidden=true;errors[name].textContent='';}};
  submit.type='submit';submit.textContent='Konto anlegen';form.append(submit,cancel);note.setAttribute('role','status');next.textContent='Jetzt ausdrücklich anmelden';next.href='/shop/account.html'+(hash==='#review'||hash==='#licences'?hash:'');next.hidden=true;host.replaceChildren(form,note,next,recovery);
  function available(){return !disposed&&host.isConnected&&d.visibilityState!=='hidden'&&w.navigator.onLine!==false;}
- function stop(message=''){epoch++;active?.abort();active=null;w.clearTimeout(timer);clearPassword();setBusy(false);form.hidden=false;next.hidden=true;recovery.hidden=false;note.textContent=message;ack.checked=false;clearErrors();}
- function privacy(){if(d.visibilityState==='hidden'){stop();for(const i of Object.values(inputs))i.value='';}}
+ function stop(message='',preservePassword=false){epoch++;active?.abort();active=null;w.clearTimeout(timer);if(preservePassword)maskPassword();else clearPassword();setBusy(false);form.hidden=false;next.hidden=true;recovery.hidden=false;note.textContent=message;ack.checked=false;clearErrors();}
+ function privacy(){if(d.visibilityState==='hidden'){maskPassword();if(active)stop('Die Registrierungsprüfung wurde unterbrochen. Deine Eingaben bleiben erhalten. Bitte zuerst die Anmeldung prüfen oder ausdrücklich erneut versuchen.',true);}}
  const hide=()=>{stop();for(const i of Object.values(inputs))i.value='';};
- const offline=()=>stop('Offline. Bitte später zuerst die Anmeldung prüfen, falls die Registrierung bereits abgeschickt wurde.');
+ const offline=()=>stop('Offline. Bitte später zuerst die Anmeldung prüfen, falls die Registrierung bereits abgeschickt wurde.',true);
  const account=()=>{stop('Das Konto hat sich geändert. Bitte zuerst die Anmeldung prüfen.');for(const i of Object.values(inputs))i.value='';displayedAccount=readAccount();accountNotice();};
  const focus=()=>{if(readAccount()!==displayedAccount)account();else setBusy(Boolean(active));};
  const online=()=>setBusy(Boolean(active));
@@ -42,10 +43,10 @@ export function mountShopRegistration({host,request=requestShopRegistration,hash
   if(displayedAccount!==''&&!ack.checked){note.textContent='Bitte bestätige ausdrücklich, dass du einen weiteren eigenen Betrieb anlegen möchtest, oder nutze die Anmeldung.';ack.focus();return;}
 
   try{requestId??=newId();}catch{note.textContent='Registrierung in diesem Browser nicht verfügbar.';clearPassword();return;}
-  const generation=++epoch,controller=new AbortController();active=controller;setBusy(true);clearPassword();note.textContent='Registrierung wird geprüft …';timer=w.setTimeout(()=>stop('Antwort ausgeblieben. Bitte zuerst anmelden. Eine Wiederholung mit unveränderten Angaben verwendet denselben Vorgang.'),timeoutMs);
+  const generation=++epoch,controller=new AbortController();active=controller;setBusy(true);maskPassword();note.textContent='Registrierung wird geprüft …';timer=w.setTimeout(()=>stop('Antwort ausgeblieben. Bitte zuerst anmelden. Eine Wiederholung mit unveränderten Angaben verwendet denselben Vorgang.',true),timeoutMs);
   try{const pending=request({requestId,registration:value,signal:controller.signal});value.password='';const r=await pending;if(generation!==epoch||!available())return;if(readAccount()!==accountAtSubmit){account();return;}
    if(r?.requestId!==requestId||r.recorded!==true||r.loginRequired!==true||r.canPay!==false||r.canActivate!==false||r.checkoutConnected!==false)throw Error();
-   note.textContent='Konto angelegt. Bitte jetzt anmelden. Dein Warenkorb bleibt im selben Tab erhalten; Konto und Preise werden danach erneut geprüft.';next.hidden=false;recovery.hidden=true;form.hidden=true;
+   clearPassword();note.textContent='Konto angelegt. Bitte jetzt anmelden. Dein Warenkorb bleibt im selben Tab erhalten; Konto und Preise werden danach erneut geprüft.';next.hidden=false;recovery.hidden=true;form.hidden=true;
   }catch(error){if(generation===epoch&&available()){note.textContent=messages[error.code]||'Registrierung nicht bestätigt. Bitte zuerst anmelden oder mit denselben Angaben erneut versuchen.';if(error.code==='REGISTRATION_LIMIT')waitBeforeRetry(error.retryAfter);}}
   finally{value.password='';if(generation===epoch){w.clearTimeout(timer);active=null;setBusy(false);}}
  }
