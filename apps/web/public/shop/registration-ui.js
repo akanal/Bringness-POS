@@ -31,7 +31,7 @@ export function mountShopRegistration({host,request=requestShopRegistration,hash
  submit.type='submit';submit.textContent='Konto anlegen';form.append(submit,cancel);note.setAttribute('role','status');next.textContent='Jetzt ausdrücklich anmelden';next.href='/shop/account.html'+(hash==='#review'||hash==='#licences'?hash:'');next.hidden=true;host.replaceChildren(form,note,next,recovery);
  function available(){return !disposed&&host.isConnected&&d.visibilityState!=='hidden'&&w.navigator.onLine!==false;}
  function stop(message='',preservePassword=false){epoch++;active?.abort();active=null;w.clearTimeout(timer);if(preservePassword)maskPassword();else clearPassword();setBusy(false);form.hidden=false;next.hidden=true;recovery.hidden=false;note.textContent=message;ack.checked=false;clearErrors();}
- function privacy(){if(d.visibilityState==='hidden')stop('',true);}
+ function privacy(){if(d.visibilityState==='hidden'){maskPassword();if(active)stop('Die Registrierungsprüfung wurde unterbrochen. Deine Eingaben bleiben erhalten. Bitte zuerst die Anmeldung prüfen oder ausdrücklich erneut versuchen.',true);}}
  const hide=()=>{stop();for(const i of Object.values(inputs))i.value='';};
  const offline=()=>stop('Offline. Bitte später zuerst die Anmeldung prüfen, falls die Registrierung bereits abgeschickt wurde.',true);
  const account=()=>{stop('Das Konto hat sich geändert. Bitte zuerst die Anmeldung prüfen.');for(const i of Object.values(inputs))i.value='';displayedAccount=readAccount();accountNotice();};

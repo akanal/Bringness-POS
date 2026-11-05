@@ -32,7 +32,7 @@ export function mountShopLogin({host,storage,request=requestShopLogin,hash='',ti
  };
  form.addEventListener('submit',send);
  const hide=()=>stop();w.addEventListener('pagehide',hide);
- const privacy=()=>{if(d.visibilityState==='hidden')stop('',true);},offline=()=>stop('Offline. Für die Anmeldung wird eine Verbindung benötigt.',true),change=e=>{if(e.key===key||e.key===null)stop(messages.ACCOUNT_CHANGED);},focus=()=>{if(loggedToken){try{if(readToken()!==loggedToken)stop(messages.ACCOUNT_CHANGED);}catch{stop(messages.STORAGE_UNAVAILABLE);}}};
+ const privacy=()=>{if(d.visibilityState==='hidden'){mask();if(active)stop('Die Anmeldeprüfung wurde unterbrochen. Deine Eingaben bleiben erhalten. Bitte erneut anmelden.',true);}},offline=()=>stop('Offline. Für die Anmeldung wird eine Verbindung benötigt.',true),change=e=>{if(e.key===key||e.key===null)stop(messages.ACCOUNT_CHANGED);},focus=()=>{if(loggedToken){try{if(readToken()!==loggedToken)stop(messages.ACCOUNT_CHANGED);}catch{stop(messages.STORAGE_UNAVAILABLE);}}};
  next.onclick=e=>{try{if(!available()||!loggedToken||readToken()!==loggedToken){e.preventDefault();stop(messages.ACCOUNT_CHANGED);}}catch{e.preventDefault();stop(messages.STORAGE_UNAVAILABLE);}};
  d.addEventListener('visibilitychange',privacy);w.addEventListener('offline',offline);w.addEventListener('storage',change);w.addEventListener('focus',focus);
  return {dispose(){if(disposed)return;disposed=true;stop();w.removeEventListener('pagehide',hide);form.removeEventListener('submit',send);d.removeEventListener('visibilitychange',privacy);w.removeEventListener('offline',offline);w.removeEventListener('storage',change);w.removeEventListener('focus',focus);host.replaceChildren();}};
