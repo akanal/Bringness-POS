@@ -9,15 +9,15 @@ export function mountShopLogin({host,storage,request=requestShopLogin,hash='',ti
  const field=(label,input)=>{const e=el('label',label);e.append(input);form.append(e);};
  email.type='email';email.name='email';email.autocomplete='username';email.maxLength=254;email.required=true;email.setAttribute('autocapitalize','none');email.spellcheck=false;
  password.type='password';password.name='password';password.autocomplete='current-password';password.maxLength=128;password.required=true;field('E-Mail',email);field('Passwort',password);
- toggle.type='button';toggle.setAttribute('aria-pressed','false');submit.type='submit';note.setAttribute('role','status');next.href=shopLoginDestination(hash);next.referrerPolicy='no-referrer';next.hidden=true;if(hash!=='#review')next.textContent=hash==='#documents'?'Weiter zu meinen Dokumenten':hash==='#merchant'?'Weiter zum Händlerbereich':hash==='#marketplace'?'Weiter zu Händlerangeboten und Bestellungen':hash==='#licences'?'Weiter zu meinen Lizenzen':'Weiter zum Shop';placePasswordEye(password,toggle);submit.className='action-primary';form.append(submit);host.replaceChildren(form,note,next);
+ toggle.type='button';toggle.setAttribute('aria-pressed','false');submit.type='submit';note.setAttribute('role','status');note.tabIndex=-1;next.href=shopLoginDestination(hash);next.referrerPolicy='no-referrer';next.hidden=true;if(hash!=='#review')next.textContent=hash==='#documents'?'Weiter zu meinen Dokumenten':hash==='#merchant'?'Weiter zum Händlerbereich':hash==='#marketplace'?'Weiter zu Händlerangeboten und Bestellungen':hash==='#licences'?'Weiter zu meinen Lizenzen':'Weiter zum Shop';placePasswordEye(password,toggle);submit.className='action-primary';form.append(submit);host.replaceChildren(form,note,next);
  function mask(){password.type='password';paintPasswordEye(toggle,false);}
  function clear(){password.value='';mask();}
- function stop(message='',preservePassword=false){generation++;active?.abort();active=null;w.clearTimeout(timer);timer=null;form.setAttribute('aria-busy','false');submit.disabled=false;email.disabled=false;toggle.disabled=false;password.disabled=false;if(preservePassword)mask();else clear();next.hidden=true;loggedToken=null;note.textContent=message;}
+ function stop(message='',preservePassword=false){generation++;active?.abort();active=null;w.clearTimeout(timer);timer=null;form.hidden=false;form.setAttribute('aria-busy','false');submit.disabled=false;email.disabled=false;toggle.disabled=false;password.disabled=false;if(preservePassword)mask();else clear();next.hidden=true;loggedToken=null;note.textContent=message;}
  function available(){return !disposed&&host.isConnected&&d.visibilityState!=='hidden'&&w.navigator.onLine!==false;}
  function readToken(){return storage.getItem(key)||'';}
  toggle.onclick=()=>{if(!available()||active)return;const reveal=password.type==='password';password.type=reveal?'text':'password';paintPasswordEye(toggle,reveal);};
  const send=async event=>{
-  event.preventDefault();if(!available()||active)return;
+  event.preventDefault();if(!available()||active||form.hidden)return;
   if(!validShopLogin(email.value,password.value)){note.textContent=messages.INVALID_INPUT;mask();return;}
   let original;try{original=readToken();}catch{note.textContent=messages.STORAGE_UNAVAILABLE;mask();return;}
   const credentials={email:email.value,password:password.value},epoch=++generation,controller=new AbortController();active=controller;submit.disabled=true;email.disabled=true;toggle.disabled=true;next.hidden=true;password.disabled=true;mask();form.setAttribute('aria-busy','true');note.textContent='Anmeldung wird geprüft …';
@@ -26,7 +26,7 @@ export function mountShopLogin({host,storage,request=requestShopLogin,hash='',ti
    const pending=request({...credentials,signal:controller.signal});credentials.password='';const result=await pending;if(epoch!==generation||!available())return;
    if(readToken()!==original)throw Object.assign(Error(),{code:'ACCOUNT_CHANGED'});
    try{storage.setItem(key,result.token);if(readToken()!==result.token)throw Error();}catch{throw Object.assign(Error(),{code:'STORAGE_UNAVAILABLE'});}
-   clear();loggedToken=result.token;next.hidden=false;note.textContent='Mit deinem Bringness-Konto angemeldet: '+email.value.trim()+'. Du kannst im Shop fortfahren; Händlerrechte und Kontopreise werden im jeweiligen Bereich geprüft.';
+   clear();form.hidden=true;loggedToken=result.token;next.hidden=false;note.textContent='Mit deinem Bringness-Konto angemeldet: '+email.value.trim()+'. Du kannst im Shop fortfahren; Händlerrechte und Kontopreise werden im jeweiligen Bereich geprüft.';note.focus();
   }catch(e){if(epoch===generation&&available()){if(e.code==='ACCOUNT_CHANGED')clear();note.textContent=messages[e.code]||messages.LOGIN_UNAVAILABLE;}}
   finally{credentials.password='';if(epoch===generation){w.clearTimeout(timer);active=null;submit.disabled=false;email.disabled=false;toggle.disabled=false;password.disabled=false;mask();form.setAttribute('aria-busy','false');}}
  };
