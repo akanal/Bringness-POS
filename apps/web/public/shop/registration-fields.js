@@ -1,5 +1,5 @@
 export const registrationLabels=Object.freeze({companyName:'Firmenname',ownerName:'Vor- und Nachname',email:'E-Mail',password:'Passwort',street:'Straße und Hausnummer',postalCode:'Postleitzahl',city:'Ort',country:'Ländercode (z. B. DE)'});
-const passwordValid=value=>typeof value==='string'&&value.length>=6&&value.length<=128&&/\p{Lu}/u.test(value)&&/\p{Ll}/u.test(value)&&/\p{Nd}/u.test(value)&&/[^\p{L}\p{N}\s]/u.test(value);
+export const passwordValid=value=>typeof value==='string'&&value.length>=6&&value.length<=128&&/\p{Lu}/u.test(value)&&/\p{Ll}/u.test(value)&&/\p{Nd}/u.test(value)&&/[^\p{L}\p{N}\s]/u.test(value);
 const emailValid=value=>typeof value==='string'&&value.length<=254&&!/[\s\u0000-\u001f\u007f]/u.test(value)&&/^[^@]+@[^@]+$/u.test(value);
 export function registrationFieldErrors(value,checks={}){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!Object.hasOwn(registrationLabels,k)))return [{field:null,message:'Bitte nur die vorgesehenen Registrierungsangaben übermitteln.'}];
@@ -12,4 +12,10 @@ export function registrationFieldErrors(value,checks={}){
   if(message)errors.push({field,message});
  }
  return errors;
+}
+
+export function passwordFeedback(value){
+ if(!value)return 'Passwort: 6 bis 128 Zeichen mit Groß- und Kleinbuchstaben, Zahl und Sonderzeichen.';
+ const missing=[];if(value.length<6)missing.push('mindestens 6 Zeichen');if(value.length>128)missing.push('höchstens 128 Zeichen');if(!/\p{Lu}/u.test(value))missing.push('Großbuchstabe');if(!/\p{Ll}/u.test(value))missing.push('Kleinbuchstabe');if(!/\p{Nd}/u.test(value))missing.push('Zahl');if(!/[^\p{L}\p{N}\s]/u.test(value))missing.push('Sonderzeichen');
+ return missing.length?'Passwort – noch erforderlich: '+missing.join(', ')+'.':'Passwort erfüllt alle Bedingungen.';
 }
