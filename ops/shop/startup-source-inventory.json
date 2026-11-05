@@ -20,9 +20,9 @@
     },
     {
       "path": "apps/web/public/shop/registration-fields.js",
-      "bytes": 1636,
-      "sha256": "921eeba2b479e8cdf851b7b8f10170d5c34ee66f83dcd51789914abfb31a37df",
-      "gitBlob": "bd380939d617680f9ca94090e5750f977a2191bf",
+      "bytes": 2271,
+      "sha256": "7eb9632c26357628e438332092d32ab85945fcdf2d7d5db70d0f369d2c9ea700",
+      "gitBlob": "756053358876d32cc4597da418627cc5d1fc4231",
       "kind": "shop-candidate",
       "imports": []
     },
