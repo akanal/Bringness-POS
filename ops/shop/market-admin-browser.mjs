@@ -5,13 +5,20 @@ export async function marketplaceAdminChecks({page,base,pool,adminToken,artifact
  try{
  // Switch across separate administration pages using real header links.
  for(const width of [390,768,1280]){
-  await page.setViewportSize({width,height:900});await page.goto(canonical+'/superadmin/');
+  await page.setViewportSize({width,height:900});await page.goto(canonical+'/superadmin/');let navPosition;
   for(const [label,path] of [['POS','/admin/'],['AI','/admin/ai-workspace.html?admin=1'],['Markt','/superadmin/']]){
    await page.getByRole('navigation',{name:'Adminbereiche',exact:true}).getByRole('link',{name:label,exact:true}).click();
    await page.waitForURL(canonical+path);
    const nav=page.getByRole('navigation',{name:'Adminbereiche',exact:true});
    assert.deepEqual(await nav.getByRole('link').allTextContents(),['Markt','POS','AI']);
    assert.equal(await nav.locator('[aria-current="page"]').textContent(),label);
+   const position=await nav.evaluate(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};});
+   if(navPosition)for(const key of ['x','y','width','height'])assert.ok(Math.abs(position[key]-navPosition[key])<=1,'same admin link '+key+' at '+width);
+   navPosition=position;
+   const header=page.locator('header[data-admin-product]');
+   if(label==='Markt')assert.ok((await header.evaluate(e=>getComputedStyle(e).backgroundImage)).includes('rgb(28, 98, 76)'),'market green');
+   if(label==='POS'){assert.equal(await header.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(16, 24, 32)');assert.equal(await header.locator('.admin-brand-name').evaluate(e=>getComputedStyle(e).color),'rgb(255, 118, 40)');}
+   if(label==='AI')assert.equal(await header.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(244, 242, 233)');
    const boxes=await nav.getByRole('link').evaluateAll(links=>links.map(link=>{const r=link.getBoundingClientRect();return {x:r.x,right:r.right,y:r.y,width:r.width,height:r.height};}));
    for(const box of boxes){assert.ok(box.x>=0&&box.right<=width+1,'header link inside '+width);assert.ok(box.height>=44,'touch target');}
    for(let i=1;i<boxes.length;i++)assert.ok(boxes[i].x>=boxes[i-1].right,'header links do not overlap');

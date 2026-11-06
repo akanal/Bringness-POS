@@ -8,7 +8,8 @@ export async function handlePlatformAiAssets(req,res){
  if(p==='/admin/ai-workspace.html'){
   let html=await fs.readFile(new URL('../apps/web/public/ai-workspace.html',import.meta.url),'utf8');
   html=html.replaceAll('/ai.html','/admin/').replace(/\/assets\/(bringness-ai-[a-z.-]+)/g,'/admin/ai-assets/$1').replace(/\/(ai-[a-z-]+\.(?:js|css))/g,'/admin/ai-assets/$1').replace('Mein Arbeitsbereich – Bringness AI','AI-Verwaltung – Bringness AI').replace('Bringness AI Startseite','Zur POS-Verwaltung');
-  html=html.replace('</head>','<link rel="stylesheet" href="/admin/product-links.css?v=20261106"></head>').replace('<div id="identity">', '<nav class="admin-products" aria-label="Adminbereiche"><a href="/superadmin/">Markt</a><a href="/admin/">POS</a><a href="/admin/ai-workspace.html?admin=1" aria-current="page">AI</a></nav><div id="identity">');
+  html=html.replace('</head>','<link rel="stylesheet" href="/admin/product-links.css?v=themes-20261106"></head>').replace('<div id="identity">', '<nav class="admin-products" aria-label="Adminbereiche"><a href="/superadmin/">Markt</a><a href="/admin/">POS</a><a href="/admin/ai-workspace.html?admin=1" aria-current="page">AI</a></nav><div id="identity">');
+  html=html.replace('<header>','<header data-admin-product="ai">').replace('<a href="/admin/" aria-label="Zur POS-Verwaltung">','<a class="admin-product-brand" href="/admin/ai-workspace.html?admin=1" aria-label="AI-Verwaltung">').replace('<div id="identity">','<div id="identity" class="admin-header-actions">');
   return send(200,html,'text/html; charset=utf-8');
  }
  const file=p.slice('/admin/ai-assets/'.length);if(!assets.has(file))return send(404,'Nicht gefunden','text/plain');
