@@ -16,7 +16,7 @@ export async function sellerRecoveryBrowserChecks({browser,base,token}){
   return route.fulfill({status:response.status,headers:Object.fromEntries(response.headers),body:Buffer.from(await response.arrayBuffer())});
  });
  try{
-  await page.goto(origin+'/shop/seller.html');await page.evaluate(value=>localStorage.setItem('bringness-pos-token',value),token);
+  await page.goto(origin+'/shop/seller.html');await page.evaluate(value=>localStorage.setItem('bringness-shop-token',value),token);
   for(const width of [1280,768,390]){
    await page.setViewportSize({width,height:900});await page.goto(origin+'/shop/seller.html');
    for(const [name,value]of Object.entries({title:'CI recovery '+width,description:'Disposable recovery browser test',price:'12,50',stock:'2',delivery:'Synthetic delivery within five days'}))await page.locator('[name='+name+']').fill(value);

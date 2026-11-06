@@ -10,7 +10,7 @@ const {JSDOM}=await import(pathToFileURL(dependency('jsdom','SHOP_JSDOM_PATH')))
 const tick=()=>new Promise(r=>setImmediate(r));
 const orderId=crypto.randomUUID();
 const base={orderId,paymentMode:'test',paymentStatus:'not_started',amountCents:1190,currency:'EUR',canPay:false,canFulfil:false,canStartTest:true};
-function setup(){const dom=new JSDOM('<main id="host"></main>',{url:'https://bringness.de/shop/marketplace.html',pretendToBeVisual:true}),w=dom.window;Object.defineProperty(w,'crypto',{value:crypto.webcrypto});w.confirm=()=>true;w.localStorage.setItem('bringness-pos-token','fixture');return {w,host:w.document.getElementById('host'),close:()=>w.close()};}
+function setup(){const dom=new JSDOM('<main id="host"></main>',{url:'https://bringness.de/shop/marketplace.html',pretendToBeVisual:true}),w=dom.window;Object.defineProperty(w,'crypto',{value:crypto.webcrypto});w.confirm=()=>true;w.localStorage.setItem('bringness-shop-token','fixture');return {w,host:w.document.getElementById('host'),close:()=>w.close()};}
 const click=async(f,text)=>{const b=[...f.host.querySelectorAll('button')].find(b=>b.textContent===text);assert.ok(b,text);b.click();await tick();};
 test('buyer test checkout uses server amount, loses reply safely and refreshes without another start',async()=>{
  const f=setup(),calls=[];let lost=true;const client={async call(path,options){calls.push({path,options});if(path.startsWith('/checkout-availability'))return base;if(path==='/checkout'&&lost)throw Object.assign(Error(),{code:'MARKET_PAYMENT_UNCERTAIN'});return {...base,paymentStatus:'paid',canStartTest:false};}};
@@ -38,7 +38,7 @@ test('merchant panel never trusts callback query as proof; profile verification 
   mountMarketMerchant({window:f.w,host:f.host,client:{async call(path,options){calls.push({path,options});return {configured:true,paymentMode:'test',status:path==='/merchant-verify'?'verified':'pending',paymentsEnabled:false,profileId:path==='/merchant-verify'?'pfl_fixture':null};}}});
   assert.match(f.host.textContent,/Bitte den gespeicherten Verbindungsstatus laden/);assert.equal(calls.length,0);assert.equal(f.w.location.search,'');
   await click(f,'Verbindungsstatus laden');const input=f.host.querySelector('input');input.value='pfl_fixture';f.host.querySelector('form').dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));await tick();assert.equal(calls.at(-1).path,'/merchant-verify');assert.deepEqual(calls.at(-1).options.body,{profileId:'pfl_fixture'});assert.match(f.host.textContent,/für Testzahlungen geprüft/);
-  f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(input.value,'');assert.equal(f.host.querySelector('form').hidden,true);
+  f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-shop-token'}));assert.equal(input.value,'');assert.equal(f.host.querySelector('form').hidden,true);
  }finally{f.close();}
 });
 test('only consent start sends same-origin cookie credentials; customer checkout never sends merchant secrets',async()=>{

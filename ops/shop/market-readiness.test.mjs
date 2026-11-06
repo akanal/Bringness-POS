@@ -29,8 +29,8 @@ test('readiness UI validates fixed codes and rejects production permission or ma
 });
 test('merchant readiness clears private state and ignores late account replies',async()=>{
  const {JSDOM}=await import(pathToFileURL(dependency('jsdom','SHOP_JSDOM_PATH')));const dom=new JSDOM('<main></main>',{url:'https://bringness.de/shop/marketplace-seller.html',pretendToBeVisual:true}),w=dom.window,host=w.document.querySelector('main');let resolve,calls=0;
- try{w.localStorage.setItem('bringness-pos-token','first');mountMarketReadiness({window:w,host,client:{call(path,options){calls++;assert.equal(path,'/merchant-readiness');assert.deepEqual(options,{auth:true});return new Promise(r=>{resolve=r;});}}});
-  host.querySelector('button').click();host.querySelector('button').click();assert.equal(calls,1);w.localStorage.setItem('bringness-pos-token','second');w.dispatchEvent(new w.StorageEvent('storage',{key:'bringness-pos-token'}));resolve(report());await tick();assert.equal(host.querySelectorAll('li').length,0);assert.match(host.textContent,/geschlossen/);
+ try{w.localStorage.setItem('bringness-shop-token','first');mountMarketReadiness({window:w,host,client:{call(path,options){calls++;assert.equal(path,'/merchant-readiness');assert.deepEqual(options,{auth:true});return new Promise(r=>{resolve=r;});}}});
+  host.querySelector('button').click();host.querySelector('button').click();assert.equal(calls,1);w.localStorage.setItem('bringness-shop-token','second');w.dispatchEvent(new w.StorageEvent('storage',{key:'bringness-shop-token'}));resolve(report());await tick();assert.equal(host.querySelectorAll('li').length,0);assert.match(host.textContent,/geschlossen/);
   host.querySelector('button').click();resolve(report());await tick();assert.ok(host.querySelectorAll('li').length>0);assert.match(host.textContent,/Echte Zahlungen und Warenfreigabe bleiben gesperrt/);w.dispatchEvent(new w.Event('pagehide'));assert.equal(host.querySelectorAll('li').length,0);
  }finally{w.close();}
 });

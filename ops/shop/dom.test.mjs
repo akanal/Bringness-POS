@@ -15,14 +15,14 @@ test('real shop DOM: search cart dialogs account response invalidation',async()=
   $('cart-open').click();assert.equal($('cart-dialog').open,true);assert.match($('cart-content').textContent,/474,81/);
   $('review-open').click();assert.equal($('review-dialog').open,true);assert.equal($('cart-dialog').open,false);
   $('account-check').click();await tick();assert.match($('account-status').textContent,/zuerst/);
-  w.localStorage.setItem('bringness-pos-token','synthetic-token');$('account-check').click();await tick();assert.ok(respond);
+  w.localStorage.setItem('bringness-shop-token','synthetic-token');$('account-check').click();await tick();assert.ok(respond);
   const q=shopPreview({cart:{'pos-download':1},plans:[{code:'download_license',amount_cents:39900,billing_type:'one_time',currency:'EUR',active:true}],profile:{company_name:'Fixture',street:'Example 1',postal_code:'10115',city:'Berlin',country:'DE'}});
   respond({ok:true,json:async()=>q});await tick();assert.match($('account-status').textContent,/erfolgreich/);assert.equal($('draft-save').disabled,false);
   for(const [issue,expected] of [['download_buyer_unsupported',/deutscher Rechnungsanschrift/],['download_invoice_format_not_ready',/aktuelle Datum/]]){
    $('account-check').click();await tick();respond({ok:true,json:async()=>({...q,issues:[issue]})});await tick();assert.match($('account-result').textContent,expected);assert.equal($('draft-save').disabled,true);
   }
   $('account-check').click();await tick();$('review-back').click();respond({ok:true,json:async()=>q});await tick();assert.equal($('review-dialog').open,false);assert.equal($('account-result').textContent,'');
-  $('review-open').click();$('account-check').click();await tick();const stale=respond;w.localStorage.setItem('bringness-pos-token','different-account');w.dispatchEvent(new w.StorageEvent('storage',{key:'bringness-pos-token'}));stale({ok:true,json:async()=>q});await tick();assert.equal($('account-result').textContent,'');assert.equal($('draft-controls').hidden,true);
+  $('review-open').click();$('account-check').click();await tick();const stale=respond;w.localStorage.setItem('bringness-shop-token','different-account');w.dispatchEvent(new w.StorageEvent('storage',{key:'bringness-shop-token'}));stale({ok:true,json:async()=>q});await tick();assert.equal($('account-result').textContent,'');assert.equal($('draft-controls').hidden,true);
   assert.ok([...w.document.querySelectorAll('#review-dialog button')].some(b=>b.disabled&&/Zahlung/.test(b.textContent)));
  }finally{for(const [k,v]of Object.entries(old)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}w.close();}
 });

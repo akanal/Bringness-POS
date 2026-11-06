@@ -1,9 +1,9 @@
 const prefix='/api/v1/shop/documents',fail=code=>Object.assign(Error(code),{code});
 export const documentMessages={UNAUTHORIZED:'Bitte mit deinem Inhaber- oder Administratorkonto anmelden.',FORBIDDEN:'Dieses Konto darf die Dokumente nicht öffnen.',DOCUMENT_STORAGE_UNAVAILABLE:'Der Dokumentenspeicher ist derzeit nicht verfügbar. Bitte später erneut versuchen.',INVALID_DOCUMENT:'Bitte eine PDF-, PNG- oder JPG-Datei bis 5 MB mit passendem Dateinamen wählen.',BODY_TOO_LARGE:'Die Datei ist größer als 5 MB.',DOCUMENT_CONFLICT:'Dieser Upload gehört bereits zu einer anderen Datei. Bitte die Dateiauswahl erneuern.',DOCUMENT_QUOTA:'Das Speicher- oder Uploadlimit dieses Kontos ist erreicht.',DOCUMENT_BUSY:'Der Speicher bearbeitet gerade andere Dateien. Bitte erneut versuchen.',DOCUMENT_NOT_FOUND:'Dieses Dokument wurde für dein Konto nicht gefunden.',DOCUMENT_UNCERTAIN:'Keine Bestätigung erhalten. Du kannst dieselbe Datei identisch erneut senden oder die Liste aktualisieren.',ACCOUNT_CHANGED:'Die Anmeldung hat sich geändert. Bitte die Dokumente erneut laden.',DOCUMENT_MISMATCH:'Die Datei konnte nicht zuverlässig geprüft werden. Es wurde kein Download gestartet.'};
 export function createDocumentClient({window:w,fetcher=w.fetch.bind(w),onPrivacy=()=>{}}){
- const token=()=>{try{return w.localStorage.getItem('bringness-pos-token')||'';}catch{return '';}};const active=new Set();let epoch=0;
+ const token=()=>{try{return w.localStorage.getItem('bringness-shop-token')||'';}catch{return '';}};const active=new Set();let epoch=0;
  function clear(){epoch++;for(const controller of active)controller.abort();active.clear();onPrivacy();}
- const storage=e=>{if(e.key===null||e.key==='bringness-pos-token')clear();};const visibility=()=>{if(w.document.visibilityState==='hidden')clear();};
+ const storage=e=>{if(e.key===null||e.key==='bringness-shop-token')clear();};const visibility=()=>{if(w.document.visibilityState==='hidden')clear();};
  w.addEventListener('storage',storage);w.addEventListener('pagehide',clear);w.document.addEventListener('visibilitychange',visibility);
  async function request(path,{method='GET',headers={},body,publicStatus=false,binary=false}={}){
   const before=token(),current=epoch;if(!publicStatus&&!before)throw fail('UNAUTHORIZED');if(w.document.visibilityState==='hidden')throw fail('ACCOUNT_CHANGED');

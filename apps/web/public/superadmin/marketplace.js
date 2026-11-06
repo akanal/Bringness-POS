@@ -1,6 +1,6 @@
 import {mountMarketplaceApproval} from '../shop/marketplace-approval-ui.js?v=marketplace-filters-20261106';
 import {createMarketClient} from '../shop/market-client.js?v=marketplace-admin-20261106';
-const tokenKey='bringness-platform-token';
+const tokenKey='bringness-market-admin-token';
 export function mountMarketplaceAdmin({window:w,host,token}){
  host.classList.add('marketplace-admin');
  const d=host.ownerDocument,controller=new w.AbortController(),signal=controller.signal;let epoch=0,busy=false,pending=null,dirty=false;

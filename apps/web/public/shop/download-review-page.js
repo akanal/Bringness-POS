@@ -3,7 +3,7 @@ import {downloadReviewLocation} from './download-review-view.js';
 import {mountDownloadReview} from './download-review-ui.js';
 import {setShopStatus} from './status-view.js';
 const host=document.getElementById('download-review-host');
-const token=()=>{try{return localStorage.getItem('bringness-pos-token')||'';}catch{return '';}};
+const token=()=>{try{return localStorage.getItem('bringness-shop-token')||'';}catch{return '';}};
 let mounted;
 function start(){
  mounted?.dispose();const id=window.top===window.self&&!window.location.search?downloadReviewLocation(window.location.hash):null;

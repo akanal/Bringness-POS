@@ -13,7 +13,7 @@ header[data-admin-product] .admin-products a{display:inline-flex;flex:1;align-it
 header[data-admin-product] .admin-products a[aria-current="page"]{background:var(--admin-active);color:var(--admin-active-text);border-color:var(--admin-active);box-shadow:inset 0 -3px var(--admin-accent)}
 header[data-admin-product] .admin-products a:hover{text-decoration:underline;text-underline-offset:4px}
 header[data-admin-product] a:focus-visible,header[data-admin-product] button:focus-visible{outline:3px solid var(--admin-accent);outline-offset:3px}
-header[data-admin-product] .admin-header-actions{grid-column:3;grid-row:1;display:flex;align-items:center;justify-content:flex-end;justify-self:end;gap:8px;min-width:0;max-width:100%;font:14px/1.25 system-ui,sans-serif}
+header[data-admin-product] .admin-header-actions{grid-column:3;grid-row:1;display:flex;align-items:center;justify-content:flex-end;justify-self:end;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%;font:14px/1.25 system-ui,sans-serif}
 header[data-admin-product] .admin-header-actions a{color:inherit}
 header[data-admin-product] .admin-header-actions button{font:600 14px/1.2 system-ui,sans-serif;min-height:40px;padding:8px 12px;margin:0}
 header[data-admin-product]>:not(.admin-product-brand):not(.admin-products):not(.admin-header-actions){grid-column:1/-1;min-width:0}

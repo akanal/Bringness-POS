@@ -21,7 +21,7 @@ test('local draft roundtrip retains distinct valid IDs and canonical values',()=
 test('local draft writes refuse malformed and ambiguous identities before touching the store',()=>{let writes=0;const store={setItem(){writes++;}};for(const rows of [null,{},[{...row,id:'offer-'+'a'.repeat(36)}],[row,{...row,id:id.toUpperCase()}]])assert.throws(()=>saveOffers(store,rows));assert.equal(writes,0);});
 const install=(values)=>{const saved=new Map(Object.keys(values).map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));for(const [k,value] of Object.entries(values))Object.defineProperty(globalThis,k,{configurable:true,value});return ()=>{for(const[k,d]of saved)if(d)Object.defineProperty(globalThis,k,d);else delete globalThis[k];};};
 test('seller reads bind identity and exact historical revision, and reject malformed histories',async()=>{
- const map=new Map([['bringness-pos-token','synthetic-owner']]),storage={getItem:k=>map.get(k)??null};let reply;
+ const map=new Map([['bringness-shop-token','synthetic-owner']]),storage={getItem:k=>map.get(k)??null};let reply;
  const restore=install({window:new EventTarget(),document:Object.assign(new EventTarget(),{hidden:false}),navigator:{onLine:true},localStorage:storage,sessionStorage:storage,fetch:async()=>Response.json(reply)});
  try{
   const client=await import('../../apps/web/public/shop/seller-account-client.js?recovery-policy');
@@ -43,7 +43,7 @@ test('lost first-save replay retains newer edits and requires explicit reload be
  const restore=install(Object.fromEntries(['window','document','location','sessionStorage','localStorage','navigator','FormData','Event'].map(k=>[k,k==='window'?w:w[k]])));
  const restoreFetch=install({fetch:async(url,options)=>{if(options.method==='POST'){const command=JSON.parse(options.body);writes.push(command);confirmed={id:command.id,revision:1,state:'draft',offer:command.offer,canPublish:false};if(mode==='lost')throw Error('Synthetic lost reply');return Response.json(confirmed);}return Response.json(confirmed);}});
  try{
-  w.localStorage.setItem('bringness-pos-token','synthetic-owner');w.confirm=()=>true;w.HTMLElement.prototype.scrollIntoView=function(){};
+  w.localStorage.setItem('bringness-shop-token','synthetic-owner');w.confirm=()=>true;w.HTMLElement.prototype.scrollIntoView=function(){};
   await import('../../apps/web/public/shop/seller-page.js?recovery-dom');
   const $=id=>w.document.getElementById(id),form=$('offer-form');for(const [key,value]of Object.entries(offer))if(form.elements[key])form.elements[key].value=value;
   form.dispatchEvent(new w.Event('input',{bubbles:true}));$('cloud-editor-save').click();await waitFor(()=>!$('cloud-editor-save').disabled&&!$('cloud-editor-retry').hidden);
@@ -51,7 +51,7 @@ test('lost first-save replay retains newer edits and requires explicit reload be
   await waitFor(()=>$('cloud-editor-retry').hidden);assert.equal($('cloud-editor-save').disabled,true);assert.equal(form.elements.title.value,'Newer unsaved edit');assert.equal($('cloud-offer-id').value,confirmed.id);assert.deepEqual(writes[0],writes[1]);
   $('cloud-editor-save').onclick();assert.equal(writes.length,2,'No new ID or revision may be submitted after replay');
   $('cloud-editor-load').click();await waitFor(()=>!$('cloud-editor-save').disabled);assert.equal(form.elements.title.value,offer.title);
-  w.dispatchEvent(new w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(form.elements.title.value,'');assert.equal($('preview-content').textContent,'');
+  w.dispatchEvent(new w.StorageEvent('storage',{key:'bringness-shop-token'}));assert.equal(form.elements.title.value,'');assert.equal($('preview-content').textContent,'');
   for(const [key,value]of Object.entries(offer))if(form.elements[key])form.elements[key].value=value;
   form.dispatchEvent(new w.Event('input',{bubbles:true}));$('cloud-editor-save').click();
   w.dispatchEvent(new w.Event('pagehide'));

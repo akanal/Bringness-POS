@@ -69,7 +69,7 @@ test('product filter resets pages and refuses response for a different product',
 });
 test('exact reference search is explicit, resets pagination and clears on account switch',async()=>{
  const row=item(),f=setup(async q=>({...page([row]),reference:q.reference}));try{
-  const input=f.host.querySelector('[aria-label="Vorgangsnummer suchen"]'),form=input.closest('form');input.value='bad';form.dispatchEvent(new f.w.Event('submit',{cancelable:true}));assert.equal(f.calls.length,0);input.value=row.id;form.dispatchEvent(new f.w.Event('submit',{cancelable:true}));await f.settle();assert.equal(f.calls[0].reference,row.id);assert.equal(f.calls[0].cursor,null);assert.equal(f.host.querySelectorAll('.history-entry').length,1);f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(input.value,'');assert.equal(f.host.querySelectorAll('.history-entry').length,0);
+  const input=f.host.querySelector('[aria-label="Vorgangsnummer suchen"]'),form=input.closest('form');input.value='bad';form.dispatchEvent(new f.w.Event('submit',{cancelable:true}));assert.equal(f.calls.length,0);input.value=row.id;form.dispatchEvent(new f.w.Event('submit',{cancelable:true}));await f.settle();assert.equal(f.calls[0].reference,row.id);assert.equal(f.calls[0].cursor,null);assert.equal(f.host.querySelectorAll('.history-entry').length,1);f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-shop-token'}));assert.equal(input.value,'');assert.equal(f.host.querySelectorAll('.history-entry').length,0);
  }finally{f.cleanup();}
 });
 test('history reference copy falls back to selection and rejects a changed account',async()=>{
