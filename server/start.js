@@ -1,3 +1,4 @@
+import {createMarketplaceAdmin} from './shop-market-admin.js';
 import {createShopLegalRuntime} from './shop-legal.js';
 import {marketplaceImageKey} from './shop-marketplace-images.js';
 import {createMarketplaceImagesRuntime} from './shop-marketplace-images-http.js';
@@ -105,6 +106,7 @@ const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
 const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
+const handleMarketplaceAdmin=createMarketplaceAdmin(platformGatewayPool);
 const handleFiskalyTest=createFiskalyTest(platformGatewayPool,{sandboxStatus:companyId=>sandboxStatus(platformGatewayPool,companyId),requestSetup:(companyId,credentials)=>requestFiskalySetup(platformGatewayPool,companyId,credentials)});
 
 // Add modular API routes without destabilising the large legacy server file.
@@ -122,6 +124,7 @@ http.createServer = function patchedCreateServer(listener) {
       }
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
       if (await shopLegalRuntime.handle(req,res)) return;
+      if (appMode!=='ai' && await handleMarketplaceAdmin(req,res)) return;
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
       if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
       if (appMode!=='ai' && await handlePosEan(req,res)) return;

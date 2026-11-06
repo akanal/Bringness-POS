@@ -13,3 +13,13 @@ Neue Routen: GET/POST `/api/v1/platform/marketplace/legal`, öffentliches GET `/
 Prüfung: SQL-/HTTP-Regression mit isoliertem PGlite; UI-/XSS-/Kontowechselprüfung; vorhandene Händlerprüfungsregression. Native Browserprüfung mit tatsächlichem Produktionseinstieg und disposable PostgreSQL in Shop-CI: zentrale Navigation, Plattformtoken, Entwurf, Veröffentlichung, Händlerliste und öffentliche Textübernahme bei 390/1280 px. Screenshots enthalten nur synthetische CI-Daten.
 
 Wegen der vom Eigentümer gemeldeten Netcup-Störung zunächst als geprüften Pull Request bereitstellen; keine Bereitstellung während der Störung behaupten.
+
+## Lesende Übersicht, Angebote und Bestellungen
+
+Folgepaket auf PR232: Übersicht mit offenen Händleranträgen, freigegebenen Händlern, Angebots-/Veröffentlichungs- und Bestellzahlen sowie abweichenden/unveröffentlichten Rechtstextentwürfen. Zahlen beschreiben den aktuellen Datenstand, keine Zahlungs- oder Rechtsfreigabe. Ein noch nie veröffentlichtes Angebot und ein gespeicherter privater Entwurf bleiben unterscheidbar.
+
+Die neuen rein lesenden Listen zeigen höchstens25 Einträge pro Seite. Angebote: Titel-/Angebotsnummernsuche, Händlername, Kategorie, Entwurfs-/Archivstand und Veröffentlichungsstand. Bestellungen: Referenzsuche, Händlername, Bearbeitungsstatus, Datum und vorhandener EUR-Gesamtbetrag; neueste zuerst mit zeitgenauem Cursor inklusive Kennung. Keine Käuferkontakte, Anschriften, Versanddokumente oder Zahlungsbehauptungen. Keine Änderungen an Bestellungen, Beständen, Angeboten, Zahlungen, Rollen oder Lizenzen.
+
+Neue GET-Routen `/api/v1/platform/marketplace/overview`, `/offers`, `/orders` prüfen pro Anfrage die vorhandene aktive Plattformmitgliedschaft. Herkunft, Parameter, Suchlänge, Cursor und Body werden geprüft. Neue Oberfläche verwendet denselben Plattformtoken und dieselben Regeln für Kontowechsel/verspätete Antworten wie der Rechtstexteditor. Keine neuen Zugangsdaten oder Migrationen.
+
+SQL-/HTTP-Regressionsprüfung umfasst26 synthetische Angebote/Bestellungen, vollständige zweite Seite, Rollenentzug, ungültige Cursor, Doppelparameter, abgelehnte Schreibmethoden und Ausschluss privater Kontakt-/Versandfelder. UI prüft Suche, Seitenwechsel und Textdarstellung. Produktions-Einstiegstest prüft zusätzlich neue Kennzahlen/Listen, leere Suchergebnisse und390/1280px. Bereitstellung bleibt während der gemeldeten Netcup-Störung zurückgestellt.
