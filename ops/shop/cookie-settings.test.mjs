@@ -4,12 +4,12 @@ import {mountCookieSettings} from '../../apps/web/public/shop/cookie-settings.js
 const {JSDOM}=createRequire(import.meta.url)(dependency('jsdom','SHOP_JSDOM_PATH'));
 test('first visit, explicit opt-in, reload, reopen and withdrawal preserve essential storage',()=>{
  const dom=new JSDOM('<body><footer></footer></body>',{url:'https://bringness.de/'}),d=dom.window.document,s=dom.window.localStorage;
- s.setItem('bringness-pos-token','fixture');s.setItem(preferenceKey,'/shop/?q=old');mountCookieSettings(d);
+ s.setItem('bringness-shop-token','fixture');s.setItem(preferenceKey,'/shop/?q=old');mountCookieSettings(d);
  const box=d.getElementById('shop-cookie-banner');assert.equal(box.hidden,false);assert.equal(preferencesAllowed(s),false);
  box.querySelector('[data-choice=preferences]').click();assert.equal(box.hidden,true);assert.equal(preferencesAllowed(s),true);
  mountCookieSettings(d);assert.equal(d.querySelectorAll('#shop-cookie-banner').length,1);
  d.querySelector('.shop-cookie-reopen').click();assert.equal(box.hidden,false);
- box.querySelector('[data-choice=necessary]').click();assert.equal(preferencesAllowed(s),false);assert.equal(s.getItem(preferenceKey),null);assert.equal(s.getItem('bringness-pos-token'),'fixture');
+ box.querySelector('[data-choice=necessary]').click();assert.equal(preferencesAllowed(s),false);assert.equal(s.getItem(preferenceKey),null);assert.equal(s.getItem('bringness-shop-token'),'fixture');
  box.remove();d.querySelector('.shop-cookie-reopen').remove();mountCookieSettings(d);assert.equal(d.getElementById('shop-cookie-banner').hidden,true);dom.window.close();
 });
 test('invalid/legacy choices and unavailable storage never authorize optional preferences',()=>{

@@ -8,11 +8,11 @@ const labels={accept:'Bestellung annehmen',reject:'Bestellung ablehnen',cancel:'
 export function mountMarketOrderViews({window:w,document:d=w.document,client,seller}){
  const prefix=seller?'seller':'buyer',host=d.getElementById(prefix+'-orders'),status=d.getElementById(prefix+'-orders-status'),load=d.getElementById(prefix+'-orders-load');
  if(!host||!load||!status)return;
- let epoch=0,busy=false,rows=[],lastToken=w.localStorage.getItem('bringness-pos-token');const drafts=new Map();
+ let epoch=0,busy=false,rows=[],lastToken=w.localStorage.getItem('bringness-shop-token');const drafts=new Map();
  const el=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
  const message=(text,error=false)=>{status.textContent=text;status.classList.toggle('market-error',error);};
- function privacy(){epoch++;rows=[];drafts.clear();host.replaceChildren();message('Private Bestellansicht geschlossen. Bitte erneut laden.');lastToken=w.localStorage.getItem('bringness-pos-token');}
- w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});w.addEventListener('focus',()=>{if(lastToken!==w.localStorage.getItem('bringness-pos-token'))privacy();});
+ function privacy(){epoch++;rows=[];drafts.clear();host.replaceChildren();message('Private Bestellansicht geschlossen. Bitte erneut laden.');lastToken=w.localStorage.getItem('bringness-shop-token');}
+ w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-shop-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});w.addEventListener('focus',()=>{if(lastToken!==w.localStorage.getItem('bringness-shop-token'))privacy();});
  function valid(r){try{if(r?.tracking)marketTracking(r.tracking);}catch{return false;}return r&&typeof r.id==='string'&&typeof r.reference==='string'&&Object.hasOwn(marketOrderLabels,r.status)&&Number.isSafeInteger(r.revision)&&r.revision>=0&&r.paymentStatus==='unpaid'&&r.canPay===false&&Array.isArray(r.lines)&&Number.isSafeInteger(r.grossCents)&&['shipping','pickup'].includes(r.method)&&(!r.tracking||Number.isSafeInteger(r.trackingRevision)&&r.trackingRevision>0);}
  function trackingForm(r,box){
   const form=el('form'),carrier=el('select'),name=el('input'),number=el('input');form.dataset.trackingForm=r.id;
@@ -44,7 +44,7 @@ export function mountMarketOrderViews({window:w,document:d=w.document,client,sel
  }
  async function refresh(){
   if(busy)return;if(drafts.size&&!w.confirm('Ungespeicherte Versandangaben verwerfen und Bestellstand neu laden?'))return;busy=true;const start=++epoch;load.disabled=true;
-  try{const result=await client.call(seller?'/inbox':'/buyer-orders',{auth:true});if(start!==epoch)return;if(!Array.isArray(result.orders)||result.orders.length>50||!result.orders.every(valid))throw Object.assign(Error(),{code:'INVALID_RESPONSE'});rows=result.orders;drafts.clear();lastToken=w.localStorage.getItem('bringness-pos-token');message('Gespeicherter Bearbeitungsstand geladen. Unbezahlt; keine Zahlungsbestätigung.');render();}
+  try{const result=await client.call(seller?'/inbox':'/buyer-orders',{auth:true});if(start!==epoch)return;if(!Array.isArray(result.orders)||result.orders.length>50||!result.orders.every(valid))throw Object.assign(Error(),{code:'INVALID_RESPONSE'});rows=result.orders;drafts.clear();lastToken=w.localStorage.getItem('bringness-shop-token');message('Gespeicherter Bearbeitungsstand geladen. Unbezahlt; keine Zahlungsbestätigung.');render();}
   catch(e){if(start===epoch){if(['UNAUTHORIZED','FORBIDDEN','SELLER_NOT_APPROVED','ACCOUNT_CHANGED'].includes(e.code)){rows=[];drafts.clear();host.replaceChildren();}message((rows.length?'Älterer Stand – Aktualisierung nicht bestätigt. ':'')+marketError(e),true);}}
   finally{busy=false;load.disabled=false;if(start===epoch)render();}
  }

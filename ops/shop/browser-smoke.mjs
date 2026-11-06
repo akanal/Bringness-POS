@@ -74,7 +74,7 @@ try{
  assert.equal(await page.locator('#shop-account-dialog').evaluate(e=>e.scrollWidth>e.clientWidth),false,'customer hub overflow');
  if(artifacts)await page.screenshot({path:path.join(artifacts,'customer-hub-320.png')});
  await page.locator('#hub-drafts').click();await page.waitForFunction(()=>document.getElementById('account-status').textContent.includes('Bitte zuerst'));await page.waitForFunction(()=>document.getElementById('review-dialog').getAttribute('aria-busy')==='false');
- await page.locator('#review-dialog [data-close]').click();await page.evaluate(()=>{localStorage.setItem('bringness-pos-token','browser-fixture');sessionStorage.removeItem('bringness.shop.draft.v2');});
+ await page.locator('#review-dialog [data-close]').click();await page.evaluate(()=>{localStorage.setItem('bringness-shop-token','browser-fixture');sessionStorage.removeItem('bringness.shop.draft.v2');});
  await page.locator('#shop-account-open').click();await page.locator('#hub-drafts').click();await page.locator('#checkout-refresh').waitFor();
  await page.waitForFunction(()=>document.getElementById('review-dialog').getAttribute('aria-busy')==='false');
  await page.locator('#checkout-refresh').click();await page.getByRole('heading',{name:'Vorbereitung gespeichert',exact:true}).waitFor();

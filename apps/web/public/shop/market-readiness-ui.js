@@ -8,9 +8,9 @@ export function readinessLines(report){
 }
 export function mountMarketReadiness({window:w,host,client}){
  const d=host.ownerDocument,button=d.createElement('button'),status=d.createElement('p'),list=d.createElement('ul');button.type='button';button.textContent='Zahlungsfreigabe prüfen';status.setAttribute('role','status');status.textContent='Freigabestatus noch nicht geladen.';host.append(button,status,list);
- let epoch=0,busy=false;const token=()=>w.localStorage.getItem('bringness-pos-token');
+ let epoch=0,busy=false;const token=()=>w.localStorage.getItem('bringness-shop-token');
  function privacy(){epoch++;list.replaceChildren();status.textContent='Private Freigabeansicht geschlossen. Bitte erneut laden.';}
- w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});
+ w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-shop-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});
  button.addEventListener('click',async()=>{if(busy||d.hidden)return;busy=true;button.disabled=true;const e=++epoch,t=token();list.replaceChildren();status.textContent='Freigabestatus wird geprüft.';
   try{const r=await client.call('/merchant-readiness',{auth:true});if(e!==epoch||token()!==t||d.hidden)return;const lines=readinessLines(r);for(const text of lines){const item=d.createElement('li');item.textContent=text;list.append(item);}status.textContent='Testmodus. Echte Zahlungen und Warenfreigabe bleiben gesperrt. Lokale Konfigurationsprüfungen ersetzen keine Händlerabnahme.';}
   catch{if(e===epoch&&token()===t&&!d.hidden){list.replaceChildren();status.textContent='Freigabestatus konnte nicht geladen werden. Bitte erneut versuchen.';}}

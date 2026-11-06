@@ -5,9 +5,9 @@ const labels={refund:'Provisionsgutschrift',offset:'Mit Provision verrechnet',re
 export function mountMarketCredit({window:w,host,client}){
  const d=host.ownerDocument,el=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
  const load=el('button','Guthaben und Buchungen laden'),status=el('p','Guthaben noch nicht geladen.'),view=el('div');load.type='button';status.setAttribute('role','status');host.append(load,status,view);
- let epoch=0,busy=false,renderedToken=null;const token=()=>w.localStorage.getItem('bringness-pos-token');
+ let epoch=0,busy=false,renderedToken=null;const token=()=>w.localStorage.getItem('bringness-shop-token');
  function privacy(){epoch++;renderedToken=null;view.replaceChildren();status.textContent='Private Guthabenansicht geschlossen. Bitte erneut laden.';}
- w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});
+ w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-shop-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});
  function valid(r){return r?.currency==='EUR'&&r.policy===policy&&typeof r.accountExists==='boolean'&&Number.isSafeInteger(r.balanceNetCents)&&r.balanceNetCents>=0&&typeof r.payoutEligible==='boolean'&&r.automaticSettlementEnabled===false&&r.canPay===false&&r.limit===50&&typeof r.hasMore==='boolean'&&Array.isArray(r.entries)&&r.entries.length<=50&&r.entries.every(e=>Object.hasOwn(labels,e.kind)&&Number.isSafeInteger(e.amountNetCents)&&(['refund','release'].includes(e.kind)?e.amountNetCents>=0:e.amountNetCents<=0)&&typeof e.createdAt==='string'&&Number.isFinite(Date.parse(e.createdAt)));}
  w.addEventListener('focus',()=>{if(renderedToken!==null&&renderedToken!==token())privacy();});w.addEventListener('offline',privacy);
  async function refresh(){if(busy||d.hidden)return;busy=true;load.disabled=true;const start=++epoch,original=token();view.replaceChildren();

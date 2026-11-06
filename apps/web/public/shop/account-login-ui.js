@@ -1,8 +1,8 @@
 import {paintPasswordEye,placePasswordEye} from './password-eye.js';
 import {requestShopLogin,validShopLogin,shopLoginDestination} from './account-login-client.js';
-const key='bringness-pos-token';
+const key='bringness-shop-token';
 const messages={INVALID_INPUT:'Bitte E-Mail und Passwort vollständig eingeben.',INVALID_CREDENTIALS:'E-Mail oder Passwort stimmen nicht. Bitte die Angaben prüfen.',LOGIN_LIMIT:'Zu viele gleichzeitige Anmeldeversuche. Bitte später ausdrücklich erneut versuchen.',SHOP_ACCOUNT_REQUIRED:'Für den Shop wird ein Inhaber- oder Administratorkonto benötigt.',LOGIN_UNAVAILABLE:'Anmeldung derzeit nicht möglich. Bitte später erneut versuchen.',STORAGE_UNAVAILABLE:'Die Anmeldung konnte im Browser nicht gespeichert werden. Bitte die Browsereinstellungen prüfen.',ACCOUNT_CHANGED:'Das Konto hat sich geändert. Bitte erneut anmelden.'};
-export function mountShopLogin({host,storage,request=requestShopLogin,hash='',timeoutMs=15000}){
+export function mountShopLogin({host,storage,request=requestShopLogin,hash='',timeoutMs=15000,onAuthenticated}){
  const d=host.ownerDocument,w=d.defaultView;let generation=0,active=null,timer=null,disposed=false,loggedToken=null;
  const el=(tag,text)=>{const e=d.createElement(tag);if(text)e.textContent=text;return e;};
  const form=el('form'),email=el('input'),password=el('input'),toggle=el('button','Passwort anzeigen'),submit=el('button','Anmelden'),note=el('p'),next=el('a','Weiter zur Bestellprüfung');
@@ -26,7 +26,7 @@ export function mountShopLogin({host,storage,request=requestShopLogin,hash='',ti
    const pending=request({...credentials,signal:controller.signal});credentials.password='';const result=await pending;if(epoch!==generation||!available())return;
    if(readToken()!==original)throw Object.assign(Error(),{code:'ACCOUNT_CHANGED'});
    try{storage.setItem(key,result.token);if(readToken()!==result.token)throw Error();}catch{throw Object.assign(Error(),{code:'STORAGE_UNAVAILABLE'});}
-   clear();form.hidden=true;loggedToken=result.token;next.hidden=false;note.textContent='Mit deinem Bringness-Konto angemeldet: '+email.value.trim()+'. Du kannst im Shop fortfahren; Händlerrechte und Kontopreise werden im jeweiligen Bereich geprüft.';note.focus();
+   clear();form.hidden=true;loggedToken=result.token;next.hidden=false;note.textContent='Mit deinem Bringness-Konto angemeldet: '+email.value.trim()+'. Du kannst im Shop fortfahren; Händlerrechte und Kontopreise werden im jeweiligen Bereich geprüft.';note.focus();onAuthenticated?.(shopLoginDestination(hash));
   }catch(e){if(epoch===generation&&available()){if(e.code==='ACCOUNT_CHANGED')clear();note.textContent=messages[e.code]||messages.LOGIN_UNAVAILABLE;}}
   finally{credentials.password='';if(epoch===generation){w.clearTimeout(timer);active=null;submit.disabled=false;email.disabled=false;toggle.disabled=false;password.disabled=false;mask();form.setAttribute('aria-busy','false');}}
  };

@@ -4,9 +4,9 @@ export function mountMarketPaymentReview({window:w,host,client}){
  const section=el('section'),heading=el('h3','Testzahlungen prüfen'),load=el('button','Zahlungsübersicht laden'),status=el('p'),list=el('div');
  load.type='button';status.setAttribute('role','status');section.append(heading,load,status,list);host.append(section);
  const labels={prepared:'Noch nicht gestartet',uncertain:'Antwort unklar',open:'Offen',pending:'In Bearbeitung',authorized:'Autorisiert',paid:'Testzahlung bestätigt',failed:'Fehlgeschlagen',expired:'Abgelaufen',canceled:'Abgebrochen'};
- let epoch=0,busy=false;const token=()=>w.localStorage.getItem('bringness-pos-token');
+ let epoch=0,busy=false;const token=()=>w.localStorage.getItem('bringness-shop-token');
  function privacy(){epoch++;list.replaceChildren();status.textContent='Private Zahlungsübersicht geschlossen. Bitte erneut laden.';}
- w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});
+ w.addEventListener('pagehide',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-shop-token')privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});
  function render(r){
   if(r.paymentMode!=='test'||r.canPay!==false||r.canFulfil!==false||!Array.isArray(r.payments)||r.payments.length>50||typeof r.hasMore!=='boolean')throw Error('INVALID_RESPONSE');
   const fragment=d.createDocumentFragment();

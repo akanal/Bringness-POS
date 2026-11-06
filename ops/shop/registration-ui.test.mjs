@@ -17,8 +17,8 @@ test('form integrates with atomic registration, explicit login and account check
  try{f.w.sessionStorage.setItem('bringness.shop.cart.v2','{"pos-online":1}');f.fill();f.send();await done;await tick();assert.equal(f.host.querySelector('a').hidden,false);assert.equal((await db.db.query('SELECT 1 FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email=$1)',[values.email])).rows.length,0);
   login=mountShopLogin({host:f.host,storage:f.w.localStorage,hash:'#review',request:async ({email,password})=>{const hash=await legacyPasswordHash(password),u=(await db.db.query('SELECT id,role,password_hash FROM users WHERE email=$1',[email])).rows[0];assert.equal(u.password_hash,hash);return {token:await issueLoginSession(db.pool,{userId:u.id,passwordHash:hash,role:u.role})};}});
   f.host.querySelector('[name=email]').value=values.email;f.host.querySelector('[name=password]').value=values.password;f.send();
-  for(let i=0;i<100&&!f.w.localStorage.getItem('bringness-pos-token');i++)await tick();
-  const token=f.w.localStorage.getItem('bringness-pos-token');assert.match(token,/^[a-f0-9]{64}$/);assert.equal(f.host.querySelector('a').getAttribute('href'),'/shop/#review');assert.equal(f.w.sessionStorage.getItem('bringness.shop.cart.v2'),'{"pos-online":1}');
+  for(let i=0;i<100&&!f.w.localStorage.getItem('bringness-shop-token');i++)await tick();
+  const token=f.w.localStorage.getItem('bringness-shop-token');assert.match(token,/^[a-f0-9]{64}$/);assert.equal(f.host.querySelector('a').getAttribute('href'),'/shop/#review');assert.equal(f.w.sessionStorage.getItem('bringness.shop.cart.v2'),'{"pos-online":1}');
   const quote=await readShopPreview(db.pool,{token,cart:{'pos-online':1}});assert.equal(quote.account.profileComplete,true);assert.deepEqual(quote.issues,[]);for(const table of ['billing_transactions','company_entitlements','company_features'])assert.equal((await db.db.query('SELECT 1 FROM '+table)).rows.length,0);
  }finally{login?.dispose();f.close();await db.db.close();}
 });

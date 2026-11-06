@@ -2,7 +2,7 @@ import {createMarketClient,marketError} from './market-client.js';
 import {marketSeller} from './market-policy.js';
 const labels={unregistered:'Kein Antrag',pending:'In Prüfung',approved:'Freigegeben',rejected:'Abgelehnt',suspended:'Gesperrt'};
 const actions={pending:[['approve','Freigeben'],['reject','Ablehnen']],approved:[['suspend','Sperren']],suspended:[['resume','Nach Prüfung wieder freigeben']]};
-export function mountMarketplaceApproval({window:w,document:d=w.document,admin=false,client:provided,tokenStorageKey='bringness-pos-token'}){
+export function mountMarketplaceApproval({window:w,document:d=w.document,admin=false,client:provided,tokenStorageKey='bringness-shop-token'}){
  const $=id=>d.getElementById(id),el=(tag,text)=>{const e=d.createElement(tag);e.textContent=text;return e;},kind=admin?'seller-review':'seller-application';let current=null,next=null,busy=false,epoch=0,disposed=false;
  function clear(){if(disposed)return;epoch++;current=null;next=null;if(!$('approval-current'))return;$('approval-filters')?.reset();$('approval-current').replaceChildren();$('approval-form').reset();$('approval-form').hidden=true;if(admin){$('approval-list').replaceChildren();$('approval-next').disabled=true;}$('approval-status').textContent='Ansicht gewechselt. Bitte erneut laden.';}
  const client=provided||createMarketClient({window:w,onPrivacy:clear});

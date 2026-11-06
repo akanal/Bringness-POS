@@ -31,7 +31,7 @@ async function fixture(suffix,{fetcher,before}={}){
 test('Mein Shop and empty cart recover an authenticated server draft without creating another',async()=>{
  const dbf=await databaseFixture();let f;try{
   await migrateShopDrafts(dbf.pool);const draft=await saveShopDraft(dbf.pool,{token:'owner-a',requestId:crypto.randomUUID(),cart:{'pos-download':1}});
-  f=await fixture('hub-recovery',{before:w=>w.localStorage.setItem('bringness-pos-token','owner-a'),fetcher:async(url,options)=>{assert.equal(options.method,'GET');assert.equal(options.headers.Authorization,'Bearer owner-a');return Response.json(await readShopDraft(dbf.pool,{token:'owner-a',active:true}));}});
+  f=await fixture('hub-recovery',{before:w=>w.localStorage.setItem('bringness-shop-token','owner-a'),fetcher:async(url,options)=>{assert.equal(options.method,'GET');assert.equal(options.headers.Authorization,'Bearer owner-a');return Response.json(await readShopDraft(dbf.pool,{token:'owner-a',active:true}));}});
   const {$,click,w}=f;$('shop-account-open').click();assert.equal($('shop-account-dialog').open,true);assert.match($('shop-account-summary').textContent,/0Artikel/);
   $('hub-drafts').click();await waitFor(()=>/Entwurf gespeichert/.test($('draft-result').textContent));assert.equal($('review-dialog').open,true);assert.equal($('account-check').disabled,true);assert.match($('draft-result').textContent,/Entwurf gespeichert/);assert.match($('draft-result').textContent,/Erstellt:/);assert.equal(w.document.querySelector('#draft-result input[readonly]').value,draft.id);assert.equal($('cart-count').textContent,'0');
   click('#draft-result button','Entwurfsnummer kopieren');await tick();assert.match($('draft-result').textContent,/markiert/);
@@ -39,7 +39,7 @@ test('Mein Shop and empty cart recover an authenticated server draft without cre
  }finally{f?.cleanup();await dbf.db.close();}
 });
 test('review single flight prevents duplicate requests and price expiry keeps recovery enabled',async()=>{
- let respond,expiry;const f=await fixture('single-flight',{before:w=>{w.localStorage.setItem('bringness-pos-token','fixture');const native=w.setTimeout.bind(w);w.setTimeout=(fn,ms,...args)=>{if(ms>60000){expiry=fn;return 12345;}return native(fn,ms,...args);};},fetcher:()=>new Promise(r=>respond=r)});
+ let respond,expiry;const f=await fixture('single-flight',{before:w=>{w.localStorage.setItem('bringness-shop-token','fixture');const native=w.setTimeout.bind(w);w.setTimeout=(fn,ms,...args)=>{if(ms>60000){expiry=fn;return 12345;}return native(fn,ms,...args);};},fetcher:()=>new Promise(r=>respond=r)});
  const {$,click}=f;try{
   click('.card-actions button','In den Warenkorb');$('cart-open').click();$('review-open').click();$('account-check').click();$('account-check').click();$('draft-recover').click();await tick();assert.equal(f.requests.length,1);assert.equal($('review-dialog').getAttribute('aria-busy'),'true');assert.equal($('review-busy').hidden,false);assert.equal($('review-back').disabled,false);
   const q=shopPreview({cart:{'pos-online':1},plans:[{code:'pos_base_monthly',amount_cents:3499,billing_type:'monthly',currency:'EUR',active:true}],profile:{company_name:'Fixture',street:'Example 1',postal_code:'10115',city:'Berlin',country:'DE'}});
@@ -47,14 +47,14 @@ test('review single flight prevents duplicate requests and price expiry keeps re
  }finally{f.cleanup();}
 });
 test('offline status blocks server actions; reconnect never auto-replays them',async()=>{
- const f=await fixture('offline-hub',{before:w=>{w.localStorage.setItem('bringness-pos-token','fixture');Object.defineProperty(w.navigator,'onLine',{value:false,configurable:true});}});
+ const f=await fixture('offline-hub',{before:w=>{w.localStorage.setItem('bringness-shop-token','fixture');Object.defineProperty(w.navigator,'onLine',{value:false,configurable:true});}});
  const {$,w}=f;try{
   $('shop-account-open').click();$('hub-drafts').click();await tick();assert.equal(f.requests.length,0);assert.match($('review-connectivity').textContent,/Offline/);assert.match($('account-status').textContent,/nichts automatisch/);
   Object.defineProperty(w.navigator,'onLine',{value:true,configurable:true});w.dispatchEvent(new w.Event('online'));await tick();assert.equal(f.requests.length,0);assert.equal($('review-connectivity').textContent,'');
  }finally{f.cleanup();}
 });
 test('closing busy review discards a late response and releases controls',async()=>{
- let respond;const f=await fixture('closed-request',{before:w=>w.localStorage.setItem('bringness-pos-token','fixture'),fetcher:()=>new Promise(r=>respond=r)});const {$,click}=f;try{
+ let respond;const f=await fixture('closed-request',{before:w=>w.localStorage.setItem('bringness-shop-token','fixture'),fetcher:()=>new Promise(r=>respond=r)});const {$,click}=f;try{
   click('.card-actions button','In den Warenkorb');$('cart-open').click();$('review-open').click();$('account-check').click();await tick();$('review-back').click();assert.equal($('review-busy').hidden,true);respond(Response.json({secret:'stale response'}));await tick();assert.equal($('account-result').textContent,'');assert.equal($('draft-controls').hidden,true);assert.equal($('review-dialog').getAttribute('aria-busy'),'false');
  }finally{f.cleanup();}
 });

@@ -54,7 +54,7 @@ try{
   throw Error('Unexpected browser egress: '+u.origin);
  });
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());
- await page.goto(base+'/shop/marketplace-seller.html');await page.evaluate(()=>localStorage.setItem('bringness-pos-token','owner-a'));
+ await page.goto(base+'/shop/marketplace-seller.html');await page.evaluate(()=>localStorage.setItem('bringness-shop-token','owner-a'));
  // Browser cookie storage must survive a stale return after a newer begin.
  const beginInBrowser=()=>page.evaluate(async()=>{
   const r=await fetch('/api/v1/shop/marketplace/merchant-connect',{method:'POST',headers:{Authorization:'Bearer owner-a','Content-Type':'application/json'},body:'{}'});
@@ -84,7 +84,7 @@ try{
  await page.getByRole('button',{name:'Mollie-Konto für Test verbinden',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Rückkehr von Mollie. Bitte den gespeicherten Verbindungsstatus laden.'));
  await page.getByRole('button',{name:'Verbindungsstatus laden',exact:true}).click();await page.getByLabel('Mollie-Profil-ID',{exact:true}).fill('pfl_browserfixture');await page.getByRole('button',{name:'Händlerprofil prüfen',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Händlerprofil für Testzahlungen geprüft'));
  assert.equal((await f.db.query('SELECT status FROM shop_market_mollie_connections')).rows[0].status,'verified');
- await page.evaluate(()=>localStorage.setItem('bringness-pos-token','owner-b'));await page.goto(base+'/shop/marketplace-payment-return.html?marketOrderId='+orderId);
+ await page.evaluate(()=>localStorage.setItem('bringness-shop-token','owner-b'));await page.goto(base+'/shop/marketplace-payment-return.html?marketOrderId='+orderId);
  await page.getByRole('button',{name:'Testzahlung starten',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Zahlungsantwort ist unklar'));
  assert.equal(paymentPosts,1);assert.equal(await page.getByRole('button',{name:'Testzahlung starten',exact:true}).count(),0);
  await page.getByRole('button',{name:'Zahlungsstand abgleichen',exact:true}).click();await page.getByRole('link',{name:'Testzahlung bei Mollie fortsetzen',exact:true}).waitFor();assert.equal(paymentPosts,1);
@@ -93,18 +93,18 @@ try{
   await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   if(process.env.SHOP_DESIGN_ARTIFACTS){await mkdir(process.env.SHOP_DESIGN_ARTIFACTS,{recursive:true});await page.screenshot({path:join(process.env.SHOP_DESIGN_ARTIFACTS,'market-payment-'+width+'.png'),fullPage:true});}
  }
- await page.evaluate(()=>localStorage.setItem('bringness-pos-token','owner-a'));await page.goto(base+'/shop/marketplace-seller.html');
+ await page.evaluate(()=>localStorage.setItem('bringness-shop-token','owner-a'));await page.goto(base+'/shop/marketplace-seller.html');
  await page.getByRole('button',{name:'Zahlungsübersicht laden',exact:true}).click();await page.waitForFunction(()=>document.body.textContent.includes('Keine Warenfreigabe oder Umsatzbuchung.'));
  assert.ok((await page.locator('#seller-payment-connection').textContent()).includes(orderId));
  // A fresh unresolved fixture status is not required: paid test rows remain
  // terminal and expose no second payment/recheck action in the merchant UI.
  assert.equal(await page.getByRole('button',{name:'Zahlungsstand nachprüfen',exact:true}).count(),0);
  for(const width of [390,768,1280]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
- await page.evaluate(()=>{localStorage.removeItem('bringness-pos-token');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-pos-token'}));});
+ await page.evaluate(()=>{localStorage.removeItem('bringness-shop-token');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-shop-token'}));});
  assert.ok(!(await page.locator('#seller-payment-connection').textContent()).includes(orderId));
- await page.evaluate(()=>localStorage.setItem('bringness-pos-token','owner-b'));await page.goto(base+'/shop/marketplace-payment-return.html?marketOrderId='+orderId);
+ await page.evaluate(()=>localStorage.setItem('bringness-shop-token','owner-b'));await page.goto(base+'/shop/marketplace-payment-return.html?marketOrderId='+orderId);
  await page.waitForFunction(()=>document.body.textContent.includes('Testzahlung bestätigt'));
  assert.equal((await f.db.query('SELECT count(*)::int AS n FROM shop_market_test_payment_handoffs')).rows[0].n,1);assert.equal(paymentPosts,1);assert.deepEqual(errors,[]);
- await page.evaluate(()=>{localStorage.removeItem('bringness-pos-token');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-pos-token'}));});assert.ok(!(await page.locator('#market-payment-return').textContent()).includes('11,90'));
+ await page.evaluate(()=>{localStorage.removeItem('bringness-shop-token');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-shop-token'}));});assert.ok(!(await page.locator('#market-payment-return').textContent()).includes('11,90'));
  console.log('PASS: HTTPS browser stale callback/new nonce recovery, consent/cookie/callback, profile, lost reply/recovery/return, test-only handoff and 390/768/1280 layouts');
 }finally{await browser?.close();if(server)await new Promise(r=>server.close(r));await f.db.close();await rm(temp,{recursive:true,force:true});}

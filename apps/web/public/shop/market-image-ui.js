@@ -3,7 +3,7 @@ export function mountMarketImage({window:w,host}){
  const title=el('h3','Produktbild'),note=el('p','PNG oder JPEG, höchstens 5 MiB. Das Bild wird neu kodiert. Bei veröffentlichten Angeboten ist es anschließend öffentlich sichtbar.'),input=el('input'),upload=el('button','Bild hochladen / Anfrage wiederholen'),remove=el('button','Produktbild entfernen'),load=el('button','Bildstand neu laden'),status=el('p','Zuerst ein Angebot laden.');
  input.type='file';input.accept='image/png,image/jpeg';input.setAttribute('aria-label','Produktbild auswählen');status.setAttribute('role','status');for(const b of [upload,remove,load])b.type='button';host.append(title,note,input,upload,remove,load,status);
  let offer=null,revision=null,epoch=0,busy=false,pending=null,account=null;
- const token=()=>w.localStorage.getItem('bringness-pos-token');
+ const token=()=>w.localStorage.getItem('bringness-shop-token');
  const update=()=>{upload.disabled=busy||!offer||revision===null;remove.disabled=busy||!offer||!revision;load.disabled=busy||!offer;input.disabled=busy||!offer;};
  function privacy(){epoch++;offer=null;revision=null;pending=null;account=null;input.value='';status.textContent='Private Bildverwaltung geschlossen. Angebot erneut laden.';update();}
  async function request(path,options={}){
@@ -22,5 +22,5 @@ export function mountMarketImage({window:w,host}){
   const command=pending;act(async()=>{const r=await request('',{method:'POST',headers:{'Content-Type':command.file.type,'X-Image-Id':command.id,'X-Image-Revision':String(command.revision)},body:command.file});if(pending===command)pending=null;return r;});
  });
  remove.addEventListener('click',()=>{if(revision&&w.confirm('Die öffentliche Bildzuordnung entfernen?'))act(async()=>{const r=await request('/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:revision})});pending=null;return r;});});
- w.addEventListener('pagehide',privacy);w.addEventListener('offline',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token')privacy();});w.addEventListener('focus',()=>{if(account!==null&&account!==token())privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});update();return {setOffer,privacy};
+ w.addEventListener('pagehide',privacy);w.addEventListener('offline',privacy);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-shop-token')privacy();});w.addEventListener('focus',()=>{if(account!==null&&account!==token())privacy();});d.addEventListener('visibilitychange',()=>{if(d.hidden)privacy();});update();return {setOffer,privacy};
 }

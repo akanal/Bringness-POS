@@ -1,0 +1,3 @@
+import {placePasswordEye,paintPasswordEye} from '/shop/password-eye.js';
+const input=document.querySelector('#loginForm input[name=password]'),toggle=document.getElementById('eye');
+if(input&&toggle){placePasswordEye(input,toggle);const mask=()=>{input.type='password';paintPasswordEye(toggle,false);};toggle.onclick=()=>{if(input.disabled)return;const reveal=input.type==='password';input.type=reveal?'text':'password';paintPasswordEye(toggle,reveal);};document.addEventListener('visibilitychange',()=>{if(document.hidden)mask();});input.form.addEventListener('reset',mask);window.addEventListener('pagehide',mask);}

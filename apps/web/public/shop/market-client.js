@@ -1,6 +1,6 @@
 import {marketTracking} from './market-tracking-policy.js';
 import {marketOrderLabels} from './market-order-policy.js';
-const base='/api/v1/shop/marketplace',tokenKey='bringness-pos-token';
+const base='/api/v1/shop/marketplace',tokenKey='bringness-shop-token';
 export function createMarketClient({window:w,fetchImpl=w.fetch.bind(w),onPrivacy=()=>{},tokenStorageKey=tokenKey}){
  let epoch=0;const active=new Set(),token=()=>w.localStorage.getItem(tokenStorageKey)||'';
  function privacy(){epoch++;for(const c of active)c.abort();active.clear();onPrivacy();}

@@ -45,7 +45,7 @@ test('uncertain write clears agreement; recovery finds the stored receipt withou
 });
 test('account/visibility/offline reset removes personal data and never replays work on reconnect',async()=>{
  const f=setup();try{
-  f.click('Rechnungsdaten laden');await f.settle();f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(f.host.textContent.includes('SYNTHETISCHER ANBIETER'),false);assert.equal(f.host.querySelector('input').checked,false);
+  f.click('Rechnungsdaten laden');await f.settle();f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-shop-token'}));assert.equal(f.host.textContent.includes('SYNTHETISCHER ANBIETER'),false);assert.equal(f.host.querySelector('input').checked,false);
   const count=f.calls.length;Object.defineProperty(f.w.navigator,'onLine',{value:false,configurable:true});f.w.dispatchEvent(new f.w.Event('offline'));assert.equal(f.host.querySelector('button').disabled,true);
   Object.defineProperty(f.w.navigator,'onLine',{value:true,configurable:true});f.w.dispatchEvent(new f.w.Event('online'));assert.equal(f.calls.length,count+1);assert.equal(f.host.querySelector('input').checked,false);
   f.click('Rechnungsdaten laden');await f.settle();Object.defineProperty(f.w.document,'hidden',{value:true,configurable:true});f.w.document.dispatchEvent(new f.w.Event('visibilitychange'));assert.equal(f.host.textContent.includes('SYNTHETISCHER ANBIETER'),false);assert.equal(f.host.querySelector('form').hidden,true);
@@ -59,7 +59,7 @@ test('stored paid status never becomes completed and historical preview prints o
  const s=invoiceSample();s.checkoutId=id;const f=setup({readStatus:async()=>({id,...flags,status:'paid',paymentMode:'test',licence:'blocked',invoicePreviewAvailable:true}),readInvoicePreview:async()=>({id,...flags,kind:'invoice_preview',snapshot:s,invoiceDelivered:false})});try{
   f.click('Kaufstatus prüfen');await f.settle();assert.match(f.host.textContent,/Lizenz weiterhin gesperrt/);assert.match(f.host.textContent,/TEST-Vorgang/);assert.equal(f.host.querySelector('[data-shop-status=completed]'),null);
   f.click('Rechnungsvorschau laden');await f.settle();assert.match(f.host.textContent,/keine ausgestellte Rechnung/);assert.equal(f.prints(),0);f.click('Vorschau drucken');assert.equal(f.prints(),1);
-  f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));f.click('Vorschau drucken');assert.equal(f.prints(),1);assert.equal(f.host.querySelector('.download-invoice').childElementCount,0);
+  f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-shop-token'}));f.click('Vorschau drucken');assert.equal(f.prints(),1);assert.equal(f.host.querySelector('.download-invoice').childElementCount,0);
  }finally{f.cleanup();}
 });
 test('expired view cannot be submitted and read-only recovery remains available',async()=>{
@@ -84,7 +84,7 @@ test('PDF download is offered only after preview and runs only on explicit actio
 });
 test('late PDF response after account invalidation cannot start a download',async()=>{
  const s=invoiceSample();s.checkoutId=id;let resolve,downloads=0;const f=setup({readStatus:async()=>({id,...flags,status:'paid',paymentMode:'live',invoicePreviewAvailable:true}),readInvoicePreview:async()=>({id,...flags,kind:'invoice_preview',snapshot:s,digest:'a'.repeat(64),invoiceDelivered:false}),readInvoicePreviewPdf:()=>new Promise(r=>resolve=r)},{downloadPdf:()=>downloads++});try{
-  f.click('Kaufstatus prüfen');await f.settle();f.click('Rechnungsvorschau laden');await f.settle();f.click('Vorschau als PDF herunterladen');f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));resolve({bytes:new Uint8Array(120),filename:'Bringness-Vorschau-BN-2026-001000.pdf'});await new Promise(r=>setTimeout(r,0));assert.equal(downloads,0);assert.equal(f.host.querySelector('.download-invoice').childElementCount,0);
+  f.click('Kaufstatus prüfen');await f.settle();f.click('Rechnungsvorschau laden');await f.settle();f.click('Vorschau als PDF herunterladen');f.setToken('owner-b');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-shop-token'}));resolve({bytes:new Uint8Array(120),filename:'Bringness-Vorschau-BN-2026-001000.pdf'});await new Promise(r=>setTimeout(r,0));assert.equal(downloads,0);assert.equal(f.host.querySelector('.download-invoice').childElementCount,0);
  }finally{f.cleanup();}
 });
 test('archive actions remain hidden without explicit capability and require a loaded preview',async()=>{

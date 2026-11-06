@@ -1,7 +1,7 @@
 import {listingNumber} from './listing-reference.js';
 import {sellerListFilters,structuredSellerMatch} from './seller-list-policy.js';
 import {offerId,validateOffer} from './offer-policy.js';
-const tokenKey='bringness-pos-token',pendingKey='bringness.seller.pending.v1.',base='/api/v1/shop/seller/offers';
+const tokenKey='bringness-shop-token',pendingKey='bringness.seller.pending.v1.',base='/api/v1/shop/seller/offers';
 const listeners=new Set();let generation=0,active=null;
 const fail=code=>Object.assign(Error(code),{code});
 function token(){try{const value=localStorage.getItem(tokenKey);if(!value)throw Error();return value;}catch{throw fail('ACCOUNT_REQUIRED');}}
