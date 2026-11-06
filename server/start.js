@@ -1,3 +1,4 @@
+import {createShopLegalRuntime} from './shop-legal.js';
 import {marketplaceImageKey} from './shop-marketplace-images.js';
 import {createMarketplaceImagesRuntime} from './shop-marketplace-images-http.js';
 import {composeMarketplaceTestHost} from './shop-mollie-marketplace-host.js';
@@ -73,6 +74,7 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
 };
 
 const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
+const shopLegalRuntime=createShopLegalRuntime(platformGatewayPool,{enabled:appMode!=='ai'});
 let shopRegistrationRuntime={migrate:async()=>{},handle:async()=>false};
 if(appMode!=='ai'&&process.env.SHOP_REGISTRATION_ENABLED!=='false'){
   try{shopRegistrationRuntime=createShopRegistrationRuntime(platformGatewayPool,{enabled:true,publicOrigin:"https://bringness.de"});}
@@ -119,6 +121,7 @@ http.createServer = function patchedCreateServer(listener) {
         return res.end(JSON.stringify({mode:'TEST',state:row?.state||'waiting',signatureConfirmed:row?.state==='complete',phase:row?.phase||null,errorCode:row?.last_error||null}));
       }
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
+      if (await shopLegalRuntime.handle(req,res)) return;
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
       if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
       if (appMode!=='ai' && await handlePosEan(req,res)) return;
@@ -263,7 +266,7 @@ async function migrateWithRetry(){
       await migrateMerchantCustomerNumbers(platformGatewayPool);
       await migrateStaffInvitations();
       try{await documentsRuntime.migrate();}catch{console.error('Private document migrations unavailable; uploads remain closed.');}
-      try{await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
+      try{await shopLegalRuntime.migrate();await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
       try{await shopAssistant.migrate();}catch{console.error('Shop assistant unavailable; guided help remains available.');}
       try{await sellerRuntime.migrate();}catch{console.error('Seller draft migrations unavailable; seller routes remain closed.');}
       try{await marketplaceRuntime.migrate();await imageRuntime.migrate();if(marketHost.schedulerEnabled&&!marketScheduler)marketScheduler=marketplaceRuntime.startReconciliation({onResult:r=>{if(!r.ok||r.failed)console.error('Marketplace test reconciliation needs review.');}});}catch{console.error('Marketplace migrations unavailable; marketplace routes remain closed.');}
