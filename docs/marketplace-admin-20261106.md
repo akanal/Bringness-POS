@@ -23,3 +23,11 @@ Die neuen rein lesenden Listen zeigen höchstens25 Einträge pro Seite. Angebote
 Neue GET-Routen `/api/v1/platform/marketplace/overview`, `/offers`, `/orders` prüfen pro Anfrage die vorhandene aktive Plattformmitgliedschaft. Herkunft, Parameter, Suchlänge, Cursor und Body werden geprüft. Neue Oberfläche verwendet denselben Plattformtoken und dieselben Regeln für Kontowechsel/verspätete Antworten wie der Rechtstexteditor. Keine neuen Zugangsdaten oder Migrationen.
 
 SQL-/HTTP-Regressionsprüfung umfasst26 synthetische Angebote/Bestellungen, vollständige zweite Seite, Rollenentzug, ungültige Cursor, Doppelparameter, abgelehnte Schreibmethoden und Ausschluss privater Kontakt-/Versandfelder. UI prüft Suche, Seitenwechsel und Textdarstellung. Produktions-Einstiegstest prüft zusätzlich neue Kennzahlen/Listen, leere Suchergebnisse und390/1280px. Bereitstellung bleibt während der gemeldeten Netcup-Störung zurückgestellt.
+
+## Lesende Detailansichten
+
+Angebots- und Bestellkarten haben „Details ansehen“. Zurück erhält die ursprüngliche Suchseite und den Cursor. Angebotsdetails unterscheiden aktuellen Entwurf und gespeicherten Veröffentlichungsstand einschließlich Varianten, Preisen, Beständen und Versandangebot; eine zurückgezogene Veröffentlichung wird dadurch nicht erneut öffentlich. Anzeige der tatsächlichen öffentlichen Sichtbarkeit berücksichtigt Händlerfreigabe und Archivstand.
+
+Bestelldetails zeigen ausschließlich Referenz, Händlername, Bearbeitungsstatus, Datum, Lieferart, gespeicherte Positionen mit Stückpreis/USt. und die vorhandenen Netto-/Steuer-/Gesamtbeträge. Statusverlauf enthält höchstens50 Übergänge, Stand und Zeitpunkt; interne Actor-Kennungen bleiben verborgen. Käuferkontakte, Empfängeranschriften, Originalversandobjekte und private Notizen werden auch in den Details nicht ausgeliefert. Die Ansicht ist keine Zahlungsbestätigung.
+
+Neue GET-Endpunkte `/api/v1/platform/marketplace/offer?number=…` und `/order?id=…` prüfen bestehende Plattformrechte und geben nur ausdrücklich ausgewählte Felder zurück. Fehlende Datensätze404, ungültige/zusätzliche Parameter400; keine neuen Datenbanktabellen oder Schreibaktionen. Native Prüfung erfolgt nach dem bestehenden tatsächlichen Händler-/Bestellablauf, damit Detailkarten mit echten API-Testdatensätzen statt leeren Listen geprüft werden. Nur isolierte Testdaten, keine Produktion.
