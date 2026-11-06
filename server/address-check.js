@@ -30,3 +30,6 @@ export function checkAddress(value,{complete=false}={}){
  }
  return {status:issues.length?'warning':found?'matched':'unverified',issues,message:(found?'PLZ und Ort stimmen laut Verzeichnis überein. ':!postcodes?'PLZ-Abgleich derzeit nicht verfügbar. ':'')+'Straßen- und Hausnummernexistenz nicht geprüft.',source:'GeoNames',sourceUrl:'https://www.geonames.org/',dataDate:'2026-10-20'};
 }
+
+// The browser downloads the public reference without sending a customer's postcode or address.
+export function postalAddressReference(){return {country:'DE',source:'GeoNames',sourceUrl:'https://www.geonames.org/',postcodes:postcodes||{}};}
