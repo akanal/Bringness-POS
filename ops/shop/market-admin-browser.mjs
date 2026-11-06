@@ -5,7 +5,7 @@ export async function marketplaceAdminChecks({page,base,pool,adminToken,artifact
  try{
  // Switch across separate administration pages using real header links.
  for(const width of [390,768,1280]){
-  await page.setViewportSize({width,height:900});await page.goto(canonical+'/superadmin/');let navPosition;
+  await page.setViewportSize({width,height:900});await page.goto(canonical+'/superadmin/');await page.evaluate(()=>localStorage.removeItem('bringness-market-admin-token'));await page.reload();await page.locator('#login:not([hidden])').waitFor();let navPosition;
   for(const [label,path] of [['POS','/admin/'],['AI','/admin/ai-workspace.html?admin=1'],['Markt','/superadmin/']]){
    await page.getByRole('navigation',{name:'Adminbereiche',exact:true}).getByRole('link',{name:label,exact:true}).click();
    await page.waitForURL(canonical+path);
