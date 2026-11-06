@@ -2,6 +2,7 @@ import {mountMarketplaceApproval} from '../shop/marketplace-approval-ui.js?v=mar
 import {createMarketClient} from '../shop/market-client.js?v=marketplace-admin-20261106';
 const tokenKey='bringness-platform-token';
 export function mountMarketplaceAdmin({window:w,host,token}){
+ host.classList.add('marketplace-admin');
  const d=host.ownerDocument,controller=new w.AbortController(),signal=controller.signal;let epoch=0,busy=false,pending=null,dirty=false;
  const el=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
  const title=el('h1','Marktplatz verwalten'),intro=el('p','Händler prüfen und rechtliche Informationen verwalten.'),nav=el('nav'),body=el('div'),note=el('p');note.setAttribute('role','status');nav.setAttribute('aria-label','Marktplatzverwaltung');host.replaceChildren(title,intro,nav,note,body);
@@ -27,5 +28,5 @@ export function mountMarketplaceAdmin({window:w,host,token}){
  }catch(e){if(start===epoch)note.textContent=errors[e.message]||'Rechtstexte derzeit nicht erreichbar. Bitte erneut öffnen.';}finally{busy=false;}}
  button('Händler',dealers,nav);button('Rechtliche Informationen',legal,nav);button('Übersicht',()=>{if(!canLeave())return;cleanup();dirty=false;pending=null;note.textContent='';body.replaceChildren(el('h2','Marktplatzübersicht'),el('p','Händleranträge bearbeiten und Rechtstexte als Entwurf vorbereiten oder nach Prüfung veröffentlichen.'),el('h2','Lizenzen'),el('p','Noch nicht eingerichtet. Gebiete, Rechte, Aufgaben und Vergütung werden zuerst gemeinsam festgelegt.'));},nav);
  body.append(el('p','Händlerverwaltung oder rechtliche Informationen auswählen.'),el('p','Lizenzverwaltung: noch nicht eingerichtet.'));
- return {canLeave,dispose(){cleanup();controller.abort();body.replaceChildren();}};
+ return {canLeave,dispose(){cleanup();controller.abort();body.replaceChildren();host.classList.remove('marketplace-admin');}};
 }
