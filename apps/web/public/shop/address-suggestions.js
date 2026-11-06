@@ -13,7 +13,7 @@ export async function loadPostalReference(){
 export function mountAddressSuggestions({form,inputs,loadReference=loadPostalReference}){
  const d=form.ownerDocument,list=d.createElement('datalist'),hint=d.createElement('p'),postalHint=d.createElement('p');let epoch=0,disposed=false,autoCity='',postalCities=[];
  list.id=inputs.city.id+'-suggestions';inputs.city.setAttribute('list',list.id);
- hint.textContent='Ort ab zwei Buchstaben wählen, z. B. Be → Berlin. Straße und Hausnummer bitte ergänzen.';postalHint.setAttribute('role','status');
+ hint.textContent='Ort ab zwei Buchstaben wählen, z. B. Be → Berlin. Straße und Hausnummer bitte ergänzen.';postalHint.setAttribute('aria-live','polite');
  const source=d.createElement('a');source.href='https://www.geonames.org/';source.textContent='Ortsverzeichnis: GeoNames · CC BY 4.0';source.target='_blank';source.rel='noopener noreferrer';source.referrerPolicy='no-referrer';
  inputs.city.parentElement.after(hint,postalHint,list,source);inputs.postalCode.inputMode='text';inputs.country.placeholder='DE';
  const german=()=>!inputs.country.value.trim()||['de','deutschland','germany'].includes(normalize(inputs.country.value));

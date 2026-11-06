@@ -10,8 +10,8 @@ test('correcting one marked field clears its error without contacting the server
 });
 test('cancel keeps a truthful recovery link and ignores a late acknowledgement without changing request identity',async()=>{
  let calls=0,resolve,ids=[];const f=setup({request:r=>{ids.push(r.requestId);return ++calls===1?new Promise(done=>resolve=done):Promise.resolve(receipt);}});try{
-  const recovery=f.host.querySelectorAll('a')[1];assert.equal(recovery.hidden,false);assert.equal(recovery.getAttribute('href'),'/shop/account.html#review');f.fill();f.send();[...f.host.querySelectorAll('button')].find(b=>b.textContent==='Anfrage in dieser Ansicht beenden').click();assert.match(f.host.textContent,/bereits angelegt/);assert.equal(f.host.querySelector('[name=companyName]').disabled,false);resolve(receipt);await tick();assert.equal(f.host.querySelector('a').hidden,true);assert.equal(recovery.hidden,false);assert.equal(calls,1);
-  f.fill();f.send();await tick();assert.deepEqual(ids,[id,id]);assert.equal(f.host.querySelector('a').hidden,false);assert.equal(recovery.hidden,true);assert.equal(f.w.localStorage.length,0);
+  const recovery=f.host.querySelectorAll(':scope > a')[1];assert.equal(recovery.hidden,false);assert.equal(recovery.getAttribute('href'),'/shop/account.html#review');f.fill();f.send();[...f.host.querySelectorAll('button')].find(b=>b.textContent==='Anfrage in dieser Ansicht beenden').click();assert.match(f.host.textContent,/bereits angelegt/);assert.equal(f.host.querySelector('[name=companyName]').disabled,false);resolve(receipt);await tick();assert.equal(f.host.querySelector(':scope > a').hidden,true);assert.equal(recovery.hidden,false);assert.equal(calls,1);
+  f.fill();f.send();await tick();assert.deepEqual(ids,[id,id]);assert.equal(f.host.querySelector(':scope > a').hidden,false);assert.equal(recovery.hidden,true);assert.equal(f.w.localStorage.length,0);
  }finally{f.close();}
 });
 test('cooldown blocks immediate requests and expiry only enables an explicit retry',async()=>{
@@ -19,5 +19,5 @@ test('cooldown blocks immediate requests and expiry only enables an explicit ret
 });
 test('server body timeout explains explicit retry and preserves the same request identity',async()=>{
  const ids=[];const f=setup({request:async r=>{ids.push(r.requestId);if(ids.length===1)throw Object.assign(Error('private'),{code:'REGISTRATION_BODY_TIMEOUT'});return receipt;}});
- try{f.fill();f.send();await tick();assert.match(f.host.querySelector('[role=status]').textContent,/Übertragung hat zu lange gedauert/);assert.equal(f.host.querySelector('[type=submit]').disabled,false);assert.equal(f.host.querySelector('[name=password]').value,values.password);assert.equal(ids.length,1);assert.equal(f.host.querySelectorAll('a')[1].hidden,false);f.fill();f.send();await tick();assert.deepEqual(ids,[id,id]);assert.equal(f.host.querySelector('form').hidden,true);}finally{f.close();}
+ try{f.fill();f.send();await tick();assert.match(f.host.querySelector('[role=status]').textContent,/Übertragung hat zu lange gedauert/);assert.equal(f.host.querySelector('[type=submit]').disabled,false);assert.equal(f.host.querySelector('[name=password]').value,values.password);assert.equal(ids.length,1);assert.equal(f.host.querySelectorAll(':scope > a')[1].hidden,false);f.fill();f.send();await tick();assert.deepEqual(ids,[id,id]);assert.equal(f.host.querySelector('form').hidden,true);}finally{f.close();}
 });
