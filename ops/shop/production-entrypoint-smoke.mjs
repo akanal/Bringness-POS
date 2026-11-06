@@ -1,3 +1,4 @@
+import {customerAccountBrowserChecks} from './customer-account-browser.mjs';
 import {marketplaceAdminChecks} from './market-admin-browser.mjs';
 import {storefrontBrowserChecks} from './storefront-browser.mjs';
 import {marketplaceHeaderBrowserChecks} from './marketplace-header-browser.mjs';
@@ -79,7 +80,7 @@ try{
   // Shared shop navigation must remain accessible on secondary pages too.
   for(const width of [390,768,1280]){
    await page.setViewportSize({width,height:900});
-   for(const file of ['account.html','register.html','my-shop.html','seller.html','seller-cloud.html','help.html','marketplace.html','marketplace-seller.html','documents.html','licences.html','order-history.html','download-history.html','download-review.html','payment-return.html','marketplace-payment-return.html','marketplace-review.html','assistant.html']){
+   for(const file of ['customer.html','account.html','register.html','my-shop.html','seller.html','seller-cloud.html','help.html','marketplace.html','marketplace-seller.html','documents.html','licences.html','order-history.html','download-history.html','download-review.html','payment-return.html','marketplace-payment-return.html','marketplace-review.html','assistant.html']){
     await page.goto(base+'/shop/'+file);const arrow=page.locator('header a[aria-label="Bringness-Assistent öffnen"]');assert.equal(await arrow.count(),1,file);assert.equal(await page.locator('.assistant-entry').count(),0,file);const box=await arrow.boundingBox();assert.ok(box.width>=44&&box.height>=44,file+' touch target');await arrow.focus();assert.equal(await arrow.evaluate(e=>e===document.activeElement),true,file+' keyboard focus');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),file+' overflow '+width);
     if(file==='account.html'){assert.equal(await page.locator('a[href="/pos/"]').count(),0);assert.equal(await page.locator('.account-secondary-actions a[href="/shop/my-shop.html"]').count(),1);if(process.env.SHOP_DESIGN_ARTIFACTS)await page.screenshot({animations:'disabled',path:process.env.SHOP_DESIGN_ARTIFACTS+'/shop-account-navigation-'+width+'.png'});}
    }
@@ -116,6 +117,7 @@ await page.goto(base+'/shop/seller-cloud.html');await page.getByRole('button',{n
   await page.locator('.offer-import-list input[type=checkbox]').first().check();page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Auswahl als lokale Kopien übernehmen',exact:true}).click();assert.equal(await page.locator('#offer-list .offer-row').count(),1);assert.equal(await page.locator('[name=title]').inputValue(),'CI unsaved title remains');assert.equal(await page.locator('[name=price]').inputValue(),'');const importedLocals=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('bringness.marketplace.offer-drafts.v1')));assert.notEqual(importedLocals[0].id,sellerCommand.id);assert.equal(importedLocals[0].gtin,'4006381333931');
   page.once('dialog',dialog=>dialog.accept());await page.locator('[data-new-kind=service]').click();
   for(const width of [1280,390]){await page.setViewportSize({width,height:900});await page.goto(base+'/shop/assistant.html#buy');await page.locator('#assistant-products article').first().waitFor();assert.equal(await page.locator('#assistant-products article').count(),3);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Assistant overflow '+width);}
+  await customerAccountBrowserChecks({browser,base,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await sellerRecoveryBrowserChecks({browser,base,token:a.token});
   // Additional review fixtures are seeded only in this verified empty loopback database.
   // Registration replay is already tested above; do not weaken its production rate limit.

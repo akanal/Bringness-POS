@@ -1,3 +1,4 @@
+import {mountCustomerAddressSelect} from './customer-address-select.js';
 import {mountMarketOrderViews} from './market-order-ui.js';
 import {createMarketClient,marketError} from './market-client.js';
 import {marketMoney as money,marketGross as gross,marketLines} from './market-policy.js';
@@ -121,5 +122,5 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   busy=true;renderCart();try{const result=await client.write('orders',{requestId:w.crypto.randomUUID(),lines:frozen.lines,method:frozen.method,shippingNetCents:frozen.shippingNetCents,recipient});showOrder(result,frozen.lines);}catch(error){quote=null;$('market-confirm').hidden=true;status(marketError(error),true);}finally{busy=false;renderCart();}
  });
  for(const [id,fn]of [['market-retry',()=>client.retry('orders')],['market-recover',()=>client.recoverOrder()]])$(id).addEventListener('click',async()=>{if(busy)return;busy=true;renderCart();try{const pending=await client.pending('orders');if(!pending)throw Object.assign(Error(),{code:'NO_PENDING_REQUEST'});showOrder(await fn(),marketLines(pending.lines));}catch(error){status(marketError(error),true);}finally{busy=false;renderCart();}});
- mountMarketOrderViews({window:w,document:d,client,seller:false});readLocation();renderCart();search();return {search,client,getCart:()=>structuredClone(cart)};
+ mountCustomerAddressSelect({window:w,form:$('market-recipient')});mountMarketOrderViews({window:w,document:d,client,seller:false});readLocation();renderCart();search();return {search,client,getCart:()=>structuredClone(cart)};
 }

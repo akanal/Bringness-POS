@@ -1,3 +1,4 @@
+import {createShopCustomerAccount} from './shop-customer-account.js';
 import {createMarketplaceAdmin} from './shop-market-admin.js';
 import {createShopLegalRuntime} from './shop-legal.js';
 import {marketplaceImageKey} from './shop-marketplace-images.js';
@@ -107,6 +108,7 @@ const handleDisplays=createDisplays(platformGatewayPool);
 const handleMailStatus=createMailStatus(platformGatewayPool);
 const handleSystemDirectory=createSystemDirectory(platformGatewayPool);
 const handleMarketplaceAdmin=createMarketplaceAdmin(platformGatewayPool);
+const customerAccountRuntime=createShopCustomerAccount(platformGatewayPool,{enabled:appMode!=='ai'});
 const handleFiskalyTest=createFiskalyTest(platformGatewayPool,{sandboxStatus:companyId=>sandboxStatus(platformGatewayPool,companyId),requestSetup:(companyId,credentials)=>requestFiskalySetup(platformGatewayPool,companyId,credentials)});
 
 // Add modular API routes without destabilising the large legacy server file.
@@ -123,6 +125,7 @@ http.createServer = function patchedCreateServer(listener) {
         return res.end(JSON.stringify({mode:'TEST',state:row?.state||'waiting',signatureConfirmed:row?.state==='complete',phase:row?.phase||null,errorCode:row?.last_error||null}));
       }
       if (appMode!=='ai' && await handleSystemDirectory(req,res)) return;
+      if (await customerAccountRuntime.handle(req,res)) return;
       if (await shopLegalRuntime.handle(req,res)) return;
       if (appMode!=='ai' && await handleMarketplaceAdmin(req,res)) return;
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
@@ -268,6 +271,7 @@ async function migrateWithRetry(){
       await migrateBillingMail(platformGatewayPool);
       await migrateMerchantCustomerNumbers(platformGatewayPool);
       await migrateStaffInvitations();
+      try{await customerAccountRuntime.migrate();}catch{console.error('Shop customer accounts unavailable.');}
       try{await documentsRuntime.migrate();}catch{console.error('Private document migrations unavailable; uploads remain closed.');}
       try{await shopLegalRuntime.migrate();await shopRuntime.migrate();}catch{console.error('Shop migrations unavailable; shop routes remain closed.');}
       try{await shopAssistant.migrate();}catch{console.error('Shop assistant unavailable; guided help remains available.');}
