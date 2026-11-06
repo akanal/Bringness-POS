@@ -1,3 +1,4 @@
+import {marketplaceAdminChecks} from './market-admin-browser.mjs';
 import {storefrontBrowserChecks} from './storefront-browser.mjs';
 import {marketplaceHeaderBrowserChecks} from './marketplace-header-browser.mjs';
 import {marketplaceImageBrowserChecks} from './market-images-browser.mjs';
@@ -125,6 +126,7 @@ await page.goto(base+'/shop/seller-cloud.html');await page.getByRole('button',{n
   await documentBrowserChecks({page,pool,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceImageBrowserChecks({page,pool,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await storefrontBrowserChecks({page,pool,token:a.token,company:owner.company_id,adminToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
+  await marketplaceAdminChecks({page,base,pool,adminToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceHeaderBrowserChecks({page,base,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   assert.deepEqual(errors,[]);await context.close();
  }
