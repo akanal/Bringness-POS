@@ -571,3 +571,5 @@ Continue subsequent changes in the marketplace administration. Preserve POS, per
 
 ## Owner admin product separation — 2026-11-06
 Keep the Bringness marketplace separate from POS and AI. The three admin headers link to Markt (/superadmin/), POS (/admin/) and AI (/admin/ai-workspace.html?admin=1), with the current area highlighted. This is navigation only; preserve each area's existing sessions, permissions, business rules and licence decisions. Do not infer authorization to merge products or customer accounts.
+
+- Header appearance clarified by owner: marketplace admin uses marketplace emerald gradient; POS admin uses black with orange Bringness wordmark; AI admin keeps its own cream/green/lime identity. Place the three admin links at identical coordinates across all three areas for each viewport; scope these styles to administration only.
