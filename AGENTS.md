@@ -567,3 +567,7 @@ The owner requests that personal founder names be omitted from marketing and pro
 
 ## Owner marketplace focus confirmed 2026-11-06
 Continue subsequent changes in the marketplace administration. Preserve POS, personnel, displays and Center behavior/design. Superadmin should open the marketplace after successful existing platform authentication. Authorized next block: merchant search/status filtering, seller/status filters in marketplace offer/order lists, and read-only legal text revision history. Marketplace licence territories, rights, tasks and economics still require a separate owner decision; do not invent or activate them.
+
+
+## Owner admin product separation — 2026-11-06
+Keep the Bringness marketplace separate from POS and AI. The three admin headers link to Markt (/superadmin/), POS (/admin/) and AI (/admin/ai-workspace.html?admin=1), with the current area highlighted. This is navigation only; preserve each area's existing sessions, permissions, business rules and licence decisions. Do not infer authorization to merge products or customer accounts.
