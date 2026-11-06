@@ -564,3 +564,6 @@ The public demonstration page must introduce the whole POS system, including reg
 
 ## Public brand wording confirmed 2026-11-04
 The owner requests that personal founder names be omitted from marketing and product copy. Use Bringness or Bringness-Team as the public contact and salutation, including demo pages, flyers and sales drafts. Do not infer changes to stored identities or legal records from this copy preference.
+
+## Owner marketplace focus confirmed 2026-11-06
+Continue subsequent changes in the marketplace administration. Preserve POS, personnel, displays and Center behavior/design. Superadmin should open the marketplace after successful existing platform authentication. Authorized next block: merchant search/status filtering, seller/status filters in marketplace offer/order lists, and read-only legal text revision history. Marketplace licence territories, rights, tasks and economics still require a separate owner decision; do not invent or activate them.
