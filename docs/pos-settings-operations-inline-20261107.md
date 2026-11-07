@@ -2,7 +2,7 @@
 
 Der Eigentümer korrigiert den vorigen separaten Link: Die tatsächlichen Werkzeuge gehören in die Einstellungen. Die vorhandene POS-Bestands-/Geräteoberfläche ist deshalb direkt dort eingebaut. Benutzer können Zählstände laden/speichern, Mindestmengen prüfen, CSV erzeugen sowie Scanner-/Druckertests bedienen, ohne die Kassenansicht zu verlassen oder ein neues Fenster zu öffnen.
 
-Der bestehende Einstellungszugang und die laufenden Warenkörbe bleiben erhalten. Keine Backend-, Berechtigungs-, Lizenz-, Preis- oder Bestandslogikänderung. Markt und AI sind unverändert. Die vorhandene eigenständige Route bleibt als eingebettete Komponente verwendbar und mit gespeicherten direkten Aufrufen kompatibel.
+Der bestehende Einstellungszugang und die laufenden Warenkörbe bleiben erhalten. Beim Laden wird der aktuell in der Kasse gewählte Betrieb ausdrücklich übernommen und gegen die vom Server freigegebenen Betriebe geprüft; keine stille Auswahl eines anderen Betriebs. Keine Backend-, Berechtigungs-, Lizenz-, Preis- oder Bestandslogikänderung. Markt und AI sind unverändert. Die vorhandene eigenständige Route bleibt als eingebettete Komponente verwendbar und mit gespeicherten direkten Aufrufen kompatibel.
 
 Technisch hält eine gleich-originige Unteransicht die vorhandenen Formular-IDs und den POS-Warenkorb getrennt. Im eingebauten Modus entfallen die eigene Kopfzeile und der äußere Seitenabstand. Die Höhe passt sich dem tatsächlichen Inhalt an. Nachrichten enthalten ausschließlich eine begrenzte Höhenangabe; der Elternrahmen prüft Ursprung und exakt sendendes Fenster. Beim Verlassen bzw. Ersetzen der Einstellungen werden Nachricht-/Ansichtsbeobachter abgemeldet und die Unteransicht entfernt. Es werden keine Zugänge oder Bestandsdaten über postMessage übertragen.
 
