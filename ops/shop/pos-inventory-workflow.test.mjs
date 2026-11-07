@@ -38,3 +38,24 @@ test('printing a filtered count worksheet is read-only and distinguishes unknown
 test('leaving warning is limited to open input or an unconfirmed command',async()=>{const f=await fixture();try{assert.equal(f.w.dispatchEvent(new f.w.Event('beforeunload',{cancelable:true})),true);f.edit(a,'countedUnits','9');assert.equal(f.w.dispatchEvent(new f.w.Event('beforeunload',{cancelable:true})),false);f.confirm=true;f.by('discard-all').click();assert.equal(f.w.dispatchEvent(new f.w.Event('beforeunload',{cancelable:true})),true);assert.equal(f.posts.length,0)}finally{f.close()}});
 
 test('prepared private worksheets are invalidated by edits, filters and account changes',async()=>{const f=await fixture();try{f.by('count-sheet').click();assert(f.by('inventory-print'));f.by('inventory-query').value='Äpfel';f.by('inventory-query').dispatchEvent(new f.w.Event('input'));assert.equal(f.by('inventory-print'),null);f.by('count-sheet').click();assert(f.by('inventory-print'));f.edit(a,'countedUnits','9');assert.equal(f.by('inventory-print'),null);f.confirm=true;f.by('discard-all').click();f.by('count-sheet').click();assert(f.by('inventory-print'));f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(f.by('inventory-print'),null)}finally{f.close()}});
+
+test('parent leave state reports only booleans and follows draft, uncertain write and recovery',async()=>{
+ const f=await fixture();try{
+  assert.deepEqual(JSON.parse(JSON.stringify(f.w.posOperationsLeaveState())),{dirty:false,pending:false,busy:false});
+  f.edit(a,'countedUnits','8');assert.equal(f.w.posOperationsLeaveState().dirty,true);
+  f.loseAck=true;f.save(a);await tick();assert.deepEqual(JSON.parse(JSON.stringify(f.w.posOperationsLeaveState())),{dirty:true,pending:true,busy:false});
+  f.by('retry').click();await tick();assert.deepEqual(JSON.parse(JSON.stringify(f.w.posOperationsLeaveState())),{dirty:false,pending:false,busy:false});
+  f.edit(b,'countedUnits','3');f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(f.w.posOperationsLeaveState().dirty,false);
+ }finally{f.close()}
+});
+
+test('actual POS restaurant change cancels before clearing the cart or removing inventory',async()=>{
+ const source=await readFile(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8');
+ const handler=source.split('\n').find(line=>line.startsWith('$(')&&line.includes('"restaurant").onchange='));assert(handler);
+ const dom=new JSDOM('<select id="restaurant" data-pos-selected-restaurant="first"><option value="first">First</option><option value="second">Second</option></select><nav id="mainnav"><button class="active" data-view="einstellungen"></button></nav><div id="posSettingsOperations"></div>',{runScripts:'outside-only'}),w=dom.window;
+ try{
+  w.eval('const $=id=>document.getElementById(id);var cart=[{id:"kept"}],cat="all",allowed=false,renders=0,shown=[];function canLeavePosOperations(){return allowed}function render(){renders++;$("restaurant").dataset.posSelectedRestaurant=$("restaurant").value}function showModule(view){shown.push(view)};'+handler);
+  const select=w.document.getElementById('restaurant');select.value='second';select.dispatchEvent(new w.Event('change'));assert.equal(select.value,'first');assert.equal(w.eval('cart[0].id'),'kept');assert(w.document.getElementById('posSettingsOperations'));assert.equal(w.eval('renders'),0);
+  w.eval('allowed=true');select.value='second';select.dispatchEvent(new w.Event('change'));assert.equal(select.value,'second');assert.equal(w.eval('cart.length'),0);assert.equal(w.document.getElementById('posSettingsOperations'),null);assert.equal(w.eval('renders'),1);assert.equal(w.eval('shown.join(",")'),'einstellungen');
+ }finally{w.close()}
+});
