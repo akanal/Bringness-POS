@@ -59,11 +59,14 @@ $('loginForm').onsubmit=async event=>{
   if(action==='disable'&&!$('confirm-disable').checked)throw invalid('Bitte die Deaktivierung ausdrücklich bestätigen.','confirm-disable','disable');
   busy=true;controls(true);button.textContent='Wird geprüft …';message('Wird geprüft …',false,action);
   if(action==='begin'){
-   const data=await api('begin',{password});pending={enrollment:data.enrollment};$('qr').src=data.qr;$('manual-key').value=data.secret;$('recovery-codes').value=data.recoveryCodes.join('\n');$('enrollment').hidden=false;paint();message('QR-Code scannen, Wiederherstellungscodes speichern und den Handy-Code bestätigen.');$('qr').scrollIntoView({block:'start',behavior:'smooth'});
+   const data=await api('begin',{password});pending={enrollment:data.enrollment,recoveryCount:data.recoveryCodes.length};$('qr').src=data.qr;$('manual-key').value=data.secret;$('recovery-codes').value=data.recoveryCodes.join('\n');$('enrollment').hidden=false;paint();message('QR-Code scannen, Wiederherstellungscodes speichern und den Handy-Code bestätigen.');$('qr').scrollIntoView({block:'start',behavior:'smooth'});
   }else{
    sent=true;
-   await api(action,action==='activate'?{password,enrollment:pending.enrollment,code,saved:true}:{password,code,confirm:true});
-   await load();success(action);
+   const result=await api(action,action==='activate'?{password,enrollment:pending.enrollment,code,saved:true}:{password,code,confirm:true});
+   // The committed write response is definitive; a later status refresh must not hide success.
+   if(result.enabled===(action==='activate'))status={...status,enabled:result.enabled,recoveryRemaining:result.enabled?pending.recoveryCount:0,recentRecovery:false};
+   else {await load();if(status.enabled!==(action==='activate'))throw Error('Die Änderung konnte nicht bestätigt werden. Bitte den Status erneut prüfen.')}
+   success(action);
   }
  }catch(error){
   if(error.stale||epoch!==generation)return;
