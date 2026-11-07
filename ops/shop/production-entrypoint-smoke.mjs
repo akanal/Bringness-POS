@@ -1,3 +1,4 @@
+import {posOperationsBrowserChecks} from './pos-operations-browser.mjs';
 import {customerAccountBrowserChecks} from './customer-account-browser.mjs';
 import {marketplaceAdminChecks} from './market-admin-browser.mjs';
 import {storefrontBrowserChecks} from './storefront-browser.mjs';
@@ -118,6 +119,7 @@ await page.goto(base+'/shop/seller-cloud.html');await page.getByRole('button',{n
   page.once('dialog',dialog=>dialog.accept());await page.locator('[data-new-kind=service]').click();
   for(const width of [1280,390]){await page.setViewportSize({width,height:900});await page.goto(base+'/shop/assistant.html#buy');await page.locator('#assistant-products article').first().waitFor();assert.equal(await page.locator('#assistant-products article').count(),3);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Assistant overflow '+width);}
   await customerAccountBrowserChecks({browser,base,token:a.token,otherToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
+  await posOperationsBrowserChecks({browser,base,pool,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await sellerRecoveryBrowserChecks({browser,base,token:a.token});
   // Additional review fixtures are seeded only in this verified empty loopback database.
   // Registration replay is already tested above; do not weaken its production rate limit.
