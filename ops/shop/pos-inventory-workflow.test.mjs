@@ -60,3 +60,11 @@ test('actual POS restaurant change cancels before clearing the cart or removing 
   w.eval('allowed=true');select.value='second';select.dispatchEvent(new w.Event('change'));assert.equal(select.value,'second');assert.equal(w.eval('cart.length'),0);assert.equal(w.document.getElementById('posSettingsOperations'),null);assert.equal(w.eval('renders'),1);assert.equal(w.eval('shown.join(",")'),'einstellungen');
  }finally{w.close()}
 });
+
+test('lost confirmed save resolves after the product disappears without restoring it or writing twice',async()=>{
+ const f=await fixture();try{
+  f.loseAck=true;f.edit(a,'countedUnits','9');f.save(a);await tick();assert.equal(f.w.posOperationsLeaveState().pending,true);
+  const request=structuredClone(f.posts[0]);f.rows=f.rows.filter(row=>row.id!==a);
+  f.by('retry').click();await tick();assert.equal(f.posts.length,2);assert.deepEqual(f.posts[1],request);assert.equal(f.card(a),null);assert.equal(f.w.posOperationsLeaveState().pending,false);assert.equal(f.w.posOperationsLeaveState().dirty,false);assert.match(f.by('status').textContent,/Zählstand gespeichert/);
+ }finally{f.close()}
+});
