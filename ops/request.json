@@ -1,5 +1,6 @@
 {
-  "operation": "backup",
-  "target": "all",
-  "requestId": "marketplace-admin-release-20261106"
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "6b2306979b4a2738dcf5abc1bb4fd205735b06c3",
+  "requestId": "owner-mfa-ai-release-20261107"
 }
