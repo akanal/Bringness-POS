@@ -33,3 +33,9 @@ CSV ist ein Kassenschichtbericht, kein DATEV-/DSFinV-K-Export und kein fiskalisc
 10. Gemeinsamen Regressionstest auf PC/iPad/Windows durchführen und echte Geräteabnahmen getrennt dokumentieren.
 
 Diese Folgeschritte sind als nächstes Paket zusammengestellt, nicht als bereits implementiert bezeichnet. Bestehende Offline-/Fernhilfe-Funktionen werden nicht als fehlend dargestellt. Code-Signatur, TSE-Anbieterfreigaben und echte Geräte-/Zahlungsabnahmen bleiben von konkreten Zugängen bzw. Geräten abhängig; keine neuen Verträge oder Lizenzpreise.
+
+## Verifiziert veröffentlicht
+
+PR248: Feature051f980190150e0f90190d02cc4c7cb2eca88acc, Tree7a6a602fb3f455ae85d92461bb0388824619a15d. Alle sechs Prüfworkflows erfolgreich; lokal700 allgemeine Tests. PostgreSQL-Prüfung und Chromium/WebKit bei390/1280px mit tatsächlichem CSV-Download erfolgreich. Finale Bilder13570115279 visuell geprüft. Frische Sicherung42211075899/job128367561934 validiert.
+
+Mergedc8fc7a29bd168f4b19d942ad20e9268be79ee6d wurde durch Netcup42360859276/job128368751728 exakt bereitgestellt, vorherige Version und Datenbanksicherung behalten. LiveJS200/bytegleich, POS-HTML200 mit neuer Skriptversion, Health200/no-store, private Kassenschichtroute401/no-store ohne Zugang. Keine echte Kasse, Zahlung oder private Produktionsdaten zur Abnahme verändert.
