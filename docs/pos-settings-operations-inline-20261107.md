@@ -1,0 +1,9 @@
+# Bestand und Geräteprüfung direkt in POS-Einstellungen
+
+Der Eigentümer korrigiert den vorigen separaten Link: Die tatsächlichen Werkzeuge gehören in die Einstellungen. Die vorhandene POS-Bestands-/Geräteoberfläche ist deshalb direkt dort eingebaut. Benutzer können Zählstände laden/speichern, Mindestmengen prüfen, CSV erzeugen sowie Scanner-/Druckertests bedienen, ohne die Kassenansicht zu verlassen oder ein neues Fenster zu öffnen.
+
+Der bestehende Einstellungszugang und die laufenden Warenkörbe bleiben erhalten. Keine Backend-, Berechtigungs-, Lizenz-, Preis- oder Bestandslogikänderung. Markt und AI sind unverändert. Die vorhandene eigenständige Route bleibt als eingebettete Komponente verwendbar und mit gespeicherten direkten Aufrufen kompatibel.
+
+Technisch hält eine gleich-originige Unteransicht die vorhandenen Formular-IDs und den POS-Warenkorb getrennt. Im eingebauten Modus entfallen die eigene Kopfzeile und der äußere Seitenabstand. Die Höhe passt sich dem tatsächlichen Inhalt an. Nachrichten enthalten ausschließlich eine begrenzte Höhenangabe; der Elternrahmen prüft Ursprung und exakt sendendes Fenster. Beim Verlassen bzw. Ersetzen der Einstellungen werden Nachricht-/Ansichtsbeobachter abgemeldet und die Unteransicht entfernt. Es werden keine Zugänge oder Bestandsdaten über postMessage übertragen.
+
+Die native POS-Einstellungsprüfung bedient den eingebauten Bestand und Scanner tatsächlich bei390/1280px unter Chromium/WebKit, prüft gespeicherten Zählstand, unveränderte Haupt-URL/Warenkorb, keine neue Browserseite, ausgeblendete Unter-Kopfzeile, ignorierte fremde Höhennachrichten und Abbau beim Wechsel zur Displayverwaltung. Der tatsächliche Abschluss von CI/Veröffentlichung/Liveprüfung wird anschließend ergänzt.
