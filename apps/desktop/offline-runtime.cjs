@@ -12,7 +12,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
  let offlineWindow;
  const {createOfflineSync}=await import('./offline-sync.mjs');
  const open=()=>{if(closed)throw Error('Offline-Kasse wurde bereits geschlossen');if(offlineWindow&&!offlineWindow.isDestroyed()){offlineWindow.show();offlineWindow.focus();return offlineWindow}offlineWindow=new BrowserWindow({width:1280,height:820,show:showOffline,webPreferences:{preload:path.join(__dirname,'offline-preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});offlineWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));offlineWindow.webContents.on('will-navigate',e=>e.preventDefault());offlineWindow.loadFile(path.join(__dirname,'offline.html'));return offlineWindow;};
- Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Kasse',submenu:[{label:'Offline-Kasse / Synchronisierung',click:open},{label:'Online-Kasse',click:()=>onlineWindow()?.show()},{role:'quit'}]}]));
+ Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Kasse',submenu:[{label:'Offline-Kasse / Synchronisierung',click:open},{label:'Online-Kasse',click:()=>onlineWindow()?.show()},{label:'Windows-Updates und Wiederherstellung',click:()=>updates.open()},{role:'quit'}]}]));
  const trusted=event=>!closed&&offlineWindow&&!offlineWindow.isDestroyed()&&event.sender===offlineWindow.webContents&&event.senderFrame===offlineWindow.webContents.mainFrame&&event.senderFrame.url===pathToFileURL(path.join(__dirname,'offline.html')).href;
  const notify=()=>{if(!closed&&offlineWindow&&!offlineWindow.isDestroyed())offlineWindow.webContents.send('offline:updated');};
  const deviceBoundLedger={...ledger,catalog:async snapshot=>{
@@ -34,6 +34,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   if(typeof token!=='string'||!token.trim())return null;
   return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(typeof data?.error==='string'?data.error:'Synchronisierung nicht verfügbar');return data;};
  }});
+ const updates=require('./update-runtime.cjs').installUpdates({app,BrowserWindow,shell,onlineWindow,ledger,coordinator,offlineWindow:()=>offlineWindow,activeOperations:()=>activeOperations.size});
  let closed=false;
  let activeSync=null;
  const activeOperations=new Set();
@@ -113,6 +114,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   closed=true;
   closing=(async()=>{
   stopRecovery();
+  updates.close();
   offlineWindow?.destroy();
   for(const channel of ['offline:view','offline:sync','offline:export','offline:sale','offline:online'])ipcMain.removeHandler(channel);
   await Promise.allSettled([...activeOperations,...(activeSync?[activeSync]:[])]);
@@ -120,5 +122,5 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   })();
   return closing;
  };
- return {ledger,open,close};
+ return {ledger,open,close,openUpdates:updates.open};
 };

@@ -16,3 +16,7 @@ Der Electron-Client lädt gegenwärtig die Online-Kasse von Railway. Er kann ohn
 ## Für die Hardwareintegration erforderlich
 
 Konkretes BSI-zertifiziertes SD-/microSD-TSE-Modell samt Version, Hersteller-SDK/Treiber und physisches Testgerät mit Kartenleser. Danach folgen TSE-Lebenszyklus, Gerätezuordnung, Signaturprüfung, Ausfallablauf, Export und Ende-zu-Ende-Test an echter Hardware.
+
+## Version0.2.3: geprüfte Updateverwaltung
+
+Kasse → Windows-Updates und Wiederherstellung öffnet eine ausschließlich lokale, isolierte Oberfläche. Berechtigte Release-Metadaten kommen weiterhin aus der bestehenden geschützten Windows-Downloadroute. Fehlende Prüfsumme oder offene lokale Vorgänge blockieren das Paket. Abgebrochene Transfers können ausdrücklich fortgesetzt oder neu gestartet werden. SHA256 wird über die ganze Datei geprüft; ein vorheriges geprüftes Paket wird erhalten. Pakete werden lediglich im Ordner angezeigt, nicht automatisch ausgeführt. Installation/Downgrade und Datenkompatibilität benötigen eine echte Windows-Abnahme; lokale Kassendaten werden nicht zurückgesetzt. Die bestehende Signaturprüfung bestimmt weiterhin, ob ein Build öffentlich veröffentlicht werden darf.

@@ -1,3 +1,4 @@
+import {createPosInventory,migratePosInventory} from './pos-inventory.js';
 import {createShopCustomerAccount} from './shop-customer-account.js';
 import {createMarketplaceAdmin} from './shop-market-admin.js';
 import {createShopLegalRuntime} from './shop-legal.js';
@@ -101,6 +102,7 @@ const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handlePosEan=createPosEan(platformGatewayPool);
+const handlePosInventory=createPosInventory(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
 const handleTableSettlement=createTableSettlement(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
@@ -131,6 +133,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handlePackageAccess(req,res)) return;
       if (appMode!=='ai' && await handleWaiterWorkflow(req,res)) return;
       if (appMode!=='ai' && await handlePosEan(req,res)) return;
+      if (appMode!=='ai' && await handlePosInventory(req,res)) return;
       if (appMode!=='ai' && await handleDutyPlanning(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
@@ -246,6 +249,7 @@ async function migrateWithRetry(){
     try{
       await migrateRestaurantOwnerFeatures();
       await migratePosEan(platformGatewayPool);
+      await migratePosInventory(platformGatewayPool);
       await migrateDutyPlanning(platformGatewayPool);
       await migrateWaiterDelivery(platformGatewayPool);
       await migratePersonnel(platformGatewayPool);

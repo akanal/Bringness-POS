@@ -120,9 +120,11 @@ export async function handleBillingAccess(req,res){
   if(!ctx) return true;
 
   if(url.pathname==="/api/v1/downloads/windows/file"){
+    const range=req.headers.range;
+    if(range!==undefined&&!/^bytes=(0|[1-9][0-9]{0,9})-$/.test(range)){sendJson(res,400,{error:"Ungültige Download-Fortsetzung."});return true;}
     let upstream;
     try{
-      upstream=await fetch(installerUrl(ctx.release.file_url),{redirect:"follow",signal:AbortSignal.timeout(300000)});
+      upstream=await fetch(installerUrl(ctx.release.file_url),{redirect:"follow",signal:AbortSignal.timeout(300000),...(range?{headers:{Range:range}}:{})});
     }catch(error){
       sendJson(res,502,{error:"Windows-Installer konnte nicht geladen werden."});
       return true;
@@ -131,6 +133,7 @@ export async function handleBillingAccess(req,res){
       sendJson(res,502,{error:"Windows-Installer ist beim Release-Speicher nicht verfügbar."});
       return true;
     }
+    if(upstream.status===206){const match=/^bytes ([0-9]+)-([0-9]+)\/([0-9]+)$/.exec(upstream.headers.get("content-range")||"");if(!range||!match||Number(match[1])!==Number(range.slice(6,-1))||Number(match[2])<Number(match[1])||Number(match[3])>1073741824||Number(match[2])!==Number(match[3])-1){await upstream.body.cancel();sendJson(res,502,{error:"Ungültige Download-Fortsetzung beim Release-Speicher."});return true;}}
     await auditDownload(ctx,"download_started");
     const version=String(ctx.release.version||"current").replace(/[^A-Za-z0-9._-]/g,"-");
     const headers={
@@ -140,7 +143,9 @@ export async function handleBillingAccess(req,res){
     };
     const length=upstream.headers.get("content-length");
     if(length) headers["content-length"]=length;
-    res.writeHead(200,headers);
+    if(upstream.status===206)headers["content-range"]=upstream.headers.get("content-range");
+    headers["accept-ranges"]="bytes";
+    res.writeHead(upstream.status===206?206:200,headers);
     await streamInstaller(upstream.body,res);
     return true;
   }
