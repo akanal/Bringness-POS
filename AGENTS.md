@@ -577,3 +577,7 @@ Keep the Bringness marketplace separate from POS and AI. The three admin headers
 
 ## Owner strict product administration separation — 2026-11-06
 The marketplace administration must not display or load POS screens, personnel, Center, venue lists or POS overview tools. These belong under /admin/systems.html reached from POS administration. Keep only the explicitly approved Markt/POS/AI header shortcuts shared. Shop browser sessions use bringness-shop-token; market administration uses bringness-market-admin-token; POS management uses bringness-pos-admin-token. Never copy tokens across products or clear the POS session when signing into the shop. Existing identities, server authorization, data, orders and licence decisions remain unchanged. Privileged sign-in uses an accessible eye icon inside the password field, not a separate text control. Hidden marketplace offers need always-visible undo/restore above the result list even if every offer was hidden.
+
+
+## Owner Windows delivery cost decision — 2026-11-07
+Only a free trusted signing/distribution route may be used for the Windows POS release. Do not purchase certificates, subscribe to paid signing services or treat a customer order as authorization for signing expenses. Keep Windows download publication blocked until an eligible free route is implemented and verified. Continue Online POS development meanwhile. A self-signed test certificate is not a publicly trusted customer signature; Store/MSIX remains a possible route, not an existing approved/published distribution.
