@@ -16,7 +16,7 @@ export async function completeOwnerLogin(data,{fetcher=fetch,signal}={}){
   if(signal?.aborted){abort();return}signal?.addEventListener('abort',abort,{once:true});
   dialog.addEventListener('cancel',event=>{event.preventDefault();abort()});dialog.querySelector('[data-cancel]').onclick=abort;
   form.onsubmit=async event=>{event.preventDefault();if(submitting)return;submitting=true;submit.disabled=true;message.textContent='Code wird geprüft …';try{
-   const response=await fetcher('/api/v1/platform/security/verify-login',{method:'POST',credentials:'omit',mode:'same-origin',cache:'no-store',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify({challenge:data.challenge,code:input.value.trim()}),signal:controller.signal});
+   const response=await fetcher('/api/v1/platform/security/verify-login',{method:'POST',credentials:'omit',mode:'same-origin',cache:'no-store',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify({challenge:data.challenge,code:input.value.replace(/\s/gu,'')}),signal:controller.signal});
    const result=await response.json();if(!response.ok)throw Error(result.error||'Die Anmeldung ist derzeit nicht möglich.');
    if(!/^[a-f0-9]{64}$/.test(result.token||''))throw Error('Bitte erneut anmelden.');finish(result);
   }catch(error){if(!done){message.textContent=error.message;input.value='';input.focus()}}finally{submitting=false;submit.disabled=false}};
