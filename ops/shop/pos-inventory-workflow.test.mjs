@@ -52,8 +52,9 @@ test('parent leave state reports only booleans and follows draft, uncertain writ
 test('actual POS restaurant change cancels before clearing the cart or removing inventory',async()=>{
  const source=await readFile(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8');
  const handler=source.split('\n').find(line=>line.startsWith('$(')&&line.includes('"restaurant").onchange='));assert(handler);
- const dom=new JSDOM('<select id="restaurant" data-pos-selected-restaurant="first"><option value="first">First</option><option value="second">Second</option></select><nav id="mainnav"><button class="active" data-view="einstellungen"></button></nav><div id="posSettingsOperations"></div>',{runScripts:'outside-only'}),w=dom.window;
+ const dom=new JSDOM('<select id="restaurant" data-pos-selected-restaurant="first"><option value="first">First</option><option value="second">Second</option></select><nav id="mainnav"><button data-view="kasse"></button></nav><div id="posSettingsOperations"></div>',{runScripts:'outside-only'}),w=dom.window;
  try{
+  w.document.body.dataset.posView='einstellungen';
   w.eval('const $=id=>document.getElementById(id);var cart=[{id:"kept"}],cat="all",allowed=false,renders=0,shown=[];function canLeavePosOperations(){return allowed}function render(){renders++;$("restaurant").dataset.posSelectedRestaurant=$("restaurant").value}function showModule(view){shown.push(view)};'+handler);
   const select=w.document.getElementById('restaurant');select.value='second';select.dispatchEvent(new w.Event('change'));assert.equal(select.value,'first');assert.equal(w.eval('cart[0].id'),'kept');assert(w.document.getElementById('posSettingsOperations'));assert.equal(w.eval('renders'),0);
   w.eval('allowed=true');select.value='second';select.dispatchEvent(new w.Event('change'));assert.equal(select.value,'second');assert.equal(w.eval('cart.length'),0);assert.equal(w.document.getElementById('posSettingsOperations'),null);assert.equal(w.eval('renders'),1);assert.equal(w.eval('shown.join(",")'),'einstellungen');
