@@ -2,6 +2,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('n
 const version=v=>typeof v==='string'&&/^\d{1,4}\.\d{1,4}\.\d{1,4}(?:-[a-z0-9.-]{1,30})?$/i.test(v);
 function release(value){const r=value?.release;if(value?.allowed!==true||!r||!version(r.version)||! /^[a-f0-9]{64}$/i.test(r.sha256||'')||r.protectedDownloadPath!=='/api/v1/downloads/windows/file')throw Error('Kein freigegebenes Update mit bestätigter SHA-256-Prüfsumme verfügbar.');return {version:r.version,sha256:r.sha256.toLowerCase()};}
 exports.release=release;
+exports.pendingPosKeys=keys=>keys.filter(k=>/^bringness\.(checkout\.pending|table-settlement\.pending|cash\.pending|trade\.pending|delivery\.pending|deposit\.return|trade\.cancellation-draft|offline\.pending-sale)/.test(k)).length;
 const compare=(a,b)=>{const x=a.split(/[.-]/),y=b.split(/[.-]/);for(let i=0;i<3;i++){const n=Number(x[i])-Number(y[i]);if(n)return Math.sign(n);}return a===b?0:a.includes('-')&&!b.includes('-')?-1:!a.includes('-')&&b.includes('-')?1:a.localeCompare(b);};
 exports.createUpdateManager=({directory,currentVersion,request,preflight,progress=()=>{}})=>{
  let busy=false,state={phase:'idle',installedVersion:currentVersion,release:null,downloadedBytes:0,totalBytes:null,error:null},loaded=false,history={current:null,previous:null};
