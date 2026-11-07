@@ -16,6 +16,7 @@ function lock(){
  for(const [id,view] of views){view.reset.disabled=waiting||!drafts.has(id);view.save.disabled=waiting||Boolean(drafts.get(id)?.conflict)}
 }
 function summary(){
+ document.getElementById('inventory-print')?.remove();
  const shown=rows.filter(visible).length,counted=rows.filter(isCounted).length,low=rows.filter(isLow).length;
  $('inventory-summary').textContent=restaurantId?`${shown} von ${rows.length} Artikeln · ${counted} gezählt · ${rows.length-counted} ungezählt · ${low} am Mindestbestand.`:'';
  $('draft-summary').textContent=drafts.size?`${drafts.size} Artikel mit offenen Eingaben. Bitte speichern oder ausdrücklich verwerfen. Exporte sind bis dahin gesperrt.`:'';
