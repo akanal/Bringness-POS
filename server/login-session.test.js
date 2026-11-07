@@ -17,3 +17,9 @@ test('POS and AI sessions keep their existing lifetimes and never store the bear
   const insert=calls.find(c=>c.sql.startsWith('INSERT'));assert.equal(insert.args[0].length,64);assert.notEqual(insert.args[0],token);assert(insert.sql.includes(kind==='pos'?"30 days":"12 hours"));assert.equal(calls.at(-1).sql,'COMMIT');assert.equal(released,1);
  }
 });
+test('second-factor password proof cannot issue or return a usable session',async()=>{
+ const calls=[],account={id:userId,status:'active',password_hash:'old',role:'owner'};
+ const db={connect:async()=>({query:async sql=>{calls.push(sql);return {rows:sql.startsWith('SELECT')?[account]:[]}},release(){}})};
+ const result=await issueLoginSession(db,{userId,passwordHash:'old',beforeIssue:async(db,locked)=>{assert.equal(locked,account);return {mfaRequired:true,challenge:'synthetic'}}});
+ assert.equal(result.mfaRequired,true);assert(!('token' in result));assert(!calls.some(sql=>sql.startsWith('INSERT')));assert.equal(calls.at(-1),'COMMIT');
+});

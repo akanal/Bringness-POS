@@ -1,3 +1,4 @@
+import {ownerMfaBrowserChecks} from './owner-mfa-browser.mjs';
 import {posOperationsBrowserChecks} from './pos-operations-browser.mjs';
 import {customerAccountBrowserChecks} from './customer-account-browser.mjs';
 import {marketplaceAdminChecks} from './market-admin-browser.mjs';
@@ -132,6 +133,7 @@ await page.goto(base+'/shop/seller-cloud.html');await page.getByRole('button',{n
   await storefrontBrowserChecks({page,pool,token:a.token,company:owner.company_id,adminToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceAdminChecks({page,base,pool,adminToken:b.token,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   await marketplaceHeaderBrowserChecks({page,base,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
+  await ownerMfaBrowserChecks({browser,base,pool,adminToken:b.token,email:b.email,password,artifacts:process.env.SHOP_DESIGN_ARTIFACTS});
   assert.deepEqual(errors,[]);await context.close();
  }
  console.log('Actual entrypoint + PostgreSQL: registration/replay, real login, quote, draft/replay, prepared checkout, account isolation, history, seller persistence/concurrency/archive/version reads and no financial grants passed.');

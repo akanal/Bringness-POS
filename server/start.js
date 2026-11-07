@@ -1,3 +1,4 @@
+import {createOwnerMfa} from './owner-mfa.js';
 import {createPosInventory,migratePosInventory} from './pos-inventory.js';
 import {createShopCustomerAccount} from './shop-customer-account.js';
 import {createMarketplaceAdmin} from './shop-market-admin.js';
@@ -77,6 +78,7 @@ pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
 };
 
 const platformGatewayPool=new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false});
+const handleOwnerMfa=createOwnerMfa(platformGatewayPool);
 const shopLegalRuntime=createShopLegalRuntime(platformGatewayPool,{enabled:appMode!=='ai'});
 let shopRegistrationRuntime={migrate:async()=>{},handle:async()=>false};
 if(appMode!=='ai'&&process.env.SHOP_REGISTRATION_ENABLED!=='false'){
@@ -118,6 +120,7 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (await handleOwnerMfa(req,res)) return;
       if (servePublicSearch(req,res,appMode)) return;
       if (redirectLegacyPosDomain(req,res,appMode)) return;
       if (serveMarketplaceHome(req,res,appMode,()=>fs.readFileSync(new URL('../apps/web/public/shop/index.html',import.meta.url),'utf8'))) return;
