@@ -66,18 +66,21 @@ async function activeDownloadEntitlement(companyId){
 async function latestWindowsRelease(){
   const configured=String(process.env.DESKTOP_INSTALLER_URL||"").trim();
   if(configured){
+    const version=String(process.env.DESKTOP_INSTALLER_VERSION||"current");
+    const gate=(await pool.query("SELECT paid_upgrade,upgrade_plan_code FROM software_releases WHERE (version=$1 OR file_url=$2) AND platform='windows' AND channel='stable' ORDER BY paid_upgrade DESC,created_at DESC LIMIT 1",[version,configured])).rows[0]||{};
     return {
+      paid_upgrade:Boolean(gate.paid_upgrade),upgrade_plan_code:gate.upgrade_plan_code||null,
       id:null,
       channel:"stable",
       platform:"windows",
-      version:String(process.env.DESKTOP_INSTALLER_VERSION||"current"),
+      version,
       file_url:configured,
       sha256:String(process.env.DESKTOP_INSTALLER_SHA256||"").trim()||null,
       source:"environment"
     };
   }
   const q=await pool.query(`
-    SELECT id,channel,platform,version,file_url,sha256
+    SELECT id,channel,platform,version,file_url,sha256,paid_upgrade,upgrade_plan_code
     FROM software_releases
     WHERE active=true AND platform='windows' AND channel='stable'
     ORDER BY created_at DESC
@@ -86,6 +89,11 @@ async function latestWindowsRelease(){
   return q.rows[0]?{...q.rows[0],source:"database"}:null;
 }
 
+export async function releaseDownloadAllowed(db,companyId,release){
+ if(!release.paid_upgrade)return true;
+ if(typeof release.upgrade_plan_code!=='string'||!release.upgrade_plan_code.trim())return false;
+ return Boolean((await db.query(`SELECT ce.id FROM company_entitlements ce JOIN billing_plans bp ON bp.id=ce.plan_id WHERE ce.company_id=$1 AND bp.code=$2 AND ce.status='active' AND (ce.current_period_end IS NULL OR ce.current_period_end>clock_timestamp()) AND ce.provider IS NOT NULL AND btrim(ce.provider)<>'' AND lower(btrim(ce.provider))<>'test' LIMIT 1`,[companyId,release.upgrade_plan_code])).rows.length);
+}
 async function licensedContext(req,res){
   const user=await currentUser(req);
   if(!user){ sendJson(res,401,{error:"Nicht angemeldet"}); return null; }
@@ -100,6 +108,7 @@ async function licensedContext(req,res){
     sendJson(res,503,{allowed:true,licenseActive:true,entitlement:{id:entitlement.id,purchasedAt:entitlement.purchased_at},releaseAvailable:false,error:"Die Lizenz ist aktiv, aber aktuell ist noch kein Windows-Installer veröffentlicht."});
     return null;
   }
+  if(!await releaseDownloadAllowed(pool,user.company_id,release)){sendJson(res,402,{allowed:false,purchaseRequired:true,error:"Diese Windows-Version benötigt die bereits vorgesehene Upgrade-Freigabe. Bitte den bestehenden Upgrade-Kaufweg verwenden."});return null;}
   return {user,entitlement,release};
 }
 
