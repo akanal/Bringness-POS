@@ -292,3 +292,34 @@ test('server confirmation with duplicate receipt identity leaves unresolved sale
  assert.equal(f.errors.length,1);
  assert.equal(f.calls.length,1);
 });
+
+for(const [httpStatus,state] of [[401,'login'],[403,'warning']]){
+ test(`HTTP ${httpStatus} preserves original pending sales and recovers after login`,async()=>{
+  const f=fixture(['a','b']);let denied=true;
+  const sync=createOfflineSync({...f,connect:async()=>{
+   const request=await f.connect();
+   return async(type,payload)=>{if(denied)throw Object.assign(Error('private server diagnostic'),{status:httpStatus});return request(type,payload);};
+  }});
+  const before=JSON.stringify([...f.pending.values()]);
+  const status=await sync.sync();assert.equal(status.state,state);assert.equal(status.lastSuccess,null);
+  assert(!status.message.includes('private server diagnostic'));assert(!status.message.includes('Verbindung während'));
+  assert.equal(JSON.stringify([...f.pending.values()]),before);assert.equal(f.errors.length,0);
+  denied=false;assert.equal((await sync.sync()).state,'success');assert.equal(f.pending.size,0);assert.deepEqual(f.calls,[['a','b']]);
+ });
+ test(`catalog HTTP ${httpStatus} keeps already confirmed receipts`,async()=>{
+  const f=fixture(['a']);let denied=true;
+  const sync=createOfflineSync({...f,connect:async()=>{
+   const request=await f.connect();return async(type,payload)=>{if(type==='catalog'&&denied)throw Object.assign(Error('private'),{status:httpStatus});return request(type,payload);};
+  }});
+  const status=await sync.sync();assert.equal(status.state,state);assert.match(status.message,/Alle gespeicherten Verkäufe übertragen/);assert.equal(f.pending.size,0);assert.equal(status.lastSuccess,null);
+  denied=false;assert.equal((await sync.sync()).state,'success');assert.deepEqual(f.calls,[['a']]);
+ });
+}
+test('expired login after an acknowledged batch retries only the unconfirmed original IDs',async()=>{
+ const ids=Array.from({length:25},(_,i)=>'sale-'+i),f=fixture(ids);let requests=0,expired=true;
+ const sync=createOfflineSync({...f,connect:async()=>{const request=await f.connect();return async(type,payload)=>{
+  if(type==='batch'&&++requests===2&&expired)throw Object.assign(Error('expired'),{status:401});return request(type,payload);
+ };}});
+ assert.equal((await sync.sync()).state,'login');assert.deepEqual([...f.pending.keys()],ids.slice(20));
+ expired=false;assert.equal((await sync.sync()).state,'success');assert.deepEqual(f.calls,[ids.slice(0,20),ids.slice(20)]);
+});

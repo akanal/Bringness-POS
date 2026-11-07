@@ -32,7 +32,7 @@ exports.install=async({app,BrowserWindow,shell,onlineWindow,deviceKey,showOfflin
   if(closed||window.isDestroyed()||onlineWindow()!==window)return null;
   try{if(new URL(window.webContents.getURL()).origin!=='https://bringness.de')return null;}catch{return null;}
   if(typeof token!=='string'||!token.trim())return null;
-  return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});const data=await response.json();if(!response.ok)throw Error(typeof data?.error==='string'?data.error:'Synchronisierung nicht verfügbar');return data;};
+  return async(endpoint,body)=>{const response=await fetch('https://bringness.de/api/v1/offline/'+endpoint,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({deviceKey,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});if(!response.ok){const error=Error('Synchronisierung nicht verfügbar');error.status=response.status;throw error;}return await response.json();};
  }});
  const updates=require('./update-runtime.cjs').installUpdates({app,BrowserWindow,shell,onlineWindow,ledger,coordinator,offlineWindow:()=>offlineWindow,activeOperations:()=>activeOperations.size});
  let closed=false;

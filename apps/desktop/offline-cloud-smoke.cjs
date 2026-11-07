@@ -52,8 +52,8 @@ app.whenReady().then(async()=>{
   }
   const id=await sale();
   await login(null);assert.equal((await sync()).state,'login');assert.equal(await runtime.ledger.pendingCount(),1);await counts(2);
-  await login(token);await cloud.expire(token);assert.equal((await sync()).state,'error');assert.equal(await runtime.ledger.pendingCount(),1);await counts(2);
-  token=await cloud.issueSession();await login(token);await cloud.ownerRole('waiter');assert.equal((await sync()).state,'error');assert.equal(await runtime.ledger.pendingCount(),1);await counts(2);
+  await login(token);await cloud.expire(token);assert.equal((await sync()).state,'login');assert.equal(await runtime.ledger.pendingCount(),1);await counts(2);
+  token=await cloud.issueSession();await login(token);await cloud.ownerRole('waiter');assert.equal((await sync()).state,'warning');assert.equal(await runtime.ledger.pendingCount(),1);await counts(2);
   await cloud.ownerRole('owner');cloud.setMode('unavailable');assert.equal((await sync()).state,'error');assert.equal(await runtime.ledger.pendingCount(),1);await counts(2);
   // A disabled device cannot refresh its catalog, but valid historical sales
   // remain importable: revocation must not erase money already collected.
