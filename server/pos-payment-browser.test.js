@@ -94,7 +94,7 @@ test('module overview exposes booking states and opens the real display editor f
    return route.abort();
   });
   try{
-   await page.goto('https://modules.test/pos/');await page.locator('.personnel-dialog input[name=pin]').fill('123456');await page.getByRole('button',{name:'Freigeben',exact:true}).click();await page.locator('#openDisplaySettings').waitFor();
+   await page.goto('https://modules.test/pos/');await page.locator('.personnel-dialog input[name=pin]').fill('123456');await page.getByRole('button',{name:'Freigeben',exact:true}).click();await page.locator('#openDisplaySettings').waitFor();const operationsLink=page.locator('a[href="/pos/operations.html"]');await operationsLink.waitFor();assert.equal(await operationsLink.getAttribute('target'),'_blank');assert.equal(await operationsLink.getAttribute('rel'),'noopener');
    await page.locator('#openDisplaySettings').click();await page.locator('#displayForm').waitFor();assert.equal(unlocks,1);assert.equal(locks,0);await page.locator('#moduleBack').click();await page.locator('#openDisplaySettings').waitFor();
    await page.getByRole('button',{name:'Module verwalten',exact:true}).click();
    const owned=page.locator('[data-license-plan="display_control_monthly"]');await owned.waitFor();
