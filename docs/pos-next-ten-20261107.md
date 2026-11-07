@@ -39,3 +39,7 @@ Diese Folgeschritte sind als nächstes Paket zusammengestellt, nicht als bereits
 PR248: Feature051f980190150e0f90190d02cc4c7cb2eca88acc, Tree7a6a602fb3f455ae85d92461bb0388824619a15d. Alle sechs Prüfworkflows erfolgreich; lokal700 allgemeine Tests. PostgreSQL-Prüfung und Chromium/WebKit bei390/1280px mit tatsächlichem CSV-Download erfolgreich. Finale Bilder13570115279 visuell geprüft. Frische Sicherung42211075899/job128367561934 validiert.
 
 Mergedc8fc7a29bd168f4b19d942ad20e9268be79ee6d wurde durch Netcup42360859276/job128368751728 exakt bereitgestellt, vorherige Version und Datenbanksicherung behalten. LiveJS200/bytegleich, POS-HTML200 mit neuer Skriptversion, Health200/no-store, private Kassenschichtroute401/no-store ohne Zugang. Keine echte Kasse, Zahlung oder private Produktionsdaten zur Abnahme verändert.
+
+## Folgestand
+
+Die oben vorbereiteten Folgepunkte sind inzwischen als PR250 technisch umgesetzt und überprüft; verbindlicher Umfang und tatsächliche Grenzen stehen in [pos-operations-ten-20261107.md](pos-operations-ten-20261107.md). Webfunktionen sind veröffentlicht. Windows0.2.3 bleibt ein unsignierter Testbuild; öffentliche Signaturfreigabe und physische Geräte-/Installations-/Downgrade-Abnahme sind nicht erledigt.
