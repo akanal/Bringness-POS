@@ -1,4 +1,9 @@
 // Keep synchronization single-flight and acknowledge only accepted sales.
+function accessFailure(error){
+ if(error?.status===401)return {state:'login',message:'Online-Anmeldung abgelaufen. Bitte in der Online-Kasse erneut anmelden. Offene Verkäufe bleiben gespeichert.'};
+ if(error?.status===403)return {state:'warning',message:'Berechtigung für den Offline-Abgleich fehlt. Bitte den Inhaber die Freigabe prüfen lassen. Offene Verkäufe bleiben gespeichert.'};
+ return null;
+}
 export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
  let running=null,lastCatalog=0,catalogValidUntil=0,forceQueued=false,activeForce=false;
  let status={state:'idle',message:'Noch keine Synchronisierung',lastSuccess:null};
@@ -31,6 +36,7 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
     let response;
     try{response=await request('batch',{sales:batch.map(s=>s.request)});}
     catch(error){
+     if(accessFailure(error))throw error;
      // A lost response does not mean the server failed to commit the sales.
      // Keep every uncertain sale pending; the server deduplicates by sale ID.
      throw Error('Verbindung während der Übertragung unterbrochen. Offene Verkäufe bleiben gespeichert und werden erneut abgeglichen.',{cause:error});
@@ -112,8 +118,9 @@ export function createOfflineSync({ledger,connect,notify=()=>{},now=Date.now}) {
    const remaining=await ledger.pendingCount();
    notifySafely();
    const message=remaining?acknowledged+' Verkäufe bestätigt. '+remaining+' Offline-Verkäufe sind weiterhin offen.'+(failed?' '+failed+' davon benötigen eine Prüfung.':''):'Alle gespeicherten Verkäufe übertragen.';
-   publish({state:failed||remaining||catalogError?'warning':'success',message:catalogError?message+' Katalogaktualisierung fehlgeschlagen: '+(catalogError.message||'nicht verfügbar'):message,...(!failed&&!remaining&&!catalogError?{lastSuccess:new Date(now()).toISOString()}:{})});
-  }catch(error){publish({state:'error',message:error.message||'Synchronisierung nicht verfügbar. Erneut versuchen.'});}
+   const access=accessFailure(catalogError);
+   publish({state:access?.state||(failed||remaining||catalogError?'warning':'success'),message:access?message+' '+access.message:catalogError?message+' Katalogaktualisierung fehlgeschlagen: '+(catalogError.message||'nicht verfügbar'):message,...(!failed&&!remaining&&!catalogError?{lastSuccess:new Date(now()).toISOString()}:{})});
+  }catch(error){publish(accessFailure(error)||{state:'error',message:error.message||'Synchronisierung nicht verfügbar. Erneut versuchen.'});}
   return {...status};
  };
  return {status:()=>({...status}),sync(force=false){
