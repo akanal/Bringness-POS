@@ -75,6 +75,7 @@ jobs:
       - run: node server/ai-tests/cash-closing-ui.mjs
       - run: node server/ai-tests/pos-inventory.mjs
       - run: node server/ai-tests/pos-inventory-history.mjs
+      - run: node server/ai-tests/pos-device-checks.mjs
       - run: node server/ai-tests/windows-upgrade-access.mjs
       - run: node server/ai-tests/customer-delivery-ui.mjs
       - run: node server/ai-tests/deposit-ui.mjs

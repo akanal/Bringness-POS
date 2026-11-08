@@ -1,5 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {createRequire} from 'node:module';import {dependency} from './dependency.mjs';
 const require=createRequire(import.meta.url),{JSDOM}=require(dependency('jsdom','SHOP_JSDOM_PATH'));
+const deviceScript=await readFile(new URL('../../apps/web/public/pos/device-checks.js',import.meta.url),'utf8');
 const html=await readFile(new URL('../../apps/web/public/pos/operations.html',import.meta.url),'utf8'),script=await readFile(new URL('../../apps/web/public/pos/operations.js',import.meta.url),'utf8');
 const restaurant='11111111-1111-4111-8111-111111111111',a='22222222-2222-4222-8222-222222222222',b='33333333-3333-4333-8333-333333333333',c='44444444-4444-4444-8444-444444444444',date='2026-11-07T10:00:00Z',tick=()=>new Promise(r=>setTimeout(r,15));
 async function fixture({history}={}){
@@ -11,7 +12,7 @@ async function fixture({history}={}){
   if(o.method==='POST'){const command=JSON.parse(o.body);posts.push(command);if(receipts.has(command.requestId))return Response.json(receipts.get(command.requestId));const row=rows.find(r=>r.id===command.productId);if((row.revision||0)!==command.expectedRevision)return Response.json({error:'Zählstand wurde geändert. Bitte neu laden.'},{status:409});Object.assign(row,{revision:command.expectedRevision+1,counted_units:command.countedUnits,minimum_units:command.minimumUnits,target_units:command.targetUnits,counted_at:date});const ack={requestId:command.requestId,productId:row.id,revision:row.revision};receipts.set(command.requestId,ack);if(loseAck){loseAck=false;throw new TypeError('response lost')}return Response.json(ack)}
   if(failRead)throw new TypeError('read failed');return Response.json({restaurantId:restaurant,rows:structuredClone(rows),manualCounts:true});
  };
- w.eval(script);doc.getElementById('load').click();await tick();const by=id=>doc.getElementById(id),card=id=>doc.querySelector('[data-product-id="'+id+'"]');
+ w.eval(deviceScript);w.eval(script.replace(/^import .*device-checks.*;\n/,''));doc.getElementById('load').click();await tick();const by=id=>doc.getElementById(id),card=id=>doc.querySelector('[data-product-id="'+id+'"]');
  const edit=(id,key,value)=>{const input=card(id).querySelector('[name='+key+']');input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}))};
  const save=id=>card(id).querySelector('form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
  return {w,by,card,edit,save,posts,downloads,historyCalls,get rows(){return rows},set rows(value){rows=value},get printed(){return printed},set confirm(value){confirm=value},set failRead(value){failRead=value},set loseAck(value){loseAck=value},close(){w.dispatchEvent(new w.Event('pagehide'));w.close()}};

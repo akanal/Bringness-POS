@@ -1,3 +1,4 @@
+import './device-checks.js?v=device-protocols-20261108';
 const $=id=>document.getElementById(id),tokenKey='bringness-pos-token';
 let rows=[],pending=null,busy=false,epoch=0,restaurantId=null;
 let historyRows=[],historyAsOf=null,historyCompany=null,historyCursor=null,historyProduct=null,historyVersion=0;
@@ -9,14 +10,15 @@ const isCounted=row=>row.revision!=null,isLow=row=>isCounted(row)&&row.counted_u
 function visible(row){const words=folded($('inventory-query').value.trim()).split(/\s+/).filter(Boolean),filter=$('inventory-filter').value;return words.every(word=>folded(row.name).includes(word))&&(filter==='all'||filter==='low'&&isLow(row)||filter==='uncounted'&&!isCounted(row)||filter==='counted'&&isCounted(row))}
 function hasFreshTimes(){return rows.every(row=>!isCounted(row)||Boolean(row.counted_at))}
 function lock(){
- const waiting=busy||Boolean(pending),dirty=drafts.size>0;
+ const device=window.posDeviceChecks?.state();const waiting=busy||Boolean(pending)||Boolean(device?.pending),stockDirty=drafts.size>0,dirty=stockDirty||Boolean(device?.dirty);
  for(const node of document.querySelectorAll('#inventory button,#inventory input,#refresh,#inventory-query,#inventory-filter'))node.disabled=waiting;
  $('restaurant').disabled=waiting||dirty;$('load').disabled=waiting||dirty;
- for(const id of ['export','inventory-csv','count-sheet'])$(id).disabled=waiting||dirty||!restaurantId||!rows.length||!hasFreshTimes();
+ for(const id of ['export','inventory-csv','count-sheet'])$(id).disabled=waiting||stockDirty||!restaurantId||!rows.length||!hasFreshTimes();
  for(const node of document.querySelectorAll('#inventory-history input,#history-load,#history-clear-product'))node.disabled=waiting||!restaurantId;
- $('history-more').disabled=waiting; $('history-more').hidden=!historyCursor; $('history-csv').disabled=waiting||dirty||!restaurantId||!historyRows.length||historyAsOf===null;
- $('discard-all').disabled=waiting||!dirty;$('retry').hidden=!pending;$('retry').disabled=busy;
+ $('history-more').disabled=waiting; $('history-more').hidden=!historyCursor; $('history-csv').disabled=waiting||stockDirty||!restaurantId||!historyRows.length||historyAsOf===null;
+ $('discard-all').disabled=waiting||!stockDirty;$('retry').hidden=!pending;$('retry').disabled=busy;
  for(const [id,view] of views){view.reset.disabled=waiting||!drafts.has(id);view.save.disabled=waiting||Boolean(drafts.get(id)?.conflict)}
+ window.posDeviceChecks?.lock();
 }
 function summary(){
  document.getElementById('inventory-print')?.remove();
@@ -26,7 +28,7 @@ function summary(){
  for(const row of rows){const view=views.get(row.id);if(view)view.card.hidden=!visible(row)}
  lock();
 }
-function clear(){resetHistory(true);epoch++;rows=[];drafts.clear();views.clear();pending=null;busy=false;restaurantId=null;$('inventory').replaceChildren();$('restaurant').replaceChildren();$('inventory-query').value='';$('inventory-filter').value='all';$('status').textContent='Private POS-Ansicht geschlossen. Bitte neu laden.';summary()}
+function clear(){window.posDeviceChecks?.reset();resetHistory(true);epoch++;rows=[];drafts.clear();views.clear();pending=null;busy=false;restaurantId=null;$('inventory').replaceChildren();$('restaurant').replaceChildren();$('inventory-query').value='';$('inventory-filter').value='all';$('status').textContent='Private POS-Ansicht geschlossen. Bitte neu laden.';summary()}
 async function request(path,body){const token=localStorage.getItem(tokenKey);if(!token)throw Error('Bitte in der POS-Kasse anmelden.');const r=await fetch('/api/v1'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});const data=await r.json();if(token!==localStorage.getItem(tokenKey)||document.hidden)throw Error('POS-Konto oder Ansicht gewechselt.');if(!r.ok)throw Object.assign(Error(r.status>=500?'POS-Bestand derzeit nicht verfügbar.':data.error||'Zugriff nicht möglich'),{definitive:r.status>=400&&r.status<500,status:r.status,code:data.code});return data}
 async function task(work){if(busy)return;busy=true;lock();const current=epoch;try{await work(current)}catch(error){if(current===epoch)$('status').textContent=error.message}finally{if(current===epoch){busy=false;lock()}}}
 function draftFor(row,form){
@@ -74,7 +76,7 @@ function render(){
 async function fetchRows(id){const data=await request('/pos-inventory?restaurantId='+encodeURIComponent(id));if(data.restaurantId!==id||!Array.isArray(data.rows))throw Error('Zählstände nicht eindeutig bestätigt. Bitte erneut laden.');return data}
 async function refresh(current){const id=$('restaurant').value;if(!id)throw Error('Bitte zuerst Betriebe laden.');const data=await fetchRows(id);if(current!==epoch||id!==$('restaurant').value)return;
  if(restaurantId&&restaurantId!==id&&drafts.size)throw Error('Bitte offene Eingaben zuerst speichern oder verwerfen.');
- if(restaurantId!==id)resetHistory(true);restaurantId=id;rows=data.rows;render();$('status').textContent=drafts.size?'Serverstände aktualisiert. Offene Eingaben sind erhalten geblieben.':'Manuelle Zählstände geladen.';
+ if(restaurantId!==id){window.posDeviceChecks?.reset();resetHistory(true);}restaurantId=id;rows=data.rows;render();$('status').textContent=drafts.size?'Serverstände aktualisiert. Offene Eingaben sind erhalten geblieben.':'Manuelle Zählstände geladen.';
 }
 async function saveCount(current){
  const command=pending;feedback(command.productId,'Zählstand wird gespeichert …');
@@ -93,10 +95,10 @@ async function saveCount(current){
 $('load').onclick=()=>task(async current=>{if(drafts.size)throw Error('Bitte offene Eingaben zuerst speichern oder verwerfen.');const data=await request('/bootstrap');if(current!==epoch)return;
  const old=$('restaurant').value,wanted=window.parent!==window&&new URLSearchParams(location.search).get('embedded')==='1'?new URLSearchParams(location.search).get('restaurantId'):old;
  $('restaurant').replaceChildren(...data.restaurants.map(row=>{const option=el('option',row.name);option.value=row.id;return option}));
- if(wanted&&!data.restaurants.some(row=>row.id===wanted)){resetHistory(true);rows=[];restaurantId=null;views.clear();$('inventory').replaceChildren();summary();throw Error('Der in den Einstellungen gewählte Betrieb ist nicht verfügbar. Bitte Betrieb prüfen.')}
- if(wanted)$('restaurant').value=wanted;if(restaurantId!==$('restaurant').value){resetHistory(true);rows=[];restaurantId=null;views.clear();$('inventory').replaceChildren();summary()}await refresh(current);
+ if(wanted&&!data.restaurants.some(row=>row.id===wanted)){window.posDeviceChecks?.reset();resetHistory(true);rows=[];restaurantId=null;views.clear();$('inventory').replaceChildren();summary();throw Error('Der in den Einstellungen gewählte Betrieb ist nicht verfügbar. Bitte Betrieb prüfen.')}
+ if(wanted)$('restaurant').value=wanted;if(restaurantId!==$('restaurant').value){window.posDeviceChecks?.reset();resetHistory(true);rows=[];restaurantId=null;views.clear();$('inventory').replaceChildren();summary()}await refresh(current);
 });
-$('refresh').onclick=()=>task(refresh);$('restaurant').onchange=()=>{if(drafts.size||pending){$('restaurant').value=restaurantId;$('status').textContent='Bitte offene Eingaben zuerst speichern oder verwerfen.';return}resetHistory(true);rows=[];restaurantId=null;views.clear();$('inventory').replaceChildren();summary();task(refresh)};
+$('refresh').onclick=()=>task(refresh);$('restaurant').onchange=()=>{const device=window.posDeviceChecks?.state();if(drafts.size||pending||device?.dirty||device?.pending){$('restaurant').value=restaurantId;$('status').textContent='Bitte offene Eingaben zuerst speichern oder verwerfen.';return}window.posDeviceChecks?.reset();resetHistory(true);rows=[];restaurantId=null;views.clear();$('inventory').replaceChildren();summary();task(refresh)};
 $('retry').onclick=()=>pending&&task(saveCount);
 for(const id of ['inventory-query','inventory-filter'])$(id).addEventListener(id==='inventory-query'?'input':'change',()=>{summary();if($('inventory-empty'))$('inventory-empty').hidden=rows.some(visible)});
 $('discard-all').onclick=()=>{if(!drafts.size||busy||pending||!window.confirm('Alle offenen Eingaben in dieser Ansicht verwerfen? Gespeicherte Zählstände bleiben erhalten.'))return;drafts.clear();render();$('status').textContent='Offene Eingaben verworfen. Gespeicherte Zählstände bleiben erhalten.'};
@@ -112,9 +114,21 @@ $('count-sheet').onclick=()=>{
  for(const row of selected){const line=el('tr');for(const value of [row.name,isCounted(row)?row.counted_units:'Nicht gezählt',row.minimum_units??'',row.target_units??'','']){const cell=el('td',value);line.append(cell)}line.lastElementChild.className='write-space';body.append(line)}table.append(body);sheet.append(table);document.body.append(sheet);window.print();$('status').textContent='Zählliste zum Drucken vorbereitet. Es wurde kein Zählstand gespeichert.';
 };
 // Synchronous same-origin parent navigation check: booleans only, no credentials or inventory data.
-window.posOperationsLeaveState=()=>({dirty:drafts.size>0,pending:Boolean(pending),busy});
-window.addEventListener('beforeunload',event=>{if(drafts.size||pending){event.preventDefault();event.returnValue=''}});
-$('scanner').onsubmit=e=>{e.preventDefault();const value=$('scan').value.trim();$('scan-result').textContent=value?'Code empfangen: '+value+' · Länge '+value.length+'. Bitte mit dem gedruckten Testcode vergleichen.':'Kein Code empfangen.';$('scan').value='';};let printRequested=false;$('print').onclick=()=>{document.getElementById('test-print')?.remove();document.getElementById('inventory-print')?.remove();const p=el('pre','Bringness POS · DRUCKERTEST\nKeine Rechnung · Kein Verkauf\n0123456789\nÄÖÜ äöü ß €\nPapier, Lesbarkeit und Schnitt prüfen.');p.id='test-print';p.hidden=true;document.body.append(p);printRequested=true;$('paper-confirm').checked=false;$('print-result').textContent='Druckdialog geöffnet. Tatsächlichen Papierausdruck bitte prüfen.';window.print();};$('paper-confirm').onchange=()=>{$('print-result').textContent=printRequested&&$('paper-confirm').checked?'Papierprüfung durch Nutzer bestätigt; kein automatischer Gerätenachweis.':'Noch kein Papierausdruck bestätigt.';};window.addEventListener('storage',e=>{if(e.key===null||e.key===tokenKey)clear();});window.addEventListener('pagehide',clear);lock();
+window.posOperationsLeaveState=()=>{const device=window.posDeviceChecks?.state();return {dirty:drafts.size>0||Boolean(device?.dirty),pending:Boolean(pending)||Boolean(device?.pending),busy:busy||Boolean(device?.busy)}};
+window.addEventListener('beforeunload',event=>{if(window.posOperationsLeaveState().dirty||window.posOperationsLeaveState().pending){event.preventDefault();event.returnValue=''}});
+$('scanner').onsubmit=e=>{e.preventDefault();if(window.posDeviceChecks&&!window.posDeviceChecks.canTest())return;const value=$('scan').value.trim();$('scan-result').textContent=value?'Code empfangen: '+value+' · Länge '+value.length+'. Bitte mit dem gedruckten Testcode vergleichen.':'Kein Code empfangen.';window.posDeviceChecks?.scanned(value);$('scan').value='';};
+let printRequested=false;
+$('print').onclick=()=>{
+ if(window.posDeviceChecks&&!window.posDeviceChecks.canTest())return;
+ document.getElementById('test-print')?.remove();document.getElementById('inventory-print')?.remove();
+ const p=el('pre','Bringness POS · DRUCKERTEST\nKeine Rechnung · Kein Verkauf\n0123456789\nÄÖÜ äöü ß €\nPapier, Lesbarkeit und Schnitt prüfen.');p.id='test-print';p.hidden=true;
+ const width=window.posDeviceChecks?.width();if(width==='58'||width==='80'){p.style.width=width+'mm';p.style.maxWidth='100%';}
+ document.body.append(p);printRequested=false;$('paper-confirm').checked=false;
+ try{window.print();printRequested=true;window.posDeviceChecks?.printed();$('print-result').textContent='Druckdialog geöffnet. Tatsächlichen Papierausdruck bitte prüfen.';}
+ catch{$('print-result').textContent='Testdruck konnte nicht angefordert werden. Bitte Drucker und Browser prüfen.';}
+};
+$('paper-confirm').onchange=()=>{$('print-result').textContent=printRequested&&$('paper-confirm').checked?'Papierprüfung durch Nutzer bestätigt; kein automatischer Gerätenachweis.':'Noch kein Papierausdruck bestätigt.';};
+window.addEventListener('storage',e=>{if(e.key===null||e.key===tokenKey)clear();});window.addEventListener('pagehide',clear);lock();
 
 if(window.parent!==window&&new URLSearchParams(location.search).get('embedded')==='1'){document.documentElement.classList.add('pos-operations-embedded');let scheduled=false;const height=()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;window.parent.postMessage({type:'bringness:pos-operations-height',height:document.body.offsetHeight+32},location.origin);});};const observer=new ResizeObserver(height);observer.observe(document.body);window.addEventListener('resize',height);window.addEventListener('pagehide',()=>{observer.disconnect();window.removeEventListener('resize',height);},{once:true});height();}
 
@@ -169,3 +183,8 @@ $('history-csv').onclick=()=>{
   const url=URL.createObjectURL(new Blob([csv(lines)],{type:'text/csv;charset=utf-8'})),link=el('a');link.href=url;link.download='Bringness-POS-Zaehlhistorie.csv';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);$('history-status').textContent=entries.length+' Historieneinträge vollständig als CSV exportiert. Keine Bestandsänderung.';
  });
 };
+
+if(window.createPosDeviceChecks){
+ window.posDeviceChecks=window.createPosDeviceChecks({request,withTask:task,context:()=>({restaurantId,epoch,busy:busy||Boolean(pending),active:busy}),notify:lock,makeCsv:csv,
+ resetPrint:()=>{printRequested=false;$('paper-confirm').checked=false;$('print-result').textContent='Noch kein Papierausdruck bestätigt.';},resetScan:()=>{$('scan-result').textContent='Noch kein Scanner-Test bestätigt.';}});lock();
+}
