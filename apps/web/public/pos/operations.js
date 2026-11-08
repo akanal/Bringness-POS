@@ -156,7 +156,7 @@ async function loadHistory(current,more=false){
  if(more&&data.rows.some(row=>historyRows.some(old=>old.event_number===row.event_number||old.request_id===row.request_id)))throw Error('Historienseite wurde doppelt geliefert. Bitte neu laden.');
  historyRows=more?[...historyRows,...data.rows]:data.rows;historyAsOf=data.asOf;historyCompany=data.companyId;historyCursor=data.nextCursor;$('history-recording').textContent='Protokollierung seit '+new Date(data.recordingSince).toLocaleString('de-DE',{hourCycle:'h23'})+'.';showHistory();
 }
-function historyTask(work){return task(async current=>{try{await work(current)}catch(error){if(current!==epoch)return;if([401,403].includes(error.status)||error.code==='HISTORY_SCOPE_CHANGED')resetHistory(true);$('history-status').textContent=error.message;}});}
+function historyTask(work){return task(async current=>{try{await work(current)}catch(error){if(current!==epoch)return;if([401,403,404].includes(error.status)||error.code==='HISTORY_SCOPE_CHANGED')resetHistory(true);$('history-status').textContent=error.message;}});}
 for(const id of ['history-query','history-from','history-to'])$(id).addEventListener('input',()=>invalidateHistory());
 $('history-load').onclick=()=>historyTask(current=>loadHistory(current));$('history-more').onclick=()=>historyCursor&&historyTask(current=>loadHistory(current,true));
 $('history-clear-product').onclick=()=>{historyProduct=null;$('history-product').textContent='';$('history-clear-product').hidden=true;invalidateHistory();};
