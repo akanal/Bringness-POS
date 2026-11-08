@@ -78,6 +78,8 @@ jobs:
         run: |
           node --test server/runtime-mode.test.js server/qr-service.test.js ops/select-operation.test.js
           python3 ops/netcup-command.test.py
+          python3 ops/netcup-source.test.py
+          python3 ops/netcup-workflow.test.py
           node server/ai-policy.test.js
           node --test server/billing-policy.test.js server/package-access.test.js server/billing-quote.test.js server/platform-ai-gateway.test.js server/ai-demand-core.test.js server/ai-forecast-comparison.test.js server/ai-recipe-cost-core.test.js server/ai-sales-contract.test.js server/ai-forecast-core.test.js server/ai-planning-core.test.js server/ai-procurement-core.test.js
           npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
@@ -138,12 +140,24 @@ jobs:
           trap 'rm -rf "$work"' EXIT
           printf '%s\n' "$NETCUP_SSH_KEY" > "$work/key"
           printf '%s\n' "$NETCUP_KNOWN_HOSTS" > "$work/known_hosts"
-          command="$OPERATION $TARGET"
-          if [[ "$OPERATION" == deploy ]]; then command="$command $REVISION"; fi
-          ssh -T -i "$work/key" -o IdentitiesOnly=yes -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
-            -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
-            root@152.53.196.43 "$command"
+          ssh_args=(-T -i "$work/key" -o IdentitiesOnly=yes -o BatchMode=yes
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts"
+            -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6)
+          if [[ "$OPERATION" == deploy ]]; then
+            # Fail before deployment if the once-only server upgrade has not happened.
+            ssh "${ssh_args[@]}" root@152.53.196.43 "status $TARGET" > "$work/capabilities"
+            grep -Fxq 'Source transfer: ssh-archive-v1' "$work/capabilities" || {
+              echo 'Server source-transfer upgrade required; deployment was not started.' >&2
+              exit 65
+            }
+            git archive --format=tar.gz --prefix=source/ "$REVISION" > "$work/source.tgz"
+            source_digest=$(sha256sum "$work/source.tgz" | cut -d ' ' -f1)
+            source_size=$(wc -c < "$work/source.tgz" | tr -d ' ')
+            ssh "${ssh_args[@]}" root@152.53.196.43 \
+              "deploy-source $TARGET $REVISION $source_digest $source_size" < "$work/source.tgz"
+          else
+            ssh "${ssh_args[@]}" root@152.53.196.43 "$OPERATION $TARGET"
+          fi
 
 
 
