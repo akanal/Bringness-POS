@@ -2,10 +2,11 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 const require=createRequire(import.meta.url),{JSDOM}=require(dependency('jsdom','SHOP_JSDOM_PATH'));
 const [html,baseScript,deviceScript]=await Promise.all(['operations.html','operations.js','device-checks.js'].map(name=>readFile(new URL('../../apps/web/public/pos/'+name,import.meta.url),'utf8')));
 const rid='11111111-1111-4111-8111-111111111111',company='22222222-2222-4222-8222-222222222222',pid='33333333-3333-4333-8333-333333333333',when='2026-11-08T02:00:00.000Z',tick=()=>new Promise(r=>setTimeout(r,15));
-async function fixture({bind=true}={}){
- const dom=new JSDOM(html,{url:'https://bringness.de/pos/operations.html',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,d=w.document;w.AbortSignal=globalThis.AbortSignal;let lose=false,failList=false,denied=false,hold=false,release=null,prints=0,throwPrint=false,allow=true;
+async function fixture({bind=true,testsOnly=false}={}){
+ const dom=new JSDOM(html,{url:'https://bringness.de/pos/operations.html'+(testsOnly?'?view=tests':''),runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,d=w.document;w.AbortSignal=globalThis.AbortSignal;let lose=false,failList=false,denied=false,hold=false,release=null,prints=0,throwPrint=false,allow=true;
  const posts=[],checks=[],requests=new Map(),downloads=[];w.localStorage.setItem('bringness-pos-token','synthetic-pos');w.localStorage.setItem('bringness-shop-token','separate-shop');w.HTMLElement.prototype.scrollIntoView=function(){};w.print=()=>{if(throwPrint)throw Error('print unavailable');prints++};w.confirm=()=>allow;w.URL.createObjectURL=blob=>{downloads.push(blob);return 'blob:protocol'};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
  w.fetch=async(url,options={})=>{
+  if(testsOnly&&url.includes('/pos-inventory'))throw Error('Tests must not read or write inventory');
   if(url.endsWith('/bootstrap'))return Response.json({restaurants:[{id:rid,name:'POS Fixture'}]});
   if(url.startsWith('/api/v1/pos-device-checks')){
    if(denied)return Response.json({error:'Betriebskontext geändert',code:'DEVICE_SCOPE_CHANGED'},{status:409});
@@ -68,5 +69,14 @@ test('device drafts participate in the existing leaving guard and are explicitly
 test('unbound legacy tests still run without creating stored evidence and print failures remain unconfirmed',async()=>{
  const f=await fixture({bind:false});try{
   f.scan('123');assert.match(f.by('scan-result').textContent,/Code empfangen: 123/);assert.equal(f.w.posOperationsLeaveState().dirty,false);f.throwPrint=true;f.by('print').click();assert.match(f.by('print-result').textContent,/konnte nicht/);assert.equal(f.posts.length,0);assert.equal(f.by('device-printer-save').disabled,true);
+ }finally{f.close()}
+});
+
+test('Tests context initializes protocols without inventory and preserves drafts across disclosure toggles',async()=>{
+ const f=await fixture({testsOnly:true});try{
+  assert.equal(f.by('load').textContent,'Betrieb für Tests laden');assert.equal(f.by('inventory').closest('section').hidden,true);assert.equal(f.by('inventory-history').hidden,true);
+  const groups=[...f.w.document.querySelectorAll('details.test-group')];assert.equal(groups.length,4);assert(groups.every(g=>!g.open));assert.deepEqual(groups.map(g=>g.querySelector('summary').textContent),['Scanner testen','Bondrucker testen','Gespeicherte Geräte-Prüfprotokolle','Windows-Updates und Offline-Abgleich']);
+  assert.equal(f.by('device-scanner-label').disabled,false);groups[0].open=true;f.input('device-scanner-label','Tresen');groups[0].open=false;assert.equal(f.w.posOperationsLeaveState().dirty,true);groups[0].open=true;assert.equal(f.by('device-scanner-label').value,'Tresen');
+  f.input('device-scanner-expected','123');f.scan('123');f.input('device-scanner-outcome','user_confirmed');f.by('device-scanner-save').click();await tick();assert.equal(f.checks.length,1);assert.equal(f.w.posOperationsLeaveState().dirty,false);assert.equal(f.w.localStorage.getItem('bringness-shop-token'),'separate-shop');
  }finally{f.close()}
 });

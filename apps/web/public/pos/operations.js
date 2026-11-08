@@ -1,5 +1,6 @@
 import './device-checks.js?v=device-protocols-20261108';
 const $=id=>document.getElementById(id),tokenKey='bringness-pos-token';
+const testsOnly=new URLSearchParams(location.search).get('view')==='tests';
 let rows=[],pending=null,busy=false,epoch=0,restaurantId=null;
 let historyRows=[],historyAsOf=null,historyCompany=null,historyCursor=null,historyProduct=null,historyVersion=0;
 const drafts=new Map(),views=new Map(),fields=['countedUnits','minimumUnits','targetUnits'];
@@ -74,7 +75,7 @@ function render(){
  summary();if($('inventory-empty'))$('inventory-empty').hidden=rows.some(visible);
 }
 async function fetchRows(id){const data=await request('/pos-inventory?restaurantId='+encodeURIComponent(id));if(data.restaurantId!==id||!Array.isArray(data.rows))throw Error('Zählstände nicht eindeutig bestätigt. Bitte erneut laden.');return data}
-async function refresh(current){const id=$('restaurant').value;if(!id)throw Error('Bitte zuerst Betriebe laden.');const data=await fetchRows(id);if(current!==epoch||id!==$('restaurant').value)return;
+async function refresh(current){const id=$('restaurant').value;if(!id)throw Error('Bitte zuerst Betriebe laden.');if(testsOnly){if(current!==epoch)return;if(restaurantId!==id){window.posDeviceChecks?.reset();resetHistory(true);}restaurantId=id;rows=[];summary();$('status').textContent='Betrieb für Geräteprüfungen geladen.';return;}const data=await fetchRows(id);if(current!==epoch||id!==$('restaurant').value)return;
  if(restaurantId&&restaurantId!==id&&drafts.size)throw Error('Bitte offene Eingaben zuerst speichern oder verwerfen.');
  if(restaurantId!==id){window.posDeviceChecks?.reset();resetHistory(true);}restaurantId=id;rows=data.rows;render();$('status').textContent=drafts.size?'Serverstände aktualisiert. Offene Eingaben sind erhalten geblieben.':'Manuelle Zählstände geladen.';
 }
@@ -187,4 +188,20 @@ $('history-csv').onclick=()=>{
 if(window.createPosDeviceChecks){
  window.posDeviceChecks=window.createPosDeviceChecks({request,withTask:task,context:()=>({restaurantId,epoch,busy:busy||Boolean(pending),active:busy}),notify:lock,makeCsv:csv,
  resetPrint:()=>{printRequested=false;$('paper-confirm').checked=false;$('print-result').textContent='Noch kein Papierausdruck bestätigt.';},resetScan:()=>{$('scan-result').textContent='Noch kein Scanner-Test bestätigt.';}});lock();
+}
+
+// Tests use their own context picker; inventory/history remain separate and unread.
+if(testsOnly){
+ const main=document.querySelector('main'),inventory=$('load').closest('section'),history=$('inventory-history');
+ inventory.hidden=true;history.hidden=true;
+ const heading=main.querySelector('h1');heading.textContent='Tests';heading.hidden=new URLSearchParams(location.search).get('embedded')==='1';document.title='Bringness POS · Tests';
+ main.querySelector('h1 + p').hidden=true;
+ const context=el('section');context.id='tests-context';context.append(el('h2','Betrieb für Tests'));
+ $('load').textContent='Betrieb für Tests laden';context.append($('load'),$('restaurant').closest('label'));main.insertBefore(context,inventory);
+ for(const section of [...main.children].filter(node=>node.tagName==='SECTION'&&node!==inventory&&node!==history&&node!==context)){
+  const heading=section.querySelector('h2');if(!heading)continue;
+  const group=el('details');group.className='test-group';const title=el('summary',heading.textContent);heading.remove();group.append(title);section.replaceWith(group);group.append(section);
+ }
+ for(const p of document.querySelectorAll('.device-fields > p'))p.textContent=p.textContent.replace('unten „Prüfprotokolle laden“','unter „Gespeicherte Geräte-Prüfprotokolle“ die Protokolle laden');
+ $('device-status').textContent='Zuerst einen Betrieb für Tests laden.';
 }
