@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -48,7 +49,7 @@ save()
 """
 
 class OperationsTest(unittest.TestCase):
-    def deploy(self, fail_public=False):
+    def deploy(self, fail_public=False, source_transfer=False, bad_source=False):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             bins=root/'bin';bins.mkdir()
@@ -63,16 +64,27 @@ class OperationsTest(unittest.TestCase):
             caddy.write_text(original)
             state=root/'state.json'
             state.write_text(json.dumps({'containers':{'bringness-pos':{'port':'3005','status':'running'}},'fail_public':fail_public}))
-            script=(ROOT/'netcup-command.sh').read_text()
+            script=(ROOT/'netcup-command.sh').read_text().replace('/usr/local/lib/bringness/netcup-source.py',str(ROOT/'netcup-source.py'))
             for prefix in ['/opt/bringness','/etc/caddy','/var/log/bringness-operations','/run/bringness-operations.lock']:
                 script=script.replace(prefix,str(root)+prefix)
             script=script.replace('export PATH=','export PATH='+str(bins)+':')
             executable=root/'operate.sh';executable.write_text(script)
             env={**os.environ,'SSH_ORIGINAL_COMMAND':'deploy pos '+'a'*40,'MOCK_STATE':str(state)}
-            result=subprocess.run(['bash',str(executable)],env=env,capture_output=True,text=True)
+            payload=None
+            if source_transfer:
+                out=io.BytesIO()
+                with tarfile.open(fileobj=out,mode='w:gz',format=tarfile.PAX_FORMAT,pax_headers={'comment':'a'*40}) as tf:
+                    for name in ['package.json','server/start.js','apps/web/public/pos/index.html','db/schema.sql']:
+                        info=tarfile.TarInfo('source/'+name);info.size=2;tf.addfile(info,io.BytesIO(b'{}'))
+                payload=out.getvalue()
+                digest='0'*64 if bad_source else hashlib.sha256(payload).hexdigest()
+                env['SSH_ORIGINAL_COMMAND']='deploy-source pos '+'a'*40+' '+digest+' '+str(len(payload))
+            result=subprocess.run(['bash',str(executable)],env=env,input=payload.decode('latin1') if payload else None,capture_output=True,text=True,encoding='latin1')
             containers=json.loads(state.read_text())['containers']
             self.assertNotIn('do-not-print-this',result.stdout+result.stderr)
-            if fail_public:
+            if source_transfer:
+                self.assertFalse(any("codeload.github.com" in " ".join(call) for call in json.loads(state.read_text())["calls"]))
+            if fail_public or bad_source:
                 self.assertNotEqual(result.returncode,0)
                 self.assertEqual(caddy.read_text(),original)
                 self.assertEqual(containers,{'bringness-pos':{'port':'3005','status':'running'}})
@@ -88,6 +100,15 @@ class OperationsTest(unittest.TestCase):
 
     def test_failed_public_health_check_restores_proxy_and_keeps_old_app_running(self):
         self.deploy(fail_public=True)
+
+    def test_uploaded_source_deploys_without_public_github_download(self):
+        self.deploy(source_transfer=True)
+
+    def test_invalid_uploaded_source_preserves_the_running_application(self):
+        self.deploy(source_transfer=True,bad_source=True)
+
+    def test_uploaded_source_health_failure_rolls_back(self):
+        self.deploy(source_transfer=True,fail_public=True)
 
     def test_invalid_ssh_command_cannot_run_shell_fragments(self):
         result=subprocess.run(['bash',str(ROOT/'netcup-command.sh')],env={**os.environ,'SSH_ORIGINAL_COMMAND':'status all; echo hacked'},capture_output=True,text=True)
