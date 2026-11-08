@@ -10,7 +10,7 @@ const digest=crypto.createHash('sha256').update(JSON.stringify([old.productId,ol
 await migratePosInventory(f.pool);
 const handler=createPosInventory(f.pool),server=http.createServer((req,res)=>handler(req,res));await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
 async function call(path,token='owner-a',body){const r=await fetch(base+'/api/v1/pos-inventory'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{Origin:'https://bringness.de','content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,cache:r.headers.get('cache-control'),data:await r.json()};}
-const history=(params={},token='owner-a')=>call('/history?'+new URLSearchParams({restaurantId:rid,...params}),token);
+const history=(params={},token='owner-a')=>call('/history?'+new URLSearchParams({restaurantId:rid,...(params.asOf!==undefined?{companyId:token==='owner-b'?f.b:f.a}:{}),...params}),token);
 const command=(extra={})=>({requestId:crypto.randomUUID(),restaurantId:rid,productId:pid,expectedRevision:0,countedUnits:2,minimumUnits:3,targetUnits:8,...extra});
 try{
  const empty=await history();assert.equal(empty.status,200);assert.equal(empty.cache,'no-store');assert.equal(empty.data.asOf,'0');assert.deepEqual(empty.data.rows,[]);assert(Number.isFinite(Date.parse(empty.data.recordingSince)));
@@ -36,7 +36,7 @@ try{
  const failed=command({expectedRevision:3,countedUnits:99});assert.equal((await call('','owner-a',failed)).status,503);assert.equal((await f.pool.query('SELECT counted_units,revision FROM pos_inventory_counts WHERE product_id=$1',[pid])).rows[0].counted_units,6);assert.equal((await f.pool.query('SELECT 1 FROM pos_inventory_requests WHERE request_id=$1',[failed.requestId])).rows.length,0);assert.equal((await history()).data.rows.length,3);
  await f.pool.query('DROP TRIGGER inventory_history_test_failure ON pos_inventory_history');assert.equal((await call('','owner-a',failed)).status,200);assert.equal((await history()).data.rows.length,4);
  const before=(await history()).data.recordingSince;await migratePosInventory(f.pool);assert.equal((await history()).data.recordingSince,before,'migration does not restart recording or backfill');
- await f.pool.query('UPDATE restaurants SET company_id=$1 WHERE id=$2',[f.b,rid]);assert.equal((await history()).status,404);const transferred=await history({},'owner-b');assert.equal(transferred.data.asOf,'0');assert.equal(transferred.data.rows.length,0,'new company cannot read previous company history');
+ await f.pool.query('UPDATE restaurants SET company_id=$1 WHERE id=$2',[f.b,rid]);assert.equal((await history()).status,404);assert.equal((await history({asOf:'4',companyId:f.a},'owner-b')).status,409);const transferred=await history({},'owner-b');assert.equal(transferred.data.asOf,'0');assert.equal(transferred.data.rows.length,0,'new company cannot read previous company history');
  await f.pool.query('UPDATE restaurants SET company_id=$1 WHERE id=$2',[f.a,rid]);assert.equal((await history()).data.rows.length,4);
  console.log('POS inventory history: atomic snapshots, actor attribution, immutable retries/SQL, stable paging/filtering, no legacy backfill, access isolation and rollback recovery passed.');
 }finally{await new Promise(r=>server.close(r));await f.db.close();}
