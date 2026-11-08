@@ -43,3 +43,17 @@ for(const suffix of ['?view=lizenz','?view=einstellungen','?payment=return']){
  }finally{v.close()}
 }
 console.log('POS navigation passed: Kasse startup for stale URLs/payment returns, first-click article form, PIN only for Settings navigation and stale table response cannot replace Article.');
+
+// Stored business/category names must remain text in the authenticated register.
+{
+ const dom=new JSDOM(read('apps/web/public/pos/index.html'),{runScripts:'outside-only',url:'https://pos.test/pos/'}),v=dom.window;
+ const restaurantName='Café & <img data-pos-injected="restaurant" src=x onerror="alert(1)">',categoryName='Food & </option><option data-pos-injected="category" value="other">Fremd</option>';
+ v.eval(read('apps/web/public/pos/app.js')+'\ndata='+JSON.stringify({restaurants:[{id:'r1',name:restaurantName,mode:'restaurant'}],categories:[{id:'c1',restaurantId:'r1',name:categoryName}],products:[],orders:[]})+';render()');
+ try{
+  assert.equal(v.document.querySelector('[data-pos-injected]'),null);
+  assert.equal(v.document.querySelector('#restaurant option').textContent,restaurantName);
+  assert.equal(v.document.querySelector('#productCategory option').textContent,categoryName);
+  assert.equal(v.document.querySelectorAll('#categories button')[1].textContent,categoryName);
+ }finally{v.close()}
+ console.log('POS stored names passed: business/category markup renders as literal text without injected elements.');
+}
