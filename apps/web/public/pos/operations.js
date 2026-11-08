@@ -194,7 +194,7 @@ if(window.createPosDeviceChecks){
 if(testsOnly){
  const main=document.querySelector('main'),inventory=$('load').closest('section'),history=$('inventory-history');
  inventory.hidden=true;history.hidden=true;
- main.querySelector('h1').textContent='Tests';document.title='Bringness POS · Tests';
+ const heading=main.querySelector('h1');heading.textContent='Tests';heading.hidden=new URLSearchParams(location.search).get('embedded')==='1';document.title='Bringness POS · Tests';
  main.querySelector('h1 + p').hidden=true;
  const context=el('section');context.id='tests-context';context.append(el('h2','Betrieb für Tests'));
  $('load').textContent='Betrieb für Tests laden';context.append($('load'),$('restaurant').closest('label'));main.insertBefore(context,inventory);
