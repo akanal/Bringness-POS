@@ -2,19 +2,19 @@ import {test} from 'node:test';import assert from 'node:assert/strict';import {r
 const require=createRequire(import.meta.url),{JSDOM}=require(dependency('jsdom','SHOP_JSDOM_PATH'));
 const html=await readFile(new URL('../../apps/web/public/pos/operations.html',import.meta.url),'utf8'),script=await readFile(new URL('../../apps/web/public/pos/operations.js',import.meta.url),'utf8');
 const restaurant='11111111-1111-4111-8111-111111111111',a='22222222-2222-4222-8222-222222222222',b='33333333-3333-4333-8333-333333333333',c='44444444-4444-4444-8444-444444444444',date='2026-11-07T10:00:00Z',tick=()=>new Promise(r=>setTimeout(r,15));
-async function fixture(){
+async function fixture({history}={}){
  const dom=new JSDOM(html,{url:'https://bringness.de/pos/operations.html',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,doc=w.document;w.AbortSignal=globalThis.AbortSignal;let printed=0,confirm=true,failRead=false,loseAck=false;
- const posts=[],downloads=[];let rows=[{id:a,name:'Äpfel',revision:1,counted_units:5,minimum_units:3,target_units:10,counted_at:date},{id:b,name:'=Rolle',revision:null,counted_units:null,minimum_units:null,target_units:null,counted_at:null},{id:c,name:'Kleine Tasse',revision:1,counted_units:0,minimum_units:0,target_units:4,counted_at:date}];
+ const posts=[],downloads=[],historyCalls=[];let rows=[{id:a,name:'Äpfel',revision:1,counted_units:5,minimum_units:3,target_units:10,counted_at:date},{id:b,name:'=Rolle',revision:null,counted_units:null,minimum_units:null,target_units:null,counted_at:null},{id:c,name:'Kleine Tasse',revision:1,counted_units:0,minimum_units:0,target_units:4,counted_at:date}];
  w.localStorage.setItem('bringness-pos-token','synthetic-pos');w.localStorage.setItem('bringness-shop-token','separate-shop');w.HTMLElement.prototype.scrollIntoView=function(){};w.confirm=()=>confirm;w.print=()=>printed++;w.URL.createObjectURL=blob=>{downloads.push(blob);return 'blob:synthetic'};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
  const receipts=new Map();
- w.fetch=async(url,o={})=>{if(url.endsWith('/bootstrap'))return Response.json({restaurants:[{id:restaurant,name:'Testbetrieb'}]});
+ w.fetch=async(url,o={})=>{if(url.startsWith('/api/v1/pos-inventory/history?')){const params=new URL(url,'https://bringness.de').searchParams;historyCalls.push(Object.fromEntries(params));return history?history(params,historyCalls):Response.json({restaurantId:restaurant,companyId:restaurant,recordingSince:date,asOf:'0',rows:[],nextCursor:null});}if(url.endsWith('/bootstrap'))return Response.json({restaurants:[{id:restaurant,name:'Testbetrieb'}]});
   if(o.method==='POST'){const command=JSON.parse(o.body);posts.push(command);if(receipts.has(command.requestId))return Response.json(receipts.get(command.requestId));const row=rows.find(r=>r.id===command.productId);if((row.revision||0)!==command.expectedRevision)return Response.json({error:'Zählstand wurde geändert. Bitte neu laden.'},{status:409});Object.assign(row,{revision:command.expectedRevision+1,counted_units:command.countedUnits,minimum_units:command.minimumUnits,target_units:command.targetUnits,counted_at:date});const ack={requestId:command.requestId,productId:row.id,revision:row.revision};receipts.set(command.requestId,ack);if(loseAck){loseAck=false;throw new TypeError('response lost')}return Response.json(ack)}
   if(failRead)throw new TypeError('read failed');return Response.json({restaurantId:restaurant,rows:structuredClone(rows),manualCounts:true});
  };
  w.eval(script);doc.getElementById('load').click();await tick();const by=id=>doc.getElementById(id),card=id=>doc.querySelector('[data-product-id="'+id+'"]');
  const edit=(id,key,value)=>{const input=card(id).querySelector('[name='+key+']');input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}))};
  const save=id=>card(id).querySelector('form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
- return {w,by,card,edit,save,posts,downloads,get rows(){return rows},set rows(value){rows=value},get printed(){return printed},set confirm(value){confirm=value},set failRead(value){failRead=value},set loseAck(value){loseAck=value},close(){w.dispatchEvent(new w.Event('pagehide'));w.close()}};
+ return {w,by,card,edit,save,posts,downloads,historyCalls,get rows(){return rows},set rows(value){rows=value},get printed(){return printed},set confirm(value){confirm=value},set failRead(value){failRead=value},set loseAck(value){loseAck=value},close(){w.dispatchEvent(new w.Event('pagehide'));w.close()}};
 }
 test('search and status filters use saved counts and preserve hidden unsaved/invalid input',async()=>{
  const f=await fixture();try{assert.match(f.by('inventory-summary').textContent,/2 gezählt.*1 ungezählt.*1 am Mindestbestand/);f.edit(a,'countedUnits','');f.by('inventory-query').value='rolle';f.by('inventory-query').dispatchEvent(new f.w.Event('input'));assert.equal(f.card(a).hidden,true);assert.equal(f.card(b).hidden,false);f.by('inventory-query').value='apfel';f.by('inventory-query').dispatchEvent(new f.w.Event('input'));assert.equal(f.card(a).hidden,false);assert.equal(f.card(a).querySelector('[name=countedUnits]').value,'');assert.equal(f.by('export').disabled,true);assert.equal(f.by('restaurant').disabled,true);f.by('inventory-filter').value='uncounted';f.by('inventory-filter').dispatchEvent(new f.w.Event('change'));assert.equal(f.card(a).hidden,true);assert.equal(f.by('inventory-empty').hidden,false);assert.equal(f.posts.length,0)}finally{f.close()}
@@ -66,5 +66,50 @@ test('lost confirmed save resolves after the product disappears without restorin
   f.loseAck=true;f.edit(a,'countedUnits','9');f.save(a);await tick();assert.equal(f.w.posOperationsLeaveState().pending,true);
   const request=structuredClone(f.posts[0]);f.rows=f.rows.filter(row=>row.id!==a);
   f.by('retry').click();await tick();assert.equal(f.posts.length,2);assert.deepEqual(f.posts[1],request);assert.equal(f.card(a),null);assert.equal(f.w.posOperationsLeaveState().pending,false);assert.equal(f.w.posOperationsLeaveState().dirty,false);assert.match(f.by('status').textContent,/Zählstand gespeichert/);
+ }finally{f.close()}
+});
+
+const historyRow=(n,extra={})=>({event_number:String(n),request_id:'request-'+n,product_id:a,product_name:'=Historischer Artikel',revision:n,previous_revision:n-1,before_counted_units:n===1?null:1,before_minimum_units:n===1?null:2,before_target_units:n===1?null:3,counted_units:2,minimum_units:3,target_units:8,counted_at:date,actor_id:restaurant,actor_label:'=Betriebsverwaltung',...extra});
+const historyReply=(rows,extra={})=>Response.json({restaurantId:restaurant,companyId:restaurant,recordingSince:date,asOf:'2',rows,nextCursor:null,...extra});
+test('history paging and complete CSV preserve filters, snapshots and formula safety',async()=>{
+ const f=await fixture({history:params=>historyReply(params.has('cursor')?[historyRow(1)]:[historyRow(2)],{nextCursor:params.has('cursor')?null:'2'})});try{
+  f.by('history-query').value='Artikel';f.by('history-query').dispatchEvent(new f.w.Event('input'));f.by('history-load').click();await tick();assert.equal(f.by('history-list').children.length,1);assert.equal(f.by('history-more').hidden,false);assert.match(f.by('history-list').textContent,/Revision 2/);
+  f.by('history-more').click();await tick();assert.equal(f.by('history-list').children.length,2);assert.equal(f.historyCalls[1].asOf,'2');assert.equal(f.historyCalls[1].cursor,'2');
+  f.by('history-csv').click();await tick();assert.equal(f.downloads.length,1);const text=await new Promise(resolve=>{const reader=new f.w.FileReader();reader.onload=()=>resolve(reader.result);reader.readAsText(f.downloads[0]);});assert.match(text,/Now|Jetzt gezählt/);assert.match(text,/'=Historischer Artikel/);assert.match(text,/'=Betriebsverwaltung/);assert(f.historyCalls.every(call=>call.q==='Artikel'));assert.equal(f.posts.length,0);
+  f.by('history-from').value='2026-11-01';f.by('history-from').dispatchEvent(new f.w.Event('input'));assert.equal(f.by('history-list').children.length,0);assert.equal(f.by('history-csv').disabled,true);
+ }finally{f.close()}
+});
+test('article history keeps count drafts and clears private history on account change',async()=>{
+ const f=await fixture({history:()=>historyReply([historyRow(1)])});try{
+  f.edit(a,'countedUnits','99');[...f.card(a).querySelectorAll('button')].find(x=>x.textContent==='Zählverlauf ansehen').click();await tick();assert.equal(f.historyCalls[0].productId,a);assert.equal(f.card(a).querySelector('[name=countedUnits]').value,'99');assert.equal(f.by('history-csv').disabled,true);assert.equal(f.by('history-list').children.length,1);
+  f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));assert.equal(f.by('history-list').children.length,0);assert.equal(f.by('history-product').textContent,'');assert.equal(f.by('history-recording').textContent,'');assert.equal(f.w.localStorage.getItem('bringness-shop-token'),'separate-shop');
+ }finally{f.close()}
+});
+test('saving invalidates a previously loaded history and revocation clears its private data',async()=>{
+ let denied=false;const f=await fixture({history:()=>denied?Response.json({error:'Keine Freigabe'},{status:403}):historyReply([historyRow(1)])});try{
+  f.by('history-load').click();await tick();assert.equal(f.by('history-list').children.length,1);f.edit(a,'countedUnits','7');f.save(a);await tick();assert.equal(f.by('history-list').children.length,0);assert.equal(f.by('history-csv').disabled,true);
+  f.by('history-load').click();await tick();denied=true;f.by('history-load').click();await tick();assert.equal(f.by('history-list').children.length,0);assert.match(f.by('history-status').textContent,/Keine Freigabe/);assert.equal(f.posts.length,1);
+ }finally{f.close()}
+});
+test('malformed history and repeated pagination never produce a partial export',async()=>{
+ let bad=false;const f=await fixture({history:params=>bad?historyReply([historyRow(2),historyRow(2)]):historyReply([historyRow(2)],{nextCursor:'2'})});try{
+  f.by('history-load').click();await tick();f.by('history-csv').click();await tick();assert.equal(f.downloads.length,0);assert.match(f.by('history-status').textContent,/doppelte|vollständig/);
+  bad=true;f.by('history-load').click();await tick();assert.equal(f.by('history-list').children.length,0);assert.match(f.by('history-status').textContent,/nicht eindeutig/);
+ }finally{f.close()}
+});
+test('history date filters include the last selected local day and late replies cannot restore cleared data',async()=>{
+ let release;const f=await fixture({history:params=>new Promise(resolve=>{release=()=>resolve(historyReply([historyRow(1)]));})});try{
+  f.by('history-from').value='2026-11-05';f.by('history-to').value='2026-11-06';f.by('history-load').click();await tick();assert.equal(f.historyCalls[0].from,new f.w.Date('2026-11-05T00:00:00').toISOString());assert.equal(f.historyCalls[0].to,new f.w.Date('2026-11-07T00:00:00').toISOString());
+  f.w.dispatchEvent(new f.w.StorageEvent('storage',{key:'bringness-pos-token'}));release();await tick();assert.equal(f.by('history-list').children.length,0);assert.equal(f.by('history-recording').textContent,'');
+ }finally{f.close()}
+});
+test('exports beyond 5000 history events fail without a partial file',async()=>{
+ const f=await fixture({history:params=>{const end=Number(params.get('cursor')||'5102')-1;return historyReply(Array.from({length:100},(_,i)=>historyRow(end-i)),{asOf:'5101',nextCursor:String(end-99)});}});try{
+  f.by('history-load').click();await tick();f.by('history-csv').click();for(let attempt=0;f.w.posOperationsLeaveState().busy&&attempt<100;attempt++)await tick();assert.equal(f.downloads.length,0);assert.match(f.by('history-status').textContent,/5000.*keine Teildatei/);
+ }finally{f.close()}
+});
+test('a changed server company scope clears loaded history and aborts CSV',async()=>{
+ let changed=false;const f=await fixture({history:()=>changed?Response.json({error:'Betriebskontext geändert',code:'HISTORY_SCOPE_CHANGED'},{status:409}):historyReply([historyRow(1)])});try{
+  f.by('history-load').click();await tick();assert.equal(f.by('history-list').children.length,1);changed=true;f.by('history-csv').click();await tick();assert.equal(f.historyCalls.at(-1).companyId,restaurant);assert.equal(f.by('history-list').children.length,0);assert.equal(f.by('history-recording').textContent,'');assert.equal(f.downloads.length,0);assert.match(f.by('history-status').textContent,/Betriebskontext/);
  }finally{f.close()}
 });
