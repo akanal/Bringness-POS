@@ -581,3 +581,7 @@ The marketplace administration must not display or load POS screens, personnel, 
 
 ## Owner Windows delivery cost decision — 2026-11-07
 Only a free trusted signing/distribution route may be used for the Windows POS release. Do not purchase certificates, subscribe to paid signing services or treat a customer order as authorization for signing expenses. Keep Windows download publication blocked until an eligible free route is implemented and verified. Continue Online POS development meanwhile. A self-signed test certificate is not a publicly trusted customer signature; Store/MSIX remains a possible route, not an existing approved/published distribution.
+
+
+## Owner development workflow reaffirmed — 2026-11-08
+For an authorized ten-point block, implement and verify all ten connected items autonomously. Reuse completed work; never reimplement it merely to fill a block. Correct small errors immediately. If a substantial issue blocks one item, continue independent authorized work and report actual remaining blockers together at the end, unless a necessary user action is required sooner. Do not repeat plans or ask for routine continuation/approval. Preserve access, cost, product-separation and tested-release boundaries.
