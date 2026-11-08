@@ -140,6 +140,12 @@ test('actual POS document loads the display editor without a fixture-injected sc
   assert(loaded.includes('/pos/displays.js'),'real HTML requested the editor asset');
   assert.equal(await page.evaluate(()=>typeof window.renderDisplaySettings),'function');
   assert.equal(await page.evaluate(()=>typeof window.showModule),'function');
+  const names=await page.evaluate(()=>{
+   const restaurantName='Café & <img src=x onerror="alert(1)">',categoryName='Food & </option><option data-pos-injected="yes" value="other">Fremd</option>';
+   data={restaurants:[{id:'11111111-1111-4111-8111-111111111111',name:restaurantName,mode:'restaurant'}],categories:[{id:'22222222-2222-4222-8222-222222222222',restaurantId:'11111111-1111-4111-8111-111111111111',name:categoryName}],products:[],orders:[]};render();
+   return {restaurantName,categoryName,restaurantText:document.querySelector('#restaurant option').textContent,categoryText:document.querySelector('#productCategory option').textContent,injected:document.querySelectorAll('[data-pos-injected]').length,options:document.querySelector('#productCategory').options.length};
+  });
+  assert.equal(names.restaurantText,names.restaurantName);assert.equal(names.categoryText,names.categoryName);assert.equal(names.injected,0);assert.equal(names.options,1);
  }finally{await browser.close();}
 });
 
