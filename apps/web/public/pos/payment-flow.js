@@ -3,6 +3,7 @@
   const euro=value=>(Number(value||0)/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
   const storageKey=id=>'bringness.checkout.pending.v1:'+id;
   const signature=(items,restaurantId)=>JSON.stringify({restaurantId,items:items.map(item=>({productId:item.id,qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId)),...(window.bnRetailSales?.extras()||{})});
+  const basketSnapshot=items=>JSON.stringify(items.map(item=>({productId:item.id,qty:item.qty,price:item.price})).sort((a,b)=>a.productId.localeCompare(b.productId)));
   let busy=false;
 
   // Recompute availability after async deposit loading and every basket change.
@@ -45,7 +46,7 @@
         status.textContent='Gegebener Betrag zu niedrig oder Warenkorb ungültig. Bitte Betrag und Artikel prüfen.';return;
       }
       if(!pending&&!crypto.randomUUID){status.textContent='Sichere Zahlungskennung nicht verfügbar. Bitte Kasse über HTTPS öffnen.';return;}
-      pending={body:{requestKey:pending?.body.requestKey||crypto.randomUUID(),restaurantId,...(window.bnRetailSales?.extras()||{}),items:cart.map(item=>({productId:item.id,qty:item.qty})),payments:[{method,amountCents:total}]},given,cartSignature:signature(cart,restaurantId),basketSnapshot:JSON.stringify(cart)};
+      pending={body:{requestKey:pending?.body.requestKey||crypto.randomUUID(),restaurantId,...(window.bnRetailSales?.extras()||{}),items:cart.map(item=>({productId:item.id,qty:item.qty})),payments:[{method,amountCents:total}]},given,cartSignature:signature(cart,restaurantId),basketSnapshot:basketSnapshot(cart)};
     }
     // Persist the immutable key and payload before sending. No token or secret is stored here.
     try{localStorage.setItem(storageKey(restaurantId),JSON.stringify(pending));}
@@ -56,7 +57,7 @@
       const result=await api('/orders/checkout',{method:'POST',body:JSON.stringify(pending.body)});
       if(!result||typeof result.id!=='string'||typeof result.receiptNumber!=='string'||!result.receiptNumber.trim()||result.status!=='paid'||result.restaurantId!==restaurantId||result.requestKey!==pending.body.requestKey||!Number.isSafeInteger(result.totalCents)||result.totalCents!==pending.body.payments.reduce((sum,p)=>sum+p.amountCents,0))throw Error('Unvollständige Zahlungsbestätigung');
       // Preserve any new basket edits made while the earlier request was uncertain.
-      if(document.getElementById('restaurant').value===restaurantId&&signature(cart,restaurantId)===pending.cartSignature&&(!pending.basketSnapshot||JSON.stringify(cart)===pending.basketSnapshot)){cart=[];window.bnRetailSales?.reset();renderCart();if(window.bnResetTender)window.bnResetTender();}
+      if(document.getElementById('restaurant').value===restaurantId&&signature(cart,restaurantId)===pending.cartSignature&&(!pending.basketSnapshot||basketSnapshot(cart)===pending.basketSnapshot)){cart=[];window.bnRetailSales?.reset();renderCart();if(window.bnResetTender)window.bnResetTender();}
       try{localStorage.removeItem(storageKey(restaurantId));}catch{}
       const total=pending.body.payments.reduce((sum,p)=>sum+p.amountCents,0);
       status.textContent='Verkauf gespeichert: '+result.receiptNumber+'. Rückgeld: '+euro(pending.given-total)+'. Beleg unter „Belege“.';
