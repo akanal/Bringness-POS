@@ -10,7 +10,7 @@ const rid=crypto.randomUUID(),pid=crypto.randomUUID(),key='bringness.trade.pendi
 const tiers=[{product_id:pid,min_qty:1,price_cents:250},{product_id:pid,min_qty:1000,price_cents:200}];
 function fixture(pending){const dom=new JSDOM('<select id="restaurant"><option value="'+rid+'">Retail</option></select><div id="moduleBody"></div>',{runScripts:'outside-only',url:'https://pos.test/pos/'}),w=dom.window;
  Object.defineProperty(w,'crypto',{value:crypto.webcrypto});w.eval('var token="fixture";var data='+JSON.stringify({products:[{id:pid,name:'Test <item>',restaurantId:rid}]})+';var $=id=>document.getElementById(id);var esc=x=>String(x).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(\'"\',"&quot;");');
- w.ensurePersonnelAccess=async()=>true;if(pending)w.localStorage.setItem(key,pending);w.eval(salesScript);w.eval(script);return w;
+ w.ensurePersonnelAccess=async()=>true;w.bnMountCustomerDelivery=()=>({check:async()=>{},merchantRecipient:()=>({merchantId:'11111111-1111-4111-8111-111111111111'})});if(pending)w.localStorage.setItem(key,pending);w.eval(salesScript);w.eval(script);return w;
 }
 let attempts=[],lose=true;
 const w=fixture();w.api=async(path,opt)=>{if(path.startsWith('/trade/settings?'))return {enabled:true};if(path.startsWith('/trade/prices?'))return {tiers};if(path==='/orders/checkout'){const b=JSON.parse(opt.body);attempts.push(b);if(lose)throw Error('connection lost');return {receiptNumber:'BN-1',receiptId:crypto.randomUUID(),requestKey:b.requestKey,restaurantId:b.restaurantId,status:'paid',totalCents:b.payments[0].amountCents};}throw Error(path)};
@@ -112,10 +112,11 @@ try{
  assert.equal(d.querySelector('.bn-sale-tools').hidden,true);
  d.getElementById('trade-email').value='buyer@example.test';d.getElementById('trade-phone').value='03012345';d.getElementById('trade-taxNumber').value='98/765';
  let paidBody,invoiceLoads=0,rejectCheckout=true;const receiptId=crypto.randomUUID();const previousApi=invoiceWindow.api;
- invoiceWindow.api=async(path,opt)=>{if(path.startsWith('/delivery-notes?'))return {deliveryNotes:[]};if(path.startsWith('/trade/invoices?'))return {invoices:[{id:receiptId,receipt_number:'HR-2026-000042',issued_at:new Date().toISOString(),total_cents:250}]};if(path==='/orders/checkout'){paidBody=JSON.parse(opt.body);if(rejectCheckout)throw Object.assign(Error('Zuerst Firmenanschrift speichern'),{status:400});return {receiptId,receiptNumber:'HR-2026-000042',requestKey:paidBody.requestKey,restaurantId:rid,status:'paid',totalCents:250};}return previousApi(path,opt);};
+ invoiceWindow.api=async(path,opt)=>{if(path==='/customers'){const b=JSON.parse(opt.body);assert.equal(b.kind,'merchant');assert.match(b.requestKey,/^[a-f0-9-]{36}$/);return {id:'11111111-1111-4111-8111-111111111111',version:1,data:b.customer,merchant_number:'100001'};}if(path.startsWith('/delivery-notes?'))return {deliveryNotes:[]};if(path.startsWith('/trade/invoices?'))return {invoices:[{id:receiptId,receipt_number:'HR-2026-000042',issued_at:new Date().toISOString(),total_cents:250}]};if(path==='/orders/checkout'){paidBody=JSON.parse(opt.body);if(rejectCheckout)throw Object.assign(Error('Zuerst Firmenanschrift speichern'),{status:400});return {receiptId,receiptNumber:'HR-2026-000042',requestKey:paidBody.requestKey,restaurantId:rid,status:'paid',totalCents:250};}return previousApi(path,opt);};
  invoiceWindow.fetch=async url=>{assert.equal(url,'/api/v1/receipts/'+receiptId+'/invoice');invoiceLoads++;return {ok:true,blob:async()=>new invoiceWindow.Blob(['%PDF-fixture'],{type:'application/pdf'})};};
  invoiceWindow.URL.createObjectURL=()=> 'blob:https://pos.test/invoice';invoiceWindow.URL.revokeObjectURL=()=>{};
- await d.querySelector('[data-preview]').onclick();assert.match(d.querySelector('[data-confirm-payment]').textContent,/Barzahlung erhalten/);await d.querySelector('[data-confirm-payment]').onclick();assert.match(d.querySelector('[data-payment-status]').textContent,/Firmenanschrift speichern/);assert(d.querySelector('.trade-sheet-dialog').open);assert.equal(invoiceLoads,0);assert.equal(invoiceWindow.localStorage.getItem(key),null);rejectCheckout=false;await d.querySelector('[data-confirm-payment]').onclick();assert.equal(paidBody.recipient.email,'buyer@example.test');assert.equal(paidBody.recipient.phone,'03012345');assert.equal(paidBody.recipient.taxNumber,'98/765');assert.equal(invoiceLoads,1);
+ await d.getElementById('tradePay').onclick();assert.match(d.getElementById('tradeStatus').textContent,/zuerst den Händler speichern/);assert.equal(paidBody,undefined);await d.querySelector('[data-save]').onclick();assert.match(d.querySelector('[data-merchant-number]').textContent,/100001/);assert.equal(d.querySelector('input[name=merchantNumber]'),null);
+ await d.querySelector('[data-preview]').onclick();assert.match(d.querySelector('[data-invoice-merchant]').textContent,/Händlernummer: 100001/);assert.match(d.querySelector('[data-confirm-payment]').textContent,/Barzahlung erhalten/);await d.querySelector('[data-confirm-payment]').onclick();assert.match(d.querySelector('[data-payment-status]').textContent,/Firmenanschrift speichern/);assert(d.querySelector('.trade-sheet-dialog').open);assert.equal(invoiceLoads,0);assert.equal(invoiceWindow.localStorage.getItem(key),null);rejectCheckout=false;await d.querySelector('[data-confirm-payment]').onclick();assert.equal(paidBody.recipient.email,'buyer@example.test');assert.equal(paidBody.recipient.phone,'03012345');assert.equal(paidBody.recipient.taxNumber,'98/765');assert.equal(invoiceLoads,1);
  assert.equal(d.querySelectorAll('#tradeDocuments button').length,1);assert.match(d.querySelector('#tradeDocuments button').textContent,/Letzte Rechnung/);assert(d.querySelector('.trade-issued-invoice').open);assert.match(d.querySelector('.trade-issued-invoice strong').textContent,/HR-2026-000042/);assert.match(d.querySelector('.trade-issued-invoice iframe').title,/Gespeicherte Rechnung/);assert.equal(d.getElementById('tradeArchive'),null);assert.equal(d.getElementById('tradeInvoices'),null);assert.equal(invoiceWindow.localStorage.getItem(key),null);
  // Cancellation review never submits a refund or changes a stored invoice.
  const beforeReviewApi=invoiceWindow.api;let reviewRequests=0,reviewMode='valid',releaseReview;
@@ -151,3 +152,42 @@ try{
 }finally{invoiceWindow.close()}
 
 await import('./trade-cancellation-ui.mjs');
+
+// Actual merchant form keeps a server-owned number and replays a lost create across reload.
+const merchantScript=await fs.readFile(new URL('../../apps/web/public/pos/customer-delivery.js',import.meta.url),'utf8');
+const merchantId=crypto.randomUUID(),merchantKey='bringness.merchant.create.v1:'+rid;
+let merchantRecord=null,loseMerchantCreate=true,merchantCommands=[],merchantSales=[];
+const merchantApi=async(path,opt)=>{
+ if(path.startsWith('/trade/settings?'))return {enabled:true};
+ if(path.startsWith('/trade/prices?'))return {tiers};
+ if(path.startsWith('/trade/invoices?'))return {invoices:[]};
+ if(path.startsWith('/customers?'))return {customers:merchantRecord?[merchantRecord]:[]};
+ if(path==='/customers'){
+  const command=JSON.parse(opt.body);merchantCommands.push(command);assert.equal(command.kind,'merchant');
+  if(opt.method==='POST'){
+   merchantRecord??={id:merchantId,version:1,data:command.customer,merchant_number:'100001'};
+   if(loseMerchantCreate)throw Error('Lost merchant reply');
+  }else merchantRecord={...merchantRecord,data:command.customer,version:merchantRecord.version+1};
+  return merchantRecord;
+ }
+ if(path==='/orders/checkout'){merchantSales.push(JSON.parse(opt.body));throw Error('Synthetic uncertain checkout');}
+ throw Error(path);
+};
+const merchantWindow=fixture();merchantWindow.api=merchantApi;merchantWindow.eval(merchantScript);
+let savedMerchantCommand;
+try{
+ await merchantWindow.renderTradeModule();await new Promise(r=>setImmediate(r));const d=merchantWindow.document;
+ for(const [k,v]of Object.entries({name:'Merchant',street:'Street 1',postalCode:'10115',city:'Berlin'}))d.getElementById('trade-'+k).value=v;
+ await d.querySelector('[data-save]').onclick();savedMerchantCommand=merchantWindow.localStorage.getItem(merchantKey);assert(savedMerchantCommand);assert.match(d.querySelector('[data-customer-status]').textContent,/Lost merchant reply/);
+}finally{merchantWindow.close();}
+const merchantReload=fixture();merchantReload.api=merchantApi;merchantReload.eval(merchantScript);merchantReload.localStorage.setItem(merchantKey,savedMerchantCommand);
+try{
+ loseMerchantCreate=false;await merchantReload.renderTradeModule();await new Promise(r=>setImmediate(r));const d=merchantReload.document;
+ await d.querySelector('[data-save]').onclick();assert.deepEqual(merchantCommands[1],merchantCommands[0]);assert.equal(merchantReload.localStorage.getItem(merchantKey),null);
+ assert.match(d.querySelector('[data-merchant-number]').textContent,/100001/);assert.equal(d.querySelectorAll('[data-merchant-number] input').length,0);
+ await d.querySelector('[data-use]').onclick();d.querySelector('[data-add]').click();
+ d.getElementById('trade-name').value='Merchant corrected';await d.getElementById('tradePay').onclick();assert.equal(merchantSales.length,0);assert.match(d.getElementById('tradeStatus').textContent,/Händler aktualisieren/);
+ await d.querySelector('[data-update]').onclick();assert.match(d.querySelector('[data-merchant-number]').textContent,/100001/);
+ await d.getElementById('tradePay').onclick();assert.equal(merchantSales.length,1);assert.equal(merchantSales[0].recipient.merchantId,merchantId);assert.equal(merchantSales[0].recipient.merchantNumber,undefined);
+ console.log('Merchant UI passed: server number read-only, persistent create replay after reload, changed-address guard, stable update and recipient ID on checkout.');
+}finally{merchantReload.close();}

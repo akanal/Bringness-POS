@@ -64,7 +64,20 @@ try{
  // One actual HTTP flow across customer records, unpaid delivery, sale, invoice and cash closure.
  const savedCustomer=await send('/customers','POST',{restaurantId:restaurant,customer:recipient});assert.equal(savedCustomer.status,200);
  const foundCustomers=await send('/customers?restaurantId='+restaurant+'&q=Wholesale');assert.equal(foundCustomers.body.customers.length,1);
- request.recipient=foundCustomers.body.customers[0].data;
+ assert.equal(savedCustomer.body.merchant_number,null,'ordinary customers remain unnumbered');
+ const merchantCommand={restaurantId:restaurant,kind:'merchant',requestKey:uuid(),customer:{...recipient,merchantNumber:'999999'}};
+ const merchant=await send('/customers','POST',merchantCommand);assert.equal(merchant.status,200);assert.equal(String(merchant.body.merchant_number),'100001');assert.equal(merchant.body.data.merchantNumber,undefined);
+ const merchantReplay=await send('/customers','POST',merchantCommand);assert.equal(merchantReplay.body.id,merchant.body.id);assert.equal(String(merchantReplay.body.merchant_number),'100001');
+ assert.equal((await send('/customers','POST',{...merchantCommand,customer:{...recipient,name:'Changed'}})).status,409);
+ const secondMerchant=await send('/customers','POST',{...merchantCommand,requestKey:uuid()});assert.equal(String(secondMerchant.body.merchant_number),'100002');
+ const updated=await send('/customers','PUT',{restaurantId:restaurant,id:merchant.body.id,version:1,kind:'merchant',merchant_number:999999,customer:{...recipient,merchantNumber:'999999'}});assert.equal(updated.status,200);assert.equal(String(updated.body.merchant_number),'100001');
+ const versioned=await send('/customers','PUT',{restaurantId:restaurant,id:merchant.body.id,version:1,kind:'merchant',customer:recipient});assert.equal(versioned.status,409);
+ await assert.rejects(query('UPDATE pos_customers SET merchant_number=999999 WHERE id=$1',[merchant.body.id]),/unveränderlich/);
+ await migratePaymentCheckout(pool);assert.equal(String((await query('SELECT merchant_number FROM pos_customers WHERE id=$1',[merchant.body.id])).rows[0].merchant_number),'100001');
+ if(postgresUrl){const concurrentCommand={...merchantCommand,requestKey:uuid(),customer:{...recipient,name:'Concurrent merchant'}};const concurrent=await Promise.all([send('/customers','POST',concurrentCommand),send('/customers','POST',concurrentCommand)]);assert(concurrent.every(r=>r.status===200));assert.equal(concurrent[0].body.id,concurrent[1].body.id);assert.equal(concurrent[0].body.merchant_number,concurrent[1].body.merchant_number);}
+ request.recipient={...merchant.body.data,merchantId:merchant.body.id,merchantNumber:'999999'};
+ assert.equal((await send('/orders/checkout','POST',{...request,requestKey:uuid(),recipient:{...request.recipient,merchantId:uuid()}})).status,400);
+
  const openCash={restaurantId:restaurant,requestKey:uuid(),action:'open',amountCents:1000};
  const cashOpened=await send('/cash-sessions','POST',openCash);assert.equal(cashOpened.status,200);const cashId=cashOpened.body.session.id;
  const deliveryRequest={restaurantId:restaurant,requestKey:uuid(),recipient:request.recipient,items:request.items,note:'Synthetic full-flow delivery'};
@@ -116,7 +129,7 @@ try{
  assert.match(content,/buyer@example.test/);assert.match(content,/03012345/);assert.match(content,/98\/765/);assert.match(content,/Zahlungsart: Barzahlung/);assert.match(content,/Wholesale Customer/);assert.match(content,/Rechnung/);assert.match(content,/3.000,00/);assert.match(content,/Nicht TSE-signiert/);await loading.destroy();
  const tokens=(await query('SELECT id,public_token,invoice_public_token FROM receipts WHERE id=$1',[sale.body.receiptId])).rows[0];assert(tokens.invoice_public_token);assert.notEqual(tokens.invoice_public_token,tokens.public_token);assert.equal(qrPayloads.length,0,'A4 invoice generation does not create a URL QR');
  const scanned=await fetch(base+'/rechnung/'+tokens.invoice_public_token);assert.equal(scanned.status,200);assert.match(scanned.headers.get('content-type'),/application\/pdf/);assert.match(scanned.headers.get('content-disposition'),/^inline/);assert.match(scanned.headers.get('cache-control'),/no-store/);assert.equal(scanned.headers.get('referrer-policy'),'no-referrer');
- const scanLoading=getDocument({data:new Uint8Array(await scanned.arrayBuffer()),useSystemFonts:true});const scanPdf=await scanLoading.promise;let scanText='';for(let page=1;page<=scanPdf.numPages;page++)scanText+=(await(await scanPdf.getPage(page)).getTextContent()).items.map(x=>x.str).join(' ');assert(scanText.includes(sale.body.receiptNumber));assert(scanText.includes(recipient.email));assert(scanText.includes('Zahlungsart: Barzahlung'));await scanLoading.destroy();
+ const scanLoading=getDocument({data:new Uint8Array(await scanned.arrayBuffer()),useSystemFonts:true});const scanPdf=await scanLoading.promise;let scanText='';for(let page=1;page<=scanPdf.numPages;page++)scanText+=(await(await scanPdf.getPage(page)).getTextContent()).items.map(x=>x.str).join(' ');assert(scanText.includes(sale.body.receiptNumber));assert(scanText.includes(recipient.email));assert(scanText.includes('Zahlungsart: Barzahlung'));assert(scanText.includes('Händlernummer: 100001'));assert(!scanText.includes('999999'));await scanLoading.destroy();
  for(const wrong of [tokens.public_token,tokens.id,uuid(),'not-a-token']){const response=await fetch(base+'/rechnung/'+wrong);assert.equal(response.status,404);assert(!(await response.text()).includes(recipient.email));}
  assert.equal((await fetch(base+'/rechnung/'+tokens.invoice_public_token,{method:'POST'})).status,405);
  await Promise.all([send('/receipts/'+sale.body.receiptId+'/invoice'),send('/receipts/'+sale.body.receiptId+'/invoice')]);assert.equal((await query('SELECT invoice_public_token FROM receipts WHERE id=$1',[sale.body.receiptId])).rows[0].invoice_public_token,tokens.invoice_public_token);
@@ -134,7 +147,7 @@ try{
  assert.equal((await send('/trade/invoices?restaurantId='+restaurant)).body.invoices.length,1);
  const replay=await send('/orders/checkout','POST',request);assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);assert.equal(replay.body.totalCents,300000);
  assert.equal((await send('/orders/checkout','POST',{...request,recipient:{...recipient,name:'Different'}})).status,409);
- const original=(await query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[sale.body.id])).rows[0].recipient;assert.equal(original.name,recipient.name);assert.equal(original.email,recipient.email);assert.equal(original.phone,recipient.phone);assert.equal(original.taxNumber,recipient.taxNumber);
+ const original=(await query('SELECT recipient FROM pos_trade_sales WHERE order_id=$1',[sale.body.id])).rows[0].recipient;assert.equal(original.name,recipient.name);assert.equal(original.email,recipient.email);assert.equal(original.phone,recipient.phone);assert.equal(original.taxNumber,recipient.taxNumber);assert.equal(original.merchantNumber,'100001');
  assert.equal(Number((await query('SELECT count(*) n FROM orders')).rows[0].n),1);
  await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true},token,unlock);
  const retail=await send('/orders/checkout','POST',{requestKey:uuid(),restaurantId:restaurant,items:[{productId:product,qty:1}],payments:[{method:'cash',amountCents:9999}]});assert.equal(retail.status,201);assert.match(retail.body.receiptNumber,/^BN-\d{4}-000001$/);
