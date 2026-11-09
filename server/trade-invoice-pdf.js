@@ -45,6 +45,7 @@ export function renderTradeInvoice(doc, receipt, items, payments) {
   let addressSize=10;doc.font('TradeRegular').fontSize(addressSize);while(addressSize>8&&doc.heightOfString(recipientText,{width:240})>78){addressSize-=0.5;doc.fontSize(addressSize);}
   const recipientY=text(recipientText,57,160,240,addressSize);
   let metaY=145;
+  if(/^\d{6,20}$/.test(String(recipient.merchantNumber||'')))metaY=text('Händlernummer: '+recipient.merchantNumber,355,metaY,192,11,true,'right')+12;
   for(const [label,value] of [['Rechnungs-Nr.',receipt.receipt_number],['Rechnungsdatum',date],['Lieferdatum',date]]){
     text(label,355,metaY,100,9);metaY=text(value,455,metaY,92,9,false,'right')+6;
   }

@@ -5,7 +5,8 @@ import {tradeRecipient} from './trade-pricing.js';
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 const fail=(status,message)=>Object.assign(Error(message),{status});
 export function customerRecord(value){
- const address=tradeRecipient(value);
+ const {merchantId,merchantNumber,...input}=value||{};
+ const address=tradeRecipient(input);
  if(value.email!=null&&typeof value.email!=='string'||value.phone!=null&&typeof value.phone!=='string')throw Error('Ungültige Kontaktdaten');
  const email=(value.email||'').trim(),phone=(value.phone||'').trim();
  if(typeof value.email!=='undefined'&&typeof value.email!=='string'||typeof value.phone!=='undefined'&&typeof value.phone!=='string')throw Error('Ungültige Kontaktdaten');
@@ -21,6 +22,19 @@ export function deliveryRequest(body){
 export async function migrateCustomerDelivery(db){await db.query(`
  CREATE TABLE IF NOT EXISTS pos_customers(id uuid PRIMARY KEY,restaurant_id uuid NOT NULL REFERENCES restaurants(id),data jsonb NOT NULL,version int NOT NULL DEFAULT 1,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
  CREATE INDEX IF NOT EXISTS pos_customers_restaurant ON pos_customers(restaurant_id);
+ CREATE SEQUENCE IF NOT EXISTS pos_merchant_number_seq START WITH 100001;
+ ALTER TABLE pos_customers ADD COLUMN IF NOT EXISTS merchant_number bigint;
+ ALTER TABLE pos_customers ADD COLUMN IF NOT EXISTS merchant_create_key uuid;
+ ALTER TABLE pos_customers ADD COLUMN IF NOT EXISTS merchant_create_fingerprint text;
+ CREATE UNIQUE INDEX IF NOT EXISTS pos_customers_merchant_number_unique ON pos_customers(merchant_number) WHERE merchant_number IS NOT NULL;
+ CREATE UNIQUE INDEX IF NOT EXISTS pos_customers_merchant_create_unique ON pos_customers(restaurant_id,merchant_create_key) WHERE merchant_create_key IS NOT NULL;
+ CREATE OR REPLACE FUNCTION protect_pos_merchant_number() RETURNS trigger LANGUAGE plpgsql AS $fn$
+ BEGIN
+ IF OLD.merchant_number IS NOT NULL AND NEW.merchant_number IS DISTINCT FROM OLD.merchant_number THEN
+ RAISE EXCEPTION 'Händlernummer ist unveränderlich'; END IF;
+ RETURN NEW; END $fn$;
+ DROP TRIGGER IF EXISTS pos_merchant_number_immutable ON pos_customers;
+ CREATE TRIGGER pos_merchant_number_immutable BEFORE UPDATE ON pos_customers FOR EACH ROW EXECUTE FUNCTION protect_pos_merchant_number();
  CREATE TABLE IF NOT EXISTS pos_delivery_notes(id uuid PRIMARY KEY,restaurant_id uuid NOT NULL REFERENCES restaurants(id),request_key uuid NOT NULL,fingerprint text NOT NULL,number text NOT NULL UNIQUE,sender jsonb NOT NULL,recipient jsonb NOT NULL,items jsonb NOT NULL,note text NOT NULL,created_by uuid NOT NULL REFERENCES users(id),issued_at timestamptz NOT NULL DEFAULT now(),UNIQUE(restaurant_id,request_key));
  CREATE INDEX IF NOT EXISTS pos_delivery_notes_restaurant ON pos_delivery_notes(restaurant_id,issued_at);
  `);}
@@ -42,11 +56,19 @@ export function createCustomerDelivery(pool,authenticate){return async(req,res)=
  if(path.endsWith('/customers')){
   if(req.method==='GET'){
    const q=(url.searchParams.get('q')||'').trim();if(q.length>160)throw fail(400,'Suchtext zu lang');
-   result={customers:(await client.query("SELECT id,data,version FROM pos_customers WHERE restaurant_id=$1 AND strpos(lower(concat_ws(' ',data->>'name',data->>'street',data->>'postalCode',data->>'city',data->>'email',data->>'phone',data->>'vatId',data->>'taxNumber')),lower($2))>0 ORDER BY lower(data->>'name'),id LIMIT 200",[body.restaurantId,q])).rows};
+   result={customers:(await client.query("SELECT id,data,version,merchant_number FROM pos_customers WHERE restaurant_id=$1 AND strpos(lower(concat_ws(' ',data->>'name',data->>'street',data->>'postalCode',data->>'city',data->>'email',data->>'phone',data->>'vatId',data->>'taxNumber')),lower($2))>0 ORDER BY lower(data->>'name'),id LIMIT 200",[body.restaurantId,q])).rows};
   }else{
    let data;try{data=customerRecord(body.customer);}catch(e){throw fail(400,e.message);}
-   if(req.method==='POST'){result=(await client.query('INSERT INTO pos_customers(id,restaurant_id,data) VALUES($1,$2,$3) RETURNING id,data,version',[crypto.randomUUID(),body.restaurantId,data])).rows[0];}
-   else{if(!uuid(body.id)||!Number.isSafeInteger(body.version)||body.version<1)throw fail(400,'Kunde und Version erforderlich');result=(await client.query('UPDATE pos_customers SET data=$3,version=version+1,updated_at=now() WHERE id=$1 AND restaurant_id=$2 AND version=$4 RETURNING id,data,version',[body.id,body.restaurantId,data,body.version])).rows[0];if(!result)throw fail(409,'Kunde wurde verändert. Bitte neu laden.');}
+   if(body.kind!=null&&!['merchant','customer'].includes(body.kind))throw fail(400,'Ungültige Empfängerart');
+   if(req.method==='POST'&&body.kind==='merchant'){
+    if(!uuid(body.requestKey))throw fail(400,'Eindeutige Händler-Anlagekennung erforderlich');
+    const fingerprint=crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[body.restaurantId+':merchant:'+body.requestKey]);
+    const old=(await client.query('SELECT id,data,version,merchant_number,merchant_create_fingerprint FROM pos_customers WHERE restaurant_id=$1 AND merchant_create_key=$2',[body.restaurantId,body.requestKey])).rows[0];
+    if(old){if(old.merchant_create_fingerprint!==fingerprint)throw fail(409,'Händler-Anlagekennung bereits verwendet. Ursprüngliche Angaben erneut abgleichen.');const {merchant_create_fingerprint,...record}=old;result=record;}
+    else result=(await client.query("INSERT INTO pos_customers(id,restaurant_id,data,merchant_number,merchant_create_key,merchant_create_fingerprint) VALUES($1,$2,$3,nextval('pos_merchant_number_seq'),$4,$5) RETURNING id,data,version,merchant_number",[crypto.randomUUID(),body.restaurantId,data,body.requestKey,fingerprint])).rows[0];
+   }else if(req.method==='POST'){result=(await client.query('INSERT INTO pos_customers(id,restaurant_id,data) VALUES($1,$2,$3) RETURNING id,data,version,merchant_number',[crypto.randomUUID(),body.restaurantId,data])).rows[0];}
+   else{if(!uuid(body.id)||!Number.isSafeInteger(body.version)||body.version<1)throw fail(400,'Kunde und Version erforderlich');result=(await client.query("UPDATE pos_customers SET data=$3,merchant_number=CASE WHEN $5='merchant' AND merchant_number IS NULL THEN nextval('pos_merchant_number_seq') ELSE merchant_number END,version=version+1,updated_at=now() WHERE id=$1 AND restaurant_id=$2 AND version=$4 RETURNING id,data,version,merchant_number",[body.id,body.restaurantId,data,body.version,body.kind||'customer'])).rows[0];if(!result)throw fail(409,'Kunde wurde verändert. Bitte neu laden.');}
   }
  }else if(req.method==='GET'){
   const id=url.searchParams.get('id');if(id&&!uuid(id))throw fail(400,'Ungültiger Lieferschein');

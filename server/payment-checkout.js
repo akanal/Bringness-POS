@@ -137,6 +137,11 @@ return async function handlePaymentCheckout(req, res) {
       await client.query('COMMIT');send(res,200,{...previous.response,replayed:true});return true;
     }
     if(trade&&!(await client.query('SELECT pos_trade_enabled FROM restaurants WHERE id=$1 AND company_id=$2',[restaurantId,actor.company_id])).rows[0]?.pos_trade_enabled)reject(409,'Händleroption ausgeschaltet. In den Einstellungen aktivieren; bei unklarem Zahlungsergebnis dieselbe Kennung abgleichen.');
+    if(trade&&recipient.merchantId){
+      const merchant=(await client.query('SELECT merchant_number FROM pos_customers WHERE id=$1 AND restaurant_id=$2 AND merchant_number IS NOT NULL FOR SHARE',[recipient.merchantId,restaurantId])).rows[0];
+      if(!merchant)reject(400,'Gespeicherten Händler mit Händlernummer auswählen.');
+      recipient={...recipient,merchantNumber:String(merchant.merchant_number)};
+    }
     if(parked){const bon=(await client.query('SELECT state,version,payload FROM pos_parked_bons WHERE id=$1 AND company_id=$2 AND restaurant_id=$3 FOR UPDATE',[body.parkedBonId,actor.company_id,restaurantId])).rows[0];if(!bon)reject(404,'Geparkter Bon nicht gefunden');if(bon.state!=='parked')reject(409,'Geparkter Bon wurde bereits bezahlt. Keine neue Zahlung buchen.');if(bon.version!==body.parkedBonVersion||bon.payload.salesMode!==(trade?'trade':'retail'))reject(409,'Geparkter Bon wurde geändert. Bitte neu laden.');}
     const products=await client.query(
       'SELECT p.id,p.name,p.price_cents,p.tax_rate FROM products p JOIN restaurants r ON r.id=p.restaurant_id WHERE p.id=ANY($1::uuid[]) AND p.restaurant_id=$2 AND r.company_id=$3 AND p.active=true FOR SHARE OF p,r',

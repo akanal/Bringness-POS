@@ -10,6 +10,7 @@ export function tradeRecipient(value){
   if(value[key]!=null&&typeof value[key]!=='string')throw Error('Ungültiger Rechnungsempfänger');r[key]=(value[key]||'').trim();if(r[key].length>max||/[\x00-\x1f\x7f]/.test(r[key]))throw Error('Ungültiger Rechnungsempfänger');
  }
  for(const [key,max] of Object.entries({taxNumber:80,email:254,phone:60})){if(value[key]!=null&&typeof value[key]!=='string')throw Error('Ungültige Kontaktdaten');const text=(value[key]||'').trim();if(text.length>max||/[\x00-\x1f\x7f]/.test(text)||key==='email'&&text&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text))throw Error('Ungültige Kontaktdaten');if(text)r[key]=text;}
+ if(value.merchantId!=null){if(typeof value.merchantId!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.merchantId))throw Error('Ungültiger Händler');r.merchantId=value.merchantId.toLowerCase();}
  if(['name','street','postalCode','city','country'].some(k=>!r[k]))throw Error('Name und vollständige Rechnungsadresse erforderlich');return r;
 }
 export function normalizeTradeTiers(tiers){
