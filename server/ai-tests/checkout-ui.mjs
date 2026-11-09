@@ -43,3 +43,31 @@ console.log('Checkout UI passed: durable immutable retry across reload, empty-ca
  const request=f.pay();await new Promise(r=>setImmediate(r));f.w.bnRefreshPaymentState();assert(f.w.document.getElementById('pay').disabled);finish();await request;assert.equal(f.w.localStorage.getItem(key),null);assert(f.w.document.getElementById('pay').disabled);f.w.close();
  console.log('Payment readiness passed: async deposit recovery enables payment; busy and empty basket stay disabled.');
 }
+
+// A late acknowledgement belongs to the submitted draft, not to the next basket or venue.
+for(const change of ['quantity','price','discount','restaurant']){
+ const f=fixture();let finish,resets=0,discount={kind:'percent',value:1000};
+ f.w.bnRetailSales={extras:()=>({discount}),total:n=>n,refresh(){},reset(){resets++;discount=undefined;}};
+ f.w.api=async(path,opt)=>new Promise(done=>{finish=()=>done(response(JSON.parse(opt.body)))});
+ const request=f.pay();
+ if(change==='quantity')f.w.eval('cart[0].qty=2');
+ if(change==='price')f.w.eval('cart[0].price=3');
+ if(change==='discount')discount={kind:'percent',value:2000};
+ if(change==='restaurant'){
+  const option=f.w.document.createElement('option');option.value='44444444-4444-4444-8444-444444444444';f.w.document.getElementById('restaurant').append(option);f.w.document.getElementById('restaurant').value=option.value;
+ }
+ finish();await request;
+ assert.equal(resets,0,change+' must retain current sale tools');
+ assert.equal(f.w.eval('cart.length'),1,change+' must retain current basket');
+ assert.equal(f.w.localStorage.getItem(key),null,'confirmed original request must leave recovery');
+ f.w.close();
+}
+// Unchanged drafts, including already stored legacy pending requests, still clear once.
+for(const legacy of [false,true]){
+ const f=fixture();let resets=0;f.w.bnRetailSales={extras:()=>({}),total:n=>n,refresh(){},reset(){resets++;}};
+ f.w.api=async()=>{throw Error('lost acknowledgement')};await f.pay();
+ if(legacy){const saved=JSON.parse(f.w.localStorage.getItem(key));delete saved.basketSnapshot;f.w.localStorage.setItem(key,JSON.stringify(saved));}
+ f.w.api=async(path,opt)=>response(JSON.parse(opt.body));await f.pay();
+ assert.equal(resets,1);assert.equal(f.w.eval('cart.length'),0);f.w.close();
+}
+console.log('Late checkout acknowledgement passed: quantity, price, discount and venue changes survive; unchanged and legacy drafts clear exactly once.');
