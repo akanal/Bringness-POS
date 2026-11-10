@@ -379,6 +379,8 @@ test('public POS contact card fits phones and downloads the advertised contact w
   assert.equal(file.suggestedFilename(),'Bringness_POS_Kontakt.vcf');
   assert.match(contact,/TEL;TYPE=CELL,WORK:\+491787256201/);assert.match(contact,/Lübecker Str\. 1/);assert.match(contact,/Postfach 21 02 66/);
   assert.equal(await page.locator('img.qr').evaluate(el=>el.complete&&el.naturalWidth>0),true);
-  assert.equal(requests.length,1,'card and contact require no remote assets, APIs or authentication');await page.close();
+  assert.equal(requests.length,1,'card and contact require no remote assets, APIs or authentication');
+  if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pos-contact-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}
+  await page.close();
  }}finally{await browser.close()}
 });
