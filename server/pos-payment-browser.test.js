@@ -72,7 +72,7 @@ test('module overview exposes booking states and opens the real display editor f
  const baseStyles=(await Promise.all(['styles.css','category-colors.css','pos/sale-tools.css','pos/trade.css','pos/colors.css'].map(path=>readFile(new URL('../apps/web/public/'+path,import.meta.url),'utf8'))));
  const navigation=app.slice(app.indexOf('const moduleInfo='),app.indexOf('async function downloadReceipt'));
  const licensing=app.split('\n').find(line=>line.startsWith('async function renderLicensing'));
- const bootstrap={restaurants:[{id:restaurant,name:'Testbetrieb'}],categories:[],products:[]};
+ const bootstrap={restaurants:[{id:restaurant,name:'Testbetrieb',mode:'restaurant'}],categories:[],products:[]};
  const state={features:{pos_base:true,display_control:true,restaurant:true},featureRows:[],plans:[{code:'pos_base_monthly',active:true,eligible:false,amount:34.99},...Object.entries(moduleCatalog).map(([code,plan])=>({code,active:false,eligible:!plan.requires.includes('table_management'),requires:plan.requires,amount:plan.netCents/100})),{code:'display_control_monthly',active:true,included:true,eligible:false,amount:14.99},{code:'personnel_monthly',active:false,eligible:true,amount:9.99},{code:'table_qr_monthly',active:false,eligible:false,requires:['pos_base','table_management'],amount:29.99}]};
  const restaurantChange=app.split('\n').find(line=>line.startsWith('$(')&&line.includes('"restaurant").onchange='));
  const branding=app.slice(app.indexOf('async function renderRestaurantBranding('),app.indexOf('let guestPresencePolling='));
@@ -101,6 +101,8 @@ test('module overview exposes booking states and opens the real display editor f
   });
   try{
    await page.goto('https://modules.test/pos/');
+   await page.getByRole('button',{name:'PIN vergessen?',exact:true}).waitFor();
+   if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pin-recovery-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png'});}
    await page.getByRole('button',{name:'PIN vergessen?',exact:true}).click();
    await page.getByRole('heading',{name:'Verwaltungs-PIN neu setzen',exact:true}).waitFor();
    assert(await page.locator('.personnel-dialog input[name=password]').isVisible());assert.equal(unlocks,0,'forgotten PIN cannot unlock settings');
