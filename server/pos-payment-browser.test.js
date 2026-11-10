@@ -331,6 +331,7 @@ test('POS introduction presents the complete system and prepares a private mail 
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://pos-intro.test/**',route=>{const path=new URL(route.request().url()).pathname;requests.push(path);if(path==='/vorfuehrung/')return route.fulfill({contentType:'text/html',body:document});const name=path.split('/').pop();if(assets[name])return route.fulfill({contentType:name.endsWith('.js')?'text/javascript':'text/css',body:assets[name]});return route.abort()});
   await page.goto('https://pos-intro.test/vorfuehrung/');
+  assert.equal(await page.locator('header').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(7, 24, 39)','POS header stays black');
   for(const name of ['Kasse & Artikel','Tische & QR-Bestellung','Kellnerbestellungen','Küchenübersicht','Personal & Dienstplan','Belege & Rechnungen','Schicht & Auswertungen','Bildschirme & Abholung'])assert(await page.getByRole('heading',{name,exact:true}).isVisible());
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'content fits viewport');
   if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pos-introduction-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}
@@ -360,4 +361,24 @@ test('POS inventory and device checks keep manual counts, real input and user pr
  await page.route('https://pos-operations.test/**',async route=>{const u=new URL(route.request().url());const name=u.pathname.split('/').at(-1);if(files[name])return route.fulfill({contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'text/javascript',body:files[name]});if(u.pathname==='/api/v1/bootstrap'){assert.equal(route.request().headers().authorization,'Bearer pos-fixture');return route.fulfill({json:{restaurants:[{id:restaurant,name:'Testbetrieb'}]}});}if(u.pathname==='/api/v1/pos-inventory'){if(route.request().method()==='GET')return route.fulfill({json:{restaurantId:restaurant,rows:[row],manualCounts:true}});const c=route.request().postDataJSON();row={...row,revision:c.expectedRevision+1,counted_units:c.countedUnits,minimum_units:c.minimumUnits,target_units:c.targetUnits,counted_at:'2026-11-07T09:00:00Z'};return route.fulfill({json:{requestId:c.requestId,productId:product,revision:row.revision}});}return route.abort();});
  try{await page.goto('https://pos-operations.test/pos/operations.html');await page.evaluate(()=>{localStorage.setItem('bringness-pos-token','pos-fixture');localStorage.setItem('bringness-shop-token','untouched-shop');window.print=()=>{window.testPrintCalls=(window.testPrintCalls||0)+1;};});await page.getByRole('button',{name:'Betriebe und Zählstände laden',exact:true}).click();await page.locator('[name=countedUnits]').fill('2');await page.locator('[name=minimumUnits]').fill('3');await page.locator('[name=targetUnits]').fill('8');await page.getByRole('button',{name:'Zählstand speichern',exact:true}).click();await page.locator('#status').filter({hasText:'Zählstand gespeichert'}).waitFor();assert.match(await page.locator('#inventory').innerText(),/Mindestbestand erreicht/);await page.locator('#scan').fill('SCANNER-123');await page.locator('#scan').press('Enter');assert.match(await page.locator('#scan-result').textContent(),/Code empfangen: SCANNER-123/);await page.locator('#paper-confirm').check();assert.match(await page.locator('#print-result').textContent(),/Noch kein/);await page.getByRole('button',{name:'Testdruck öffnen',exact:true}).click();assert.equal(await page.evaluate(()=>testPrintCalls),1);assert.match(await page.locator('#print-result').textContent(),/Druckdialog geöffnet/);await page.locator('#paper-confirm').check();assert.match(await page.locator('#print-result').textContent(),/durch Nutzer bestätigt/);assert.equal(await page.evaluate(()=>localStorage.getItem('bringness-shop-token')),'untouched-shop');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pos-operations-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}assert.deepEqual(errors,[]);
  }finally{await browser.close();}}
+});
+
+
+test('public POS contact card fits phones and downloads the advertised contact without an account',async()=>{
+ const document=await readFile(new URL('../apps/web/public/vorfuehrung/kontakt.html',import.meta.url),'utf8');
+ const browser=await engine.launch({headless:true});
+ try{for(const width of [390,1280]){
+  const page=await browser.newPage({viewport:{width,height:900},acceptDownloads:true}),requests=[];
+  await page.route('https://pos-contact.test/**',route=>{requests.push(route.request().url());return route.fulfill({contentType:'text/html',body:document})});
+  await page.goto('https://pos-contact.test/vorfuehrung/kontakt.html');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  assert.equal(await page.locator('a[href="tel:+491787256201"]').count(),1);
+  assert.equal(await page.locator('a[href="mailto:info@bringness.de"]').count(),1);
+  const download=page.waitForEvent('download');await page.getByRole('link',{name:'Kontakt speichern',exact:true}).click();
+  const file=await download,contact=await readFile(await file.path(),'utf8');
+  assert.equal(file.suggestedFilename(),'Bringness_POS_Kontakt.vcf');
+  assert.match(contact,/TEL;TYPE=CELL,WORK:\+491787256201/);assert.match(contact,/Lübecker Str\. 1/);assert.match(contact,/Postfach 21 02 66/);
+  assert.equal(await page.locator('img.qr').evaluate(el=>el.complete&&el.naturalWidth>0),true);
+  assert.equal(requests.length,1,'card and contact require no remote assets, APIs or authentication');await page.close();
+ }}finally{await browser.close()}
 });
