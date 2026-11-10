@@ -115,6 +115,7 @@ test('module overview exposes booking states and opens the real display editor f
    for(const title of ['QR-Bestellmodell','QR-Code & Center','Betriebsart','Restaurantname und QR-Logo']){const c=cards.find(c=>c.title===title);assert(c,title+' exists');assert(Math.abs(c.width-displayCard.width)<2,title+' matches display width');assert(Math.abs(c.x-displayCard.x)<2,title+' aligns');}
    for(let i=1;i<cards.length;i++)assert(cards[i].top-cards[i-1].bottom>=10,'consistent visible card gaps');
    assert(await page.locator('#businessMode').evaluate(n=>getComputedStyle(n).paddingTop==='11px'));
+   await page.locator('#businessMode').selectOption('counter');assert.equal(await page.locator('#businessMode').inputValue(),'counter');await page.locator('#businessMode').selectOption('restaurant');
    assert(await page.locator('#qr-code a').evaluate(n=>getComputedStyle(n).display==='inline-flex'));
    if(process.env.RUNNER_TEMP)await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/settings-sizing-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),JSON.stringify(await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('#moduleBody *')].filter(n=>n.getBoundingClientRect().right>innerWidth).map(n=>({tag:n.tagName,id:n.id,cls:n.className,right:n.getBoundingClientRect().right,width:n.getBoundingClientRect().width})).slice(0,20)}))));
