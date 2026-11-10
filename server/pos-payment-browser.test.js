@@ -116,7 +116,8 @@ test('module overview exposes booking states and opens the real display editor f
    for(let i=1;i<cards.length;i++)assert(cards[i].top-cards[i-1].bottom>=10,'consistent visible card gaps');
    assert(await page.locator('#businessMode').evaluate(n=>getComputedStyle(n).paddingTop==='11px'));
    assert(await page.locator('#qr-code a').evaluate(n=>getComputedStyle(n).display==='inline-flex'));
-   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+   if(process.env.RUNNER_TEMP)await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/settings-sizing-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});
+   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),JSON.stringify(await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('#moduleBody *')].filter(n=>n.getBoundingClientRect().right>innerWidth).map(n=>({tag:n.tagName,id:n.id,cls:n.className,right:n.getBoundingClientRect().right,width:n.getBoundingClientRect().width})).slice(0,20)}))));
    await page.locator('#brandingName').fill('Unveränderter Entwurf');
    if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/settings-aligned-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}
 
