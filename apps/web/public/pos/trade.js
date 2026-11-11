@@ -54,7 +54,33 @@
    host.querySelectorAll('[data-qty]').forEach(el=>{el.disabled=busy||savingPrices||!!pending;el.onchange=()=>{const l=lines.find(l=>l.id===el.dataset.qty),n=Number(el.value);if(Number.isSafeInteger(n)&&n>=1&&n<=999999)l.qty=n;draw()}});
    host.querySelectorAll('[data-remove]').forEach(el=>{el.disabled=busy||savingPrices||!!pending;el.onclick=()=>{lines=lines.filter(l=>l.id!==el.dataset.remove);draw()}});
   }
-  function catalog(){const search=$('tradeSearch').value.toLocaleLowerCase();$('tradeProducts').innerHTML=products.filter(p=>p.name.toLocaleLowerCase().includes(search)).map(p=>{const list=tiers.filter(t=>t.product_id===p.id);return '<div class="trade-product"><span>'+esc(p.name)+'<small>'+esc(list.map(t=>'ab '+t.min_qty+': '+money(t.price_cents)).join(' · ')||'Kein Händlerpreis hinterlegt')+'</small></span><input data-addqty="'+p.id+'" aria-label="Hinzufügen Menge '+esc(p.name)+'" type="number" min="1" max="999999" step="1" value="'+(list[0]?.min_qty||1)+'"><button data-add="'+p.id+'" '+'>'+(!list.length?'Preis festlegen':'Hinzufügen')+'</button></div>'}).join('');host.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{if(busy||pending||savingPrices)return;const p=products.find(p=>p.id===b.dataset.add);if(!tiers.some(t=>t.product_id===p.id)){$('tradePriceProduct').value=p.id;loadTiers();$('tradeTiers').closest('details').open=true;$('tradeTiers').querySelector('input')?.focus();status('Für diesen Artikel zuerst einen Händlerpreis mit Verwaltungs-PIN speichern.');return;}const n=Number(host.querySelector('[data-addqty="'+p.id+'"]').value),existing=lines.find(l=>l.id===p.id),qty=n+(existing?.qty||0);if(!Number.isSafeInteger(n)||n<1||qty>999999||!price(p.id,qty))return status('Gültige Menge mit hinterlegtem Händlerpreis wählen.');if(existing)existing.qty=qty;else if(lines.length<100)lines.push({id:p.id,name:p.name,qty});draw()})}
+  let openCategory=null;
+  function catalog(){
+   const search=$('tradeSearch').value.trim().toLocaleLowerCase();
+   const categories=(data.categories||[]).filter(c=>c.restaurantId===rid);
+   const known=new Set(categories.map(c=>c.id));
+   const groups=categories.map(c=>({id:c.id,name:c.name,items:products.filter(p=>p.categoryId===c.id)}));
+   const unassigned=products.filter(p=>!known.has(p.categoryId));
+   if(unassigned.length)groups.push({id:null,name:'Ohne Kategorie',items:unassigned});
+   const visible=groups.map(g=>({...g,items:g.items.filter(p=>p.name.toLocaleLowerCase().includes(search))})).filter(g=>!search||g.items.length);
+   $('tradeProducts').innerHTML=visible.map(g=>{
+    const groupIndex=groups.findIndex(x=>x.id===g.id);
+    const rows=g.items.map(p=>{const list=tiers.filter(t=>t.product_id===p.id);return '<div class="trade-product"><span>'+esc(p.name)+'<small>'+esc(list.map(t=>'ab '+t.min_qty+': '+money(t.price_cents)).join(' · ')||'Kein Händlerpreis hinterlegt')+'</small></span><input data-addqty="'+p.id+'" aria-label="Hinzufügen Menge '+esc(p.name)+'" type="number" min="1" max="999999" step="1" value="'+(list[0]?.min_qty||1)+'"><button data-add="'+p.id+'" '+'>'+(!list.length?'Preis festlegen':'Hinzufügen')+'</button></div>'}).join('');
+    return '<details class="trade-category" data-trade-category="'+groupIndex+'"'+(openCategory===groupIndex?' open':'')+'><summary>'+esc(g.name)+' <span class="trade-category-count">('+g.items.length+')</span></summary><div class="trade-category-products">'+(rows||'<p class="muted">Keine Produkte in dieser Kategorie.</p>')+'</div></details>';
+   }).join('')||'<p class="muted">'+(search?'Keine passenden Produkte.':'Noch keine Produkte vorhanden.')+'</p>';
+   const folders=[...$('tradeProducts').querySelectorAll('.trade-category')];
+   folders.forEach(folder=>{
+    folder.querySelector('summary').onclick=()=>{
+     if(!folder.open){folders.forEach(other=>{if(other!==folder)other.open=false;});openCategory=Number(folder.dataset.tradeCategory);}
+     else openCategory=null;
+    };
+    folder.ontoggle=()=>{
+     if(!folder.isConnected)return;
+     if(folder.open){folders.forEach(other=>{if(other!==folder)other.open=false;});openCategory=Number(folder.dataset.tradeCategory);}
+     else if(openCategory===Number(folder.dataset.tradeCategory))openCategory=null;
+    };
+   });
+   host.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{if(busy||pending||savingPrices)return;const p=products.find(p=>p.id===b.dataset.add);if(!tiers.some(t=>t.product_id===p.id)){$('tradePriceProduct').value=p.id;loadTiers();$('tradeTiers').closest('details').open=true;$('tradeTiers').querySelector('input')?.focus();status('Für diesen Artikel zuerst einen Händlerpreis mit Verwaltungs-PIN speichern.');return;}const n=Number(host.querySelector('[data-addqty="'+p.id+'"]').value),existing=lines.find(l=>l.id===p.id),qty=n+(existing?.qty||0);if(!Number.isSafeInteger(n)||n<1||qty>999999||!price(p.id,qty))return status('Gültige Menge mit hinterlegtem Händlerpreis wählen.');if(existing)existing.qty=qty;else if(lines.length<100)lines.push({id:p.id,name:p.name,qty});draw()})}
   const tierEditor=$('tradeTiers');
   function lockTierEditor(){
    const locked=busy||!!pending||savingPrices;

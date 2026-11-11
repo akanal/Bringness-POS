@@ -15,6 +15,8 @@ const server=http.createServer((req,res)=>{try{const path=req.url.split('?')[0];
  await page.locator('#trade-city').fill('Berlin');assert.equal(await page.locator('#trade-postalCode').getAttribute('aria-invalid'),null);await page.locator('#trade-city').blur();
  await page.waitForFunction(()=>document.querySelector('.trade-recipient .address-check').textContent.includes('stimmen laut Verzeichnis überein'));
  await page.locator('.trade-recipient summary').click();
+ assert.equal(await page.locator('.trade-category[open]').count(),0);
+ await page.locator('.trade-category>summary').first().click();
  await page.locator('[data-add]').first().click();await page.locator('[data-add]').nth(1).click();await page.locator('details.trade-panel>summary').filter({hasText:'Kunden & Dokumente'}).click();await page.locator('[data-preview]').click();
  const preview=page.locator('.trade-sheet-dialog');await preview.waitFor();
  const sheet=preview.locator('.trade-sheet');assert.equal(await sheet.locator('header,footer').count(),0,'invoice must not inherit website header/footer');assert.equal(await sheet.locator('input[placeholder="Artikel suchen …"]').count(),0,'product search belongs outside invoice');assert(await sheet.locator('.trade-sheet-footer').isVisible());assert.match(await sheet.textContent(),/Rechnungsentwurf/);assert.match(await sheet.textContent(),/Musterbank/);

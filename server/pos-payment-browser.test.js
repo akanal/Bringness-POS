@@ -384,3 +384,34 @@ test('public POS contact card fits phones and downloads the advertised contact w
   await page.close();
  }}finally{await browser.close()}
 });
+
+test('merchant categories open exclusively on touch and keyboard while preserving selected products',async()=>{
+ const trade=await readFile(new URL('../apps/web/public/pos/trade.js',import.meta.url),'utf8');
+ const css=await readFile(new URL('../apps/web/public/pos/trade.css',import.meta.url),'utf8');
+ const products=[{id:product,restaurantId:restaurant,categoryId:'food',name:'Testbrot'},{id:'water',restaurantId:restaurant,categoryId:'drinks',name:'Testwasser'},{id:'old',restaurantId:restaurant,name:'Ohne Zuordnung'}];
+ const bootstrap={products,categories:[{id:'food',restaurantId:restaurant,name:'Speisen'},{id:'drinks',restaurantId:restaurant,name:'Getränke'}]};
+ for(const width of [390,1280]){
+  const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.route('https://trade.test/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path==='/pos/')return route.fulfill({contentType:'text/html',body:'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><select id="restaurant"><option value="'+restaurant+'">Testbetrieb</option></select><div id="moduleBody"></div><script>var data='+JSON.stringify(bootstrap)+';var token="fixture";var $=id=>document.getElementById(id);var esc=s=>String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(\'"\',"&quot;");'+api+'</script><script src="/trade.js"></script><script>renderTradeModule()</script>'});
+   if(path==='/trade.js')return route.fulfill({contentType:'text/javascript',body:trade});
+   if(path==='/api/v1/trade/settings')return route.fulfill({json:{enabled:true}});
+   if(path==='/api/v1/trade/prices')return route.fulfill({json:{tiers:products.map(p=>({product_id:p.id,min_qty:1,price_cents:250}))}});
+   return route.abort();
+  });
+  try{
+   await page.goto('https://trade.test/pos/');await page.locator('.trade-category').first().waitFor();
+   assert.equal(await page.locator('.trade-category[open]').count(),0);assert.equal(await page.locator('[data-add]').first().isVisible(),false);
+   await page.getByText('Speisen (1)',{exact:true}).click();await page.locator('[data-add]').first().waitFor();await page.locator('[data-add]').first().click();
+   const total=await page.locator('#tradeTotal').textContent();assert.match(total,/2,50/);
+   await page.getByText('Getränke (1)',{exact:true}).click();assert.equal(await page.locator('.trade-category[open]').count(),1);assert.equal(await page.locator('[data-add]').first().isVisible(),false);
+   await page.getByText('Getränke (1)',{exact:true}).press('Enter');assert.equal(await page.locator('.trade-category[open]').count(),0);
+   await page.locator('#tradeSearch').fill('Testwasser');assert.equal(await page.locator('.trade-category').count(),1);
+   await page.getByText('Getränke (1)',{exact:true}).click();assert(await page.locator('[data-add="water"]').isVisible());
+   await page.locator('#tradeSearch').fill('nichts');assert.match(await page.locator('#tradeProducts').textContent(),/Keine passenden/);
+   await page.locator('#tradeSearch').fill('');assert.equal(await page.locator('.trade-category').count(),3);assert.equal(await page.locator('#tradeTotal').textContent(),total);
+   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+ }
+});
