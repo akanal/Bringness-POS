@@ -191,3 +191,24 @@ try{
  await d.getElementById('tradePay').onclick();assert.equal(merchantSales.length,1);assert.equal(merchantSales[0].recipient.merchantId,merchantId);assert.equal(merchantSales[0].recipient.merchantNumber,undefined);
  console.log('Merchant UI passed: server number read-only, persistent create replay after reload, changed-address guard, stable update and recipient ID on checkout.');
 }finally{merchantReload.close();}
+
+// Merchant catalogue starts closed; filtering and folder changes keep the sale intact.
+const categoriesWindow=fixture();
+categoriesWindow.eval('data.categories='+JSON.stringify([{id:'food',restaurantId:rid,name:'Speisen <img src=x>'},{id:'drinks',restaurantId:rid,name:'Getränke'},{id:'foreign',restaurantId:'other',name:'Fremd'}])+';data.products='+JSON.stringify([{id:pid,restaurantId:rid,categoryId:'food',name:'Brot'},{id:'water',restaurantId:rid,categoryId:'drinks',name:'Wasser'},{id:'legacy',restaurantId:rid,categoryId:'gone',name:'Altartikel'},{id:'other',restaurantId:'other',categoryId:'foreign',name:'Fremd'}]));
+categoriesWindow.api=async path=>path.startsWith('/trade/settings?')?{enabled:true}:path.startsWith('/trade/prices?')?{tiers}:{};
+try{
+ await categoriesWindow.renderTradeModule();const d=categoriesWindow.document;
+ const folders=()=>[...d.querySelectorAll('.trade-category')];
+ assert.equal(folders().length,3);assert.equal(folders().filter(f=>f.open).length,0);
+ assert.equal(d.querySelector('#tradeProducts img'),null);assert(!d.querySelector('#tradeProducts').textContent.includes('Fremd'));
+ folders()[0].querySelector('summary').click();assert(folders()[0].open);
+ d.querySelector('[data-add]').click();const total=d.getElementById('tradeTotal').textContent;assert.match(total,/2,50/);
+ folders()[1].querySelector('summary').click();assert(!folders()[0].open);assert(folders()[1].open);
+ folders()[1].querySelector('summary').click();assert.equal(folders().filter(f=>f.open).length,0);
+ const search=d.getElementById('tradeSearch');search.value='wasser';search.oninput();assert.equal(folders().length,1);assert.match(folders()[0].textContent,/Wasser/);
+ search.value='missing';search.oninput();assert.match(d.getElementById('tradeProducts').textContent,/Keine passenden/);
+ search.value='';search.oninput();assert.equal(folders().length,3);assert.equal(d.getElementById('tradeTotal').textContent,total);
+ assert.match(folders()[2].querySelector('summary').textContent,/Ohne Kategorie/);
+ await categoriesWindow.renderTradeModule();assert.equal(folders().filter(f=>f.open).length,0);
+ console.log('Trade categories passed: closed initial folders, exclusive toggle, escaped tenant-scoped groups, orphan access, search and preserved sale.');
+}finally{categoriesWindow.close();}

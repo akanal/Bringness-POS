@@ -58,3 +58,11 @@
 @media(max-width:520px){.trade-issued-invoice[open]{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto auto minmax(0,1fr)}.trade-issued-invoice>[data-cancellation-review]{grid-column:1/-1}.trade-issued-invoice>iframe{grid-row:5}}
 
 .trade-invoice-sheet .trade-deposit-line td{font-size:11px;padding-top:3px;padding-bottom:3px;font-weight:400}
+
+/* Merchant catalogue: one compact category open at a time. */
+#tradeProducts .trade-category{margin:7px 0;border:1px solid #dce5ee;border-radius:8px;overflow:hidden}
+#tradeProducts .trade-category>summary{padding:10px;cursor:pointer;font-weight:700;overflow-wrap:anywhere}
+#tradeProducts .trade-category>summary:focus-visible{outline:2px solid #193e36;outline-offset:-3px}
+#tradeProducts .trade-category-count{font-weight:400;color:#596d7c}
+#tradeProducts .trade-category-products{padding:0 10px 6px}
+#tradeProducts .trade-product>span{min-width:0;overflow-wrap:anywhere}
