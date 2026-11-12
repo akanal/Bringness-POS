@@ -15,7 +15,7 @@ try{
   CREATE TABLE company_entitlements(id uuid PRIMARY KEY,company_id uuid,plan_id uuid,status text,purchased_at timestamptz DEFAULT now(),created_at timestamptz DEFAULT now());
   CREATE TABLE devices(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid,device_key text UNIQUE,name text,platform text,app_version text,status text,last_seen_at timestamptz,entitlement_id uuid);
   CREATE TABLE software_releases(id uuid PRIMARY KEY,version text,active boolean,platform text,channel text,created_at timestamptz DEFAULT now());
-  CREATE TABLE audit_log(company_id uuid,actor_user_id uuid,event_type text,entity_type text,entity_id uuid,payload jsonb);`);
+  CREATE TABLE audit_log(company_id uuid,actor_user_id uuid,event_type text,entity_type text,entity_id text,payload jsonb);`);
  const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.rowCount??r.affectedRows??r.rows.length};};
  const pool={query,connect:async()=>({query,release(){}})};
  await migrateDeviceLicense(pool);await migrateDeviceLicense(pool);

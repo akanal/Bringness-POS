@@ -152,6 +152,12 @@ jobs:
           node server/ai-tests/waiter-draft.mjs
           node server/ai-tests/waiter-push.mjs
           node server/ai-tests/waiter-signal.mjs
+      - name: Verify waiter recovery against the actual foundation schema
+        run: node server/ai-tests/waiter-recovery-schema.mjs
+      - name: Verify atomic and competing waiter recovery on PostgreSQL 16
+        run: node server/ai-tests/waiter-recovery-schema.mjs
+        env:
+          WAITER_RECOVERY_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - name: Verify guest pickup, billing and simulated fiscal providers
         run: |
           node server/ai-tests/pickup-notify.mjs
