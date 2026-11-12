@@ -76,6 +76,7 @@ return async function handlePaymentCheckout(req, res) {
   const trade=body.salesMode==='trade';let recipient=null;
   if(body.salesMode!=null&&!['retail','trade'].includes(body.salesMode)){send(res,400,{error:'Ungültiger Verkaufsmodus'});return true;}
   if(trade){try{recipient=tradeRecipient(body.recipient)}catch(e){send(res,400,{error:e.message});return true;}}
+  if(body.tradeDiscountMode!==undefined&&(!trade||!['quantity','percent'].includes(body.tradeDiscountMode))){send(res,400,{error:'Ungültige Händlerrabattart'});return true;}
   let discount;try{discount=normalizeDiscount(body.discount)}catch(e){send(res,400,{error:e.message});return true;}
   let depositReturns=[];if(body.depositReturns!=null){if(!Array.isArray(body.depositReturns)||!body.depositReturns.length||body.depositReturns.length>100||body.depositReturns.some(i=>!i||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(i.lineId||'')||!Number.isSafeInteger(i.qty)||i.qty<1||i.qty>9999999)||new Set(body.depositReturns.map(i=>i.lineId)).size!==body.depositReturns.length||typeof body.depositReturnReason!=='string'||!body.depositReturnReason.trim()||body.depositReturnReason.length>300||/[\x00-\x1f\x7f]/.test(body.depositReturnReason)||!Number.isSafeInteger(body.depositCreditCents)||body.depositCreditCents<=0){send(res,400,{error:'Ungültige Pfandverrechnung'});return true;}depositReturns=body.depositReturns.map(i=>({lineId:i.lineId,qty:i.qty})).sort((a,b)=>a.lineId.localeCompare(b.lineId));}
   const parked=body.parkedBonId!=null;
@@ -122,7 +123,7 @@ return async function handlePaymentCheckout(req, res) {
   const canonicalItems=items.map(item=>({productId:item.productId.toLowerCase(),qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId));
   if(new Set(canonicalItems.map(item=>item.productId)).size!==canonicalItems.length){send(res,400,{error:'Doppelte Artikelkennung'});return true;}
   const canonicalPayments=payments.map(p=>({method:p.method,amountCents:p.amountCents}));
-  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail,...(trade?{salesMode:'trade',recipient}: {}),...(discount?{discount}:{}),...(depositReturns.length?{depositReturns,depositReturnReason:body.depositReturnReason.trim(),depositCreditCents:body.depositCreditCents}:{}),...(parked?{parkedBonId:body.parkedBonId,parkedBonVersion:body.parkedBonVersion}:{})})).digest('hex');
+  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail,...(trade?{salesMode:'trade',recipient,...(body.tradeDiscountMode!==undefined?{tradeDiscountMode:body.tradeDiscountMode}:{})}: {}),...(discount?{discount}:{}),...(depositReturns.length?{depositReturns,depositReturnReason:body.depositReturnReason.trim(),depositCreditCents:body.depositCreditCents}:{}),...(parked?{parkedBonId:body.parkedBonId,parkedBonVersion:body.parkedBonVersion}:{})})).digest('hex');
   const client=await pool.connect();
   const reject=(status,message)=>{throw Object.assign(Error(message),{status});};
   try{
@@ -136,7 +137,7 @@ return async function handlePaymentCheckout(req, res) {
       if(previous.fingerprint!==fingerprint)reject(409,'Zahlungskennung bereits für andere Daten verwendet. Ursprüngliche Zahlung abgleichen.');
       await client.query('COMMIT');send(res,200,{...previous.response,replayed:true});return true;
     }
-    if(trade&&!(await client.query('SELECT pos_trade_enabled FROM restaurants WHERE id=$1 AND company_id=$2',[restaurantId,actor.company_id])).rows[0]?.pos_trade_enabled)reject(409,'Händleroption ausgeschaltet. In den Einstellungen aktivieren; bei unklarem Zahlungsergebnis dieselbe Kennung abgleichen.');
+    let tradeMode='quantity';if(trade){const setting=(await client.query('SELECT pos_trade_enabled,pos_trade_discount_mode FROM restaurants WHERE id=$1 AND company_id=$2',[restaurantId,actor.company_id])).rows[0];if(!setting?.pos_trade_enabled)reject(409,'Händleroption ausgeschaltet. In den Einstellungen aktivieren; bei unklarem Zahlungsergebnis dieselbe Kennung abgleichen.');tradeMode=setting.pos_trade_discount_mode;if((body.tradeDiscountMode??'quantity')!==tradeMode)reject(400,'Rabattart wurde vom R.O. geändert. Händlerbetrag neu prüfen und erneut bestätigen.');if(discount&&(tradeMode!=='percent'||discount.kind!=='percent'))reject(400,'Die aktuelle Händlereinstellung erlaubt diesen zusätzlichen Rabatt nicht. Mengenrabatt und Prozentrabatt werden nicht kombiniert.');}
     if(trade&&recipient.merchantId){
       const merchant=(await client.query('SELECT merchant_number FROM pos_customers WHERE id=$1 AND restaurant_id=$2 AND merchant_number IS NOT NULL FOR SHARE',[recipient.merchantId,restaurantId])).rows[0];
       if(!merchant)reject(400,'Gespeicherten Händler mit Händlernummer auswählen.');
@@ -157,8 +158,8 @@ return async function handlePaymentCheckout(req, res) {
     const productMap=new Map(products.rows.map(p=>[p.id,p]));
     const cleanItems=[];let totalCents=0;
     for(const item of canonicalItems){
-      const product=productMap.get(item.productId),priceCents=Number(trade?tradePrice(tradeTiers.filter(t=>t.product_id===item.productId).map(t=>({minQty:t.min_qty,priceCents:t.price_cents})),item.qty):product?.price_cents),taxRate=Number(product?.tax_rate);
-      if(trade&&!priceCents)reject(400,'Kein Händlerpreis für diese Artikelmenge hinterlegt');
+      const product=productMap.get(item.productId),priceCents=Number(trade?tradePrice(tradeTiers.filter(t=>t.product_id===item.productId).map(t=>({minQty:t.min_qty,priceCents:t.price_cents})),item.qty,tradeMode):product?.price_cents),taxRate=Number(product?.tax_rate);
+      if(trade&&!priceCents)reject(400,tradeMode==='percent'?'Für den Prozentmodus fehlt ein Händler-Grundpreis ab Menge 1.':'Kein Händlerpreis für diese Artikelmenge hinterlegt');
       if(!product||!Number.isSafeInteger(priceCents)||priceCents<0||priceCents>2147483647||!Number.isFinite(taxRate)||taxRate<0||taxRate>100)reject(400,'Ungültiger Artikelpreis oder Steuersatz');
       totalCents+=priceCents*item.qty;cleanItems.push({product:{...product,price_cents:priceCents},qty:item.qty});
     }

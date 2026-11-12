@@ -2,8 +2,9 @@ import {tableWaiterAssignments} from '../table-waiter-assignments.js';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {JSDOM} from 'jsdom';
-import fs from 'node:fs';
+import fs from 'node:fs';import {correctWaiterDeposit} from '../waiter-deposit-correction.js';
 const db=new PGlite();await db.waitReady;
+await db.exec('CREATE TABLE pos_deposit_rules(product_id uuid,amount_cents integer,units integer);CREATE TABLE pos_deposit_lines(id uuid,order_id uuid,product_id uuid,quantity integer,returned_qty integer,unit_cents integer,tax_rate numeric,label text)');
 const user='00000000-0000-4000-8000-000000000001',employee='00000000-0000-4000-8000-000000000002',restaurant='00000000-0000-4000-8000-000000000003',company='00000000-0000-4000-8000-000000000004',table='00000000-0000-4000-8000-000000000005';
 await db.exec("CREATE TABLE employees(id uuid PRIMARY KEY,user_id uuid,restaurant_id uuid,active boolean,role text,duty_state text,stamp_pin_digits int);CREATE TABLE restaurants(id uuid,company_id uuid,name text,mode text);CREATE TABLE dining_tables(id uuid PRIMARY KEY,restaurant_id uuid,waiter_employee_ids uuid[] NOT NULL DEFAULT '{}',waiter_employee_id uuid,name text,area text,status text,sort_order int);CREATE TABLE orders(id uuid,table_id uuid,source text,status text,created_at timestamptz,total_cents int);CREATE TABLE products(id uuid,restaurant_id uuid,name text,price_cents int,active boolean,ai_stock_available boolean);CREATE TABLE waiter_push_subscriptions(user_id uuid,endpoint text,subscription jsonb);");
 await db.query("INSERT INTO employees VALUES($1,$2,$3,true,'waiter','off',4)",[employee,user,restaurant]);await db.query("INSERT INTO restaurants VALUES($1,$2,'Restaurant','restaurant')",[restaurant,company]);await db.query("INSERT INTO dining_tables(id,restaurant_id,waiter_employee_id,name,area,status,sort_order) VALUES($1,$2,$3,'Tisch 1','Saal','open',1)",[table,restaurant,employee]);await db.query("INSERT INTO orders VALUES(gen_random_uuid(),$1,'qr','open',now(),2500)",[table]);await db.query("INSERT INTO waiter_push_subscriptions VALUES($1,'https://push.example','{}')",[user]);
@@ -24,8 +25,8 @@ await featureCheck('/api/v1/waiter/bootstrap',async()=>{checks++;return null},{}
 const routes=['/api/v1/waiter/bootstrap','/api/v1/waiter/alerts','/api/v1/waiter/orders','/api/v1/waiter/orders/correct'].map(p=>lines.find(l=>l.startsWith('if(p==="'+p+'"')));
 routes.push(lines.find(l=>l.startsWith('if(/^\\/api\\/v1\\/waiter\\/tables')));
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-const handler=new AsyncFunction('req','res','p','u','pool','auth','currentUser','requireFeature','json','body',guard+'\n'+routes.join('\n'));
-async function request(path,b=null,as=user){const u=new URL('https://example'+path);let result;await handler({method:b?'POST':'GET'},{},u.pathname,u,pool,async()=>({id:as,company_id:company,role:'waiter',display_name:'Service'}),async()=>({id:as}),async()=>true,(_res,status,data)=>{result={...data,status}},async()=>b);return result}
+const handler=new AsyncFunction('req','res','p','u','pool','auth','currentUser','requireFeature','json','body','correctWaiterDeposit',guard+'\n'+routes.join('\n'));
+async function request(path,b=null,as=user){const u=new URL('https://example'+path);let result;await handler({method:b?'POST':'GET'},{},u.pathname,u,pool,async()=>({id:as,company_id:company,role:'waiter',display_name:'Service'}),async()=>({id:as}),async()=>true,(_res,status,data)=>{result={...data,status}},async()=>b,correctWaiterDeposit);return result}
 const off=await request('/api/v1/waiter/bootstrap');assert.equal(off.employee.duty_state,'off');assert.equal(off.tables.length,0);assert.equal(off.products.length,0);assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);assert.equal((await request('/api/v1/waiter/tables/'+table)).status,403);
 await db.query("UPDATE employees SET duty_state='working'");
 const working=await request('/api/v1/waiter/bootstrap');assert.equal(working.tables.length,1);assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);
