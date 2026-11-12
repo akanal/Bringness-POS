@@ -114,6 +114,12 @@ jobs:
         env:
           DEVICE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/offline-ui.mjs
+      - run: node server/ai-tests/service-team.mjs
+      - run: node server/ai-tests/service-team-ui.mjs
+      - name: Verify atomic table handovers and owner-approved shift swaps on PostgreSQL 16
+        run: node server/ai-tests/service-team.mjs
+        env:
+          TEAM_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/roster-auto.mjs
       - name: Verify concurrent roster approval on PostgreSQL 16
         run: node server/ai-tests/roster-auto.mjs
