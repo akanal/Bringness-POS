@@ -226,7 +226,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js?v=quiet-team-20261112"></script></body>');
         if (!html.includes('/personnel-report.js')) html = html.replace("</body>", '<script src="/personnel-report.js?v=20261012"></script></body>');
         if (!html.includes('/pos/ean-scanner.js')) html = html.replace('</body>', '<script src="/pos/ean-scanner.js?v=nav-pin-20261020"></script></body>');
-        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=time24-validation-20261021"></script></body>');
+        if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=personnel-complete-20261112"></script></body>');
         if (!html.includes('/pos/personnel.js')) html = html.replace("</body>", '<script src="/pos/personnel.js"></script></body>');
         if (!html.includes('/pos/desktop-profile.js')) html = html.replace("</body>", '<script src="/pos/desktop-profile.js"></script></body>');
       }
@@ -236,7 +236,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {
-        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js?v=standby-20261112"></script></body>');
+        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js?v=personnel-complete-20261112"></script></body>');
         if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js?v=standby-20261112"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
@@ -319,7 +319,7 @@ async function migrateWithRetry(){
   }
 }
 migrateWithRetry().then(()=>{
- if(appMode!=='ai'&&!isolatedPreview()){const propose=createRosterProposalWorker(platformGatewayPool);propose().catch(()=>console.error('Roster proposal worker unavailable'));setInterval(()=>propose().catch(()=>console.error('Roster proposal worker unavailable')),900000).unref();}
+ if(appMode!=='ai'&&!isolatedPreview()){const propose=createRosterProposalWorker(platformGatewayPool);propose().catch(()=>console.error('Roster proposal worker unavailable'));setInterval(()=>propose().catch(()=>console.error('Roster proposal worker unavailable')),60000).unref();}
  if(appMode!=='ai'&&!isolatedPreview()){const deliver=createWaiterDelivery(platformGatewayPool);setInterval(()=>deliver().catch(()=>console.error('Waiter delivery unavailable')),3000).unref();const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
 });
 

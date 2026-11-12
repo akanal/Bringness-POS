@@ -32,7 +32,8 @@ export function normalizeRosterPolicy(value){
  if(needs.some((a,i)=>needs.slice(i+1).some(b=>a.role===b.role&&a.weekday===b.weekday&&a.start===b.start&&a.end===b.end&&JSON.stringify(a.skills)===JSON.stringify(b.skills))))fail('Identische Besetzungszeiten und Qualifikationen bitte zusammenfassen.');
  const profiles=value.profiles.map(p=>{if(!rosterUuid(p.employeeId)||typeof p.enabled!=='boolean'||!Array.isArray(p.windows)||p.windows.length>21)fail('Mitarbeiter und Verfügbarkeit prüfen.');const windows=p.windows.map(row=>windowInput(row,1440));if(windows.some((a,i)=>windows.slice(i+1).some(b=>overlapWindows(a,b))))fail('Verfügbarkeitszeiten eines Mitarbeiters überschneiden sich.');return {employeeId:p.employeeId.toLowerCase(),enabled:p.enabled,skills:skills(p.skills||[]),windows};});
  if(new Set(profiles.map(p=>p.employeeId)).size!==profiles.length)fail('Mitarbeiterprofil doppelt.');if(value.enabled&&!needs.length)fail('Zuerst mindestens eine Besetzungszeit festlegen.');
- return {enabled:value.enabled,timezone:value.timezone,needs,profiles};
+ for(const field of ['automaticPublication','autoEnroll'])if(value[field]!==undefined&&typeof value[field]!=='boolean')fail('Planungsoption prüfen.');
+ return {enabled:value.enabled,timezone:value.timezone,needs,profiles,...(value.automaticPublication!==undefined?{automaticPublication:value.automaticPublication}:{}),...(value.autoEnroll!==undefined?{autoEnroll:value.autoEnroll}:{})};
 }
 const start=s=>Date.parse(s.starts_at??s.startsAt),end=s=>Date.parse(s.ends_at??s.endsAt);
 const intersect=(a,b)=>start(a)<end(b)&&start(b)<end(a);
@@ -41,7 +42,7 @@ export function assignmentProblem(person,slot,context,{manual=false}={}){
  const {policy,people,absences=[],existing=[],slots=[]}=context,a=start(slot),b=end(slot),zone=policy.timezone;
  if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a||(b-a)>8*3600000)return 'Dienstzeit ungültig oder länger als acht Stunden.';
  if(!person?.active||person.role!==slot.role)return 'Mitarbeiter ist nicht aktiv oder hat eine andere Rolle.';
- const profile=policy.profiles.find(p=>p.employeeId===person.id);
+ const profile=policy.profiles.find(p=>p.employeeId===person.id)||(policy.autoEnroll?{enabled:true,skills:[],windows:[...new Set(policy.needs.filter(n=>n.role===person.role).map(n=>n.weekday))].map(weekday=>({weekday,start:'00:00',end:'00:00'}))}:null);
  if(!manual&&(!profile?.enabled||!profile.windows.length))return 'Nicht für automatische Planung verfügbar.';
  if((slot.skills||[]).some(s=>!profile?.skills.includes(s)))return 'Benötigte Qualifikation fehlt.';
  if(profile?.windows.length){const day=localDay(a,zone);const allowed=profile.windows.some(w=>[day,addDays(day,-1)].some(date=>{if(weekday(date)!==w.weekday)return false;try{const bounds=weeklyInterval(date,w.start,w.end,zone);return start(bounds)<=a&&end(bounds)>=b}catch{return false}}));if(!allowed)return 'Außerhalb der hinterlegten Verfügbarkeit.';}

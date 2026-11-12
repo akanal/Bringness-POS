@@ -1,3 +1,4 @@
+import {enqueueMail} from './transactional-mail.js';
 import crypto from 'node:crypto';
 import {readJsonObject} from './http-body.js';
 import {normalizeRosterPolicy,makeRosterProposal,assignmentProblem,rosterContextHash,rosterUuid,rosterDate,weekday,addDays,localDay,localParts,zonedInstant,nextMonday} from './roster-auto-core.js';
@@ -48,11 +49,12 @@ async function loadContext(c,company,rid,week,{lock=false}={}){
 function checkWeek(week,zone,{future=true}={}){const today=localDay(Date.now(),zone);if(!rosterDate(week)||weekday(week)!==1||week>addDays(today,90)||(future&&week<today))fail('Für neue Vorschläge bitte einen zukünftigen Montag innerhalb der nächsten 90 Tage auswählen.');return week;}
 const getDraft=async(c,company,rid,id)=>{if(!rosterUuid(id))fail('Vorschlag ungültig.');const row=(await c.query('SELECT *,week::text AS week FROM roster_auto_drafts WHERE id=$1 AND company_id=$2 AND restaurant_id=$3 FOR UPDATE',[id,company,rid])).rows[0];if(!row)fail('Vorschlag nicht gefunden.',404);return row;};
 function revision(row,expected){if(!Number.isInteger(expected)||row.revision!==expected)fail('Der Vorschlag wurde geändert. Bitte neu laden.',409);if(row.state!=='draft')fail('Dieser Vorschlag wurde bereits freigegeben.',409);}
-async function generate(c,company,rid,week,who,{expectedRevision,skipExisting=false}={}){
- const config=await settings(c,company,rid);checkWeek(week,config.policy.timezone);if(!config.policy.enabled)fail('Automatische Vorschläge sind ausgeschaltet.',409);
- const old=(await c.query("SELECT * FROM roster_auto_drafts WHERE company_id=$1 AND restaurant_id=$2 AND week=$3 AND state='draft' FOR UPDATE",[company,rid,week])).rows[0];if(old&&skipExisting)return old;
+async function generate(c,company,rid,week,who,{expectedRevision,skipExisting=false,refresh=false,allowCurrent=false}={}){
+ const config=await settings(c,company,rid);checkWeek(week,config.policy.timezone,{future:!allowCurrent});if(!config.policy.enabled)fail('Automatische Vorschläge sind ausgeschaltet.',409);
+ const old=(await c.query("SELECT * FROM roster_auto_drafts WHERE company_id=$1 AND restaurant_id=$2 AND week=$3 AND state='draft' FOR UPDATE",[company,rid,week])).rows[0];if(old&&skipExisting&&!refresh)return old;
  const context=await loadContext(c,company,rid,week,{lock:true});
- if(!skipExisting&&(!Number.isInteger(expectedRevision)||expectedRevision!==(old?.revision||0)))fail('Vorschlagsstand wurde geändert. Bitte neu laden.',409);
+ if(refresh&&old&&old.context_hash===rosterContextHash(context)&&old.settings_version===context.version&&old.payload.slots.every(slot=>Date.parse(slot.startsAt)>Date.now()))return old;
+ if(!refresh&&!skipExisting&&(!Number.isInteger(expectedRevision)||expectedRevision!==(old?.revision||0)))fail('Vorschlagsstand wurde geändert. Bitte neu laden.',409);
  const payload=makeRosterProposal(context,week,{manualSlots:(old?.payload.slots||[]).filter(s=>s.edited===true)}),hash=rosterContextHash(context);
  const result=old?(await c.query('UPDATE roster_auto_drafts SET payload=$2,context_hash=$3,settings_version=$4,revision=revision+1 WHERE id=$1 RETURNING *,week::text AS week',[old.id,JSON.stringify(payload),hash,context.version])).rows[0]:(await c.query('INSERT INTO roster_auto_drafts(company_id,restaurant_id,week,settings_version,context_hash,payload,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *,week::text AS week',[company,rid,week,context.version,hash,JSON.stringify(payload),who||null])).rows[0];
  await event(c,company,rid,who,'proposal.generated',result.id,{week,revision:result.revision,openCount:payload.openCount});return result;
@@ -68,6 +70,27 @@ async function weekly(c,company,rid,who,source,sourceSchedule,slot,oldPattern){
  const row=(await c.query(`INSERT INTO roster_weekly_patterns(company_id,restaurant_id,source_key,source_base,source_schedule_id,employee_id,weekday,start_time,end_time,role,skills,from_date) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(company_id,restaurant_id,source_key) DO UPDATE SET employee_id=excluded.employee_id,weekday=excluded.weekday,start_time=excluded.start_time,end_time=excluded.end_time,role=excluded.role,skills=excluded.skills,from_date=excluded.from_date,until_date=NULL,active=true RETURNING id`,[company,rid,key,base,sourceSchedule||null,slot.employeeId,weekday(day),p.hour+':'+p.minute,q.hour+':'+q.minute,slot.role,JSON.stringify(slot.skills||[]),day])).rows[0];
  await bump(c,company,rid,who,config.policy);return {patternId:row.id,occurrence:day};
 }
+async function notifyScheduleChanges(c,company,rid,ids){
+ for(const id of ids){const row=(await c.query("SELECT s.id,s.planner_revision,s.starts_at,s.ends_at,u.email,e.display_name FROM waiter_schedules s JOIN employees e ON e.id=s.employee_id JOIN users u ON u.id=e.user_id WHERE s.id=$1 AND s.restaurant_id=$2 AND e.restaurant_id=$2 AND u.company_id=$3 AND u.status='active' AND e.active=true",[id,rid,company])).rows[0];if(!row)continue;
+ await enqueueMail(c,'roster-schedule:'+row.id+':'+row.planner_revision,row.email,{subject:'Bringness – dein Dienstplan wurde aktualisiert',text:'Hallo '+row.display_name+', dein Dienstplan wurde aktualisiert. Die aktuellen Zeiten findest du nach der Anmeldung in der Bringness-App unter Meine Dienstzeiten: https://bringness.de/service/'});
+ }
+}
+async function publishDraft(c,company,rid,who,draft,{acceptOpen=false,retainDraft=false}={}){
+ const context=await loadContext(c,company,rid,draft.week,{lock:true});if(draft.settings_version!==context.version||draft.context_hash!==rosterContextHash(context))fail('Planungsgrundlage geändert. Vorschlag zuerst aktualisieren.',409);
+  const payload=draft.payload;if(payload.issues?.length)fail('Zeitkonflikte in den Vorgaben zuerst korrigieren.',409);if(!Array.isArray(payload.slots)||payload.slots.length>400||new Set(payload.slots.map(s=>s.key)).size!==payload.slots.length)fail('Vorschlag ungültig.',409);
+  const accepted=[],ids=[];let open=0;
+  for(const slot of payload.slots){if(Date.parse(slot.startsAt)<=Date.now())fail('Ein Dienst hat bereits begonnen. Vorschlag zuerst aktualisieren.',409);if(!slot.employeeId){open++;continue;}
+   const problem=assignmentProblem(context.people.find(e=>e.id===slot.employeeId),slot,{...context,slots:accepted},{manual:slot.manual===true});if(problem)fail(problem,409);accepted.push(slot);
+  }
+  if(open&&acceptOpen!==true)fail('Offene Dienste ausdrücklich bestätigen oder zuerst besetzen.');
+  for(const slot of accepted){
+   let row;if(slot.replacesShiftId){const old=context.existing.find(s=>s.id===slot.replacesShiftId&&s.coverage_state==='open');if(!old)fail('Der zu ersetzende offene Dienst wurde verändert.',409);row=(await c.query("UPDATE waiter_schedules SET employee_id=$2,starts_at=$3,ends_at=$4,manual_lock=true,planner_revision=planner_revision+1,planner_origin='auto-approved',planner_company_id=$5,planner_key=$6,planner_pattern_id=$7,planner_occurrence=$8,planner_skills=$9,planner_role=$10,original_employee_id=NULL,coverage_state='planned' WHERE id=$1 RETURNING id",[old.id,slot.employeeId,slot.startsAt,slot.endsAt,company,slot.key,slot.patternId||null,slot.occurrence||null,JSON.stringify(slot.skills||[]),slot.role])).rows[0];await event(c,company,rid,who,'open-shift.replaced',old.id,{before:old,after:slot});}
+   else row=(await c.query("INSERT INTO waiter_schedules(employee_id,restaurant_id,starts_at,ends_at,note,recurrence,manual_lock,planner_origin,planner_company_id,planner_key,planner_pattern_id,planner_occurrence,planner_skills,planner_role) VALUES($1,$2,$3,$4,'Freigegebener Dienstplan','roster-approved',true,'auto-approved',$5,$6,$7,$8,$9,$10) RETURNING id",[slot.employeeId,rid,slot.startsAt,slot.endsAt,company,slot.key,slot.patternId||null,slot.occurrence||null,JSON.stringify(slot.skills||[]),slot.role])).rows[0];ids.push(row.id);
+  }
+  if(!retainDraft)await c.query("UPDATE roster_auto_drafts SET state='published',published_at=now(),revision=revision+1 WHERE id=$1",[draft.id]);await event(c,company,rid,who,retainDraft?'proposal.partially-published':'proposal.published',draft.id,{scheduleIds:ids,open,revision:draft.revision});await notifyScheduleChanges(c,company,rid,ids);return {draftId:draft.id,published:ids.length,open};
+
+}
+
 export function createRosterAuto(pool){return async(req,res)=>{
  const url=new URL(req.url,'http://local');if(url.pathname!=='/api/v1/roster-auto')return false;let c;
  try{
@@ -77,7 +100,7 @@ export function createRosterAuto(pool){return async(req,res)=>{
  const config=await settings(c,company,rid),week=b.week||nextMonday(Date.now(),config.policy.timezone);if(req.method==='GET')checkWeek(week,config.policy.timezone,{future:false});
  if(req.method==='GET'){
   const context=await loadContext(c,company,rid,week);const drafts=(await c.query('SELECT *,week::text AS week FROM roster_auto_drafts WHERE company_id=$1 AND restaurant_id=$2 AND week=$3 ORDER BY created_at DESC,id LIMIT 20',[company,rid,week])).rows;
-  await c.query('COMMIT');return send(res,200,{actorId:u.id,restaurantId:rid,week,...config,people:context.people,patterns:context.patterns,drafts,published:context.existing.filter(s=>Date.parse(s.ends_at)>Date.now()),serverTime:new Date().toISOString(),automaticPublication:false});
+  await c.query('COMMIT');return send(res,200,{actorId:u.id,restaurantId:rid,week,...config,people:context.people,patterns:context.patterns,drafts,published:context.existing.filter(s=>Date.parse(s.ends_at)>Date.now()),serverTime:new Date().toISOString(),automaticPublication:config.policy.automaticPublication===true});
  }
  if(!rosterUuid(b.requestId)||!['settings','generate','draft-slot','publish','edit-shift','pattern-stop'].includes(b.action))fail('Aktion oder Vorgangskennung fehlt.');
  const fingerprint=digest(JSON.stringify(stable(b))),prior=(await c.query('SELECT fingerprint,response FROM roster_auto_commands WHERE company_id=$1 AND restaurant_id=$2 AND request_id=$3',[company,rid,b.requestId])).rows[0];
@@ -103,18 +126,7 @@ export function createRosterAuto(pool){return async(req,res)=>{
   const fresh=await loadContext(c,company,rid,draft.week),payload={...draft.payload,slots:draft.payload.slots.map(s=>s.key===slot.key?edited:s)};payload.openCount=payload.slots.filter(s=>!s.employeeId||s.reason).length;
   const row=(await c.query('UPDATE roster_auto_drafts SET payload=$2,revision=revision+1,settings_version=$3,context_hash=$4 WHERE id=$1 RETURNING revision',[draft.id,JSON.stringify(payload),fresh.version,rosterContextHash(fresh)])).rows[0];await event(c,company,rid,u.id,'proposal.manual-change',draft.id,{key:slot.key,repeat:b.repeat,before:slot,after:edited});result={draftId:draft.id,revision:row.revision};
  }else if(b.action==='publish'){
-  const draft=await getDraft(c,company,rid,b.draftId);revision(draft,b.revision);const context=await loadContext(c,company,rid,draft.week,{lock:true});if(draft.settings_version!==context.version||draft.context_hash!==rosterContextHash(context))fail('Planungsgrundlage geändert. Vorschlag zuerst aktualisieren.',409);
-  const payload=draft.payload;if(payload.issues?.length)fail('Zeitkonflikte in den Vorgaben zuerst korrigieren.',409);if(!Array.isArray(payload.slots)||payload.slots.length>400||new Set(payload.slots.map(s=>s.key)).size!==payload.slots.length)fail('Vorschlag ungültig.',409);
-  const accepted=[],ids=[];let open=0;
-  for(const slot of payload.slots){if(Date.parse(slot.startsAt)<=Date.now())fail('Ein Dienst hat bereits begonnen. Vorschlag zuerst aktualisieren.',409);if(!slot.employeeId){open++;continue;}
-   const problem=assignmentProblem(context.people.find(e=>e.id===slot.employeeId),slot,{...context,slots:accepted},{manual:slot.manual===true});if(problem)fail(problem,409);accepted.push(slot);
-  }
-  if(open&&b.acceptOpen!==true)fail('Offene Dienste ausdrücklich bestätigen oder zuerst besetzen.');
-  for(const slot of accepted){
-   let row;if(slot.replacesShiftId){const old=context.existing.find(s=>s.id===slot.replacesShiftId&&s.coverage_state==='open');if(!old)fail('Der zu ersetzende offene Dienst wurde verändert.',409);row=(await c.query("UPDATE waiter_schedules SET employee_id=$2,starts_at=$3,ends_at=$4,manual_lock=true,planner_revision=planner_revision+1,planner_origin='auto-approved',planner_company_id=$5,planner_key=$6,planner_pattern_id=$7,planner_occurrence=$8,planner_skills=$9,planner_role=$10,original_employee_id=NULL,coverage_state='planned' WHERE id=$1 RETURNING id",[old.id,slot.employeeId,slot.startsAt,slot.endsAt,company,slot.key,slot.patternId||null,slot.occurrence||null,JSON.stringify(slot.skills||[]),slot.role])).rows[0];await event(c,company,rid,u.id,'open-shift.replaced',old.id,{before:old,after:slot});}
-   else row=(await c.query("INSERT INTO waiter_schedules(employee_id,restaurant_id,starts_at,ends_at,note,recurrence,manual_lock,planner_origin,planner_company_id,planner_key,planner_pattern_id,planner_occurrence,planner_skills,planner_role) VALUES($1,$2,$3,$4,'Freigegebener Dienstplan','roster-approved',true,'auto-approved',$5,$6,$7,$8,$9,$10) RETURNING id",[slot.employeeId,rid,slot.startsAt,slot.endsAt,company,slot.key,slot.patternId||null,slot.occurrence||null,JSON.stringify(slot.skills||[]),slot.role])).rows[0];ids.push(row.id);
-  }
-  await c.query("UPDATE roster_auto_drafts SET state='published',published_at=now(),revision=revision+1 WHERE id=$1",[draft.id]);await event(c,company,rid,u.id,'proposal.published',draft.id,{scheduleIds:ids,open,revision:draft.revision});result={draftId:draft.id,published:ids.length,open};
+  const draft=await getDraft(c,company,rid,b.draftId);revision(draft,b.revision);result=await publishDraft(c,company,rid,u.id,draft,{acceptOpen:b.acceptOpen});
  }else if(b.action==='edit-shift'){
   if(!rosterUuid(b.scheduleId)||!rosterUuid(b.employeeId)||!['once','weekly'].includes(b.repeat)||!Number.isInteger(b.revision))fail('Dienst, Mitarbeiter und Änderungsart prüfen.');
   const old=(await c.query('SELECT s.*,s.planner_occurrence::text AS planner_occurrence,e.role AS employee_role FROM waiter_schedules s JOIN employees e ON e.id=s.employee_id LEFT JOIN users u ON u.id=e.user_id WHERE s.id=$1 AND s.restaurant_id=$2 AND e.restaurant_id=$2 AND (e.user_id IS NULL OR u.company_id=$3) AND (s.planner_company_id IS NULL OR s.planner_company_id=$3) FOR UPDATE OF s',[b.scheduleId,rid,company])).rows[0];
@@ -124,7 +136,7 @@ export function createRosterAuto(pool){return async(req,res)=>{
   if(old.planner_pattern_id&&old.planner_occurrence)await c.query('INSERT INTO roster_pattern_exceptions(pattern_id,occurrence,schedule_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[old.planner_pattern_id,old.planner_occurrence,old.id]);
   const recurring=b.repeat==='weekly'?await weekly(c,company,rid,u.id,'shift:'+old.id,old.id,slot,old.planner_pattern_id):null;
   await c.query("UPDATE waiter_schedules SET employee_id=$2,starts_at=$3,ends_at=$4,note=$5,manual_lock=true,planner_revision=planner_revision+1,planner_origin='manual',planner_company_id=$6,planner_pattern_id=coalesce($7,planner_pattern_id),planner_occurrence=coalesce($8::date,planner_occurrence),original_employee_id=NULL,coverage_state='planned' WHERE id=$1",[old.id,slot.employeeId,slot.startsAt,slot.endsAt,b.note,company,recurring?.patternId||null,recurring?.occurrence||null]);
-  await event(c,company,rid,u.id,'schedule.manual-change',old.id,{before:old,after:slot,note:b.note,repeat:b.repeat,recurring});result={scheduleId:old.id,revision:old.planner_revision+1,repeat:b.repeat};
+  await event(c,company,rid,u.id,'schedule.manual-change',old.id,{before:old,after:slot,note:b.note,repeat:b.repeat,recurring});await notifyScheduleChanges(c,company,rid,[old.id]);result={scheduleId:old.id,revision:old.planner_revision+1,repeat:b.repeat};
  }else if(b.action==='pattern-stop'){
   if(b.version!==config.version||!rosterUuid(b.patternId))fail('Regelstand geändert. Bitte neu laden.',409);const changed=await c.query('UPDATE roster_weekly_patterns SET active=false WHERE company_id=$2 AND restaurant_id=$3 AND active=true AND source_base=(SELECT source_base FROM roster_weekly_patterns WHERE id=$1 AND company_id=$2 AND restaurant_id=$3) RETURNING id',[b.patternId,company,rid]);if(!changed.rowCount)fail('Regel nicht gefunden.',404);result=await bump(c,company,rid,u.id,config.policy);await event(c,company,rid,u.id,'pattern.stopped',b.patternId,{});
  }
@@ -133,7 +145,14 @@ export function createRosterAuto(pool){return async(req,res)=>{
 };}
 export function createRosterProposalWorker(pool){let busy=false;return async()=>{if(busy)return;busy=true;try{
  const rows=(await pool.query(`SELECT s.company_id,s.restaurant_id,s.policy FROM roster_auto_settings s JOIN restaurants r ON r.id=s.restaurant_id AND r.company_id=s.company_id WHERE s.policy->>'enabled'='true' AND EXISTS(SELECT 1 FROM users u WHERE u.company_id=s.company_id AND u.role IN ('owner','admin') AND u.status='active') AND EXISTS(SELECT 1 FROM company_features f WHERE f.company_id=s.company_id AND f.feature_code IN ('personnel','restaurant') AND f.status='active' AND (f.ends_at IS NULL OR f.ends_at>now() OR f.grace_until>now())) ORDER BY s.last_checked_at NULLS FIRST,s.updated_at,s.restaurant_id LIMIT 50`)).rows;
- for(const row of rows){for(let i=0;i<2;i++){const c=await pool.connect();try{await c.query('BEGIN');await allowed(c,row.company_id,row.restaurant_id,true);const config=await settings(c,row.company_id,row.restaurant_id);if(config.policy.enabled&&(await c.query("SELECT id FROM users WHERE company_id=$1 AND role IN ('owner','admin') AND status='active' FOR SHARE",[row.company_id])).rowCount){const week=addDays(nextMonday(Date.now(),config.policy.timezone),i*7);await generate(c,row.company_id,row.restaurant_id,week,null,{skipExisting:true});}await c.query('UPDATE roster_auto_settings SET last_checked_at=now() WHERE company_id=$1 AND restaurant_id=$2',[row.company_id,row.restaurant_id]);await c.query('COMMIT');}catch(error){await c.query('ROLLBACK').catch(()=>{});await c.query('UPDATE roster_auto_settings SET last_checked_at=now() WHERE company_id=$1 AND restaurant_id=$2',[row.company_id,row.restaurant_id]).catch(()=>{});console.error('Roster proposal check unavailable:',error.status||error.code||error.name);}finally{c.release();}}}
+ for(const row of rows){for(let i=0;i<(row.policy.automaticPublication?3:2);i++){const c=await pool.connect();try{await c.query('BEGIN');await allowed(c,row.company_id,row.restaurant_id,true);const config=await settings(c,row.company_id,row.restaurant_id);if(config.policy.enabled&&(await c.query("SELECT id FROM users WHERE company_id=$1 AND role IN ('owner','admin') AND status='active' FOR SHARE",[row.company_id])).rowCount){const automatic=config.policy.automaticPublication===true,today=localDay(Date.now(),config.policy.timezone),monday=addDays(today,-((weekday(today)+6)%7)),week=addDays(automatic?monday:nextMonday(Date.now(),config.policy.timezone),i*7);
+ const draft=await generate(c,row.company_id,row.restaurant_id,week,null,{skipExisting:true,refresh:automatic,allowCurrent:automatic});
+ if(automatic&&!draft.payload.issues?.length){
+ const ready=draft.payload.slots.filter(slot=>slot.employeeId&&!slot.reason),remaining=draft.payload.slots.filter(slot=>!slot.employeeId||slot.reason);
+ if(ready.length){await publishDraft(c,row.company_id,row.restaurant_id,null,{...draft,payload:{...draft.payload,slots:ready}},{retainDraft:remaining.length>0});
+ if(remaining.length){const context=await loadContext(c,row.company_id,row.restaurant_id,week,{lock:true}),payload=makeRosterProposal(context,week,{manualSlots:remaining.filter(slot=>slot.edited===true)});await c.query('UPDATE roster_auto_drafts SET payload=$2,context_hash=$3,settings_version=$4,revision=revision+1 WHERE id=$1',[draft.id,JSON.stringify(payload),rosterContextHash(context),context.version]);}
+ }
+ }}await c.query('UPDATE roster_auto_settings SET last_checked_at=now() WHERE company_id=$1 AND restaurant_id=$2',[row.company_id,row.restaurant_id]);await c.query('COMMIT');}catch(error){await c.query('ROLLBACK').catch(()=>{});await c.query('UPDATE roster_auto_settings SET last_checked_at=now() WHERE company_id=$1 AND restaurant_id=$2',[row.company_id,row.restaurant_id]).catch(()=>{});console.error('Roster proposal check unavailable:',error.status||error.code||error.name);}finally{c.release();}}}
  }finally{busy=false;}};}
 
 // Shared by explicit, operator-approved one-off shift exchanges.

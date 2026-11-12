@@ -48,3 +48,12 @@ test('weekly workload counts existing shifts across local day and calendar-week 
  const slot={key:'saturday',employeeId:a,startsAt:'2027-01-09T08:00Z',endsAt:'2027-01-09T16:00Z',role:'waiter',skills:[]};assert.match(assignmentProblem(c.people[0],slot,c,{manual:true}),/40 geplante Stunden/);
  slot.startsAt='2027-01-11T08:00Z';slot.endsAt='2027-01-11T16:00Z';assert.equal(assignmentProblem(c.people[0],slot,c,{manual:true}),null,'previous calendar week does not consume current week allowance');
 });
+
+
+test('explicit automatic enrollment includes newcomers but preserves profile exclusions and skills',()=>{
+ const c=context();c.policy.autoEnroll=true;c.policy.profiles=[];c.policy.needs[0].skills=[];
+ let result=makeRosterProposal(c,week,{now});assert.equal(result.openCount,0);assert(result.slots[0].employeeId);
+ c.policy.profiles=c.people.map(p=>({employeeId:p.id,enabled:false,skills:[],windows:[]}));assert(makeRosterProposal(c,week,{now}).openCount>0,'explicit exclusions beat automatic enrollment');
+ c.policy.profiles=[];c.policy.needs[0].skills=['barista'];assert(makeRosterProposal(c,week,{now}).openCount>0,'never invent a newcomer qualification');
+ assert.throws(()=>normalizeRosterPolicy({...c.policy,automaticPublication:'true'}));
+});
