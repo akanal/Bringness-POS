@@ -539,3 +539,23 @@ test('Service standby: white countdown, private alarm and automatic POS-duty tra
   assert(!calls.some(c=>c.method!=='GET'));assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });
+
+test('Service tables: repeated numbers identify the area in groups, basket, details and QR orders',{timeout:45000},async()=>{
+ const terrace='11111111-1111-4111-8111-111111111111',inside='22222222-2222-4222-8222-222222222222',bar='33333333-3333-4333-8333-333333333333',terrace2='44444444-4444-4444-8444-444444444444';
+ const tables=[{id:terrace,name:'1',area:'Terrasse',open_total_cents:1345},{id:inside,name:'1',area:'Innen',open_total_cents:0},{id:bar,name:'1',area:'Bar',open_total_cents:0},{id:terrace2,name:'Tisch 2',area:'Terrasse',open_total_cents:0}];const visits=[];
+ const f=await serviceAuthFixture(async(route,path)=>{
+  if(path==='/waiter/bootstrap')return serviceJson(route,{employee:{id:product,restaurant_id:restaurant,restaurant_name:'Fixture',duty_state:'working',stamp_pin_digits:4},tables,products:[{id:product,name:'Suppe',price_cents:500}]});
+  if(path==='/waiter/extras')return serviceJson(route,{extras:[]});
+  if(path==='/waiter/qr-orders')return serviceJson(route,{orders:[{id:'qr-fixture',table_id:bar,table_name:'1',status:'open',total_cents:100,items:[]}]});
+  if(path.startsWith('/waiter/tables/')){const id=path.split('/').at(-1);visits.push(id);return serviceJson(route,{table:{id,name:'1'},orders:[]});}
+  return serviceJson(route,{orders:[]});
+ },{signedIn:true});
+ try{
+  await f.page.locator('[data-table="'+bar+'"]').waitFor();assert.deepEqual(await f.page.locator('.table-area-title').allTextContents(),['Terrasse','Innen','Bar']);
+  for(const [id,area]of [[terrace,'Terrasse'],[inside,'Innen'],[bar,'Bar']])assert.equal(await f.page.locator('[data-table="'+id+'"] strong').textContent(),area+' · Tisch 1');
+  assert.equal(await f.page.locator('[data-table="'+terrace2+'"] strong').textContent(),'Terrasse · Tisch 2');
+  for(const width of [390,1280]){await f.page.setViewportSize({width,height:844});await f.page.locator('#tables').scrollIntoViewIfNeeded();assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await f.page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/waiter-table-areas-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}}
+  await f.page.locator('[data-step="1"]').click();await f.page.locator('[data-table="'+bar+'"]').click();await f.page.waitForFunction(()=>document.querySelector('#tableName').textContent==='Bar · Tisch 1');
+  assert.equal(visits[0],bar);assert.equal(await f.page.textContent('#selectedTable'),'Für Bar · Tisch 1');assert.equal(await f.page.locator('#qrOrders .row b').first().textContent(),'Bar · Tisch 1');assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
