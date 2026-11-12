@@ -36,16 +36,16 @@ async function loadContext(c,company,rid,week,{lock=false}={}){
  const linked=(await c.query(`SELECT e.id,e.display_name,e.role,(e.active AND u.status='active') active FROM employees e JOIN users u ON u.id=e.user_id WHERE e.restaurant_id=$1 AND u.company_id=$2 ORDER BY e.id LIMIT 101`+(lock?' FOR SHARE OF e,u':''),[rid,company])).rows;
  const local=(await c.query('SELECT e.id,e.display_name,e.role,e.active FROM employees e WHERE e.restaurant_id=$1 AND e.user_id IS NULL ORDER BY e.id LIMIT 101'+(lock?' FOR SHARE OF e':''),[rid])).rows;
  const people=[...linked,...local].sort((a,b)=>a.id.localeCompare(b.id));
- if(people.length>100)fail('Mehr als100 Mitarbeiter: Planung für diesen Betrieb zunächst manuell verwalten.',409);
+ if(people.length>100)fail('Mehr als 100 Mitarbeiter: Planung für diesen Betrieb zunächst manuell verwalten.',409);
  const existing=(await c.query(`SELECT s.*,s.planner_occurrence::text AS planner_occurrence FROM waiter_schedules s JOIN employees e ON e.id=s.employee_id LEFT JOIN users u ON u.id=e.user_id WHERE s.restaurant_id=$1 AND e.restaurant_id=$1 AND (e.user_id IS NULL OR u.company_id=$2) AND (s.planner_company_id IS NULL OR s.planner_company_id=$2) AND s.starts_at<$4::date AND s.ends_at>$3::date ORDER BY s.starts_at,s.id LIMIT 2001`+(lock?' FOR UPDATE OF s':''),[rid,company,from,to])).rows;
  const absences=(await c.query("SELECT * FROM staff_absences WHERE restaurant_id=$1 AND state='approved' AND starts_at<$3::date AND (ends_at IS NULL OR ends_at>$2::date) ORDER BY id LIMIT 2001",[rid,from,to])).rows;
  if(existing.length>2000||absences.length>2000)fail('Zu viele Dienste oder Abwesenheiten im Zeitraum. Bitte einen kleineren Betriebsteil planen.',409);
  const patterns=(await c.query('SELECT *,from_date::text AS from_date,until_date::text AS until_date FROM roster_weekly_patterns WHERE company_id=$1 AND restaurant_id=$2 AND active=true AND from_date<$4::date AND (until_date IS NULL OR until_date>=$3::date) ORDER BY id LIMIT 201',[company,rid,week,addDays(week,7)])).rows;
- if(patterns.length>200)fail('Mehr als200 feste Regeln: bitte zuerst nicht mehr benötigte Regeln beenden.',409);
+ if(patterns.length>200)fail('Mehr als 200 feste Regeln: bitte zuerst nicht mehr benötigte Regeln beenden.',409);
  const exceptions=(await c.query('SELECT x.pattern_id,p.source_base,x.occurrence::text AS occurrence FROM roster_pattern_exceptions x JOIN roster_weekly_patterns p ON p.id=x.pattern_id WHERE p.company_id=$1 AND p.restaurant_id=$2 AND x.occurrence>=$3::date AND x.occurrence<$4::date ORDER BY x.pattern_id,x.occurrence',[company,rid,week,addDays(week,7)])).rows;
  return {...config,people,existing,absences,patterns,exceptions};
 }
-function checkWeek(week,zone,{future=true}={}){const today=localDay(Date.now(),zone);if(!rosterDate(week)||weekday(week)!==1||week>addDays(today,90)||(future&&week<today))fail('Für neue Vorschläge bitte einen zukünftigen Montag innerhalb der nächsten90 Tage auswählen.');return week;}
+function checkWeek(week,zone,{future=true}={}){const today=localDay(Date.now(),zone);if(!rosterDate(week)||weekday(week)!==1||week>addDays(today,90)||(future&&week<today))fail('Für neue Vorschläge bitte einen zukünftigen Montag innerhalb der nächsten 90 Tage auswählen.');return week;}
 const getDraft=async(c,company,rid,id)=>{if(!rosterUuid(id))fail('Vorschlag ungültig.');const row=(await c.query('SELECT *,week::text AS week FROM roster_auto_drafts WHERE id=$1 AND company_id=$2 AND restaurant_id=$3 FOR UPDATE',[id,company,rid])).rows[0];if(!row)fail('Vorschlag nicht gefunden.',404);return row;};
 function revision(row,expected){if(!Number.isInteger(expected)||row.revision!==expected)fail('Der Vorschlag wurde geändert. Bitte neu laden.',409);if(row.state!=='draft')fail('Dieser Vorschlag wurde bereits freigegeben.',409);}
 async function generate(c,company,rid,week,who,{expectedRevision,skipExisting=false}={}){

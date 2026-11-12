@@ -26,9 +26,9 @@ function windowInput(row,maximum=480){if(!row||!Number.isInteger(row.weekday)||r
 function overlapWindows(a,b){const start=a.weekday*1440+minutes(a.start),end=start+((minutes(a.end)-minutes(a.start)+1440)%1440||1440),other=b.weekday*1440+minutes(b.start),otherEnd=other+((minutes(b.end)-minutes(b.start)+1440)%1440||1440);return [-10080,0,10080].some(n=>start<otherEnd+n&&end>other+n);}
 export function normalizeRosterPolicy(value){
  if(!value||typeof value.enabled!=='boolean'||typeof value.timezone!=='string'||value.timezone.length>80)fail('Planungsmodus und Zeitzone prüfen.');try{localParts(Date.now(),value.timezone)}catch{fail('Ungültige Betriebszeitzone.');}
- if(!Array.isArray(value.needs)||value.needs.length>40||!Array.isArray(value.profiles)||value.profiles.length>100)fail('Maximal40 Besetzungszeiten und100 Mitarbeiterprofile möglich.');
+ if(!Array.isArray(value.needs)||value.needs.length>40||!Array.isArray(value.profiles)||value.profiles.length>100)fail('Maximal 40 Besetzungszeiten und 100 Mitarbeiterprofile möglich.');
  const needs=value.needs.map(row=>{if(!rosterUuid(row.id)||!Number.isInteger(row.count)||row.count<1||row.count>20)fail('Besetzungskennung und Anzahl prüfen.');return {id:row.id.toLowerCase(),...windowInput(row),role:cleanText(row.role,40),count:row.count,skills:skills(row.skills||[])};});
- if(new Set(needs.map(n=>n.id)).size!==needs.length||needs.reduce((n,x)=>n+x.count,0)>200)fail('Doppelte Besetzungskennung oder mehr als200 Dienste je Woche.');
+ if(new Set(needs.map(n=>n.id)).size!==needs.length||needs.reduce((n,x)=>n+x.count,0)>200)fail('Doppelte Besetzungskennung oder mehr als 200 Dienste je Woche.');
  if(needs.some((a,i)=>needs.slice(i+1).some(b=>a.role===b.role&&a.weekday===b.weekday&&a.start===b.start&&a.end===b.end&&JSON.stringify(a.skills)===JSON.stringify(b.skills))))fail('Identische Besetzungszeiten und Qualifikationen bitte zusammenfassen.');
  const profiles=value.profiles.map(p=>{if(!rosterUuid(p.employeeId)||typeof p.enabled!=='boolean'||!Array.isArray(p.windows)||p.windows.length>21)fail('Mitarbeiter und Verfügbarkeit prüfen.');const windows=p.windows.map(row=>windowInput(row,1440));if(windows.some((a,i)=>windows.slice(i+1).some(b=>overlapWindows(a,b))))fail('Verfügbarkeitszeiten eines Mitarbeiters überschneiden sich.');return {employeeId:p.employeeId.toLowerCase(),enabled:p.enabled,skills:skills(p.skills||[]),windows};});
  if(new Set(profiles.map(p=>p.employeeId)).size!==profiles.length)fail('Mitarbeiterprofil doppelt.');if(value.enabled&&!needs.length)fail('Zuerst mindestens eine Besetzungszeit festlegen.');
@@ -57,7 +57,7 @@ export function assignmentProblem(person,slot,context,{manual=false}={}){
  for(let monday=addDays(localDay(a,zone),-((weekday(localDay(a,zone))+6)%7)),last=localDay(b-1,zone);monday<=last;monday=addDays(monday,7)){
   const lo=Date.parse(zonedInstant(monday,'00:00',zone)),hi=Date.parse(zonedInstant(addDays(monday,7),'00:00',zone));
   const hours=others.reduce((n,s)=>n+Math.max(0,Math.min(end(s),hi)-Math.max(start(s),lo)),Math.max(0,Math.min(b,hi)-Math.max(a,lo)))/3600000;
-  if(hours>40+1e-9)return 'Mehr als40 geplante Stunden in der Kalenderwoche.';
+  if(hours>40+1e-9)return 'Mehr als 40 geplante Stunden in der Kalenderwoche.';
  }
  return null;
 }

@@ -42,3 +42,9 @@ test('permanent manual patterns yield proposals, exceptions stop one occurrence 
 });
 
 test('one multi-qualified published employee cannot cover two simultaneous staffing requirements',()=>{const c=context();c.policy.needs=[{...c.policy.needs[0],skills:['barista']},{...c.policy.needs[0],id:b,skills:['bar']}];c.policy.profiles[0].skills=['bar','barista'];c.policy.profiles[1].skills=['barista'];c.existing=[{id:'published',employee_id:a,starts_at:'2027-01-04T08:00Z',ends_at:'2027-01-04T16:00Z',coverage_state:'planned'}];const p=makeRosterProposal(c,week,{now});assert.equal(p.slots.length,1);assert.equal(p.slots[0].employeeId,b);});
+
+test('weekly workload counts existing shifts across local day and calendar-week boundaries',()=>{
+ const c=context();c.policy.profiles[0].windows=[];c.existing=Array.from({length:5},(_,i)=>({id:'day-'+i,employee_id:a,starts_at:'2027-01-'+String(4+i).padStart(2,'0')+'T08:00Z',ends_at:'2027-01-'+String(4+i).padStart(2,'0')+'T16:00Z',coverage_state:'planned'}));
+ const slot={key:'saturday',employeeId:a,startsAt:'2027-01-09T08:00Z',endsAt:'2027-01-09T16:00Z',role:'waiter',skills:[]};assert.match(assignmentProblem(c.people[0],slot,c,{manual:true}),/40 geplante Stunden/);
+ slot.startsAt='2027-01-11T08:00Z';slot.endsAt='2027-01-11T16:00Z';assert.equal(assignmentProblem(c.people[0],slot,c,{manual:true}),null,'previous calendar week does not consume current week allowance');
+});
