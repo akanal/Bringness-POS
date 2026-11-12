@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 export async function verifyDepositFlow({send,query,restaurant,product,token,unlock,request,setFail}){
+ const settings=(await send('/trade/settings?restaurantId='+restaurant)).body;assert.equal((await send('/trade/settings','PUT',{restaurantId:restaurant,enabled:true,discountMode:'percent',version:settings.version},token,unlock)).status,200);request={...request,tradeDiscountMode:'percent'};
  const rid=restaurant,rules={restaurantId:rid,productId:product,amountCents:25,units:24,label:'Flasche im Kasten',taxRate:19};
  assert.equal((await send('/deposit/rules','PUT',rules)).status,200);assert.equal((await send('/deposit/rules','PUT',rules,'invalid-session')).status,401);
  assert.equal((await send('/deposit/rules','PUT',rules,token,unlock)).status,200);const actor=(await query('SELECT user_id FROM sessions WHERE token_hash=$1',[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];await query("UPDATE users SET role='manager' WHERE id=$1",[actor.user_id]);assert.equal((await send('/deposit/rules','PUT',rules,token)).status,403);await query("UPDATE users SET role='owner' WHERE id=$1",[actor.user_id]);

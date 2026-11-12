@@ -103,6 +103,8 @@ jobs:
           node server/ai-tests/personnel.mjs
           node server/ai-tests/personnel-service.mjs
           node server/ai-tests/table-waiters.mjs
+          node server/ai-tests/deposit-trade-mode.mjs
+          node server/ai-tests/deposit-trade-mode-ui.mjs
           node server/ai-tests/waiter-workflow.mjs
           node server/ai-tests/pickup-notify.mjs
           node server/ai-tests/qr-guest-push.mjs
