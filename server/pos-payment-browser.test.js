@@ -428,7 +428,7 @@ async function serviceAuthFixture(onApi,{fragment='',signedIn=false}={}){
   const path=new URL(route.request().url()).pathname;
   if(path==='/service/')return route.fulfill({contentType:'text/html',body:document});
   if(path==='/service/app.js')return route.fulfill({contentType:'text/javascript',body:script});
-  if(path==='/service/standby.js'||path==='/service/standby.css')return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:await readFile(new URL('../apps/web/public'+path,import.meta.url),'utf8')});
+  if(['/service/standby.js','/service/standby.css','/service/team.js','/service/team.css'].includes(path))return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:await readFile(new URL('../apps/web/public'+path,import.meta.url),'utf8')});
   if(path.startsWith('/api/v1/'))return onApi(route,path.slice('/api/v1'.length));
   return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:''});
  });
