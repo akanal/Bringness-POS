@@ -434,7 +434,7 @@ async function serviceAuthFixture(onApi,{fragment='',signedIn=false}={}){
  await page.goto('https://service-auth.test/service/'+fragment);return {browser,page,errors};
 }
 const serviceJson=(route,body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
-for(const kind of ['password','pin'])test('Service auth: '+kind+' reset shows success after a delayed native submit',async()=>{
+for(const kind of ['password','pin'])test('Service auth: '+kind+' reset shows success after a delayed native submit',{timeout:45000},async()=>{
  const capability='a'.repeat(64),value=kind==='pin'?'5678':'NewServicePass2!',requests=[];let release,entered;
  const gate=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
  const f=await serviceAuthFixture(async(route,path)=>{
@@ -446,15 +446,15 @@ for(const kind of ['password','pin'])test('Service auth: '+kind+' reset shows su
   await f.page.waitForFunction(()=>typeof document.querySelector('#resetForm').onsubmit==='function');
   assert.equal(await f.page.evaluate(()=>location.hash),'');
   await f.page.fill('#resetValue',value);await f.page.fill('#resetConfirm',value);
-  await f.page.click('#resetForm button');await started;
-  assert.equal(await f.page.isDisabled('#resetForm button'),true);assert.equal(await f.page.inputValue('#resetValue'),value);
+  await f.page.click('#resetForm button.primary');await started;
+  assert.equal(await f.page.isDisabled('#resetForm button.primary'),true);assert.equal(await f.page.inputValue('#resetValue'),value);
   release();await f.page.waitForFunction(()=>document.querySelector('#resetForm').hidden&&document.querySelector('#resetMsg').textContent.includes('Gespeichert'));
   assert.equal(await f.page.inputValue('#resetValue'),'');assert.equal(await f.page.inputValue('#resetConfirm'),'');
   assert.equal(requests.length,1);assert.deepEqual(requests[0],{token:capability,value,confirm:value});
   await f.page.click('#reset a');assert.equal(await f.page.isVisible('#login'),true);assert.deepEqual(f.errors,[]);
  }finally{release();await f.browser.close();}
 });
-test('Service auth: rejected reset retains values and retries the original link',async()=>{
+test('Service auth: rejected reset retains values and retries the original link',{timeout:45000},async()=>{
  const capability='b'.repeat(64),requests=[];
  const f=await serviceAuthFixture(async(route)=>{
   const body=route.request().postDataJSON();if(body.inspect)return serviceJson(route,{kind:'password'});requests.push(body);
@@ -462,14 +462,14 @@ test('Service auth: rejected reset retains values and retries the original link'
  },{fragment:'#reset='+capability});
  try{
   await f.page.waitForFunction(()=>typeof document.querySelector('#resetForm').onsubmit==='function');
-  await f.page.fill('#resetValue','ServicePass2!');await f.page.fill('#resetConfirm','ServicePass2!');await f.page.click('#resetForm button');
-  await f.page.waitForFunction(()=>document.querySelector('#resetMsg').textContent==='Bitte Passwort prüfen'&&!document.querySelector('#resetForm button').disabled);
+  await f.page.fill('#resetValue','ServicePass2!');await f.page.fill('#resetConfirm','ServicePass2!');await f.page.click('#resetForm button.primary');
+  await f.page.waitForFunction(()=>document.querySelector('#resetMsg').textContent==='Bitte Passwort prüfen'&&!document.querySelector('#resetForm button.primary').disabled);
   assert.equal(await f.page.inputValue('#resetValue'),'ServicePass2!');assert.equal(await f.page.isVisible('#resetForm'),true);
-  await f.page.click('#resetForm button');await f.page.waitForFunction(()=>document.querySelector('#resetForm').hidden);
+  await f.page.click('#resetForm button.primary');await f.page.waitForFunction(()=>document.querySelector('#resetForm').hidden);
   assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });
-test('Service auth: two-step activation clears fields and offers login after a native submit',async()=>{
+test('Service auth: two-step activation clears fields and offers login after a native submit',{timeout:45000},async()=>{
  let confirmed=0;
  const f=await serviceAuthFixture(async(route,path)=>{
   if(path==='/staff/invitation')return serviceJson(route,{state:'pending'});
@@ -485,7 +485,7 @@ test('Service auth: two-step activation clears fields and offers login after a n
   assert.equal(await f.page.isVisible('#activationMessage + a'),true);assert.equal(confirmed,1);assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });
-test('Service auth: required password change clears fields and reloads service after native submit',async()=>{
+test('Service auth: required password change clears fields and reloads service after native submit',{timeout:45000},async()=>{
  let changed=false,changes=0;
  const f=await serviceAuthFixture(async(route,path)=>{
   if(path==='/profile/password'){changes++;changed=true;return serviceJson(route,{message:'Passwort geändert.'});}
@@ -494,7 +494,7 @@ test('Service auth: required password change clears fields and reloads service a
  },{signedIn:true});
  try{
   await f.page.waitForFunction(()=>!document.querySelector('#passwordBox').hidden);
-  await f.page.fill('#oldPassword','OldServicePass1!');await f.page.fill('#newPassword','NewServicePass2!');await f.page.click('#passwordForm button');
+  await f.page.fill('#oldPassword','OldServicePass1!');await f.page.fill('#newPassword','NewServicePass2!');await f.page.click('#passwordForm button.primary');
   await f.page.waitForFunction(()=>!document.querySelector('#app').hidden);
   assert.equal(await f.page.inputValue('#oldPassword'),'');assert.equal(await f.page.inputValue('#newPassword'),'');
   assert.equal(await f.page.textContent('#passwordMsg'),'');assert.equal(changes,1);assert.deepEqual(f.errors,[]);

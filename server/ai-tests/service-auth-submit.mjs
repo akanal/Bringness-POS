@@ -18,7 +18,7 @@ for(const kind of ['password','pin']){
   const form=w.document.getElementById('resetForm'),value=kind==='pin'?'5678':'NewServicePass2!';
   w.document.getElementById('resetValue').value=value;w.document.getElementById('resetConfirm').value=value;
   const event=new w.Event('submit',{bubbles:true,cancelable:true});form.dispatchEvent(event);await started;
-  assert.equal(event.currentTarget,null);assert.equal(form.querySelector('button').disabled,true);
+  assert.equal(event.currentTarget,null);assert.equal(form.querySelector('button.primary').disabled,true);
   release();await tick();await tick();
   assert.equal(form.hidden,true,w.document.getElementById('resetMsg').textContent);
   assert.match(w.document.getElementById('resetMsg').textContent,/Gespeichert/);
