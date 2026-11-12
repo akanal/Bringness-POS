@@ -66,3 +66,8 @@
 #tradeProducts .trade-category-count{font-weight:400;color:#596d7c}
 #tradeProducts .trade-category-products{padding:0 10px 6px}
 #tradeProducts .trade-product>span{min-width:0;overflow-wrap:anywhere}
+
+/* Owner-requested persistent discount switch directly below the trade products. */
+.trade-discount-control{margin:12px 0;padding:10px 0;border-top:1px solid #dce5ee}.trade-panel .trade-mode-switch{display:flex;align-items:center;gap:9px;position:relative;width:fit-content;max-width:100%;cursor:pointer}.trade-mode-switch input[role=switch]{position:absolute;width:44px;height:26px;left:0;opacity:0}.trade-switch-track{position:relative;flex:none;width:44px;height:26px;background:#596d7c;border-radius:20px}.trade-switch-track:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:white;border-radius:50%;transition:transform .15s}.trade-mode-switch input:checked+.trade-switch-track{background:#ff7921}.trade-mode-switch input:checked+.trade-switch-track:after{transform:translateX(18px)}.trade-mode-switch input:focus-visible+.trade-switch-track{outline:2px solid #193e36;outline-offset:3px}.trade-mode-switch:has(input:disabled){opacity:.55;cursor:default}.trade-discount-control [hidden]{display:none!important}.trade-discount-control .bn-sale-tools{margin:8px 0;padding:0;border:0}.trade-discount-control .bn-discount{display:flex;flex-wrap:wrap;align-items:end;gap:7px}.trade-discount-control .bn-discount label{max-width:140px}.trade-discount-control p{font-size:13px;margin:6px 0}
+
+.trade-panel #tradePriceEditor[hidden]{display:none!important}
