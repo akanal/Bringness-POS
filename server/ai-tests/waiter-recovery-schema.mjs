@@ -19,7 +19,7 @@ if(connectionString){
  db=new pg.Pool({connectionString,max:4,options:'-c search_path='+schema+',public -c statement_timeout=5000'});
 }else{db=new PGlite();await db.waitReady;}
 const query=async(sql,args)=>{
- if(!connectionString&&args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0};}
+ if(args===undefined&&sql.includes(';')){await (connectionString?db.query(sql):db.exec(sql));return {rows:[],rowCount:0};}
  const result=await db.query(sql,args);return {...result,rowCount:result.rowCount??result.affectedRows??result.rows.length};
 };
 let failAudit=false;
