@@ -611,3 +611,6 @@ For an authorized ten-point block, implement and verify all ten connected items 
 
 ## Händler-Schiebeschalter korrigiert — 12.11.2026
 Betreiber präzisiert: Rabattart als echten Schiebeschalter direkt unter der Produktliste im Händlerverkauf, nicht in Einstellungen/Händler. Prozentmodus blendet Mengenstaffeln aus und zeigt direkt die Prozenteingabe für den Warenwert. Vorhandene Pfand-Ausnahme und serverseitige PIN-/Rollen-/Versionsprüfung sowie dauerhafte Betriebswahl erhalten. Unbestätigte Zahlung sperrt Umschaltung. Händler-Aktivierung in Einstellungen bleibt separat erhalten.
+
+## Händler-Schalter im Preisbereich — 12.11.2026
+Neueste Betreiberpräzisierung: Schiebeschalter samt Prozentfeld innerhalb des aufklappbaren Bereichs „Händlerpreise verwalten“, nicht mehr separat davor. Im Prozentmodus nur die Mengenstaffelfelder ausblenden, den umschließenden Bereich samt Schalter sichtbar/erreichbar lassen. Persistenz, Berechnung und bestehende Schutzregeln unverändert.
