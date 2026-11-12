@@ -5,14 +5,15 @@ if(connectionString){const u=new URL(connectionString);assert(['localhost','127.
 const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await(connectionString?db.query(sql):db.exec(sql));return {rows:[],rowCount:0};}const r=await db.query(sql,args);return {...r,rowCount:r.rowCount??r.affectedRows??r.rows.length};};
 let failEvent=false;const wrap=c=>({query:async(sql,args)=>{if(failEvent&&sql.startsWith('INSERT INTO roster_auto_events')){failEvent=false;throw Object.assign(Error('Synthetic audit outage'),{code:'TEST_ROSTER_AUDIT'});}return c.query(sql,args);},release:()=>c.release()});
 const pool={query,connect:async()=>wrap(connectionString?await db.connect():{query,release(){}})},handler=createRosterAuto(pool);
-async function call(body,token='owner',method='POST',extra=''){
- const req=Readable.from(method==='POST'?[JSON.stringify(body)]:[]);Object.assign(req,{method,url:'/api/v1/roster-auto'+(method==='GET'?'?restaurantId='+body.restaurantId+'&week='+body.week+extra:''),headers:{authorization:'Bearer '+token}});let status,result;assert(await handler(req,{writeHead(s,h){status=s;assert.equal(h['cache-control'],'no-store');},end(raw){result=JSON.parse(raw)}}));return {status,...result};
+async function call(body,token='owner',method='POST',extra='',pin='pin-'+token){
+ const req=Readable.from(method==='POST'?[JSON.stringify(body)]:[]);Object.assign(req,{method,url:'/api/v1/roster-auto'+(method==='GET'?'?restaurantId='+body.restaurantId+'&week='+body.week+extra:''),headers:{authorization:'Bearer '+token,'x-personnel-unlock':pin}});let status,result;assert(await handler(req,{writeHead(s,h){status=s;assert.equal(h['cache-control'],'no-store');},end(raw){result=JSON.parse(raw)}}));return {status,...result};
 }
 try{
  let foundation=fs.readFileSync(new URL('../../db/schema.sql',import.meta.url),'utf8').replace('CREATE EXTENSION IF NOT EXISTS pgcrypto;','');await query(foundation);
  await query(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner',ADD COLUMN must_change_password boolean DEFAULT false;
  ALTER TABLE employees ADD COLUMN user_id uuid REFERENCES users(id),ADD COLUMN duty_state text DEFAULT 'off';
  CREATE TABLE sessions(token_hash text PRIMARY KEY,user_id uuid REFERENCES users(id),expires_at timestamptz);
+ CREATE TABLE personnel_unlocks(token_hash text PRIMARY KEY,session_hash text,user_id uuid REFERENCES users(id),expires_at timestamptz);
  CREATE TABLE company_features(company_id uuid,feature_code text,status text,ends_at timestamptz,grace_until timestamptz);
  CREATE TABLE waiter_schedules(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),employee_id uuid NOT NULL REFERENCES employees(id),restaurant_id uuid NOT NULL REFERENCES restaurants(id),starts_at timestamptz NOT NULL,ends_at timestamptz NOT NULL,note text,recurrence text);`);
  await migrateDutyPlanning(pool);await migrateRosterAuto(pool);await migrateRosterAuto(pool);
@@ -20,11 +21,13 @@ try{
  await query("INSERT INTO companies(id,name) VALUES($1,'Synthetic roster company'),($2,'Other company')",[company,otherCompany]);await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Synthetic restaurant'),($3,$4,'Other restaurant')",[restaurant,company,foreignRestaurant,otherCompany]);
  for(const [uid,cid,role,email]of [[owner,company,'owner','owner@example.test'],[staffUser,company,'waiter','staff@example.test'],[otherOwner,otherCompany,'owner','other@example.test']])await query('INSERT INTO users(id,company_id,email,password_hash,display_name,role) VALUES($1,$2,$3,\'synthetic\',\'Synthetic user\',$4)',[uid,cid,email,role]);
  for(const [uid,token]of [[owner,'owner'],[staffUser,'waiter'],[otherOwner,'other']])await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[sha(token),uid]);
+ for(const [uid,token]of [[owner,'owner'],[otherOwner,'other']])await query("INSERT INTO personnel_unlocks VALUES($1,$2,$3,now()+interval '3 minutes')",[sha('pin-'+token),sha(token),uid]);
  for(const cid of [company,otherCompany])await query("INSERT INTO company_features VALUES($1,'personnel','active',NULL,NULL)",[cid]);
  await query("INSERT INTO employees(id,restaurant_id,display_name,role,user_id) VALUES($1,$2,'A','waiter',$3),($4,$2,'B','waiter',NULL),($5,$2,'Cook','cook',NULL)",[a,restaurant,staffUser,b,cook]);
  const week=nextMonday(Date.now(),'Europe/Berlin'),week2=addDays(week,7),base={restaurantId:restaurant,week};let serial=0;
  const command=(action,fields={})=>({...base,requestId:id(),action,...fields}),read=(period=week,token='owner',rid=restaurant)=>call({restaurantId:rid,week:period},token,'GET');
  assert.equal((await read(week,'bad')).status,401);assert.equal((await read(week,'waiter')).status,403);assert.equal((await read(week,'other')).status,404);
+ assert.equal((await call(base,'owner','GET','','')).status,403);assert.equal((await call(base,'owner','GET','','wrong')).status,403);
  let state=await read();assert.equal(state.status,200);assert.equal(state.version,0);assert.equal(state.policy.enabled,false);assert.equal(state.drafts.length,0);
  const policy={enabled:true,timezone:'Europe/Berlin',needs:[{id:need,weekday:1,start:'09:00',end:'17:00',role:'waiter',count:1,skills:['barista']}],profiles:[a,b].map(employeeId=>({employeeId,enabled:true,skills:['barista'],windows:[{weekday:1,start:'08:00',end:'18:00'}]}))};
  const settingsCommand=command('settings',{version:0,policy});let result=await call(settingsCommand);assert.equal(result.status,200,JSON.stringify(result));assert.equal(result.version,1);
@@ -71,6 +74,9 @@ try{
   const waiting=call(command('publish',{week:week2,draftId:draft.id,revision:draft.revision,acceptOpen:true}));await blocker.query('UPDATE roster_auto_settings SET version=version+1 WHERE restaurant_id=$1',[restaurant]);await blocker.query('COMMIT');blocker.release();const changed=await waiting;assert.equal(changed.status,409,JSON.stringify(changed));assert.equal((await query('SELECT * FROM waiter_schedules')).rowCount,beforeCount+results[0].published);
 
  }
+ // Administrative unlock remains bound to the current login and expires independently.
+ await query("UPDATE personnel_unlocks SET expires_at=now()-interval '1 second' WHERE user_id=$1",[owner]);assert.equal((await read()).status,403);assert.equal((await call(command('generate',{version:0,revision:0}))).status,403);await query("UPDATE personnel_unlocks SET expires_at=now()+interval '3 minutes' WHERE user_id=$1",[owner]);
+ assert.equal((await call(base,'owner','GET','','pin-other')).status,403);
  await assert.rejects(query("UPDATE roster_auto_events SET action='tampered'"),/unverändert/);await assert.rejects(query('TRUNCATE roster_auto_events'),/unverändert/);
  await query("UPDATE company_features SET status='inactive' WHERE company_id=$1",[company]);assert.equal((await read()).status,402);
  console.log('Automatic roster '+(connectionString?'PostgreSQL':'PGlite')+' passed: actual foundation, draft-only worker, owner/tenant/module scope, context invalidation, protected one-off/weekly choices, open-shift acknowledgement, audit rollback, replay and immutable events.');
