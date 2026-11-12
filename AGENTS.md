@@ -614,3 +614,6 @@ Betreiber präzisiert: Rabattart als echten Schiebeschalter direkt unter der Pro
 
 ## Händler-Schalter im Preisbereich — 12.11.2026
 Neueste Betreiberpräzisierung: Schiebeschalter samt Prozentfeld innerhalb des aufklappbaren Bereichs „Händlerpreise verwalten“, nicht mehr separat davor. Im Prozentmodus nur die Mengenstaffelfelder ausblenden, den umschließenden Bereich samt Schalter sichtbar/erreichbar lassen. Persistenz, Berechnung und bestehende Schutzregeln unverändert.
+
+## Händler-Prozentberechnung reparieren — 12.11.2026
+Betreiber meldet fehlende Berechnung im Prozentmodus. Prozenteingabe direkt auf Eingabe aktualisieren; kein gesondertes Übernehmen erforderlich. Ungültiger Prozentwert darf keine Zahlung mit vorherigem Rabatt auslösen. Fehlenden Händlergrundpreis explizit anzeigen und Zahlung sperren, nicht als0€ darstellen oder einen Ersatzpreis erfinden. Schalterposition in Händlerpreise verwalten und Pfandausnahme erhalten.
