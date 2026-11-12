@@ -84,6 +84,9 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           node --test server/billing-status.test.js server/personnel-report.test.js server/system-access.test.js server/displays.test.js server/center-core.test.js
           node server/ai-tests/duty-planning.mjs
+          node --test server/roster-auto-core.test.js
+          node server/ai-tests/roster-auto.mjs
+          node server/ai-tests/roster-auto-ui.mjs
           node server/ai-tests/pos-ean.mjs
           node server/ai-tests/pos-ean-offline.mjs
           node server/ai-tests/pos-ean-licensing.mjs

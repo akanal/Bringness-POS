@@ -57,9 +57,19 @@ try{
  await replanDuty(pool,restaurant);let row=(await query('SELECT * FROM waiter_schedules')).rows[0];assert.equal(row.employee_id,second);assert.equal(row.coverage_state,'open');
  const worker=createRosterProposalWorker(pool);await worker();await worker();assert.equal((await query("SELECT * FROM roster_auto_drafts WHERE week=$1 AND state='draft'",[week2])).rowCount,1);assert.equal((await query('SELECT * FROM waiter_schedules')).rowCount,1,'worker only drafts');
  state=await read(week2);draft=state.drafts.find(d=>d.state==='draft');assert(draft.payload.slots.some(s=>s.patternId&&s.startsAt===zonedInstant(week2,'10:00','Europe/Berlin')),'one-off edit must not change future weekly pattern');
+ // A future weekly change starts on its explicit date, preserving intervening weeks.
+ const thirdWeek=addDays(week,14);state=await read(thirdWeek);result=await call(command('generate',{week:thirdWeek,version:state.version,revision:0}));assert.equal(result.status,200,JSON.stringify(result));draft=result.draft;const fixed=draft.payload.slots.find(s=>s.patternId);assert(fixed);
+ result=await call(command('draft-slot',{week:thirdWeek,draftId:draft.id,revision:draft.revision,key:fixed.key,employeeId:second,date:thirdWeek,start:'12:00',endDate:thirdWeek,end:'16:00',repeat:'weekly'}));assert.equal(result.status,200,JSON.stringify(result));
+ state=await read(week2);draft=state.drafts.find(d=>d.state==='draft');result=await call(command('generate',{week:week2,version:state.version,revision:draft.revision}));assert.equal(result.status,200,JSON.stringify(result));assert(result.draft.payload.slots.some(s=>s.patternId&&s.startsAt===zonedInstant(week2,'10:00','Europe/Berlin')));
+ const fourth=addDays(week,21);state=await read(fourth);result=await call(command('generate',{week:fourth,version:state.version,revision:0}));assert.equal(result.status,200,JSON.stringify(result));assert(result.draft.payload.slots.some(s=>s.patternId&&s.startsAt===zonedInstant(fourth,'12:00','Europe/Berlin')));
  if(connectionString){
-  // Competing identical commands on independent connections commit once.
-  const third=addDays(week,14),s=await read(third),generate=command('generate',{week:third,version:s.version,revision:0});const results=await Promise.all([call(generate),call(generate)]);assert(results.every(r=>r.status===200));assert.equal(results.filter(r=>r.replayed).length,1);assert.equal((await query("SELECT * FROM roster_auto_drafts WHERE week=$1 AND state='draft'",[third])).rowCount,1);
+  // Independent connections racing to publish the exact reviewed draft commit once.
+  state=await read(fourth);draft=state.drafts.find(d=>d.state==='draft');const publish=command('publish',{week:fourth,draftId:draft.id,revision:draft.revision,acceptOpen:true}),beforeCount=(await query('SELECT * FROM waiter_schedules')).rowCount;
+  const results=await Promise.all([call(publish),call(publish)]);assert(results.every(r=>r.status===200),JSON.stringify(results));assert.equal(results.filter(r=>r.replayed).length,1);assert.equal((await query('SELECT * FROM waiter_schedules')).rowCount,beforeCount+results[0].published);
+  // A settings write committed while approval waits on the restaurant lock invalidates approval.
+  state=await read(week2);draft=state.drafts.find(d=>d.state==='draft');const blocker=await db.connect();await blocker.query('BEGIN');await blocker.query('SELECT id FROM restaurants WHERE id=$1 FOR UPDATE',[restaurant]);
+  const waiting=call(command('publish',{week:week2,draftId:draft.id,revision:draft.revision,acceptOpen:true}));await blocker.query('UPDATE roster_auto_settings SET version=version+1 WHERE restaurant_id=$1',[restaurant]);await blocker.query('COMMIT');blocker.release();const changed=await waiting;assert.equal(changed.status,409,JSON.stringify(changed));assert.equal((await query('SELECT * FROM waiter_schedules')).rowCount,beforeCount+results[0].published);
+
  }
  await assert.rejects(query("UPDATE roster_auto_events SET action='tampered'"),/unverändert/);await assert.rejects(query('TRUNCATE roster_auto_events'),/unverändert/);
  await query("UPDATE company_features SET status='inactive' WHERE company_id=$1",[company]);assert.equal((await read()).status,402);

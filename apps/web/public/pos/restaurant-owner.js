@@ -51,31 +51,18 @@ function localDateTime(date,time){
     }
   }
 
-  const mins=d=>d.getHours()*60+d.getMinutes();
-  const duration=(a,b)=>Math.round((b-a)/60000);
-  function sameWeeklyPattern(x,employeeId,start,end){
-    const xs=new Date(x.starts_at),xe=new Date(x.ends_at);
-    return String(x.employee_id)===String(employeeId)&&xs.getDay()===start.getDay()&&Math.abs(mins(xs)-mins(start))<=5&&Math.abs(duration(xs,xe)-duration(start,end))<=5;
-  }
-  async function extendRecognizedPattern(existing,payload,start,end){
-    const matches=existing.filter(x=>sameWeeklyPattern(x,payload.employeeId,start,end));
-    if(matches.length<2)return 0;
-    let created=0;
-    for(let week=1;week<=4;week++){
-      const s=new Date(start.getTime()+week*7*86400000),e=new Date(end.getTime()+week*7*86400000);
-      const duplicate=existing.some(x=>String(x.employee_id)===String(payload.employeeId)&&Math.abs(new Date(x.starts_at)-s)<5*60000);
-      if(duplicate)continue;
-      await api("/owner/schedules",{method:"POST",body:JSON.stringify({...payload,startsAt:s.toISOString(),endsAt:e.toISOString(),recurrence:"auto-weekly"})});
-      created++;
-    }
-    return created;
-  }
-
   async function renderShift(){
     const area=body();if(!area)return;const restaurantId=rid();
     const [waiters,presence,schedules]=await Promise.all([api("/personnel/employees?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/presence?restaurantId="+encodeURIComponent(restaurantId)),api("/owner/schedules?restaurantId="+encodeURIComponent(restaurantId))]);
+    if(!area.isConnected||rid()!==restaurantId||document.body.dataset.posView!=="dienstplan")return;
     const people=waiters.employees||[],activeIds=new Set(people.filter(x=>x.active).map(x=>x.id)),existing=schedules.schedules||[],upcoming=existing.filter(x=>activeIds.has(x.employee_id)&&Date.parse(x.ends_at)>Date.now());
-    area.innerHTML='<div class="modulegrid"><div class="modulecard"><b>Service-Anmeldungen</b><p class="muted">Login und Logout dokumentieren den Servicezugang. Arbeitszeiten werden separat in der Zeiterfassung gebucht.</p><div id="presenceList"></div></div><div class="modulecard"><b>Dienstplan</b><p class="muted">Schichten festlegen; Kellner sehen ihre kommenden Dienste beim Login. Wiederholt sich derselbe Wochentag mit derselben Uhrzeit mindestens dreimal, führt Bringness diesen Rhythmus automatisch für vier weitere Wochen fort.</p><form id="scheduleForm" style="display:grid;gap:8px"><select id="scheduleEmployee" required><option value="">Mitarbeiter wählen</option>'+people.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+'</option>').join("")+'</select><label>Beginn – Datum<input id="scheduleStartDate" type="date" required></label><label>Beginn – Uhrzeit<input id="scheduleStartTime" type="text" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" title="24-Stunden-Format, z. B. 09:00 oder 22:30" required></label><label>Ende – Datum<input id="scheduleEndDate" type="date" required></label><label>Ende – Uhrzeit<input id="scheduleEndTime" type="text" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" title="24-Stunden-Format, z. B. 09:00 oder 22:30" required></label><input id="scheduleNote" maxlength="300" placeholder="Hinweis, z. B. Terrasse"><button type="submit">Dienst eintragen</button></form></div></div><div class="modulecard" style="margin-top:12px"><b>Kommende Dienste</b><div id="scheduleList"></div></div>';
+    area.innerHTML='<div class="modulegrid"><div class="modulecard"><b>Service-Anmeldungen</b><p class="muted">Login und Logout dokumentieren den Servicezugang. Arbeitszeiten werden separat in der Zeiterfassung gebucht.</p><div id="presenceList"></div></div><div class="modulecard"><b>Dienstplan</b><p class="muted">Schichten festlegen; Kellner sehen ihre kommenden Dienste beim Login. Automatische Vorschläge werden erst nach deiner Freigabe zu Diensten. Einmalige und wöchentlich geltende Änderungen legst du ausdrücklich fest.</p><button type="button" id="openRosterAuto">Automatische Dienstplanung öffnen</button><p class="muted">Einzelnen Dienst direkt eintragen:</p><form id="scheduleForm" style="display:grid;gap:8px"><select id="scheduleEmployee" required><option value="">Mitarbeiter wählen</option>'+people.filter(x=>x.active).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+'</option>').join("")+'</select><label>Beginn – Datum<input id="scheduleStartDate" type="date" required></label><label>Beginn – Uhrzeit<input id="scheduleStartTime" type="text" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" title="24-Stunden-Format, z. B. 09:00 oder 22:30" required></label><label>Ende – Datum<input id="scheduleEndDate" type="date" required></label><label>Ende – Uhrzeit<input id="scheduleEndTime" type="text" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" title="24-Stunden-Format, z. B. 09:00 oder 22:30" required></label><input id="scheduleNote" maxlength="300" placeholder="Hinweis, z. B. Terrasse"><button type="submit">Dienst eintragen</button></form></div></div><div class="modulecard" style="margin-top:12px"><b>Kommende Dienste</b><div id="scheduleList"></div></div>';
+    document.getElementById("openRosterAuto").onclick=()=>{
+      area.replaceChildren();const back=document.createElement('button');back.type='button';back.textContent='← Zur Dienstübersicht';const frame=document.createElement('iframe');frame.id='rosterAutoFrame';frame.src='/pos/roster-auto.html?embedded=1&restaurantId='+encodeURIComponent(restaurantId);frame.title='Automatische Dienstplanung';frame.style.cssText='width:100%;height:1200px;border:0;display:block;margin-top:12px';area.append(back,frame);
+      const guard=()=>{if(!frame.isConnected)return true;let status;try{status=frame.contentWindow.rosterLeaveState?.();}catch{return false;}if(status?.busy||status?.pending){alert('Eine Dienstplan-Speicherung läuft noch oder ist unbestätigt. Bitte zuerst abschließen oder erneut abgleichen.');return false;}return !status?.dirty||confirm('Ungespeicherte Dienstplanänderungen verwerfen?');};window.bnRosterLeaveGuard=guard;
+      back.onclick=()=>{if(guard()){window.bnRosterLeaveGuard=null;renderShift().catch(e=>alert(e.message));}};
+      const leave=event=>{if(event.detail?.view!=='dienstplan'){if(window.bnRosterLeaveGuard===guard)window.bnRosterLeaveGuard=null;document.removeEventListener('bringness:pos-view',leave);}};document.addEventListener('bringness:pos-view',leave);
+    };
     document.getElementById("presenceList").innerHTML=(presence.presence||[]).filter(x=>activeIds.has(x.employee_id)&&!x.ended_at).map(x=>'<p><b>'+esc(x.display_name)+'</b> · '+new Date(x.started_at).toLocaleString("de-DE",{hourCycle:"h23"})+' – '+(x.ended_at?new Date(x.ended_at).toLocaleString("de-DE",{hourCycle:"h23"}):'anwesend')+'</p>').join("")||'<p class="muted">Noch keine Anwesenheitsdaten.</p>';
     document.getElementById("scheduleList").innerHTML=upcoming.map(x=>'<p><b>'+esc(x.display_name)+'</b> · '+new Date(x.starts_at).toLocaleString("de-DE",{hourCycle:"h23"})+' – '+new Date(x.ends_at).toLocaleString("de-DE",{hourCycle:"h23"})+(x.note?' · '+esc(x.note):'')+(x.recurrence==='auto-weekly'?' · <span class="muted">automatisch fortgeführt</span>':'')+'</p>').join("")||'<p class="muted">Noch keine Dienste geplant.</p>';
     document.getElementById("scheduleForm").onsubmit=async e=>{
@@ -85,8 +72,6 @@ function localDateTime(date,time){
         if(end<=start)throw Error("Das Ende muss nach dem Beginn liegen.");
         const payload={restaurantId,employeeId,startsAt:start.toISOString(),endsAt:end.toISOString(),note:document.getElementById("scheduleNote").value};
         await api("/owner/schedules",{method:"POST",body:JSON.stringify(payload)});
-        const autoCreated=await extendRecognizedPattern(existing,payload,start,end);
-        if(autoCreated)alert("Dienstplan-Muster erkannt: "+autoCreated+" weitere Dienste wurden automatisch angelegt.");
         await renderShift();
       }catch(err){alert(err.message)}
     };

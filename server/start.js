@@ -23,6 +23,7 @@ import {isolatedPreview,assertPreviewEntrypoint} from './preview-policy.js';
 import {createTableSettlement,migrateTableSettlement} from './table-settlement.js';
 import {migrateBillingMail,createBillingMail} from './billing-mail.js';
 import {createDutyPlanning,migrateDutyPlanning} from './duty-planning.js';
+import {createRosterAuto,migrateRosterAuto,createRosterProposalWorker} from './roster-auto.js';
 import {createWaiterDelivery,migrateWaiterDelivery} from './waiter-push-delivery.js';
 import {createSandboxWorker,migrateFiskalySandbox,sandboxStatus,requestFiskalySetup,onboardingRequest} from './fiskaly-sandbox.js';
 import {createFiskalyTest,migrateFiskalyTest} from './fiskaly-test.js';
@@ -108,6 +109,7 @@ const handlePosEan=createPosEan(platformGatewayPool);
 const handlePosInventory=createPosInventory(platformGatewayPool);
 const handlePosDeviceChecks=createPosDeviceChecks(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
+const handleRosterAuto=createRosterAuto(platformGatewayPool);
 const handleTableSettlement=createTableSettlement(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
@@ -140,6 +142,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handlePosEan(req,res)) return;
       if (appMode!=='ai' && await handlePosInventory(req,res)) return;
       if (appMode!=='ai' && await handlePosDeviceChecks(req,res)) return;
+      if (appMode!=='ai' && await handleRosterAuto(req,res)) return;
       if (appMode!=='ai' && await handleDutyPlanning(req,res)) return;
       if (appMode!=='ai' && await handlePersonnel(req,res)) return;
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
@@ -217,7 +220,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js?v=checkout-recovery-20261017"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js?v=time24-complete-20261021"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js?v=time24-development-20261021"></script></body>');
-        if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js?v=variant-adjacent-20261023"></script></body>');
+        if (!html.includes('/pos/restaurant-owner.js')) html = html.replace("</body>", '<script src="/pos/restaurant-owner.js?v=auto-roster-20261112"></script></body>');
         if (!html.includes('/personnel-report.js')) html = html.replace("</body>", '<script src="/personnel-report.js?v=20261012"></script></body>');
         if (!html.includes('/pos/ean-scanner.js')) html = html.replace('</body>', '<script src="/pos/ean-scanner.js?v=nav-pin-20261020"></script></body>');
         if (!html.includes('/pos/duty-planning.js')) html = html.replace('</body>', '<script src="/pos/duty-planning.js?v=time24-validation-20261021"></script></body>');
@@ -258,6 +261,7 @@ async function migrateWithRetry(){
       await migratePosInventory(platformGatewayPool);
       await migratePosDeviceChecks(platformGatewayPool);
       await migrateDutyPlanning(platformGatewayPool);
+      await migrateRosterAuto(platformGatewayPool);
       await migrateWaiterDelivery(platformGatewayPool);
       await migratePersonnel(platformGatewayPool);
       await migrateWaiterWorkflow(platformGatewayPool);
@@ -311,6 +315,7 @@ async function migrateWithRetry(){
   }
 }
 migrateWithRetry().then(()=>{
+ if(appMode!=='ai'&&!isolatedPreview()){const propose=createRosterProposalWorker(platformGatewayPool);propose().catch(()=>console.error('Roster proposal worker unavailable'));setInterval(()=>propose().catch(()=>console.error('Roster proposal worker unavailable')),900000).unref();}
  if(appMode!=='ai'&&!isolatedPreview()){const deliver=createWaiterDelivery(platformGatewayPool);setInterval(()=>deliver().catch(()=>console.error('Waiter delivery unavailable')),3000).unref();const tick=createSandboxWorker(platformGatewayPool);tick().catch(()=>console.error('Fiskaly TEST worker unavailable'));setInterval(()=>tick().catch(()=>console.error('Fiskaly TEST worker unavailable')),15000).unref();}
 });
 
