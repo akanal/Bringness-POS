@@ -617,3 +617,6 @@ Neueste Betreiberpräzisierung: Schiebeschalter samt Prozentfeld innerhalb des a
 
 ## Händler-Prozentberechnung reparieren — 12.11.2026
 Betreiber meldet fehlende Berechnung im Prozentmodus. Prozenteingabe direkt auf Eingabe aktualisieren; kein gesondertes Übernehmen erforderlich. Ungültiger Prozentwert darf keine Zahlung mit vorherigem Rabatt auslösen. Fehlenden Händlergrundpreis explizit anzeigen und Zahlung sperren, nicht als0€ darstellen oder einen Ersatzpreis erfinden. Schalterposition in Händlerpreise verwalten und Pfandausnahme erhalten.
+
+## Prozentmodus ohne separate Händlerpreise — Screenshot12.11.2026
+Die bisherige Pflicht zu einem Händlergrundpreis ab Menge1 blockiert die gewünschten Prozentverkäufe. Neuester Fehlerauftrag präzisiert: Wenn kein eigener Händlergrundpreis ab Menge1 vorhanden ist, im Prozentmodus den bestehenden normalen Artikelpreis verwenden. Kein Preis wird geraten oder produktiv neu angelegt. Ein expliziter Händlergrundpreis behält Vorrang. Mengenmodus bleibt ausschließlich staffelbasiert; nie zusätzliche Mengenstaffel plus Prozent. Clientanzeige und Serverberechnung müssen dieselbe Priorität verwenden, Server liest den aktuellen Produktpreis und speichert den Originalpreis im Beleg. Auch ohne jegliche Händlerstaffel muss Hinzufügen möglich sein.
