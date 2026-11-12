@@ -528,7 +528,7 @@ test('Service standby: white countdown, private alarm and automatic POS-duty tra
   const [download]=await Promise.all([f.page.waitForEvent('download'),f.page.click('#exportShiftAlarm')]);
   const stream=await download.createReadStream(),chunks=[];for await(const chunk of stream)chunks.push(chunk);const calendar=Buffer.concat(chunks).toString('utf8');assert.match(calendar,/BEGIN:VALARM/);assert.match(calendar,/TRIGGER:-PT30M/);
   await f.page.evaluate(({shift,boot,start})=>window.bnWaiterStandby.update({...boot,serverTime:new Date(start+1000).toISOString()},[shift]),{shift,boot:boot(),start});
-  assert.equal(await f.page.textContent('#shiftCountdown'),'00:00:00');assert.equal(await f.page.isVisible('#app'),false);
+  assert.equal(await f.page.textContent('#shiftCountdown'),'00:00:00');assert.equal(await f.page.isDisabled('#exportShiftAlarm'),true);assert.equal(await f.page.isVisible('#app'),false);
   // Only the server state changed by onsite stamping can open the workplace.
   onDuty=true;await f.page.waitForFunction(()=>!document.querySelector('#app').hidden,{},{timeout:15000});
   assert.equal(await f.page.textContent('#dutyState'),'Online');assert.equal(await f.page.isVisible('#standby'),false);
