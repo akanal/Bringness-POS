@@ -158,8 +158,8 @@ return async function handlePaymentCheckout(req, res) {
     const productMap=new Map(products.rows.map(p=>[p.id,p]));
     const cleanItems=[];let totalCents=0;
     for(const item of canonicalItems){
-      const product=productMap.get(item.productId),priceCents=Number(trade?tradePrice(tradeTiers.filter(t=>t.product_id===item.productId).map(t=>({minQty:t.min_qty,priceCents:t.price_cents})),item.qty,tradeMode):product?.price_cents),taxRate=Number(product?.tax_rate);
-      if(trade&&!priceCents)reject(400,tradeMode==='percent'?'Für den Prozentmodus fehlt ein Händler-Grundpreis ab Menge 1.':'Kein Händlerpreis für diese Artikelmenge hinterlegt');
+      const product=productMap.get(item.productId),priceCents=Number(trade?tradePrice(tradeTiers.filter(t=>t.product_id===item.productId).map(t=>({minQty:t.min_qty,priceCents:t.price_cents})),item.qty,tradeMode,product?.price_cents):product?.price_cents),taxRate=Number(product?.tax_rate);
+      if(trade&&!priceCents)reject(400,tradeMode==='percent'?'Für den Prozentmodus fehlt ein gültiger Artikelpreis.':'Kein Händlerpreis für diese Artikelmenge hinterlegt');
       if(!product||!Number.isSafeInteger(priceCents)||priceCents<0||priceCents>2147483647||!Number.isFinite(taxRate)||taxRate<0||taxRate>100)reject(400,'Ungültiger Artikelpreis oder Steuersatz');
       totalCents+=priceCents*item.qty;cleanItems.push({product:{...product,price_cents:priceCents},qty:item.qty});
     }
