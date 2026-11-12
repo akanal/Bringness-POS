@@ -585,3 +585,7 @@ Only a free trusted signing/distribution route may be used for the Windows POS r
 
 ## Owner development workflow reaffirmed — 2026-11-08
 For an authorized ten-point block, implement and verify all ten connected items autonomously. Reuse completed work; never reimplement it merely to fill a block. Correct small errors immediately. If a substantial issue blocks one item, continue independent authorized work and report actual remaining blockers together at the end, unless a necessary user action is required sooner. Do not repeat plans or ask for routine continuation/approval. Preserve access, cost, product-separation and tested-release boundaries.
+
+## Owner waiter standby/clock decision — 2026-11-12
+- Off-duty/paused waiter app: retain existing header, Online/Offline and More, with white countdown-only rest area and collapsible alarm settings. Automatically open the existing workplace only after the existing onsite POS clock sets duty_state=working; countdown zero never grants duty/access or creates a time entry. Preserve drafts, orders, permissions and POS-only stamping.
+- Alarm choice may be device-local. Foreground sound follows existing signal controls; closed-app phone reminders use explicit user-imported calendar VALARM. Disclose import requirement and manual refresh after schedule changes; do not claim background browser audio or silent automatic calendar writes. See docs/waiter-standby-20261112.md.

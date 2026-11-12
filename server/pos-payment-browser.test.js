@@ -428,6 +428,7 @@ async function serviceAuthFixture(onApi,{fragment='',signedIn=false}={}){
   const path=new URL(route.request().url()).pathname;
   if(path==='/service/')return route.fulfill({contentType:'text/html',body:document});
   if(path==='/service/app.js')return route.fulfill({contentType:'text/javascript',body:script});
+  if(path==='/service/standby.js'||path==='/service/standby.css')return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:await readFile(new URL('../apps/web/public'+path,import.meta.url),'utf8')});
   if(path.startsWith('/api/v1/'))return onApi(route,path.slice('/api/v1'.length));
   return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:''});
  });
@@ -498,5 +499,43 @@ test('Service auth: required password change clears fields and reloads service a
   await f.page.waitForFunction(()=>!document.querySelector('#app').hidden);
   assert.equal(await f.page.inputValue('#oldPassword'),'');assert.equal(await f.page.inputValue('#newPassword'),'');
   assert.equal(await f.page.textContent('#passwordMsg'),'');assert.equal(changes,1);assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
+
+test('Service standby: white countdown, private alarm and automatic POS-duty transitions', {timeout:60000},async()=>{
+ let onDuty=false;const calls=[],start=Date.now()+3600000;
+ const shift={id:'11111111-1111-4111-8111-111111111119',starts_at:new Date(start).toISOString(),ends_at:new Date(start+3600000).toISOString(),coverage_state:'planned'};
+ const boot=()=>({serverTime:new Date().toISOString(),employee:{id:product,restaurant_id:restaurant,restaurant_name:'Synthetic restaurant',stamp_pin_digits:4,duty_state:onDuty?'working':'off'},tables:[],products:[]});
+ const f=await serviceAuthFixture(async(route,path)=>{
+  calls.push({path,method:route.request().method()});
+  if(path==='/waiter/bootstrap')return serviceJson(route,boot());
+  if(path==='/waiter/duty')return serviceJson(route,{shifts:[shift],absences:[]});
+  if(path.startsWith('/waiter/alerts'))return serviceJson(route,{orders:[],dutyState:onDuty?'working':'off',serverTime:new Date().toISOString()});
+  return serviceJson(route,path==='/waiter/extras'?{extras:[]}:{orders:[]});
+ },{signedIn:true});
+ try{
+  await f.page.waitForFunction(()=>!document.querySelector('#standby').hidden&&document.querySelector('#nextShiftDate').textContent);
+  assert.equal(await f.page.isVisible('#app'),false);assert.equal(await f.page.isVisible('#serviceMore'),true);assert.equal(await f.page.textContent('#dutyState'),'Offline');
+  assert(!calls.some(c=>['/waiter/extras','/waiter/qr-orders'].includes(c.path)));
+  for(const width of [390,1280]){
+   await f.page.setViewportSize({width,height:844});
+   assert.equal(await f.page.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgb(255, 255, 255)');
+   assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+   if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await f.page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/service-standby-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}
+  }
+  await f.page.setViewportSize({width:390,height:844});await f.page.click('#shiftAlarm summary');await f.page.selectOption('#alarmMinutes','30');await f.page.click('#armShiftAlarm');
+  assert.match(await f.page.textContent('#shiftAlarmStatus'),/aktiviert: 30 Minuten/);
+  const [download]=await Promise.all([f.page.waitForEvent('download'),f.page.click('#exportShiftAlarm')]);
+  const stream=await download.createReadStream(),chunks=[];for await(const chunk of stream)chunks.push(chunk);const calendar=Buffer.concat(chunks).toString('utf8');assert.match(calendar,/BEGIN:VALARM/);assert.match(calendar,/TRIGGER:-PT30M/);
+  await f.page.evaluate(({shift,boot,start})=>window.bnWaiterStandby.update({...boot,serverTime:new Date(start+1000).toISOString()},[shift]),{shift,boot:boot(),start});
+  assert.equal(await f.page.textContent('#shiftCountdown'),'00:00:00');assert.equal(await f.page.isDisabled('#exportShiftAlarm'),true);assert.equal(await f.page.isVisible('#app'),false);
+  // Only the server state changed by onsite stamping can open the workplace.
+  onDuty=true;await f.page.waitForFunction(()=>!document.querySelector('#app').hidden,{},{timeout:15000});
+  assert.equal(await f.page.textContent('#dutyState'),'Online');assert.equal(await f.page.isVisible('#standby'),false);
+  onDuty=false;await f.page.waitForFunction(()=>!document.querySelector('#standby').hidden,{},{timeout:15000});
+  assert.equal(await f.page.isVisible('#app'),false);assert.equal(await f.page.textContent('#dutyState'),'Offline');
+  await f.page.click('#serviceMore > summary');assert.equal(await f.page.locator('#serviceMore').getAttribute('open'),'');
+  await f.page.evaluate(()=>load());assert.equal(await f.page.locator('#serviceMore').getAttribute('open'),'');
+  assert(!calls.some(c=>c.method!=='GET'));assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });
