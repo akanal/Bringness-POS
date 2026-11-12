@@ -7,7 +7,7 @@ const db=new PGlite();
 try{
  await db.exec(`CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,email text,role text,status text,must_change_password boolean DEFAULT false);
   CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);
-  CREATE TABLE audit_log(id bigserial PRIMARY KEY,company_id uuid,actor_user_id uuid,created_at timestamptz,event_type text,entity_type text,entity_id uuid);`);
+  CREATE TABLE audit_log(id bigserial PRIMARY KEY,company_id uuid,actor_user_id uuid,created_at timestamptz,event_type text,entity_type text,entity_id text);`);
  const company=crypto.randomUUID(),other=crypto.randomUUID(),owner=crypto.randomUUID();
  await db.query("INSERT INTO users(id,company_id,email,role,status) VALUES($1,$2,$3,'owner','active')",[owner,company,' \t=untrusted']);
  await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[owner,crypto.createHash('sha256').update('fixture').digest('hex')]);
