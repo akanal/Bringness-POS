@@ -11,7 +11,7 @@ try{
  q('armShiftAlarm').click();assert.equal(unlocks,1);assert.match(q('shiftAlarmStatus').textContent,/aktiviert/);
  const calendar=ui.calendar();assert.match(calendar,/TRIGGER:-PT15M/);assert.match(calendar,/DTSTART:\d{8}T\d{6}Z/);assert.equal((calendar.match(/BEGIN:VEVENT/g)||[]).length,1);assert(!calendar.includes('\r\nBEGIN:BAD'));assert(calendar.endsWith('\r\n'));for(const line of calendar.split('\r\n'))assert(Buffer.byteLength(line)<=75);
  ui.update({...boot,serverTime:new Date(start-14*60000).toISOString()},[shift]);assert.equal(rings,1);ui.render();ui.render();assert.equal(rings,1);
- ui.update({...boot,serverTime:new Date(start+1000).toISOString()},[shift]);assert.equal(q('shiftCountdown').textContent,'00:00:00');assert.match(q('shiftState').textContent,/an der Kasse einstempeln/);assert.equal(employee.duty_state,'off');
+ ui.update({...boot,serverTime:new Date(start+1000).toISOString()},[shift]);assert.equal(q('shiftCountdown').textContent,'00:00:00');assert.match(q('shiftState').textContent,/an der Kasse einstempeln/);assert.equal(employee.duty_state,'off');assert.equal(q('exportShiftAlarm').disabled,true);assert.throws(()=>ui.calendar(),/zukünftiger/);
  ui.update({...boot,serverTime:new Date(end+1000).toISOString()},[shift]);assert.equal(q('shiftCountdown').textContent,'--:--:--');assert.equal(q('armShiftAlarm').disabled,true);
  ui.update({...boot,employee:{...employee,id:'employee-b'}},[shift]);assert.match(q('shiftAlarmStatus').textContent,/ausgeschaltet/);
  ui.update(boot,[], 'network');assert.match(q('shiftState').textContent,/nicht erreichbar/);assert.equal(q('exportShiftAlarm').disabled,true);
