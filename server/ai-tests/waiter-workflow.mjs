@@ -16,3 +16,4 @@ const w=new JSDOM(fs.readFileSync(new URL('../../apps/web/public/service/index.h
 
 await import('./service-auth-submit.mjs');
 await import('./waiter-standby.mjs');
+await import('./waiter-table-areas.mjs');
