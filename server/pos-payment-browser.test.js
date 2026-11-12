@@ -415,3 +415,88 @@ test('merchant categories open exclusively on touch and keyboard while preservin
   }finally{await browser.close();}
  }
 });
+
+// Dispatch actual browser submit events: currentTarget is cleared once dispatch
+// ends. Calling an async .onsubmit with a hand-made event object hides this bug.
+async function serviceAuthFixture(onApi,{fragment='',signedIn=false}={}){
+ const browser=await engine.launch({headless:true}),page=await browser.newPage(),errors=[];
+ page.on('pageerror',error=>errors.push(error.message));
+ if(signedIn)await page.addInitScript(()=>localStorage.setItem('bringness-waiter-token','synthetic-waiter-session'));
+ const document=await readFile(new URL('../apps/web/public/service/index.html',import.meta.url),'utf8');
+ const script=await readFile(new URL('../apps/web/public/service/app.js',import.meta.url),'utf8');
+ await page.route('https://service-auth.test/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path==='/service/')return route.fulfill({contentType:'text/html',body:document});
+  if(path==='/service/app.js')return route.fulfill({contentType:'text/javascript',body:script});
+  if(path.startsWith('/api/v1/'))return onApi(route,path.slice('/api/v1'.length));
+  return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:''});
+ });
+ await page.goto('https://service-auth.test/service/'+fragment);return {browser,page,errors};
+}
+const serviceJson=(route,body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+for(const kind of ['password','pin'])test('Service auth: '+kind+' reset shows success after a delayed native submit',async()=>{
+ const capability='a'.repeat(64),value=kind==='pin'?'5678':'NewServicePass2!',requests=[];let release,entered;
+ const gate=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+ const f=await serviceAuthFixture(async(route,path)=>{
+  assert.equal(path,'/staff/reset');const body=route.request().postDataJSON();assert.equal(body.token,capability);
+  if(body.inspect)return serviceJson(route,{kind});requests.push(body);entered();await gate;
+  return serviceJson(route,{message:'Gespeichert. Du kannst dich jetzt anmelden.'});
+ },{fragment:'#reset='+capability});
+ try{
+  await f.page.waitForFunction(()=>typeof document.querySelector('#resetForm').onsubmit==='function');
+  assert.equal(await f.page.evaluate(()=>location.hash),'');
+  await f.page.fill('#resetValue',value);await f.page.fill('#resetConfirm',value);
+  await f.page.click('#resetForm button');await started;
+  assert.equal(await f.page.isDisabled('#resetForm button'),true);assert.equal(await f.page.inputValue('#resetValue'),value);
+  release();await f.page.waitForFunction(()=>document.querySelector('#resetForm').hidden&&document.querySelector('#resetMsg').textContent.includes('Gespeichert'));
+  assert.equal(await f.page.inputValue('#resetValue'),'');assert.equal(await f.page.inputValue('#resetConfirm'),'');
+  assert.equal(requests.length,1);assert.deepEqual(requests[0],{token:capability,value,confirm:value});
+  await f.page.click('#reset a');assert.equal(await f.page.isVisible('#login'),true);assert.deepEqual(f.errors,[]);
+ }finally{release();await f.browser.close();}
+});
+test('Service auth: rejected reset retains values and retries the original link',async()=>{
+ const capability='b'.repeat(64),requests=[];
+ const f=await serviceAuthFixture(async(route)=>{
+  const body=route.request().postDataJSON();if(body.inspect)return serviceJson(route,{kind:'password'});requests.push(body);
+  return requests.length===1?serviceJson(route,{error:'Bitte Passwort prüfen'},400):serviceJson(route,{message:'Gespeichert. Du kannst dich jetzt anmelden.'});
+ },{fragment:'#reset='+capability});
+ try{
+  await f.page.waitForFunction(()=>typeof document.querySelector('#resetForm').onsubmit==='function');
+  await f.page.fill('#resetValue','ServicePass2!');await f.page.fill('#resetConfirm','ServicePass2!');await f.page.click('#resetForm button');
+  await f.page.waitForFunction(()=>document.querySelector('#resetMsg').textContent==='Bitte Passwort prüfen'&&!document.querySelector('#resetForm button').disabled);
+  assert.equal(await f.page.inputValue('#resetValue'),'ServicePass2!');assert.equal(await f.page.isVisible('#resetForm'),true);
+  await f.page.click('#resetForm button');await f.page.waitForFunction(()=>document.querySelector('#resetForm').hidden);
+  assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
+test('Service auth: two-step activation clears fields and offers login after a native submit',async()=>{
+ let confirmed=0;
+ const f=await serviceAuthFixture(async(route,path)=>{
+  if(path==='/staff/invitation')return serviceJson(route,{state:'pending'});
+  assert.equal(path,'/staff/confirm');confirmed++;return serviceJson(route,{message:'Zugang eingerichtet.'});
+ },{fragment:'#activate='+'c'.repeat(64)});
+ try{
+  await f.page.waitForFunction(()=>!document.querySelector('#activationSubmit').disabled);
+  await f.page.fill('#activationName','Synthetic Waiter');await f.page.fill('#activationPassword','ServicePass1!');await f.page.fill('#activationPasswordConfirm','ServicePass1!');
+  await f.page.click('#activationSubmit');await f.page.waitForFunction(()=>!document.querySelector('#stampStep').hidden);
+  await f.page.fill('#activationPin','1234');await f.page.fill('#activationPinConfirm','1234');await f.page.click('#activationSubmit');
+  await f.page.waitForFunction(()=>document.querySelector('#activationForm').hidden);
+  assert.equal(await f.page.textContent('#activationMessage'),'Zugang eingerichtet.');assert.equal(await f.page.inputValue('#activationPassword'),'');
+  assert.equal(await f.page.isVisible('#activationMessage + a'),true);assert.equal(confirmed,1);assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
+test('Service auth: required password change clears fields and reloads service after native submit',async()=>{
+ let changed=false,changes=0;
+ const f=await serviceAuthFixture(async(route,path)=>{
+  if(path==='/profile/password'){changes++;changed=true;return serviceJson(route,{message:'Passwort geändert.'});}
+  if(path==='/waiter/bootstrap')return changed?serviceJson(route,{employee:{id:product,restaurant_id:restaurant,restaurant_name:'Synthetic restaurant',stamp_pin_digits:4,duty_state:'working'},tables:[],products:[]}):serviceJson(route,{error:'Bitte Passwort ändern'},428);
+  return serviceJson(route,path==='/waiter/extras'?{extras:[]}:{orders:[]});
+ },{signedIn:true});
+ try{
+  await f.page.waitForFunction(()=>!document.querySelector('#passwordBox').hidden);
+  await f.page.fill('#oldPassword','OldServicePass1!');await f.page.fill('#newPassword','NewServicePass2!');await f.page.click('#passwordForm button');
+  await f.page.waitForFunction(()=>!document.querySelector('#app').hidden);
+  assert.equal(await f.page.inputValue('#oldPassword'),'');assert.equal(await f.page.inputValue('#newPassword'),'');
+  assert.equal(await f.page.textContent('#passwordMsg'),'');assert.equal(changes,1);assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});

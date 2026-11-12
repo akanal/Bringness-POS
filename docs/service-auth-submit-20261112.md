@@ -1,0 +1,11 @@
+# Service recovery confirmation — 12 November 2026
+
+The second owner screenshot shows `Cannot read properties of null (reading 'reset')`, which is distinct from the corrected PostgreSQL audit error in PR291. The service reset handler accesses event.currentTarget after awaiting the server response. Native DOM dispatch clears currentTarget when dispatch finishes, so a successful save is followed by a client exception instead of the success state. The same pattern also exists in invitation activation and required password change.
+
+Capture the form synchronously before awaiting, then use the captured form to clear sensitive fields. Preserve all existing requests, single-use links, validation, server transactions, layout and success messages. Bump the service script version. No account/password/PIN or server configuration is changed for testing.
+
+The new service-auth-submit.mjs dispatches an actual DOM submit event with a held server response, explicitly observes currentTarget becoming null, then verifies password and PIN success, hidden form and cleared secret fields. It fails against the original code with the exact screenshot message and passes after the repair. The existing waiter-workflow integration imports it so the normal CI and deployment tests execute it.
+
+Five native-browser cases in the existing POS browser suite use real clicks on the actual service HTML and JavaScript: delayed password success, delayed PIN success, rejection preserving values and retrying the original link, two-step invitation activation, and required password change reloading the service view. Requests and success are simulated only in the isolated browser fixture; no production account is used. Chromium/WebKit acceptance is pending the actual CI run. Local browser download returned invalid archives; no local native-browser success is claimed. Existing staff/waiter integration and the focused DOM regression pass locally.
+
+A prior successful server save may have already consumed the owner's link. The screenshot alone does not establish the current account password; do not change or inspect it. After release, the owner should try their most recently entered new password at the service login and request a fresh link only if necessary.
