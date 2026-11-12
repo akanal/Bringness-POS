@@ -53,7 +53,7 @@ async function generate(c,company,rid,week,who,{expectedRevision,skipExisting=fa
  const config=await settings(c,company,rid);checkWeek(week,config.policy.timezone,{future:!allowCurrent});if(!config.policy.enabled)fail('Automatische Vorschläge sind ausgeschaltet.',409);
  const old=(await c.query("SELECT * FROM roster_auto_drafts WHERE company_id=$1 AND restaurant_id=$2 AND week=$3 AND state='draft' FOR UPDATE",[company,rid,week])).rows[0];if(old&&skipExisting&&!refresh)return old;
  const context=await loadContext(c,company,rid,week,{lock:true});
- if(refresh&&old&&old.context_hash===rosterContextHash(context)&&old.settings_version===context.version)return old;
+ if(refresh&&old&&old.context_hash===rosterContextHash(context)&&old.settings_version===context.version&&old.payload.slots.every(slot=>Date.parse(slot.startsAt)>Date.now()))return old;
  if(!refresh&&!skipExisting&&(!Number.isInteger(expectedRevision)||expectedRevision!==(old?.revision||0)))fail('Vorschlagsstand wurde geändert. Bitte neu laden.',409);
  const payload=makeRosterProposal(context,week,{manualSlots:(old?.payload.slots||[]).filter(s=>s.edited===true)}),hash=rosterContextHash(context);
  const result=old?(await c.query('UPDATE roster_auto_drafts SET payload=$2,context_hash=$3,settings_version=$4,revision=revision+1 WHERE id=$1 RETURNING *,week::text AS week',[old.id,JSON.stringify(payload),hash,context.version])).rows[0]:(await c.query('INSERT INTO roster_auto_drafts(company_id,restaurant_id,week,settings_version,context_hash,payload,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *,week::text AS week',[company,rid,week,context.version,hash,JSON.stringify(payload),who||null])).rows[0];
