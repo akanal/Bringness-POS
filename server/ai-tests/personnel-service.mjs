@@ -26,7 +26,7 @@ routes.push(lines.find(l=>l.startsWith('if(/^\\/api\\/v1\\/waiter\\/tables')));
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const handler=new AsyncFunction('req','res','p','u','pool','auth','currentUser','requireFeature','json','body',guard+'\n'+routes.join('\n'));
 async function request(path,b=null,as=user){const u=new URL('https://example'+path);let result;await handler({method:b?'POST':'GET'},{},u.pathname,u,pool,async()=>({id:as,company_id:company,role:'waiter',display_name:'Service'}),async()=>({id:as}),async()=>true,(_res,status,data)=>{result={...data,status}},async()=>b);return result}
-const off=await request('/api/v1/waiter/bootstrap');assert.equal(off.employee.duty_state,'off');assert.equal(off.tables.length,1);assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);assert.equal((await request('/api/v1/waiter/tables/'+table)).status,403);
+const off=await request('/api/v1/waiter/bootstrap');assert.equal(off.employee.duty_state,'off');assert.equal(off.tables.length,0);assert.equal(off.products.length,0);assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);assert.equal((await request('/api/v1/waiter/tables/'+table)).status,403);
 await db.query("UPDATE employees SET duty_state='working'");
 const working=await request('/api/v1/waiter/bootstrap');assert.equal(working.tables.length,1);assert.equal((await request('/api/v1/waiter/alerts')).orders.length,1);
 const employee2='00000000-0000-4000-8000-000000000020',user2='00000000-0000-4000-8000-000000000021';

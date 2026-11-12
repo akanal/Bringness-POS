@@ -1,0 +1,17 @@
+# Kellner-App: Ruheansicht und Dienstbeginn
+
+Owner instruction12.11.2026: When off duty, keep header/status/More, with a white area showing only the countdown to the next scheduled shift and optional alarm controls. Open the workplace on the phone after onsite POS stamping.
+
+## Behavior
+
+- The existing employee duty_state is authoritative. Off and paused display standby. Only working opens products, assigned tables and QR orders. Countdown zero never stamps or opens access. Existing POS-only PIN stamping and server-side order restrictions remain unchanged.
+- Off-duty bootstrap now returns empty tables/products before querying either catalogue. The phone polls its existing authenticated bootstrap every10 seconds while visible and refreshes on foreground. On-duty alerts report a changed duty state before sounds are played; sign-out returns to standby on the next visible check. Network disconnection is not reinterpreted as clocking out. Existing order drafts remain saved and orders/receipts are not changed by switching views.
+- The existing own-duty API supplies shifts; only assigned non-open shifts that have not ended are considered. A currently running shift stays at zero until it ends, so a late employee is still told to clock in. No schedule shows a clear empty state; a failed lookup is explicitly unavailable. Server time anchors the visible countdown. More and its existing access, signal and time controls remain available off duty. Schedule reads now also require matching employee/restaurant/company on the existing private schedule route.
+- Alarm lead times5/15/30/60/120 minutes are device-local and keyed to employee plus restaurant. Explicit activation unlocks browser audio. Foreground alarm uses existing sound/vibration settings; one warning per shift/start/lead per tab. No background delivery or guaranteed audio on a suspended/closed browser is claimed.
+- The optional ICS export contains exactly the next shift with UTC dates, a display VALARM, escaped text and UTF-8-safe75-byte line folding. The user must import it into their phone calendar and confirm its reminder. There is no automatic calendar write. A changed shift requires a fresh export/import; the app does not synchronize a previously imported calendar event. This is disclosed beside the controls.
+
+## Verification
+
+Local existing staff/waiter/personnel/duty-planning integration plus new standby DOM checks cover scoped settings, server-time countdown, zero without stamping, expired/open shifts, one warning, unavailable schedule and escaped alarm export. The new native browser case uses the actual service HTML/scripts at390/1280px, verifies the white view and no overflow, downloads/reads the ICS, keeps the workplace hidden at zero, and waits for the real polling timer to react to simulated onsite clock-in/out. No phone-side stamping request is sent. Chromium/WebKit screenshots and final CI results must be inspected before release.
+
+No real staff accounts, schedules, PINs, calendar events, orders or payments were changed for acceptance. Existing notification/platform/financial/module configuration is preserved. Physical phone audio and actual calendar import remain device acceptance, not proven by simulated browser tests.

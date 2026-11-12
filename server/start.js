@@ -230,8 +230,8 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
         if (!html.includes('/tisch/guest-enhancements.js')) html = html.replace("</body>", '<script src="/tisch/guest-enhancements.js"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/service/index.html")) {
-        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js?v=time24-validation-20261021"></script></body>');
-        if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js?v=time24-complete-20261021"></script></body>');
+        if (!html.includes('/service/duty-planning.js')) html = html.replace('</body>', '<script src="/service/duty-planning.js?v=standby-20261112"></script></body>');
+        if (!html.includes('/service/presence.js')) html = html.replace("</body>", '<script src="/service/presence.js?v=standby-20261112"></script></body>');
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
         if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js?v=time24-complete-20261021"></script></body>');

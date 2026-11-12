@@ -251,8 +251,8 @@ export async function handleRestaurantOwnerFeature(req,res,{db=pool}={}){
     if(u.role!=="waiter")return json(res,403,{error:"Kein Kellnerkonto"});
     const q=await pool.query(`SELECT ws.id,ws.starts_at,ws.ends_at,ws.note,ws.recurrence,r.name restaurant_name
       FROM waiter_schedules ws JOIN employees e ON e.id=ws.employee_id JOIN restaurants r ON r.id=ws.restaurant_id
-      WHERE e.user_id=$1 AND e.active=true AND ws.coverage_state<>'open' AND ws.ends_at>now()-interval '1 day'
-      ORDER BY ws.starts_at LIMIT 100`,[u.id]);
+      WHERE e.user_id=$1 AND e.active=true AND ws.restaurant_id=e.restaurant_id AND r.company_id=$2 AND ws.coverage_state<>'open' AND ws.ends_at>now()-interval '1 day'
+      ORDER BY ws.starts_at LIMIT 100`,[u.id,u.company_id]);
     json(res,200,{schedules:q.rows}); return true;
   }
 
