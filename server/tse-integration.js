@@ -112,3 +112,9 @@ export async function tseSigningTick(){
  signingBusy=true;try{await processPreparedTse(pool,adapterForRestaurant);}finally{signingBusy=false;}
 }
 const signingTimer=setInterval(()=>{if(!isolatedPreview())return tseSigningTick().catch(()=>console.error('TSE signing worker failed'))},10000);signingTimer.unref();
+
+// Same current production-capability limits as /fiscal/status; never promote TEST evidence.
+export async function readFiscalSetupStatus(restaurantId){
+ const adapter=await adapterForRestaurant(restaurantId);const status=await adapter.status();
+ return {ready:false,message:status.certified===true&&status.connection==="connected"?"TSE verbunden, aber produktive Signierung und DSFinV-K-Export sind noch nicht freigegeben.":String(status.message||"TSE nicht betriebsbereit.")};
+}

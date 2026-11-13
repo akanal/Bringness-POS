@@ -2,7 +2,7 @@
  const $=id=>document.getElementById(id),params=new URLSearchParams(location.search),context=params.get('registerId')?{registerId:params.get('registerId')}:{restaurantId:params.get('restaurantId')};
  let csvText=null,csvOptions=null;
  let rows=[],dirty=false,busy=false,generation=0,pending=null,originalUrl=null,textChanged=false,previewRestaurantId=null,identity=localStorage.getItem('bringness-pos-token');
- if(context.registerId)$('back').href='/admin/online-registers.html';
+ if(context.registerId){$('back').href='/admin/online-registers.html';$('setupWizard').hidden=true}else if(context.restaurantId)$('setupWizard').href='/pos/setup.html?restaurantId='+encodeURIComponent(context.restaurantId);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const identityValid=()=>identity&&identity===localStorage.getItem('bringness-pos-token');
  function status(message){$('message').textContent=message}

@@ -120,6 +120,7 @@ jobs:
           node server/ai-tests/billing-eligibility.mjs
           node server/ai-tests/remote-support.mjs
           node server/ai-tests/online-registers.mjs
+          node server/ai-tests/pos-setup.mjs
           node server/ai-tests/menu-import.mjs
           node server/ai-tests/menu-import-ocr.mjs
           node server/ai-tests/browser-support.mjs

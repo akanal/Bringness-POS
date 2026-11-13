@@ -1,3 +1,5 @@
+import {createPosSetup,migratePosSetup} from './pos-setup.js';
+import {readFiscalSetupStatus} from './tse-integration.js';
 import {createMenuImport,migrateMenuImport} from './menu-import.js';
 import {createOnlineRegisters,migrateOnlineRegisters} from './online-registers.js';
 import {createPosDeviceChecks,migratePosDeviceChecks} from './pos-device-checks.js';
@@ -107,6 +109,7 @@ const imageRuntime=createMarketplaceImagesRuntime(platformGatewayPool,{enabled:m
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handleOnlineRegisters=createOnlineRegisters(platformGatewayPool);
+const handlePosSetup=createPosSetup(platformGatewayPool,{fiscalStatus:readFiscalSetupStatus});
 const handleMenuImport=createMenuImport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
@@ -180,6 +183,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleAdminAuditExport(req,res)) return;
       if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformAiGateway(req,res)) return;
+      if (await handlePosSetup(req,res)) return;
       if (await handleMenuImport(req,res)) return;
       if (await handleOnlineRegisters(req,res)) return;
       if (await handleRemoteSupport(req,res)) return;
@@ -288,6 +292,7 @@ async function migrateWithRetry(){
       await migrateRemoteSupport(platformGatewayPool);
       await migrateOnlineRegisters(platformGatewayPool);
       await migrateMenuImport(platformGatewayPool);
+      await migratePosSetup(platformGatewayPool);
       setInterval(()=>cleanupRemoteSupport(platformGatewayPool).catch(()=>{}),30000).unref();
       await migrateOfflineSales();
       await migrateAccountantAccess();
