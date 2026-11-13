@@ -7,7 +7,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
  const $=id=>d.getElementById(id),el=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
  const categories=new Set();
  const edits=new Map();let rows=[],cart=[],quote=null,busy=false,searchEpoch=0,cartEpoch=0,activeSeller='',sellerContext='',detailId='',nextCursor='';
- const client=provided||createMarketClient({window:w,onPrivacy:()=>{quote=null;busy=false;cartEpoch++;$('market-recipient').reset();$('market-confirm').hidden=true;status('Ansicht gewechselt. Auswahl vor dem Senden erneut prüfen.');}});
+ const client=provided||createMarketClient({window:w,onPrivacy:()=>{if($('market-account-next'))$('market-account-next').hidden=true;quote=null;busy=false;cartEpoch++;$('market-recipient').reset();$('market-confirm').hidden=true;status('Ansicht gewechselt. Auswahl vor dem Senden erneut prüfen.');}});
  const status=(text,error=false)=>{$('market-status').textContent=text;$('market-status').classList.toggle('market-error',error);};
  const link=(label,params)=>{const a=el('a',label);a.href='/shop/marketplace.html?'+new URLSearchParams(params);return a;};
  const cartKey='bringness.market.cart.v1';
@@ -18,7 +18,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   }
  }catch{cart=[];status('Gespeicherte Auswahl ist nicht lesbar. Sie wurde nicht überschrieben.',true);}
  function selected(){return cart.filter(x=>(x.sellerId||'legacy')===activeSeller);}
- function invalidate(){cartEpoch++;quote=null;$('market-total').textContent='';$('market-summary').replaceChildren();$('market-confirm').hidden=true;}
+ function invalidate(){if($('market-account-next'))$('market-account-next').hidden=true;cartEpoch++;quote=null;$('market-total').textContent='';$('market-summary').replaceChildren();$('market-confirm').hidden=true;}
  function saveCart(){try{w.sessionStorage.setItem(cartKey,JSON.stringify(cart));return true;}catch{status('Auswahl bleibt hier erhalten, konnte aber nicht gespeichert werden.',true);return false;}}
  function changed(){invalidate();const persisted=saveCart();renderCart();return persisted;}
  function renderCart(){
@@ -57,6 +57,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
    box.append(link('Händlerprofil: '+p.seller.name,{seller:p.sellerId}),el('p',detailId?p.description:p.description.slice(0,240)+(p.description.length>240?' …':'')),el('p',p.seller.street+', '+p.seller.postalCode+' '+p.seller.city+' · '+p.seller.country));
    if(detailId){box.append(el('p','Geschäftlicher Kontakt: '+p.seller.email),el('p','Zustand: '+({new:'Neu',used:'Gebraucht',refurbished:'Generalüberholt'}[p.condition]||p.condition)));if(p.gtin)box.append(el('p','GTIN: '+p.gtin));}
    box.append(el('p',p.shipping?'Versand: '+p.delivery+' · '+money(gross(p.shippingNetCents,p.shippingVatBasisPoints))+' inkl. MwSt. je Händlerbestellung':'Kein Versand'),el('p',p.pickup?'Abholung: '+p.pickupAddress:'Keine Abholung'));
+   if(detailId){const facts=el('section');facts.className='offer-purchase-facts';facts.setAttribute('aria-label','Verkäufer, Lieferung und Rückgabe');facts.append(el('h4','Dein Einkauf auf einen Blick'),el('p','Verkauft von '+p.seller.name),el('p',p.shipping?'Lieferzeit: '+p.delivery:'Versand wird nicht angeboten'),el('p',p.pickup?'Abholort: '+p.pickupAddress:'Keine Abholung'));const contact=el('a','Verkäufer zu Produkt, Rückgabe oder Reklamation kontaktieren');if(typeof p.seller.email==='string'&&/^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(p.seller.email))contact.href='mailto:'+encodeURIComponent(p.seller.email);facts.append(contact,el('p','Es gelten die tatsächlichen Bedingungen des Verkäufers. Rückfragen zu den Rückgabe- und Reklamationsbedingungen kannst du direkt an den Verkäufer richten.'));box.append(facts);}
    const select=el('select');select.setAttribute('aria-label','Variante für '+p.title);
    for(const v of p.variants){const o=el('option',v.label+' · '+money(gross(v.netCents,v.vatBasisPoints))+' inkl. MwSt. · Bestand '+v.stock);o.value=v.sku;o.disabled=v.stock===0;select.append(o);}
    const first=p.variants.find(v=>v.stock>0);if(first)select.value=first.sku;
@@ -100,13 +101,14 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
  $('market-quote').addEventListener('click',async()=>{
   if(busy)return;busy=true;renderCart();const current=cartEpoch;
   try{
-   if(!selected().length)return;quote=null;$('market-confirm').hidden=true;$('market-total').textContent='';$('market-summary').replaceChildren();
+   if(!selected().length)return;if($('market-account-next'))$('market-account-next').hidden=true;quote=null;$('market-confirm').hidden=true;$('market-total').textContent='';$('market-summary').replaceChildren();
    const lines=commandLines(),method=$('market-method').value,shippingNetCents=method==='shipping'?selected()[0].shippingNetCents:0;
    const q=await client.call('/quote',{body:{lines,method,shippingNetCents}});if(current!==cartEpoch)return;
    if(q.sellerId!==activeSeller||q.method!==method||q.paymentStatus!=='unpaid'||q.canPay!==false||!Array.isArray(q.lines)||![q.grossCents,q.vatCents,q.netCents].every(n=>Number.isSafeInteger(n)&&n>=0))throw Object.assign(Error(),{code:'INVALID_RESPONSE'});
    quote={...q,lines,shippingNetCents};$('market-total').textContent='Gesamt '+money(q.grossCents)+' inkl. '+money(q.vatCents)+' MwSt. · '+q.seller.name+' · '+q.delivery;
    for(const line of q.lines)$('market-summary').append(el('li',line.quantity+' × '+line.name+' · '+money(gross(line.unitNetCents*line.quantity,line.vatBasisPoints))+' inkl. MwSt.'));
-   $('market-confirm').hidden=false;status('Preis und Bestand dieses Händlers geprüft. Andere Händlerauswahlen bleiben getrennt. Keine Zahlung.');
+   let signedIn=false;try{signedIn=!!w.localStorage.getItem('bringness-shop-token');}catch{}
+   $('market-confirm').hidden=!signedIn;if($('market-account-next'))$('market-account-next').hidden=signedIn;status('Preis und Bestand dieses Händlers geprüft. Andere Händlerauswahlen bleiben getrennt. Keine Zahlung.');
   }catch(e){status(e.message?.startsWith('Bitte ')?e.message:marketError(e),true);}finally{busy=false;renderCart();}
  });
  function showOrder(result,confirmedLines){
