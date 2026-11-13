@@ -2,6 +2,8 @@ name: Center validation
 on:
   pull_request:
     paths:
+      - 'server/online-register*'
+      - 'apps/web/public/admin/online-register*'
       - 'server/center*'
       - 'server/pos-payment-browser.test.js'
       - 'server/payment-checkout*'
@@ -22,6 +24,8 @@ on:
   push:
     branches: ['main', 'feat/center-mode-foundation', 'finish/**', 'staging/preview-20261016']
     paths:
+      - 'server/online-register*'
+      - 'apps/web/public/admin/online-register*'
       - 'server/center*'
       - 'server/pos-payment-browser.test.js'
       - 'server/payment-checkout*'
@@ -79,6 +83,9 @@ jobs:
         run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node --test server/center-browser.test.js
       - name: Verify POS cash and table payment recovery in browser
         run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node --test server/pos-payment-browser.test.js
+
+      - name: Verify online register admin forms and responsive layout
+        run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node server/online-registers-browser.mjs
 
       - name: Save module overview previews
         if: always()

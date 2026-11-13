@@ -1,3 +1,4 @@
+import {createOnlineRegisters,migrateOnlineRegisters} from './online-registers.js';
 import {createPosDeviceChecks,migratePosDeviceChecks} from './pos-device-checks.js';
 import {createOwnerMfa} from './owner-mfa.js';
 import {createPosInventory,migratePosInventory} from './pos-inventory.js';
@@ -104,6 +105,7 @@ if(appMode!=='ai'&&!isolatedPreview())try{imageStore=await configuredIdriveDocum
 const imageRuntime=createMarketplaceImagesRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)&&!isolatedPreview(),store:imageStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
+const handleOnlineRegisters=createOnlineRegisters(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
 const handlePosEan=createPosEan(platformGatewayPool);
@@ -176,6 +178,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleAdminAuditExport(req,res)) return;
       if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformAiGateway(req,res)) return;
+      if (await handleOnlineRegisters(req,res)) return;
       if (await handleRemoteSupport(req,res)) return;
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
@@ -241,7 +244,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
         if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js?v=time24-complete-20261021"></script></body>');
-        if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js?v=time24-complete-20261021"></script></body>');
+        if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js?v=online-register-20261113"></script></body>');
         if (!html.includes('/admin/platform-hub.js')) html = html.replace("</body>", '<script src="/admin/platform-hub.js"></script></body>');
         if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js?v=time24-complete-20261021"></script></body>');
       }
@@ -280,6 +283,7 @@ async function migrateWithRetry(){
       await migrateBillingAccess();
       await migrateDeviceLicense();
       await migrateRemoteSupport(platformGatewayPool);
+      await migrateOnlineRegisters(platformGatewayPool);
       setInterval(()=>cleanupRemoteSupport(platformGatewayPool).catch(()=>{}),30000).unref();
       await migrateOfflineSales();
       await migrateAccountantAccess();

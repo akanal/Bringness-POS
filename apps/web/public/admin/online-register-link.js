@@ -1,0 +1,1 @@
+(()=>{const tabs=document.querySelector('#dash .tabs');if(tabs&&!tabs.querySelector('[data-online-registers]')){const button=document.createElement('button');button.type='button';button.dataset.onlineRegisters='true';button.textContent='Online-Kassen · ID';button.onclick=()=>location.assign('/admin/online-registers.html');tabs.append(button)}})();
