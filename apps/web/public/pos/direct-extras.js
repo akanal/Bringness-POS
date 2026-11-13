@@ -1,0 +1,18 @@
+(()=>{
+ const pending=()=>!!localStorage.getItem('bringness.checkout.pending.v1:'+document.getElementById('restaurant').value);
+ window.bnExtraDraft=i=>i.extraIds?.length?{extraIds:[...i.extraIds],extraSnapshot:i.extraSnapshot}:{};
+ window.bnRestoreExtraItem=(p,i)=>{if(!i.extraIds?.length)return {...p,qty:i.qty};const extras=i.extraSnapshot;if(!Array.isArray(extras)||extras.length!==i.extraIds.length||extras.some(e=>!i.extraIds.includes(e.id)||!Number.isSafeInteger(e.price_cents)||e.price_cents<0))throw Error('Extras des geparkten Bons bitte erneut prüfen.');return {...p,qty:i.qty,extraIds:i.extraIds,extraSnapshot:extras,baseName:p.name,basePrice:p.price,name:p.name+' ('+extras.map(e=>e.name).join(', ')+')',price:(Math.round(p.price*100)+extras.reduce((s,e)=>s+e.price_cents,0))/100};};
+ async function edit(item){
+  if(pending())throw Error('Vorhandene Zahlung zuerst abgleichen.');
+  const rid=document.getElementById('restaurant').value;
+  const reply=await api('/pos/extras?restaurantId='+encodeURIComponent(rid));
+  if(rid!==document.getElementById('restaurant').value||!cart.includes(item))return;
+  const extras=reply.extras.filter(e=>e.product_id===item.id),dialog=document.createElement('dialog'),form=document.createElement('form');form.method='dialog';
+  const title=document.createElement('h3');title.textContent='Extras: '+(item.baseName||item.name);form.append(title);const note=document.createElement('p');note.textContent='Diese Auswahl gilt für alle '+item.qty+' Stück dieser Warenkorbposition.';form.append(note);
+  if(!extras.length){const text=document.createElement('p');text.textContent='Für diesen Artikel sind keine aktiven Extras hinterlegt.';form.append(text);}
+  for(const extra of extras){const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.value=extra.id;input.checked=!!item.extraIds?.includes(extra.id);label.append(input,document.createTextNode(extra.name+' '+euro(extra.price_cents)));form.append(label,document.createElement('br'));}
+  const save=document.createElement('button');save.textContent='Übernehmen';save.value='save';const cancel=document.createElement('button');cancel.textContent='Abbrechen';cancel.value='cancel';form.append(save,cancel);dialog.append(form);document.body.append(dialog);
+  dialog.addEventListener('close',()=>{try{if(dialog.returnValue==='save'){if(pending()||rid!==document.getElementById('restaurant').value||!cart.includes(item))throw Error('Warenkorb wurde geändert. Extras erneut öffnen.');const ids=[...form.querySelectorAll('input:checked')].map(i=>i.value).sort(),selected=extras.filter(e=>ids.includes(e.id));item.baseName=item.baseName||item.name;item.basePrice=item.basePrice??item.price;item.extraIds=ids;item.extraSnapshot=selected;item.name=item.baseName+(selected.length?' ('+selected.map(e=>e.name).join(', ')+')':'');item.price=(Math.round(item.basePrice*100)+selected.reduce((s,e)=>s+Number(e.price_cents),0))/100;renderCart();}}catch(e){alert(e.message)}finally{dialog.remove()}});dialog.showModal();
+ }
+ const original=renderCart;renderCart=function(){original();const host=document.getElementById('cart');if(!host||!cart.length)return;const controls=document.createElement('details');controls.dataset.directExtras='';const summary=document.createElement('summary');summary.textContent='Extras auswählen';controls.append(summary);for(const item of cart){const button=document.createElement('button');button.type='button';button.textContent=item.name;button.onclick=()=>edit(item).catch(e=>alert(e.message));controls.append(button);}host.append(controls);};
+})();

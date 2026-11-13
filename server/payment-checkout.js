@@ -1,3 +1,4 @@
+import {selectedExtras,pricedExtras} from './checkout-extras.js';
 import {migrateDeposit,createDepositHandler,depositQuote,reserveDepositCredit} from './pos-deposit.js';
 import {migrateCashClosing,createCashClosing} from './cash-closing.js';
 import {migrateCustomerDelivery,createCustomerDelivery} from './customer-delivery.js';
@@ -52,6 +53,14 @@ return async function handlePaymentCheckout(req, res) {
   if(await parkedHandler(req,res))return true;
   if(await tradeHandler(req,res))return true;
   const pathname = new URL(req.url, "http://localhost").pathname;
+  if(pathname==='/api/v1/pos/extras'&&req.method==='GET'){
+    const actor=await currentUser(req);if(!actor){send(res,401,{error:'Nicht angemeldet'});return true;}
+    if(!['owner','admin','manager'].includes(actor.role)){send(res,403,{error:'Kein Kassenzugang'});return true;}
+    const rid=new URL(req.url,'http://localhost').searchParams.get('restaurantId');
+    if(!/^[0-9a-f-]{36}$/i.test(rid||'')){send(res,400,{error:'Betrieb erforderlich'});return true;}
+    const rows=await pool.query('SELECT pe.id,pe.product_id,pe.name,pe.price_cents FROM product_extras pe JOIN products p ON p.id=pe.product_id JOIN restaurants r ON r.id=p.restaurant_id WHERE r.id=$1 AND r.company_id=$2 AND p.active=true AND pe.active=true ORDER BY pe.sort_order,pe.name',[rid,actor.company_id]);
+    send(res,200,{extras:rows.rows});return true;
+  }
   if (pathname !== "/api/v1/orders/checkout" || req.method !== "POST") return false;
 
   const user = await currentUser(req);
@@ -120,7 +129,7 @@ return async function handlePaymentCheckout(req, res) {
     send(res,400,{error:'Ungültige Menge'});return true;
   }
   const requestKey=body.requestKey.toLowerCase();
-  const canonicalItems=items.map(item=>({productId:item.productId.toLowerCase(),qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId));
+  let canonicalItems;try{canonicalItems=items.map(item=>({productId:item.productId.toLowerCase(),qty:item.qty,...selectedExtras(item.extraIds,{trade})})).sort((a,b)=>a.productId.localeCompare(b.productId));}catch(e){send(res,400,{error:e.message});return true;}
   if(new Set(canonicalItems.map(item=>item.productId)).size!==canonicalItems.length){send(res,400,{error:'Doppelte Artikelkennung'});return true;}
   const canonicalPayments=payments.map(p=>({method:p.method,amountCents:p.amountCents}));
   const fingerprint=crypto.createHash('sha256').update(JSON.stringify({restaurantId:restaurantId.toLowerCase(),items:canonicalItems,payments:canonicalPayments,receiptEmail,...(trade?{salesMode:'trade',recipient,...(body.tradeDiscountMode!==undefined?{tradeDiscountMode:body.tradeDiscountMode}:{})}: {}),...(discount?{discount}:{}),...(depositReturns.length?{depositReturns,depositReturnReason:body.depositReturnReason.trim(),depositCreditCents:body.depositCreditCents}:{}),...(parked?{parkedBonId:body.parkedBonId,parkedBonVersion:body.parkedBonVersion}:{})})).digest('hex');
@@ -156,12 +165,15 @@ return async function handlePaymentCheckout(req, res) {
       if(!seller||['company_name','street','postal_code','city','vat_id'].some(k=>!String(seller[k]||'').trim()))reject(400,'Für Händlerrechnungen bitte zuerst vollständige Firmendaten und USt-IdNr. im Rechnungsprofil hinterlegen');
     }
     const productMap=new Map(products.rows.map(p=>[p.id,p]));
+    const requestedExtras=canonicalItems.flatMap(i=>i.extraIds||[]);
+    const extraRows=requestedExtras.length?(await client.query('SELECT id,product_id,name,price_cents FROM product_extras WHERE id=ANY($1::uuid[]) AND active=true FOR SHARE',[requestedExtras])).rows:[];
     const cleanItems=[];let totalCents=0;
     for(const item of canonicalItems){
       const product=productMap.get(item.productId),priceCents=Number(trade?tradePrice(tradeTiers.filter(t=>t.product_id===item.productId).map(t=>({minQty:t.min_qty,priceCents:t.price_cents})),item.qty,tradeMode,product?.price_cents):product?.price_cents),taxRate=Number(product?.tax_rate);
       if(trade&&!priceCents)reject(400,tradeMode==='percent'?'Für den Prozentmodus fehlt ein gültiger Artikelpreis.':'Kein Händlerpreis für diese Artikelmenge hinterlegt');
       if(!product||!Number.isSafeInteger(priceCents)||priceCents<0||priceCents>2147483647||!Number.isFinite(taxRate)||taxRate<0||taxRate>100)reject(400,'Ungültiger Artikelpreis oder Steuersatz');
-      totalCents+=priceCents*item.qty;cleanItems.push({product:{...product,price_cents:priceCents},qty:item.qty});
+      let configured;try{configured=pricedExtras({...product,price_cents:priceCents},item.extraIds,extraRows)}catch(e){reject(400,e.message)}
+      totalCents+=configured.price*item.qty;cleanItems.push({product:{...product,name:configured.name,price_cents:configured.price},qty:item.qty,extras:configured.extras});
     }
     if(!Number.isSafeInteger(totalCents)||totalCents<=0||totalCents>2147483647)reject(400,'Ungültiger Gesamtbetrag');
     let adjustment=null;if(discount){try{adjustment={...discountedSale(cleanItems.map(i=>({id:i.product.id,grossCents:i.product.price_cents*i.qty})),discount),actorId:actor.id};totalCents=adjustment.totalCents}catch(e){reject(400,e.message)}}
@@ -174,7 +186,7 @@ return async function handlePaymentCheckout(req, res) {
     if(!Number.isSafeInteger(paymentTotal)||paymentTotal!==totalCents)reject(400,'Zahlungsaufteilung stimmt nicht mit dem Gesamtbetrag überein');
     await client.query("SELECT set_config('bringness.deposit_checkout','yes',true)");
     const order=(await client.query("INSERT INTO orders(restaurant_id,status,total_cents,closed_at) VALUES($1,'paid',$2,now()) RETURNING id,created_at",[restaurantId,totalCents])).rows[0];
-    for(const item of cleanItems)await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,item.product.id,item.product.name,item.product.price_cents,item.product.tax_rate,item.qty]);
+    for(const item of cleanItems){if(item.extras.length)await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,extras_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)',[order.id,item.product.id,item.product.name,item.product.price_cents,item.product.tax_rate,item.qty,JSON.stringify(item.extras)]);else await client.query('INSERT INTO order_items(order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,item.product.id,item.product.name,item.product.price_cents,item.product.tax_rate,item.qty]);}
     for(const l of depositLines){await client.query('INSERT INTO pos_deposit_lines(order_id,product_id,label,unit_cents,tax_rate,quantity) VALUES($1,$2,$3,$4,$5,$6)',[order.id,l.productId,l.label,l.unitCents,l.taxRate,l.qty]);await client.query('INSERT INTO order_items(order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5)',[order.id,'Pfand: '+l.label,l.unitCents,l.taxRate,l.qty]);}
     if(depositCredit){for(const l of depositCredit.lines)await client.query('INSERT INTO order_items(order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,$4,$5)',[order.id,'Pfandrücknahme: '+l.label,-l.unitCents,l.taxRate,l.qty]);const number='PF-R-'+String((await client.query("SELECT nextval('deposit_return_number_seq') n")).rows[0].n).padStart(8,'0');await client.query('INSERT INTO pos_deposit_returns(id,restaurant_id,request_key,fingerprint,number,amount_cents,lines,reason,actor_id,credited_order_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[crypto.randomUUID(),restaurantId,requestKey,fingerprint,number,depositCredit.total,JSON.stringify(depositCredit.lines),body.depositReturnReason.trim(),actor.id,order.id]);}
     if(trade)await client.query('INSERT INTO pos_trade_sales(order_id,recipient) VALUES($1,$2::jsonb)',[order.id,JSON.stringify(recipient)]);

@@ -1,8 +1,10 @@
+import {migratePartialSettlement} from './partial-settlement.js';
 import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fail=(status,message,code)=>{throw Object.assign(Error(message),{status,code});};
 export async function migrateTableSettlement(db){
+ await migratePartialSettlement(db);
  await db.query(`CREATE TABLE IF NOT EXISTS pos_table_settlements(
   company_id uuid NOT NULL REFERENCES companies(id),request_key uuid NOT NULL,
   table_id uuid NOT NULL,fingerprint text NOT NULL,response jsonb NOT NULL,
@@ -34,6 +36,7 @@ export function createTableSettlement(pool){return async(req,res)=>{
   if(previous){if(previous.fingerprint!==fingerprint)fail(409,'Zahlungskennung bereits für andere Daten verwendet');await client.query('COMMIT');return send(200,{...previous.response,replayed:true});}
   const orders=(await client.query("SELECT id,total_cents FROM orders WHERE table_id=$1 AND restaurant_id=$2 AND status NOT IN ('paid','cancelled') ORDER BY id FOR UPDATE",[tableId,table.restaurant_id])).rows;
   if(JSON.stringify(orders.map(o=>o.id).sort())!==JSON.stringify(orderIds))fail(409,'Offene Bestellungen haben sich geändert. Tisch erneut prüfen.','SETTLEMENT_CHANGED');
+  if((await client.query('SELECT 1 FROM pos_partial_allocations WHERE order_id=ANY($1::uuid[]) LIMIT 1',[orderIds])).rows.length)fail(409,'Teilzahlung vorhanden. Bitte Teilzahlungen / Restbetrag öffnen.','PARTIAL_SETTLEMENT_REQUIRED');
   let total=0;
   for(const order of orders){if(!Number.isSafeInteger(order.total_cents)||order.total_cents<=0)fail(409,'Ungültiger Bestellbetrag');total+=order.total_cents;}
   if(!Number.isSafeInteger(total)||total!==body.expectedTotalCents)fail(409,'Bestellbetrag hat sich geändert. Tisch erneut prüfen.','SETTLEMENT_CHANGED');

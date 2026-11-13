@@ -16,6 +16,8 @@ export const tseTriggerSql=`
       v_client_id text;
       v_process jsonb;
     BEGIN
+      -- Cash reversal fiscalization is deliberately deferred until provider selection.
+      IF EXISTS(SELECT 1 FROM orders WHERE id=NEW.order_id AND source='pos_refund') THEN RETURN NEW;END IF;
       SELECT restaurant_id,total_cents,created_at,closed_at
         INTO v_restaurant_id,v_order_total,v_order_created,v_order_closed
       FROM orders WHERE id=NEW.order_id;

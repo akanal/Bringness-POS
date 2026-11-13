@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {selectedExtras,pricedExtras} from './checkout-extras.js';
+const product={id:'10000000-0000-4000-8000-000000000001',name:'Pizza',price_cents:1000};
+const first='20000000-0000-4000-8000-000000000001',second='20000000-0000-4000-8000-000000000002';
+const rows=[{id:first,product_id:product.id,name:'Käse',price_cents:150},{id:second,product_id:product.id,name:'Pilze',price_cents:80}];
+test('legacy empty selections retain exact checkout fingerprints',()=>{assert.deepEqual(selectedExtras(),{});assert.deepEqual(selectedExtras([]),{});assert.deepEqual(selectedExtras([second,first]),{extraIds:[first,second]});});
+test('reject duplicate, malformed and trade extras',()=>{for(const input of [[first,first],['wrong'],{},[null],Array(21).fill(first)])assert.throws(()=>selectedExtras(input));assert.throws(()=>selectedExtras([first],{trade:true}));});
+test('price and receipt names use active server rows, never client amounts',()=>{assert.deepEqual(pricedExtras(product,[first,second],rows),{extras:rows.map(({product_id,...r})=>r),price:1230,name:'Pizza (Käse, Pilze)'});assert.equal(pricedExtras(product,[],[]).price,1000);});
+test('foreign, missing, negative and overflowing extra prices fail closed',()=>{assert.throws(()=>pricedExtras(product,[first],[{...rows[0],product_id:second}]));assert.throws(()=>pricedExtras(product,[first],[]));assert.throws(()=>pricedExtras(product,[first],[{...rows[0],price_cents:-1}]));assert.throws(()=>pricedExtras({...product,price_cents:2147483647},[first],rows));});

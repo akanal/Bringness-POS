@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {allocatePartial} from './partial-settlement.js';
+import {receiptLines} from './receipt-lines.js';
+const lines=[{id:'a',order_id:'one',gross_cents:1000,paid_cents:333,unit_price_cents:500},{id:'b',order_id:'two',gross_cents:300,paid_cents:0,unit_price_cents:300}];
+test('amount allocation conserves cents across multiple original orders',()=>{assert.deepEqual(allocatePartial(lines,{amountCents:800}),[{lineId:'a',orderId:'one',cents:667},{lineId:'b',orderId:'two',cents:133}]);assert.equal(allocatePartial(lines,{amountCents:967}).reduce((s,l)=>s+l.cents,0),967);});
+test('guest item allocation never collects already paid portions twice',()=>{assert.deepEqual(allocatePartial(lines,{items:[{lineId:'a',qty:1}]}),[{lineId:'a',orderId:'one',cents:500}]);for(const selection of [{amountCents:968},{amountCents:0},{amountCents:0.5},{items:[{lineId:'a',qty:2}]},{items:[{lineId:'b',qty:1},{lineId:'b',qty:1}]},{items:[{lineId:'foreign',qty:1}]}])assert.throws(()=>allocatePartial(lines,selection));});
+test('reversal net snapshots exactly negate original half-cent VAT rounding',()=>{const original=receiptLines([{unit_price_cents:3,quantity:1,tax_rate_snapshot:20,product_name_snapshot:'Item'}])[0];assert.equal(original.netCents,3);const credit=receiptLines([{unit_price_cents:-3,quantity:1,tax_rate_snapshot:20,fixed_net_cents:-original.netCents,product_name_snapshot:'Storno'}])[0];assert.equal(credit.grossCents,-original.grossCents);assert.equal(credit.netCents,-original.netCents);assert.equal(credit.taxCents+original.taxCents,0);});

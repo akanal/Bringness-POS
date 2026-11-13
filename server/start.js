@@ -1,3 +1,5 @@
+import {createCashReversal,migrateCashReversal} from './cash-reversal.js';
+import {createPartialSettlement} from './partial-settlement.js';
 import {createPosSetup,migratePosSetup} from './pos-setup.js';
 import {readFiscalSetupStatus} from './tse-integration.js';
 import {createMenuImport,migrateMenuImport} from './menu-import.js';
@@ -119,6 +121,8 @@ const handlePosDeviceChecks=createPosDeviceChecks(platformGatewayPool);
 const handleDutyPlanning=createDutyPlanning(platformGatewayPool);
 const handleServiceTeam=createServiceTeam(platformGatewayPool);
 const handleRosterAuto=createRosterAuto(platformGatewayPool);
+const handleCashReversal=createCashReversal(platformGatewayPool);
+const handlePartialSettlement=createPartialSettlement(platformGatewayPool);
 const handleTableSettlement=createTableSettlement(platformGatewayPool);
 const handleWaiterWorkflow=createWaiterWorkflow(platformGatewayPool);
 const handleDisplays=createDisplays(platformGatewayPool);
@@ -199,6 +203,8 @@ http.createServer = function patchedCreateServer(listener) {
       if (await imageRuntime.handle(req,res)) return;
       if (await marketplaceRuntime.handle(req,res)) return;
       if (await shopAssistant.handle(req,res)) return;
+      if (await handleCashReversal(req,res)) return;
+      if (await handlePartialSettlement(req,res)) return;
       if (await handleTableSettlement(req,res)) return;
       if (await handlePaymentCheckout(req,res)) return;
       if (await handlePaymentReceipt(req,res)) return;
@@ -229,7 +235,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (!normalized.includes('/ai') && !normalized.includes('/apps/web/public/shop/') && !normalized.includes('/apps/web/public/superadmin/') && !/\/apps\/web\/public\/(impressum|datenschutz)\/index\.html$/.test(normalized) && !html.includes('/brand-logo.js')) html = html.replace("</head>", '<script src="/brand-logo.js"></script></head>');
       if (normalized.endsWith("/apps/web/public/pos/index.html")) {
         if (!html.includes('/pos/numpad.js')) html = html.replace("</body>", '<script src="/pos/numpad.js"></script></body>');
-        if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=checkout-recovery-20261017"></script></body>');
+        if (!html.includes('/pos/settlement-flow.js')) html = html.replace("</body>", '<script src="/pos/settlement-flow.js?v=partial-payments-20261113"></script></body>');
         if (!html.includes('/pos/payment-flow.js')) html = html.replace("</body>", '<script src="/pos/payment-flow.js?v=checkout-recovery-20261017"></script></body>');
         if (!html.includes('/pos/tax-export.js')) html = html.replace("</body>", '<script src="/pos/tax-export.js?v=time24-complete-20261021"></script></body>');
         if (!html.includes('/pos/availability.js')) html = html.replace("</body>", '<script src="/pos/availability.js?v=time24-development-20261021"></script></body>');
@@ -300,6 +306,7 @@ async function migrateWithRetry(){
       await migrateTransactionalMail(platformGatewayPool);
       await migratePaymentCheckout(platformGatewayPool);
       await migrateTableSettlement(platformGatewayPool);
+      await migrateCashReversal(platformGatewayPool);
       await migrateBillingMail(platformGatewayPool);
       await migrateMerchantCustomerNumbers(platformGatewayPool);
       await migrateStaffInvitations();
