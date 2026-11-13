@@ -1,0 +1,13 @@
+# Speisekarte aus Foto oder PDF
+
+Online-POS → Artikelverwaltung → **Speisekarte aus Foto/PDF importieren**. Im Adminbereich steht derselbe Import innerhalb einer über Kassen-ID geöffneten und vom Kunden freigegebenen Kasse bereit. Die Kassen-ID allein ist keine Berechtigung.
+
+1. JPEG/PNG oder PDF wählen (8 MB, maximal 10 PDF-Seiten), dann Datei erkennen. Alternativ Text einfügen. PDF-Text wird direkt gelesen, Fotos und gescannte Seiten mit der bereits gebündelten deutschen Tesseract-Erkennung lokal verarbeitet. Kein neuer KI-Dienst oder Schlüssel.
+2. Vorschläge mit dem Original vergleichen: Kategorie, Artikelname, Bruttopreis und MwSt. bearbeiten. Mehrere Preise in einer Zeile werden nicht geraten. Nicht erkannte Zeilen können manuell ergänzt werden; höchstens 100 Artikel pro Durchgang. Varianten mit unterschiedlichen Preisen als eigene Artikelzeilen prüfen. Extras, Übersetzungen, Zutaten und Allergene werden nicht automatisch erzeugt.
+3. MwSt. ausdrücklich wählen, gewünschte Zeilen auswählen und die Prüfung bestätigen. Erst **Ausgewählte Artikel in Speisekarte übernehmen** schreibt Kategorien und Artikel. Danach Kasse aktualisieren.
+
+Vorhandene Kategorien werden wiederverwendet. Bereits vorhandene gleichnamige Artikel derselben Kategorie werden abgewählt; ein Konflikt beim Speichern bricht den gesamten Import ab. Vorhandene Produkte werden nicht überschrieben. Inaktive oder mehrdeutige Kategorien müssen zuerst in der Verwaltung geklärt werden. Ein Verbindungsabbruch nach dem Speichern lässt die unveränderte Anfrage erneut prüfen: dieselbe Importkennung liefert das gespeicherte Ergebnis ohne erneuten Import. Währenddessen bleiben die Angaben gesperrt. Entwürfe und Wiederholungskennung liegen im aktuellen Tab, nicht in einer dauerhaften Entwurfsablage; Seite bei ungeklärtem Ergebnis nicht schließen.
+
+Dateien und Erkennungstext werden nicht als Importdateien gespeichert. Der Bestätigungsbeleg enthält nur die Importkennung, Hash der geprüften Daten, erzeugte Produkt-IDs/Zähler und Bearbeiter. Produkt-/Kategoriedaten und Audit werden atomar in einer Transaktion gespeichert. Rechte werden vor der Erkennung, danach und beim Schreiben erneut geprüft. Plattformadministratoren benötigen eine aktive Kundenfreigabe und gültige Sitzung. Der Zugriff endet bei Widerruf/Ablauf. Vorschaurate 6/Minute je Bearbeiter; eine lokale Menü-Dateierkennung gleichzeitig, begrenzter Worker und 90 Sekunden Zeitlimit.
+
+Abnahme: Parser-/Worker-Lebenszyklustests; echte lokale PNG-/Text-PDF-/Scan-PDF-Erkennung; isolierte SQL-/DOM-Integration mit Mandantenrechten, Widerruf nach OCR, Rollback und Wiederholung verlorener Antworten; native Chromium-/WebKit-Formulare bei 390/1280 px. Keine produktiven Speisekarten werden für Tests importiert.
