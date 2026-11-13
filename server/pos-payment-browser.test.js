@@ -652,7 +652,7 @@ test('direct extras and partial cash payments survive native dialog interaction 
  const extra='33333333-3333-4333-8333-333333333333';page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
  await page.route('https://partial.test/**',async route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path==='/pos/')return route.fulfill({contentType:'text/html',body:'<!doctype html><select id="restaurant"><option value="'+restaurant+'">Fixture</option></select><div id="cart"></div><button id="partial">Teilzahlung</button><script>var token="fixture",cart=[{id:"'+product+'",name:"Pizza",price:10,qty:2}];function euro(n){return n+" cents"};function renderCart(){document.getElementById("cart").replaceChildren()};async function renderTableDashboard(){};'+api+'</script><script src="/extras.js"></script><script src="/partial.js"></script><script>renderCart();document.getElementById("partial").onclick=()=>bnOpenPartialTable("'+restaurant+'");</script>'});
+  if(path==='/pos/')return route.fulfill({contentType:'text/html',body:'<!doctype html><meta charset="utf-8"><select id="restaurant"><option value="'+restaurant+'">Fixture</option></select><div id="cart"></div><button id="partial">Teilzahlung</button><script>var token="fixture",cart=[{id:"'+product+'",name:"Pizza",price:10,qty:2}];function euro(n){return n+" cents"};function renderCart(){document.getElementById("cart").replaceChildren()};async function renderTableDashboard(){};'+api+'</script><script src="/extras.js"></script><script src="/partial.js"></script><script>renderCart();document.getElementById("partial").onclick=()=>bnOpenPartialTable("'+restaurant+'");</script>'});
   if(path==='/extras.js')return route.fulfill({contentType:'text/javascript',body:extras});if(path==='/partial.js')return route.fulfill({contentType:'text/javascript',body:partial});
   if(path==='/api/v1/pos/extras')return route.fulfill({json:{extras:[{id:extra,product_id:product,name:'Käse',price_cents:150}]}});
   if(path==='/api/v1/tables/partial'){
@@ -662,7 +662,7 @@ test('direct extras and partial cash payments survive native dialog interaction 
   }return route.abort();
  });
  try{
-  await page.goto('https://partial.test/pos/');await page.locator('[data-direct-extras] summary').click();await page.locator('[data-direct-extras] button').click();await page.locator('dialog input[type=checkbox]').check();await page.getByRole('button',{name:'Übernehmen',exact:true}).click();assert.equal(await page.evaluate(()=>cart[0].price),11.5);
+  await page.goto('https://partial.test/pos/');await page.locator('[data-direct-extras] summary').click();await page.locator('[data-direct-extras] button').click();await page.locator('dialog input[type=checkbox]').check();await page.getByRole('button',{name:'Übernehmen',exact:true}).click();await page.waitForFunction(()=>cart[0].price===11.5);assert.equal(await page.evaluate(()=>cart[0].price),11.5);
   await page.click('#partial');await page.locator('[data-amount]').fill('3,33');await page.locator('[data-pay-amount]').click();await page.waitForFunction(()=>!document.querySelector('[data-retry]').hidden&&!document.querySelector('[data-retry]').disabled);await page.reload();await page.click('#partial');await page.locator('[data-retry]').click();await page.waitForFunction(()=>document.querySelector('[data-status]').textContent.includes('bestätigt'));assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);assert.equal(committed.size,1);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
