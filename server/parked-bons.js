@@ -1,10 +1,11 @@
+import {selectedExtras} from './checkout-extras.js';
 import {readJsonObject} from './http-body.js';
 import {normalizeDiscount} from './sale-discount.js';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export async function migrateParkedBons(db){await db.query(`CREATE TABLE IF NOT EXISTS pos_parked_bons(id uuid PRIMARY KEY,company_id uuid NOT NULL REFERENCES companies(id),restaurant_id uuid NOT NULL REFERENCES restaurants(id),label text NOT NULL,payload jsonb NOT NULL,version int NOT NULL DEFAULT 1,state text NOT NULL DEFAULT 'parked' CHECK(state IN ('parked','paid')),order_id uuid REFERENCES orders(id),created_by uuid NOT NULL REFERENCES users(id),created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());CREATE INDEX IF NOT EXISTS pos_parked_bons_restaurant ON pos_parked_bons(restaurant_id,state);ALTER TABLE receipts ADD COLUMN IF NOT EXISTS sale_adjustment jsonb;`)}
 function payload(b){
  const mode=b.salesMode||'retail',items=b.items;if(!['retail','trade'].includes(mode)||!Array.isArray(items)||!items.length||items.length>100)throw Error('Betriebsart und Artikel erforderlich');
- const clean=items.map(i=>{if(!i||!uuid.test(i.productId||'')||!Number.isSafeInteger(i.qty)||i.qty<1||i.qty>(mode==='trade'?999999:999))throw Error('Ungültige Artikelmenge');return {productId:i.productId.toLowerCase(),qty:i.qty}}).sort((a,b)=>a.productId.localeCompare(b.productId));
+ const clean=items.map(i=>{if(!i||!uuid.test(i.productId||'')||!Number.isSafeInteger(i.qty)||i.qty<1||i.qty>(mode==='trade'?999999:999))throw Error('Ungültige Artikelmenge');return {productId:i.productId.toLowerCase(),qty:i.qty,...selectedExtras(i.extraIds,{trade:mode==='trade'}),...(i.extraIds?.length&&Array.isArray(i.extraSnapshot)?{extraSnapshot:i.extraSnapshot.map(e=>({id:e.id,name:String(e.name||'').slice(0,200),price_cents:e.price_cents}))}:{})}}).sort((a,b)=>a.productId.localeCompare(b.productId));
  if(new Set(clean.map(i=>i.productId)).size!==clean.length)throw Error('Artikel doppelt');
  const recipient={};if(mode==='trade')for(const [k,max]of Object.entries({name:160,street:160,postalCode:20,city:100,country:80,vatId:40})){const v=b.recipient?.[k]??'';if(typeof v!=='string'||v.length>max||/[\x00-\x1f\x7f]/.test(v))throw Error('Ungültige Empfängerdaten');recipient[k]=v.trim();}
  return {salesMode:mode,items:clean,discount:normalizeDiscount(b.discount),...(mode==='trade'?{recipient}:{})};

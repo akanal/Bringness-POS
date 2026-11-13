@@ -645,3 +645,24 @@ test('merchant percentage mode excludes Pfand and the owner choice survives relo
   await page.locator('#tradeDiscountMode').uncheck();await page.waitForFunction(()=>!document.querySelector('#tradeDiscountMode').disabled);assert.equal(mode,'quantity');await page.reload();await page.waitForFunction(()=>document.querySelector('#tradeModeLabel')?.textContent.includes('Mengenrabatt'));assert.equal(mode,'quantity');await page.locator('#tradeProducts .trade-category > summary').click();await page.locator('[data-addqty]').fill('5');await page.locator('[data-add]').click();await page.waitForFunction(()=>document.querySelector('#tradeTotal').textContent.includes('42,50'));await page.evaluate(rid=>renderTradeSettings(rid),restaurant);assert.equal(await page.locator('#tradeDiscountMode').count(),1,'only the sales switch exists; settings have no duplicate');assert.equal(await page.locator('#tradeToggleSave').count(),1);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
+
+test('direct extras and partial cash payments survive native dialog interaction and lost replies',async()=>{
+ const browser=await engine.launch({headless:true}),page=await browser.newPage(),requests=[],committed=new Set(),errors=[];
+ const extras=await readFile(new URL('../apps/web/public/pos/direct-extras.js',import.meta.url),'utf8'),partial=await readFile(new URL('../apps/web/public/pos/partial-payments.js',import.meta.url),'utf8');
+ const extra='33333333-3333-4333-8333-333333333333';page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ await page.route('https://partial.test/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path==='/pos/')return route.fulfill({contentType:'text/html',body:'<!doctype html><select id="restaurant"><option value="'+restaurant+'">Fixture</option></select><div id="cart"></div><button id="partial">Teilzahlung</button><script>var token="fixture",cart=[{id:"'+product+'",name:"Pizza",price:10,qty:2}];function euro(n){return n+" cents"};function renderCart(){document.getElementById("cart").replaceChildren()};async function renderTableDashboard(){};'+api+'</script><script src="/extras.js"></script><script src="/partial.js"></script><script>renderCart();document.getElementById("partial").onclick=()=>bnOpenPartialTable("'+restaurant+'");</script>'});
+  if(path==='/extras.js')return route.fulfill({contentType:'text/javascript',body:extras});if(path==='/partial.js')return route.fulfill({contentType:'text/javascript',body:partial});
+  if(path==='/api/v1/pos/extras')return route.fulfill({json:{extras:[{id:extra,product_id:product,name:'Käse',price_cents:150}]}});
+  if(path==='/api/v1/tables/partial'){
+   if(route.request().method()==='GET')return route.fulfill({json:{remainingCents:1200,lines:[{id:product,product_name_snapshot:'Pizza',unit_price_cents:400,remainingCents:1200}],confirmations:[]}});
+   const body=route.request().postDataJSON();requests.push(body);if(!committed.has(body.requestKey)){committed.add(body.requestKey);return route.abort('failed');}
+   return route.fulfill({json:{requestKey:body.requestKey,tableId:restaurant,method:'cash',amountCents:333,remainingCents:867}});
+  }return route.abort();
+ });
+ try{
+  await page.goto('https://partial.test/pos/');await page.locator('[data-direct-extras] summary').click();await page.locator('[data-direct-extras] button').click();await page.locator('dialog input[type=checkbox]').check();await page.getByRole('button',{name:'Übernehmen',exact:true}).click();assert.equal(await page.evaluate(()=>cart[0].price),11.5);
+  await page.click('#partial');await page.locator('[data-amount]').fill('3,33');await page.locator('[data-pay-amount]').click();await page.waitForFunction(()=>!document.querySelector('[data-retry]').hidden&&!document.querySelector('[data-retry]').disabled);await page.reload();await page.click('#partial');await page.locator('[data-retry]').click();await page.waitForFunction(()=>document.querySelector('[data-status]').textContent.includes('bestätigt'));assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);assert.equal(committed.size,1);assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});

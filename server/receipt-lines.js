@@ -5,7 +5,7 @@ export function receiptLines(items, adjustment) {
   const merchandise=[], deposits=new Map();
   for(const item of items){
     const grossCents=Math.round(Number(item.unit_price_cents)*Number(item.quantity))-lineDiscount(adjustment,item.product_id);
-    const netCents=Math.round(grossCents/(1+Number(item.tax_rate_snapshot)/100));
+    const netCents=item.fixed_net_cents!=null?Number(item.fixed_net_cents):Math.round(grossCents/(1+Number(item.tax_rate_snapshot)/100));
     const row={...item,grossCents,netCents,taxCents:grossCents-netCents};
     // Financial lines have no product. A merchandise name alone must not classify it.
     const kind=!item.product_id && /^Pfand:/.test(item.product_name_snapshot)?'charge':

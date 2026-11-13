@@ -2,8 +2,8 @@
   const cents=value=>Math.round(Number(String(value).replace(',','.'))*100);
   const euro=value=>(Number(value||0)/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'});
   const storageKey=id=>'bringness.checkout.pending.v1:'+id;
-  const signature=(items,restaurantId)=>JSON.stringify({restaurantId,items:items.map(item=>({productId:item.id,qty:item.qty})).sort((a,b)=>a.productId.localeCompare(b.productId)),...(window.bnRetailSales?.extras()||{})});
-  const basketSnapshot=items=>JSON.stringify(items.map(item=>({productId:item.id,qty:item.qty,price:item.price})).sort((a,b)=>a.productId.localeCompare(b.productId)));
+  const signature=(items,restaurantId)=>JSON.stringify({restaurantId,items:items.map(item=>({productId:item.id,qty:item.qty,...(item.extraIds?.length?{extraIds:[...item.extraIds].sort()}:{})})).sort((a,b)=>a.productId.localeCompare(b.productId)),...(window.bnRetailSales?.extras()||{})});
+  const basketSnapshot=items=>JSON.stringify(items.map(item=>({productId:item.id,qty:item.qty,...(item.extraIds?.length?{extraIds:[...item.extraIds].sort()}:{}),price:item.price})).sort((a,b)=>a.productId.localeCompare(b.productId)));
   let busy=false;
 
   // Recompute availability after async deposit loading and every basket change.
@@ -46,7 +46,7 @@
         status.textContent='Gegebener Betrag zu niedrig oder Warenkorb ungültig. Bitte Betrag und Artikel prüfen.';return;
       }
       if(!pending&&!crypto.randomUUID){status.textContent='Sichere Zahlungskennung nicht verfügbar. Bitte Kasse über HTTPS öffnen.';return;}
-      pending={body:{requestKey:pending?.body.requestKey||crypto.randomUUID(),restaurantId,...(window.bnRetailSales?.extras()||{}),items:cart.map(item=>({productId:item.id,qty:item.qty})),payments:[{method,amountCents:total}]},given,cartSignature:signature(cart,restaurantId),basketSnapshot:basketSnapshot(cart)};
+      pending={body:{requestKey:pending?.body.requestKey||crypto.randomUUID(),restaurantId,...(window.bnRetailSales?.extras()||{}),items:cart.map(item=>({productId:item.id,qty:item.qty,...(item.extraIds?.length?{extraIds:[...item.extraIds].sort()}:{})})),payments:[{method,amountCents:total}]},given,cartSignature:signature(cart,restaurantId),basketSnapshot:basketSnapshot(cart)};
     }
     // Persist the immutable key and payload before sending. No token or secret is stored here.
     try{localStorage.setItem(storageKey(restaurantId),JSON.stringify(pending));}

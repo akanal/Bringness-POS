@@ -51,15 +51,16 @@ export function renderTradeInvoice(doc, receipt, items, payments) {
   }
   for(const value of [receipt.document_details?.taxNumber&&'Steuer-Nr.: '+receipt.document_details.taxNumber,receipt.vat_id&&'USt-IdNr.: '+receipt.vat_id].filter(Boolean))metaY=text(value,355,metaY,192,8)+6;
   let y=Math.max(250,recipientY+25,metaY+25);
-  y=text('Rechnung Nr. '+receipt.receipt_number,left,y,width,16,true)+23;
+  y=text((receipt.merchant_snapshot?.reversal?'Stornorechnung Nr. ':'Rechnung Nr. ')+receipt.receipt_number,left,y,width,16,true)+23;
+  if(receipt.merchant_snapshot?.reversal)y=text('Zu '+receipt.merchant_snapshot.reversal.originalNumber+': '+receipt.merchant_snapshot.reversal.reason,left,y)+18;
   y=text('Sehr geehrte Damen und Herren,',left,y)+16;
   y=text('vielen Dank für Ihren Auftrag. Wir berechnen folgende Leistungen:',left,y)+18;
   y=header(y);
   const vat=new Map();let netTotal=0,grossTotal=0;
-  items.forEach((item,index)=>{
+  receiptLines(items,receipt.sale_adjustment).forEach((item,index)=>{
     const quantity=Number(item.quantity),rate=Number(item.tax_rate_snapshot);
-    const gross=Math.round(Number(item.unit_price_cents)*quantity)-lineDiscount(receipt.sale_adjustment,item.product_id);
-    const net=Math.round(gross/(1+rate/100)),tax=gross-net;
+    const gross=item.grossCents;
+    const net=item.netCents,tax=item.taxCents;
     netTotal+=net;grossTotal+=gross;vat.set(rate,(vat.get(rate)||0)+tax);
   });
   const displayItems=receiptLines(items,receipt.sale_adjustment);
@@ -93,7 +94,7 @@ export function renderTradeInvoice(doc, receipt, items, payments) {
   if(grossTotal!==Number(receipt.total_cents))y=text('Hinweis: Positionssumme weicht vom Zahlbetrag ab.',left,y,width,9)+8;
   if(y+payments.length*18+30>bottom)y=next();
   for(const payment of payments){
-    const label=({cash:'Barzahlung',card:'Karte',mollie_center:'Online-Zahlung'})[payment.method]||payment.method;
+    const label=({cash_refund:'Barerstattung',cash:'Barzahlung',card:'Karte',mollie_center:'Online-Zahlung'})[payment.method]||payment.method;
     y=text('Zahlungsart: '+label+' · '+money(payment.amount_cents),left,y,width,10)+5;
   }
   if(receipt.fiscal_status!=='signed')text('Nicht TSE-signiert – kein fiskalisierter Kassenbeleg.',left,y,width,8);

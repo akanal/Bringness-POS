@@ -83,11 +83,11 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   }
 
   const [itemsResult, paymentsResult] = await Promise.all([
-    pool.query("SELECT product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity FROM order_items WHERE order_id=$1 ORDER BY id", [receipt.order_id]),
+    pool.query("SELECT product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity,(to_jsonb(order_items)->>'fixed_net_cents')::int fixed_net_cents FROM order_items WHERE order_id=$1 ORDER BY id", [receipt.order_id]),
     pool.query("SELECT method,amount_cents,created_at FROM payments WHERE order_id=$1 ORDER BY created_at,id", [receipt.order_id]),
   ]);
   const items = itemsResult.rows;
-  const payments = paymentsResult.rows;
+  const payments = paymentsResult.rows;if(receipt.merchant_snapshot?.reversal)payments.push({method:'cash_refund',amount_cents:-receipt.merchant_snapshot.reversal.amountCents});
   let qrBuffer;
   try {
     if(!receipt.formatA4)qrBuffer=await QRCode.toBuffer(receiptUrl(req,receipt.public_token),{width:120,margin:1});
@@ -131,14 +131,15 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   }else doc.moveDown().text("Beleg: " + receipt.receipt_number);
   if(receipt.order_id)doc.text("Bestellnummer: " + orderNumber(receipt));
   doc.text("Datum: " + new Date(receipt.issued_at).toLocaleString("de-DE", { timeZone: "Europe/Berlin" }) + " Uhr");
+  if(receipt.merchant_snapshot?.reversal)doc.text('Storno zu '+receipt.merchant_snapshot.reversal.originalNumber).text(receipt.merchant_snapshot.reversal.reason);
   doc.moveDown();
 
   const vat = new Map();
   let itemsTotal = 0;
-  for (const item of items) {
-    const gross = Math.round(Number(item.unit_price_cents) * Number(item.quantity))-lineDiscount(receipt.sale_adjustment,item.product_id);
+  for (const item of receiptLines(items,receipt.sale_adjustment)) {
+    const gross = item.grossCents;
     const rate = Number(item.tax_rate_snapshot);
-    const tax = gross - Math.round(gross / (1 + rate / 100));
+    const tax = item.taxCents;
     itemsTotal += gross;
     const group = vat.get(rate) || { gross: 0, tax: 0 };
     group.gross += gross;
@@ -154,7 +155,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   doc.moveDown().font("Helvetica-Bold").text("Gesamt: " + euro(receipt.total_cents), { align: "right" });
   doc.font("Helvetica").text("Zahlung:");
   for (const payment of payments) {
-    const label = ({cash:"Bar",card:"Karte",mollie_center:"Online-Zahlung"})[payment.method] || payment.method;
+    const label = ({cash_refund:"Barerstattung",cash:"Bar",card:"Karte",mollie_center:"Online-Zahlung"})[payment.method] || payment.method;
     doc.text("  " + label + ": " + euro(payment.amount_cents), { align: "right" });
   }
   if (itemsTotal !== Number(receipt.total_cents)) doc.text("Hinweis: Positionssumme weicht vom Zahlbetrag ab.");

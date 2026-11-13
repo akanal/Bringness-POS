@@ -20,6 +20,7 @@
    try{localStorage.removeItem(key);}catch{}
    return result;
   }catch(error){
+   if(error.code==='PARTIAL_SETTLEMENT_REQUIRED'){localStorage.removeItem(key);throw error;}
    if(error.code==='SETTLEMENT_CHANGED'){pending.correctable=true;try{localStorage.setItem(key,JSON.stringify(pending));}catch{}}
    throw Error(error.message+' Zahlungsstatus prüfen; mit derselben Kennung abgleichen und Bargeld nicht erneut kassieren.');
   }finally{busy.delete(selection.tableId);}

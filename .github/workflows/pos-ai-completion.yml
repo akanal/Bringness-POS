@@ -51,6 +51,12 @@ jobs:
       - run: node server/ai-tests/transactional-mail.mjs
       - run: node server/ai-tests/checkout-ui.mjs
       - run: node server/ai-tests/settlement-ui.mjs
+      - run: node server/ai-tests/partial-cash.mjs
+      - run: node server/ai-tests/partial-cash-ui.mjs
+      - name: Partial payments and cash reversal concurrency (PostgreSQL)
+        run: node server/ai-tests/partial-cash.mjs
+        env:
+          SETTLEMENT_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/table-settlement.mjs
       - name: Verify immutable table settlement and concurrent retries on PostgreSQL 16
         run: node server/ai-tests/table-settlement.mjs
