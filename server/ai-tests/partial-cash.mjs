@@ -40,7 +40,7 @@ try{
  const before=await call('/tables/partial?tableId='+table);assert.equal(before.body.remainingCents,1200);
  assert.equal((await call('/tables/partial',{requestKey:uuid(),tableId:table,paymentMethod:'card',expectedRemainingCents:1200,amountCents:400})).status,400);
  const first={requestKey:uuid(),tableId:table,paymentMethod:'cash',expectedRemainingCents:1200,items:[{lineId:line,qty:1}]};lose=true;await assert.rejects(call('/tables/partial',first));assert.equal(await count('payments'),1);assert.equal(await count('receipts'),0);
- assert.equal((await call('/tables/partial',first)).body.replayed,true);assert.equal(await count('payments'),1);
+ const expired=await call('/tables/partial',first,{authorization:'Bearer expired'});assert.equal(expired.status,401);assert.equal(expired.body.rejected,false);assert.equal((await call('/tables/partial',first)).body.replayed,true);assert.equal(await count('payments'),1);
  await assert.rejects(query('UPDATE order_items SET quantity=4 WHERE id=$1',[line]));await assert.rejects(query('INSERT INTO order_items(order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,\'Tamper\',1,19,1)',[order]));await assert.rejects(query("UPDATE orders SET status='cancelled' WHERE id=$1",[order]));
  const second={requestKey:uuid(),tableId:table,paymentMethod:'cash',expectedRemainingCents:800,amountCents:333};assert.equal((await call('/tables/partial',second)).body.remainingCents,467);
  const last={requestKey:uuid(),tableId:table,paymentMethod:'cash',expectedRemainingCents:467,amountCents:467};

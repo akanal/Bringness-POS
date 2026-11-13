@@ -36,7 +36,7 @@ export async function migratePartialSettlement(db){await db.query(`
  `);}
 export function createPartialSettlement(pool){return async(req,res)=>{
  const url=new URL(req.url,'http://local');if(url.pathname!=='/api/v1/tables/partial'||!['GET','POST'].includes(req.method))return false;
- const send=(s,b)=>{res.writeHead(s,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(b));return true;};let c;
+ const send=(s,b)=>{res.writeHead(s,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(b));return true;};let c,definitive=false;
  try{
  const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');if(!token)return send(401,{error:'Nicht angemeldet'});
  const b=req.method==='POST'?await readJsonObject(req,{maxBytes:65536}):{tableId:url.searchParams.get('tableId')};
@@ -51,6 +51,7 @@ export function createPartialSettlement(pool){return async(req,res)=>{
  await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[actor.company_id+':partial:'+b.requestKey.toLowerCase()]);
  fingerprint=crypto.createHash('sha256').update(JSON.stringify({tableId:table.id,expectedRemainingCents:b.expectedRemainingCents,items:b.items||null,amountCents:b.amountCents||null,method:'cash'})).digest('hex');
  const old=(await c.query('SELECT fingerprint,response FROM pos_partial_requests WHERE company_id=$1 AND request_key=$2',[actor.company_id,b.requestKey])).rows[0];if(old){if(old.fingerprint!==fingerprint)throw Object.assign(Error('Kennung wurde bereits anders verwendet'),{status:409,collision:true});await c.query('COMMIT');return send(200,{...old.response,replayed:true});}
+ definitive=true;
  }
  const orders=(await c.query("SELECT id,total_cents,status FROM orders WHERE table_id=$1 AND restaurant_id=$2 AND status NOT IN ('paid','cancelled') ORDER BY id FOR UPDATE",[table.id,table.restaurant_id])).rows;
  const ids=orders.map(o=>o.id);
@@ -81,5 +82,5 @@ export function createPartialSettlement(pool){return async(req,res)=>{
  const rest=remaining-amount;if(!rest)await c.query("UPDATE dining_tables SET status='free' WHERE id=$1",[table.id]);
  const result={requestKey:b.requestKey,tableId:table.id,amountCents:amount,remainingCents:rest,method:'cash',receipts,confirmation:'TZ-'+b.requestKey,lines:allocations.map(a=>({...a,name:lines.find(l=>l.id===a.lineId).product_name_snapshot}))};
  await c.query('INSERT INTO pos_partial_requests(company_id,request_key,table_id,fingerprint,response,actor_id) VALUES($1,$2,$3,$4,$5::jsonb,$6)',[actor.company_id,b.requestKey,table.id,fingerprint,JSON.stringify(result),actor.id]);await c.query('COMMIT');return send(200,result);
- }catch(e){if(c)await c.query('ROLLBACK');return send(e.status||503,{error:e.status?e.message:'Zahlungsstatus unklar. Mit derselben Kennung erneut abgleichen.',rejected:!!e.status&&!e.collision});}finally{c?.release();}
+ }catch(e){if(c)await c.query('ROLLBACK');return send(e.status||503,{error:e.status?e.message:'Zahlungsstatus unklar. Mit derselben Kennung erneut abgleichen.',rejected:definitive&&!!e.status&&!e.collision});}finally{c?.release();}
  };}
