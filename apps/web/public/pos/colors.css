@@ -51,3 +51,6 @@
 .bn-deposit-line [data-deposit-count]{font-size:12px;white-space:nowrap}.bn-tender-summary[data-balance=due] [data-change]{color:#ad4100}.bn-tender-summary[data-balance=change] [data-change]{color:#12633b}
 
 .artikelmanage{scroll-margin-top:110px}
+
+/* Explicit text fill also prevents Safari default blue action labels. */
+.posapp .btn:not(.ghost),.posapp .kitchenfoot button,.posapp .brandingcard button{color:#000;-webkit-text-fill-color:#000}
