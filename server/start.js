@@ -244,7 +244,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       }
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
         if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js?v=time24-complete-20261021"></script></body>');
-        if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js?v=time24-complete-20261021"></script></body>');
+        if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js?v=online-register-20261113"></script></body>');
         if (!html.includes('/admin/platform-hub.js')) html = html.replace("</body>", '<script src="/admin/platform-hub.js"></script></body>');
         if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js?v=time24-complete-20261021"></script></body>');
       }

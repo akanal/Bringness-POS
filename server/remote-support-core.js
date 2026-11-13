@@ -32,7 +32,7 @@ export function createRemoteSupport(pool){
 
    const b=req.method==='POST'?await readJsonObject(req,{maxBytes:250000}):{};
    await cleanupRemoteSupport(pool);
-   if(p==='/api/v1/remote-support/devices'&&req.method==='GET')return send(200,{devices:(await pool.query(`SELECT d.id,d.name,d.app_version,d.status,d.last_seen_at,d.support_diagnostics,d.support_grant,c.name company_name,rs.id session_id,rs.state session_state,rs.expires_at FROM devices d JOIN companies c ON c.id=d.company_id LEFT JOIN remote_support_sessions rs ON rs.device_id=d.id AND rs.state IN ('requested','active') WHERE d.platform IN ('windows','win32','browser') ORDER BY d.last_seen_at DESC NULLS LAST LIMIT 500`)).rows,limit:500});
+   if(p==='/api/v1/remote-support/devices'&&req.method==='GET')return send(200,{devices:(await pool.query(`SELECT d.id,d.name,d.platform,d.app_version,d.status,d.last_seen_at,d.support_diagnostics,d.support_grant,c.name company_name,rs.id session_id,rs.state session_state,rs.expires_at FROM devices d JOIN companies c ON c.id=d.company_id LEFT JOIN remote_support_sessions rs ON rs.device_id=d.id AND rs.state IN ('requested','active') WHERE d.platform IN ('windows','win32','browser') ORDER BY d.last_seen_at DESC NULLS LAST LIMIT 500`)).rows,limit:500});
    let device;
    if(!adminPath){if(!/^[a-f0-9]{64}$/.test(b.deviceKey||''))return send(400,{error:'Ungültiges Gerät.'});device=(await pool.query("SELECT id,company_id,status,support_grant FROM devices WHERE device_key=$1 AND company_id=$2 AND status='active'",[b.deviceKey,user.company_id])).rows[0];if(!device)return send(403,{error:'Gerät nicht freigegeben.'})}
    const owner=['owner','admin'].includes(user.role);

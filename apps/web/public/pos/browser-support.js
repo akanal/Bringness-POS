@@ -28,7 +28,7 @@
   if(input.type==='reload')throw Error('Neuladen bitte lokal an der Kasse bestätigen.'); // End access rather than resuming automatically.
   if(input.type==='click'){const el=document.elementFromPoint(input.x/frame.width*innerWidth,input.y/frame.height*innerHeight);if(forbidden(el))throw Error('Geschütztes Element.');const a=el.closest('a');if(a){const url=new URL(a.href,location.href);if(url.origin!==location.origin||!url.pathname.startsWith('/pos/'))throw Error('Navigation nicht freigegeben.')}el.focus?.();el.click();return}
   const el=document.activeElement;if(forbidden(el))throw Error('Geschützte Eingabe.');
-  if(input.type==='scroll'){const scrollable=el.closest('[data-scrollable]')||document.scrollingElement;scrollable.scrollBy(0,input.delta);return}
+  if(input.type==='scroll'){let scrollable=el;while(scrollable&&!(scrollable.scrollHeight>scrollable.clientHeight&&/auto|scroll/.test(getComputedStyle(scrollable).overflowY)))scrollable=scrollable.parentElement;(scrollable||document.scrollingElement).scrollBy(0,input.delta);return}
   if(input.type==='text'){
    if(!el.matches('input:not([type="file"]):not([type="hidden"]),textarea')||el.disabled||el.readOnly)throw Error('Kein Texteingabefeld.');
    const prototype=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(prototype,'value').set.call(el,input.text);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return;
@@ -53,5 +53,6 @@
   let data=canvas.toDataURL('image/jpeg',0.6).split(',')[1];if(data.length>220000)data=canvas.toDataURL('image/jpeg',0.25).split(',')[1];if(data.length>220000)throw Error('Bildschirm zu groß.');
   const viewportWidth=innerWidth,viewportHeight=innerHeight,d=await api('sessions/'+s.id+'/frame',{frame:data,width:canvas.width,height:canvas.height});frame={sequence:d.frameSequence,time:Date.now(),width:canvas.width,height:canvas.height,viewportWidth,viewportHeight};
  }catch{if(session)await stop()}finally{busy=false}}
+ for(const name of ['pointerdown','keydown','input'])document.addEventListener(name,event=>{if(event.isTrusted)frame=null},true);
  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop()});window.addEventListener('pagehide',()=>{if(accepted&&session&&reg)fetch('/api/v1/remote-support/device/sessions/'+session.id+'/stop',{method:'POST',keepalive:true,headers:{authorization:'Bearer '+localStorage.getItem('bringness-pos-token'),'content-type':'application/json'},body:JSON.stringify({deviceKey:reg.deviceKey})}).catch(()=>{});cleanup()});window.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token')stop()});setInterval(tick,2000);
 })();
