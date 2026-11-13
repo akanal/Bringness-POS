@@ -77,6 +77,9 @@ jobs:
         run: npm install --prefix "$RUNNER_TEMP/center-deps" --no-save pg@8.13.1 playwright@1.62.1 pdfkit@0.17.2 qrcode@1.5.4
       - name: Install browser engine
         run: node "$RUNNER_TEMP/center-deps/node_modules/playwright/cli.js" install --with-deps ${{ matrix.browser }}
+      - name: Verify reviewed menu import and responsive layout
+        run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node server/menu-import-browser.mjs
+
       - name: Run authorization checks
         run: CENTER_TEST_PDFKIT="$RUNNER_TEMP/center-deps/node_modules/pdfkit/js/pdfkit.js" CENTER_TEST_QRCODE="$RUNNER_TEMP/center-deps/node_modules/qrcode/lib/index.js" node --test server/center-payment-receipt.test.js server/center-core.test.js server/center-payment-recovery.test.js server/center-notifications.test.js server/center-guest-push.test.js server/center-table-qr.test.js server/center-payment-core.test.js server/center-mollie-connect.test.js server/center-mollie-payment.test.js server/center-mollie-checkout.test.js server/center-mollie-mode.test.js server/center-guest-checkout.test.js server/center-stock-bridge.test.js server/tse-signing-worker.test.js
       - name: Verify migration and lifecycle on PostgreSQL
@@ -90,9 +93,6 @@ jobs:
 
       - name: Verify online register admin forms and responsive layout
         run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node server/online-registers-browser.mjs
-
-      - name: Verify reviewed menu import and responsive layout
-        run: CENTER_TEST_BROWSER="${{ matrix.browser }}" CENTER_TEST_PLAYWRIGHT="$RUNNER_TEMP/center-deps/node_modules/playwright/index.mjs" node server/menu-import-browser.mjs
 
       - name: Save module overview previews
         if: always()
