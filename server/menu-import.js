@@ -1,3 +1,4 @@
+import {csvMenuPreview} from './menu-import-csv.js';
 import crypto from 'node:crypto';
 import {readJsonObject} from './http-body.js';
 import {menuPreview,reviewedMenu,menuKey,menuDigest,menuFail} from './menu-import-core.js';
@@ -39,8 +40,8 @@ export function createMenuImport(pool,{recognize=recognizeMenuFile}={}){
    if(path.endsWith('/preview')){
     const now=Date.now();for(const [key,value] of attempts)if(now-value.at>60000)attempts.delete(key);
     const rate=attempts.get(initial.actor.id);if(rate&&rate.count>=6)menuFail('Bitte eine Minute bis zur nächsten Vorschau warten.',429);if(!rate&&attempts.size>=500)menuFail('Vorschau momentan ausgelastet.',429);attempts.set(initial.actor.id,{at:rate?.at||now,count:(rate?.count||0)+1});
-    const extracted=b.data?await recognize(b):{text:b.text,confidence:null};
-    await authorize(pool,req,b);const draft=menuPreview(extracted.text);
+    const extracted=b.csv!==undefined?{text:b.csv,confidence:null}:b.data?await recognize(b):{text:b.text,confidence:null};
+    await authorize(pool,req,b);const draft=b.csv!==undefined?csvMenuPreview(extracted.text,b.csvOptions):menuPreview(extracted.text);
     const existing=(await pool.query('SELECT p.name,c.name category FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.restaurant_id=$1',[initial.restaurant.id])).rows;
     for(const row of draft.rows)if(existing.some(p=>menuKey(p.name)===menuKey(row.name)&&menuKey(p.category)===menuKey(row.category))){row.selected=false;row.warning='Artikel in dieser Kategorie bereits vorhanden. Bestehende Artikel werden nicht überschrieben.'}
     return send(200,{...draft,confidence:extracted.confidence,restaurant:{id:initial.restaurant.id,name:initial.restaurant.name},...(extracted.confidence!==null&&extracted.confidence<60?{recognitionWarning:'Texterkennung unsicher. Alle Angaben mit dem Original vergleichen.'}:{})});
