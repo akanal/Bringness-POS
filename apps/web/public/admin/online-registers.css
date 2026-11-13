@@ -1,0 +1,1 @@
+#detail{overflow-wrap:anywhere}#detail form{max-width:640px;margin:22px 0}#detail input:not([type=checkbox]),#detail select,#detail textarea{display:block;width:100%;font:inherit;padding:10px;border:1px solid #b8c2cc;border-radius:6px}#detail textarea{min-height:90px;resize:vertical}header{flex-wrap:wrap}#q{display:block;width:min(100%,640px)}
