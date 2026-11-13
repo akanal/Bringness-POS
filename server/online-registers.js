@@ -1,3 +1,4 @@
+import {migrateRegisterMaintenance,registerMaintenance,acknowledgeRegisterMaintenance,handleRegisterTools} from './online-register-tools.js';
 import crypto from 'node:crypto';
 import {readJsonObject} from './http-body.js';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -9,7 +10,7 @@ export async function migrateOnlineRegisters(db){await db.query(`
  device_id uuid PRIMARY KEY REFERENCES devices(id),restaurant_id uuid NOT NULL REFERENCES restaurants(id),
  management_until timestamptz,granted_by uuid REFERENCES users(id),updated_at timestamptz NOT NULL DEFAULT now());
  CREATE INDEX IF NOT EXISTS online_registers_restaurant ON online_registers(restaurant_id);
-`)}
+`);await migrateRegisterMaintenance(db)}
 export function createOnlineRegisters(pool){return async(req,res)=>{
  const url=new URL(req.url,'http://local'),p=url.pathname,base='/api/v1/online-registers';
  if(p!==base&&!p.startsWith(base+'/'))return false;
@@ -23,7 +24,7 @@ export function createOnlineRegisters(pool){return async(req,res)=>{
    FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()
    AND u.status='active' AND NOT coalesce(u.must_change_password,false)`,[digest(raw)])).rows[0]:null;
   if(!actor)fail('Bitte anmelden.',401);
-  const b=['POST','PUT'].includes(req.method)?await readJsonObject(req,{maxBytes:32768}):{};
+  const b=['POST','PUT'].includes(req.method)?await readJsonObject(req,{maxBytes:320000}):{};
   let result,status=200;
   const audit=async(device,event,payload={})=>db.query(`INSERT INTO audit_log(company_id,actor_user_id,event_type,entity_type,entity_id,payload)
    VALUES($1,$2,$3,'device',$4,$5::jsonb)`,[device.company_id,actor.id,'online_register.'+event,device.id,JSON.stringify(payload)]);
@@ -35,12 +36,15 @@ export function createOnlineRegisters(pool){return async(req,res)=>{
    // A key may never be moved between tenants or restaurants.
    const d=(await db.query(`INSERT INTO devices(company_id,device_key,name,platform,app_version,last_seen_at)
     VALUES($1,$2,'Online-Kasse','browser',$3,now()) ON CONFLICT(device_key) DO UPDATE SET last_seen_at=now(),app_version=EXCLUDED.app_version
-    WHERE devices.company_id=EXCLUDED.company_id AND devices.platform='browser' AND devices.status='active' RETURNING id,company_id,status`,[actor.company_id,b.deviceKey,'web-20261113'])).rows[0];
+    WHERE devices.company_id=EXCLUDED.company_id AND devices.platform='browser' AND devices.status='active' RETURNING id,company_id,status`,[actor.company_id,b.deviceKey,'web-maintenance-20261112'])).rows[0];
    if(!d)fail('Kassenkennung nicht verfügbar.',409);
    await db.query('INSERT INTO online_registers(device_id,restaurant_id) VALUES($1,$2) ON CONFLICT(device_id) DO NOTHING',[d.id,r.id]);
    const reg=(await db.query('SELECT restaurant_id,management_until FROM online_registers WHERE device_id=$1',[d.id])).rows[0];
    if(reg.restaurant_id!==r.id)fail('Kasse gehört zu einem anderen Betrieb.',409);
-   result={id:d.id,...reg};
+   result={id:d.id,...reg,maintenance:(await registerMaintenance(db,d.id)).filter(x=>['requested','accepted'].includes(x.state))};
+  }else if(p===base+'/maintenance-ack'&&req.method==='POST'){
+   if(!['owner','admin','manager','cashier'].includes(actor.role))fail('Keine Kassenberechtigung.',403);
+   const ack=await acknowledgeRegisterMaintenance(db,actor,b,audit);result=ack.data;status=ack.status;
   }else if(p===base+'/grant'&&req.method==='POST'){
    if(!['owner','admin'].includes(actor.role))fail('Nur Inhaber und Administratoren.',403);
    if(!uuid.test(b.id||'')||typeof b.enabled!=='boolean')fail('Ungültige Freigabe.');
@@ -49,6 +53,7 @@ export function createOnlineRegisters(pool){return async(req,res)=>{
    if(!d)fail('Kasse nicht gefunden.',404);
    const grant=(await db.query(`UPDATE online_registers SET management_until=CASE WHEN $2 THEN now()+interval '1 hour' ELSE NULL END,
     granted_by=$3,updated_at=now() WHERE device_id=$1 RETURNING management_until`,[d.id,b.enabled,actor.id])).rows[0];
+   await db.query("UPDATE online_register_maintenance SET state='cancelled',updated_at=now() WHERE device_id=$1 AND state IN ('requested','accepted')",[d.id]);
    await audit(d,b.enabled?'granted':'revoked');result=grant;
   }else{
    if(!actor.platform_admin)fail('Nur freigeschaltete Plattformadministratoren.',403);
@@ -60,7 +65,7 @@ export function createOnlineRegisters(pool){return async(req,res)=>{
      WHERE ($1='' OR d.id::text=$1 OR r.name ILIKE '%'||$1||'%' OR c.name ILIKE '%'||$1||'%')
      ORDER BY d.last_seen_at DESC NULLS LAST,d.id LIMIT 100`,[q])).rows};
    }else{
-    const match=p.slice(base.length).match(/^\/([^/]+)(?:\/(catalog|settings|category|product|audit))?$/);
+    const match=p.slice(base.length).match(/^\/([^/]+)(?:\/(catalog|settings|category|product|audit|menu-details|image|extra|translation|category-settings|branding|health|maintenance))?$/);
     if(!match||!uuid.test(match[1]))fail('Kassen-ID nicht gefunden.',404);
     const d=(await db.query(`SELECT d.id,d.company_id,d.status,d.last_seen_at,d.app_version,o.restaurant_id,o.management_until,
      r.name,r.mode FROM online_registers o JOIN devices d ON d.id=o.device_id JOIN restaurants r ON r.id=o.restaurant_id
@@ -69,8 +74,11 @@ export function createOnlineRegisters(pool){return async(req,res)=>{
      WHERE d.id=$1 AND d.status='active' AND o.management_until>now() FOR UPDATE OF o`,[match[1]])).rows[0];
     if(!d)fail('Keine aktive Kundenfreigabe für diese Kasse.',403);
     const action=match[2]||'diagnostics';
-    if(req.method==='GET'&&action==='diagnostics')result={register:{id:d.id,restaurant_id:d.restaurant_id,name:d.name,mode:d.mode,last_seen_at:d.last_seen_at,app_version:d.app_version,management_until:d.management_until},diagnostics:{database:'ok',serverTime:new Date().toISOString(),online:Boolean(d.last_seen_at&&Date.now()-Date.parse(d.last_seen_at)<120000)},capabilities:['catalog','settings','diagnostics','audit'],screenSupport:'explicit_browser_share'};
-    else if(req.method==='GET'&&action==='catalog')result={categories:(await db.query('SELECT id,name,active FROM categories WHERE restaurant_id=$1 ORDER BY sort_order,name',[d.restaurant_id])).rows,products:(await db.query('SELECT id,category_id,name,description,price_cents,tax_rate,active FROM products WHERE restaurant_id=$1 ORDER BY name',[d.restaurant_id])).rows};
+    const tool=await handleRegisterTools({db,device:d,actor,raw,action,method:req.method,b,url,audit});
+    if(tool){result=tool.data;status=tool.status;}
+    else
+    if(req.method==='GET'&&action==='diagnostics')result={register:{id:d.id,restaurant_id:d.restaurant_id,name:d.name,mode:d.mode,last_seen_at:d.last_seen_at,app_version:d.app_version,management_until:d.management_until},diagnostics:{database:'ok',serverTime:new Date().toISOString(),online:Boolean(d.last_seen_at&&Date.now()-Date.parse(d.last_seen_at)<120000)},capabilities:['catalog','settings','diagnostics','audit','menu-details','image','extra','translation','category-settings','branding','health','maintenance'],screenSupport:'explicit_browser_share'};
+    else if(req.method==='GET'&&action==='catalog')result={categories:(await db.query('SELECT id,name,active,sort_order FROM categories WHERE restaurant_id=$1 ORDER BY sort_order,name',[d.restaurant_id])).rows,products:(await db.query('SELECT id,category_id,name,description,price_cents,tax_rate,active FROM products WHERE restaurant_id=$1 ORDER BY name',[d.restaurant_id])).rows};
     else if(req.method==='GET'&&action==='audit')result={events:(await db.query("SELECT event_type,created_at,payload FROM audit_log WHERE entity_type='device' AND entity_id=$1 AND event_type LIKE 'online_register.%' ORDER BY created_at DESC LIMIT 100",[d.id])).rows};
     else if(req.method==='PUT'&&action==='settings'){
      const name=text(b.name,120,2);if(!['counter','restaurant'].includes(b.mode))fail('Ungültige Betriebsart.');

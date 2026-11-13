@@ -23,7 +23,7 @@
    const p=panel('Fernhilfe aktiv: '+(control?'Bildschirm und Bedienung':'nur Bildschirm')+'. Du kannst jederzeit stoppen.');button(p,'Fernhilfe sofort stoppen',stop);
   }catch(e){await stop();const p=panel(e.message||'Bildschirmfreigabe nicht möglich.');button(p,'Schließen',()=>p.remove())}
  }
- function forbidden(el){return !el||Boolean(el.closest('#browserSupportNotice,input[type="password"],input[autocomplete="current-password"],input[autocomplete="new-password"],input[autocomplete^="cc-"],input[autocomplete="one-time-code"],iframe'))}
+ function forbidden(el){return !el||Boolean(el.closest('#browserSupportNotice,#registerMaintenanceNotice,#onlineGrant,#onlineRevoke,input[type="password"],input[autocomplete="current-password"],input[autocomplete="new-password"],input[autocomplete^="cc-"],input[autocomplete="one-time-code"],iframe'))}
  function execute(input){
   if(!verified()||!control||!frame||frame.sequence!==input.frameSequence||Date.now()-frame.time>10000||frame.viewportWidth!==innerWidth||frame.viewportHeight!==innerHeight)throw Error('Veralteter Bildschirm.');
   if(input.type==='reload')throw Error('Neuladen bitte lokal an der Kasse bestätigen.'); // End access rather than resuming automatically.
@@ -35,7 +35,14 @@
    const prototype=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(prototype,'value').set.call(el,input.text);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return;
   }
   // Browser-reserved keys and trusted OS input cannot be synthesized safely.
-  if(input.type==='key'&&input.key==='Enter'&&el.form){el.form.requestSubmit();return}
+  if(input.type==='key'){
+   if(input.key==='Enter'&&el.matches('button,a[href]')&&!el.disabled){el.click();return}
+   if(input.key==='Enter'&&el.form){el.form.requestSubmit();return}
+   if(['ArrowUp','ArrowDown'].includes(input.key)&&el.matches('select')&&!el.disabled){const indices=Array.from(el.options).map((o,i)=>!o.disabled&&!o.hidden?i:-1).filter(i=>i>=0),at=indices.indexOf(el.selectedIndex),next=indices[Math.max(0,Math.min(indices.length-1,at+(input.key==='ArrowDown'?1:-1)))];if(next===undefined)throw Error('Keine Auswahl.');el.selectedIndex=next;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return}
+   if(input.key==='Tab'){const fields=Array.from(document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]')).filter(n=>n.tabIndex>=0&&!n.disabled&&!forbidden(n)&&n.getClientRects().length);if(!fields.length)throw Error('Kein erreichbares Feld.');fields[(fields.indexOf(el)+1)%fields.length].focus();return}
+   if(input.key==='Escape'){const dialog=document.querySelector('dialog[open]');if(dialog&&!dialog.querySelector('input[type=password],input[autocomplete=one-time-code]')){dialog.close();return}}
+   if(['Backspace','ArrowLeft','ArrowRight'].includes(input.key)&&el.matches('input,textarea')&&!el.disabled&&!el.readOnly&&typeof el.selectionStart==='number'){const start=el.selectionStart,end=el.selectionEnd;if(input.key==='Backspace'){const from=start===end?Math.max(0,start-1):start;el.setRangeText('',from,end,'end');el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))}else{const next=Math.max(0,Math.min(el.value.length,start+(input.key==='ArrowRight'?1:-1)));el.setSelectionRange(next,next)}return}
+  }
   throw Error('Diese Taste bitte lokal an der Kasse bedienen.');
  }
  async function tick(){if(busy||document.hidden)return;busy=true;try{

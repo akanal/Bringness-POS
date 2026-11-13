@@ -1,1 +1,3 @@
 .browser-support-notice{position:fixed;z-index:2147483647;left:12px;right:12px;bottom:12px;padding:14px;background:#fff8db;color:#222;border:2px solid #84610a;border-radius:8px;box-shadow:0 2px 16px #0004}.browser-support-notice p{margin:0 0 8px}.browser-support-notice button{margin:4px;padding:8px 12px;min-height:40px}
+
+#registerMaintenanceNotice{top:12px;bottom:auto}

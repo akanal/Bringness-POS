@@ -14,7 +14,10 @@ const wait=async f=>{for(let i=0;i<100;i++){if(f())return;await new Promise(r=>s
  const el=h.w.document.querySelector('#normal');el.focus();h.command({type:'text',text:'Speisekarte',frameSequence:1});await h.run();assert.equal(el.value,'Speisekarte');assert.equal(h.acks.at(-1).state,'completed');
  const secret=h.w.document.querySelector('#secret');secret.focus();h.command({type:'text',text:'verboten',frameSequence:2});await h.run();assert.equal(secret.value,'');assert.equal(h.acks.at(-1).state,'failed');
  el.focus();h.command({type:'text',text:'alt',frameSequence:1});await h.run();assert.equal(el.value,'Speisekarte');assert.equal(h.acks.at(-1).state,'failed');
- h.w.document.querySelector('#browserSupportNotice button').click();await wait(()=>h.stops===1);assert.equal(h.track.readyState,'ended');h.dom.window.close();
+ const select=h.w.document.createElement('select');select.innerHTML='<option>A</option><option>B</option>';h.w.document.body.append(select);select.focus();h.command({type:'key',key:'ArrowDown',frameSequence:h.frames});await h.run();assert.equal(select.value,'B');assert.equal(h.acks.at(-1).state,'completed');
+ el.focus();el.setSelectionRange(el.value.length,el.value.length);h.command({type:'key',key:'Backspace',frameSequence:h.frames});await h.run();assert.equal(el.value,'Speisekart');
+ let permissionClicked=false;const local=h.w.document.createElement('aside');local.id='registerMaintenanceNotice';local.innerHTML='<button>Nur lokal bestätigen</button>';h.w.document.body.append(local);local.querySelector('button').onclick=()=>permissionClicked=true;h.w.document.elementFromPoint=()=>local.querySelector('button');h.command({type:'click',x:1,y:1,frameSequence:h.frames});await h.run();assert.equal(permissionClicked,false);assert.equal(h.acks.at(-1).state,'failed');
+h.w.document.querySelector('#browserSupportNotice button').click();await wait(()=>h.stops===1);assert.equal(h.track.readyState,'ended');h.dom.window.close();
 }
 {
  const h=setup();await h.run();h.other();h.w.document.querySelector('#browserSupportNotice button').click();await wait(()=>h.track.readyState==='ended');assert.equal(h.stops,0);assert.equal(h.frames,0);assert(h.w.document.body.textContent.includes('ausschließlich diesen'));h.dom.window.close();

@@ -2,20 +2,24 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {Readable} from 'node:stream';
 import {PGlite} from '@electric-sql/pglite';
-import {JSDOM} from 'jsdom';
+import {JSDOM,VirtualConsole} from 'jsdom';
 import fs from 'node:fs';
 import {createOnlineRegisters,migrateOnlineRegisters} from '../online-registers.js';
 const db=new PGlite();await db.waitReady;
 const query=async(sql,args)=>{if(args===undefined&&sql.includes(';')){await db.exec(sql);return {rows:[],rowCount:0}}const r=await db.query(sql,args);return {...r,rowCount:r.affectedRows??r.rows.length}};
 let connectionTail=Promise.resolve();
 const pool={query,connect:async()=>{const previous=connectionTail;let release;connectionTail=new Promise(r=>release=r);await previous;return {query,release}}},id=()=>crypto.randomUUID(),hash=s=>crypto.createHash('sha256').update(s).digest('hex');
-await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text);CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text,mode text DEFAULT 'counter');
+await db.exec(`CREATE TABLE companies(id uuid PRIMARY KEY,name text);CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text,mode text DEFAULT 'counter',logo_data text);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);
  CREATE TABLE sessions(token_hash text PRIMARY KEY,user_id uuid,expires_at timestamptz);CREATE TABLE platform_admins(user_id uuid,active boolean);
  CREATE TABLE devices(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid,device_key text UNIQUE,name text,platform text,app_version text,status text DEFAULT 'active',last_seen_at timestamptz);
  CREATE TABLE categories(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,name text,active boolean DEFAULT true,sort_order int DEFAULT 0);
- CREATE TABLE products(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,category_id uuid,name text,description text,price_cents int,tax_rate numeric(5,2),active boolean DEFAULT true);
+ CREATE TABLE products(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),restaurant_id uuid,category_id uuid,name text,description text,price_cents int,tax_rate numeric(5,2),active boolean DEFAULT true,image_url text);
  CREATE TABLE audit_log(company_id uuid,actor_user_id uuid,event_type text,entity_type text,entity_id text,payload jsonb,created_at timestamptz DEFAULT now());`);
+await db.exec(`CREATE TABLE product_extras(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),product_id uuid REFERENCES products(id),name text,price_cents int,sort_order int DEFAULT 0,active boolean DEFAULT true);
+ CREATE TABLE product_translations(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),product_id uuid REFERENCES products(id),language_code text,description text,ingredients text,allergens text,UNIQUE(product_id,language_code));
+ CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,status text);CREATE TABLE receipts(id uuid PRIMARY KEY,order_id uuid,fiscal_status text);
+ CREATE TABLE pos_device_checks(restaurant_id uuid,outcome text);`);
 await migrateOnlineRegisters(pool);await migrateOnlineRegisters(pool);
 const co=id(),other=id(),rid=id(),rid2=id(),otherRid=id(),owner=id(),admin=id(),waiter=id(),stranger=id();
 await query("INSERT INTO companies VALUES($1,'Kunde'),($2,'Andere Firma')",[co,other]);
@@ -47,6 +51,45 @@ assert.equal((await call('/'+did+'/catalog')).products[0].price_cents,1390);
 assert.equal((await call('/'+did+'/settings',{name:'Neuer Name',mode:'restaurant'},'platform','PUT')).restaurant.mode,'restaurant');
 assert.equal((await call('/'+did+'/settings',{name:'Neuer Name',mode:'arbitrary'},'platform','PUT')).status,400);
 assert.equal((await call('/'+did+'/audit')).events.filter(e=>e.event_type==='online_register.product.saved').length,3);
+// Extended menu tools use the same restaurant-scoped grant and real transactions.
+const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
+assert.equal((await call('/'+did+'/image',{productId:pr.product.id,image:png},'platform','PUT')).status,200);
+assert.equal((await call('/'+did+'/image',{productId:pr.product.id,image:'https://foreign.test/private'},'platform','PUT')).status,400);
+assert.equal((await call('/'+did+'/image',{productId:pr.product.id,image:'data:image/svg+xml;base64,PHN2Zz4='},'platform','PUT')).status,400);
+assert.equal((await call('/'+did+'/branding',{logo:png},'platform','PUT')).status,200);
+assert.equal((await call('/'+did+'/branding',{logo:'data:image/png;base64,YmFk'},'platform','PUT')).status,400);
+const extra={id:id(),productId:pr.product.id,name:'Extra Käse',price_cents:150,sort_order:0,active:true};
+assert.equal((await call('/'+did+'/extra',extra)).status,201);assert.equal((await call('/'+did+'/extra',extra)).id,extra.id);
+assert.equal((await call('/'+did+'/extra',{...extra,price_cents:-1})).status,400);
+assert.equal((await call('/'+did+'/extra',{...extra,active:false},'platform','PUT')).status,200);
+const translation={productId:pr.product.id,language:'de',description:'Hausgemacht',ingredients:'Käse',allergens:'Milch'};
+assert.equal((await call('/'+did+'/translation',translation,'platform','PUT')).status,200);
+assert.equal((await call('/'+did+'/translation',{...translation,language:'../../'},'platform','PUT')).status,400);
+let details=await call('/'+did+'/menu-details?productId='+pr.product.id);assert.equal(details.extras.length,1);assert.equal(details.extras[0].active,false);assert.equal(details.translations[0].ingredients,'Käse');assert.equal(details.product.image_url,png);
+const foreignProduct=id();await query("INSERT INTO products(id,restaurant_id,name) VALUES($1,$2,'Fremd')",[foreignProduct,otherRid]);
+assert.equal((await call('/'+did+'/menu-details?productId='+foreignProduct)).status,404);
+assert.equal((await call('/'+did+'/extra',{...extra,productId:foreignProduct},'platform','PUT')).status,404);
+assert.equal((await call('/'+did+'/translation',{...translation,productId:foreignProduct},'platform','PUT')).status,404);
+assert.equal((await call('/'+did+'/category-settings',{id:cat.id,name:'Speisen neu',active:true,sort_order:7},'platform','PUT')).status,200);
+assert.equal((await call('/'+did+'/category-settings',{id:foreign,name:'Fremd',active:false,sort_order:0},'platform','PUT')).status,404);
+assert.equal((await call('/'+did+'/health')).counts.products,1);
+// Maintenance is a request, never a server command; customer ACK is device/tenant scoped.
+const maintenance=()=>({id:id(),kind:'reload'});let request=maintenance();
+assert.equal((await call('/'+did+'/maintenance',{...request,kind:'shell'})).status,400);
+assert.equal((await call('/'+did+'/maintenance',request)).state,'requested');assert.equal((await call('/'+did+'/maintenance',request)).id,request.id);
+assert.equal((await call('/'+did+'/maintenance',maintenance())).status,409);
+assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'completed',clientVersion:'test'},'owner')).status,409);
+assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'accepted'},'other')).status,403);
+assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'accepted'},'waiter')).status,403);
+assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'accepted'},'owner')).status,200);
+assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'completed',clientVersion:'web-test'},'owner')).status,200);
+assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'completed',clientVersion:'web-test'},'owner')).status,200);
+assert.equal((await call('/'+did+'/maintenance')).requests[0].client_version,'web-test');
+request=maintenance();await call('/'+did+'/maintenance',request);await call('/'+did+'/maintenance',{id:request.id,kind:'cancel'});assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'accepted'},'owner')).status,409);
+request=maintenance();await call('/'+did+'/maintenance',request);await query("UPDATE online_register_maintenance SET expires_at=now()-interval '1 second' WHERE id=$1",[request.id]);assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'accepted'},'owner')).status,409);
+request=maintenance();await call('/'+did+'/maintenance',request);await query('UPDATE platform_admins SET active=false');assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'accepted'},'owner')).status,409);await query('UPDATE platform_admins SET active=true');
+request=maintenance();await call('/'+did+'/maintenance',request);await call('/grant',{id:did,enabled:false},'owner');assert.equal((await call('/maintenance-ack',{id:request.id,deviceKey:key,state:'accepted'},'owner')).status,409);await call('/grant',{id:did,enabled:true},'owner');
+
 // No deletion, commands, payments, arbitrary SQL, or cross-register IDs accepted.
 assert.equal((await call('/'+did+'/product',{...product,id:id()},'platform','PUT')).status,404);
 assert.equal((await call('/'+did+'/payment',{amount:10})).status,404);
@@ -57,12 +100,22 @@ await query("UPDATE users SET status='disabled' WHERE id=$1",[owner]);assert.equ
 await query("UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1",[admin]);assert.equal((await call('/'+did)).status,401);await query("UPDATE sessions SET expires_at=now()+interval '1 hour' WHERE user_id=$1",[admin]);
 // Actual DOM admin flow backed by the same SQL handler, no production accounts.
 const html=fs.readFileSync(new URL('../../apps/web/public/admin/online-registers.html',import.meta.url),'utf8');const dom=new JSDOM(html,{url:'https://pos.example/admin/online-registers.html',runScripts:'outside-only'}),w=dom.window;w.AbortSignal=AbortSignal;w.localStorage.setItem('bringness-pos-token','platform');w.fetch=async(url,opts={})=>{const r=await call(String(url).replace('/api/v1/online-registers',''),opts.body?JSON.parse(opts.body):null,'platform',opts.method||'GET');return {ok:r.status<400,json:async()=>r}};
+w.eval(fs.readFileSync(new URL('../../apps/web/public/admin/online-register-tools.js',import.meta.url),'utf8'));
 w.eval(fs.readFileSync(new URL('../../apps/web/public/admin/online-registers.js',import.meta.url),'utf8'));
 const wait=async f=>{for(let i=0;i<200;i++){if(f())return;await new Promise(r=>setTimeout(r,10))}throw Error('UI timeout')};await wait(()=>w.document.querySelector('[data-open]'));w.document.querySelector('[data-open]').click();await wait(()=>w.document.querySelector('#product'));assert(w.document.querySelector('#detail').textContent.includes(did));w.document.querySelector('#edit').value=pr.product.id;w.document.querySelector('#edit').dispatchEvent(new w.Event('change'));assert.equal(w.document.querySelector('#product').elements.price.value,'13.90');
-const f=w.document.querySelector('#settings');f.elements.name.value='DOM Test';f.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:f.querySelector('button')}));await wait(()=>w.document.querySelector('#settings')?.elements.name.value==='DOM Test');
+w.document.querySelector('#toolsProduct').value=pr.product.id;w.document.querySelector('#toolsLoad').click();await wait(()=>w.document.querySelector('#toolsTranslation'));assert.equal(w.document.querySelector('#toolsTranslation').elements.ingredients.value,'Käse');
+const tf=w.document.querySelector('#toolsTranslation');tf.elements.description.value='DOM Beschreibung';tf.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:tf.querySelector('button:not([type=button])')}));await wait(()=>!tf.querySelector('button:not([type=button])').disabled);assert.equal((await call('/'+did+'/menu-details?productId='+pr.product.id)).translations[0].description,'DOM Beschreibung');
+const f=w.document.querySelector('#settings');f.elements.name.value='DOM Test';f.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:f.querySelector('button')}));await wait(()=>w.document.querySelector('#settings')!==f&&w.document.querySelector('#settings')?.elements.name.value==='DOM Test');
 w.close();
 const ownerDom=new JSDOM('<div id="workspace" class="show"></div><select id="restaurant"><option value="'+rid+'">Betrieb</option></select><main id="settings"></main>',{url:'https://pos.example/pos/',runScripts:'outside-only'}),ow=ownerDom.window;ow.AbortSignal=AbortSignal;ow.localStorage.setItem('bringness-pos-token','owner');ow.setInterval=()=>{};ow.fetch=async(url,opts)=>{const r=await call(String(url).replace('/api/v1/online-registers',''),JSON.parse(opts.body),'owner',opts.method);return {ok:r.status<400,json:async()=>r}};
 ow.eval(fs.readFileSync(new URL('../../apps/web/public/pos/online-register.js',import.meta.url),'utf8'));await ow.renderOnlineRegister(ow.document.querySelector('main'));assert(ow.document.querySelector('main').textContent.includes('Bildschirmhilfe wird von diesem Browser nicht unterstützt'));
 ow.document.querySelector('#onlineGrant').click();await wait(()=>ow.document.querySelector('#onlineGrantState').textContent.startsWith('Verwaltung freigegeben'));ow.document.querySelector('#onlineRevoke').click();await wait(()=>ow.document.querySelector('#onlineGrantState').textContent==='Verwaltung nicht freigegeben.');
 ow.document.documentElement.dataset.bringnessEdition='download';const empty=ow.document.createElement('section');await ow.renderOnlineRegister(empty);assert.equal(empty.children.length,0);ownerDom.window.close();
+// Actual client script: no acceptance with a basket, no success before a new page load.
+const maintenanceClientSource=fs.readFileSync(new URL('../../apps/web/public/pos/online-register-maintenance.js',import.meta.url),'utf8'),idleSource=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8').split('\n').find(line=>line.startsWith('window.posMaintenanceIdle='));
+function maintenanceClient(savedMarker){const virtualConsole=new VirtualConsole(),dom=new JSDOM('<div id="workspace" class="show"></div><select id="restaurant"><option value="'+rid+'">Betrieb</option></select>',{url:'https://pos.example/pos/',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole}),cw=dom.window;let tick;cw.AbortSignal=AbortSignal;cw.localStorage.setItem('bringness-pos-token','owner');cw.setInterval=f=>tick=f;cw.eval('var cart=[];var currentModule="kasse";var otherIdle=true;const $=id=>document.getElementById(id);function canLeavePosOperations(){return otherIdle};'+idleSource);if(savedMarker)cw.sessionStorage.setItem('bringness-online-maintenance-reload',savedMarker);cw.onlineRegisterIdentity=async()=>({...await call('/self',{deviceKey:key,restaurantId:rid},'owner'),deviceKey:key});cw.fetch=async(url,opts)=>{const r=await call(String(url).replace('/api/v1/online-registers',''),JSON.parse(opts.body),'owner',opts.method);return {ok:r.status<400,status:r.status,json:async()=>r}};cw.eval(maintenanceClientSource);return {dom,cw,tick:()=>tick()}}
+request=maintenance();assert.equal((await call('/'+did+'/maintenance',request)).status,201);let client=maintenanceClient();client.cw.eval('cart=[{id:"open-basket"}]');await client.tick();client.cw.document.querySelector('#registerMaintenanceNotice button').click();await wait(()=>!client.cw.document.querySelector('#registerMaintenanceNotice button').disabled);assert.equal((await call('/'+did+'/maintenance')).requests.find(x=>x.id===request.id).state,'declined');assert.equal(client.cw.sessionStorage.getItem('bringness-online-maintenance-reload'),null);client.dom.window.close();
+request=maintenance();await call('/'+did+'/maintenance',request);client=maintenanceClient();assert.equal(client.cw.posMaintenanceIdle(),true);client.cw.localStorage.setItem('bringness.checkout.pending.v1:'+rid,'{}');assert.equal(client.cw.posMaintenanceIdle(),false);client.cw.localStorage.removeItem('bringness.checkout.pending.v1:'+rid);client.cw.eval('currentModule="artikel"');assert.equal(client.cw.posMaintenanceIdle(),false);client.cw.eval('currentModule="kasse"');await client.tick();client.cw.document.querySelector('#registerMaintenanceNotice button').click();await wait(()=>client.cw.sessionStorage.getItem('bringness-online-maintenance-reload')!==null);for(let i=0;i<200;i++){if((await call('/'+did+'/maintenance')).requests.find(x=>x.id===request.id)?.state==='accepted')break;await new Promise(r=>setTimeout(r,10))}
+assert.equal((await call('/'+did+'/maintenance')).requests.find(x=>x.id===request.id).state,'accepted');const savedMarker=client.cw.sessionStorage.getItem('bringness-online-maintenance-reload');assert(savedMarker);client.dom.window.close();client=maintenanceClient(savedMarker);await client.tick();assert.equal((await call('/'+did+'/maintenance')).requests.find(x=>x.id===request.id).state,'completed');assert.equal(client.cw.sessionStorage.getItem('bringness-online-maintenance-reload'),null);client.dom.window.close();
+
 const adminHeader=new JSDOM(fs.readFileSync(new URL('../../apps/web/public/admin/index.html',import.meta.url),'utf8'),{url:'https://pos.example/admin/',runScripts:'outside-only'});const linkSource=fs.readFileSync(new URL('../../apps/web/public/admin/online-register-link.js',import.meta.url),'utf8');adminHeader.window.eval(linkSource);adminHeader.window.eval(linkSource);assert.deepEqual(Array.from(adminHeader.window.document.querySelectorAll('nav.admin-products a'),a=>a.textContent),['Markt','POS','AI']);assert.equal(adminHeader.window.document.querySelectorAll('#dash .tabs [data-online-registers]').length,1);adminHeader.window.close();await db.close();console.log('Online register SQL + DOM passed: stable ID, key collision/tenant isolation, owner-only grant, admin access, expiry, revocation, disabled grantor, session and platform revocation, catalog/settings writes, audit, unknown actions and actual form submit.');
