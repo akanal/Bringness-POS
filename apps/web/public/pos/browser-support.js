@@ -1,5 +1,6 @@
 (()=>{
  // Share only the verified current POS tab. Browser and OS dialogs remain local.
+ if(new URLSearchParams(location.search).get('desktop')==='1'||new URLSearchParams(location.search).get('edition')==='download')return;
  const media=navigator.mediaDevices;
  if(!media?.getDisplayMedia||!media?.setCaptureHandleConfig||!window.MediaStreamTrack||!('getCaptureHandle' in MediaStreamTrack.prototype))return;
  const handle=crypto.randomUUID();try{media.setCaptureHandleConfig({handle,exposeOrigin:true,permittedOrigins:[location.origin]})}catch{return}
