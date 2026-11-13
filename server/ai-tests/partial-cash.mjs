@@ -7,6 +7,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {createPartialSettlement,migratePartialSettlement,allocatePartial} from '../partial-settlement.js';
 import {createCashReversal,migrateCashReversal} from '../cash-reversal.js';
 import {createPaymentCheckout,migratePaymentCheckout} from '../payment-checkout.js';
+import {migratePosStockBridge} from '../pos-stock-bridge-core.js';
 import {createPublicReceiptHandler} from '../public-receipt-core.js';
 import {receiptLines} from '../receipt-lines.js';
 const uuid=()=>crypto.randomUUID(),hash=s=>crypto.createHash('sha256').update(s).digest('hex'),postgresUrl=process.env.SETTLEMENT_TEST_DATABASE_URL;let db,adminDb,schema;
@@ -24,13 +25,14 @@ await db.exec(`ALTER TABLE users ADD COLUMN role text DEFAULT 'owner';ALTER TABL
  ALTER TABLE order_items ADD COLUMN extras_snapshot jsonb;
  CREATE TABLE product_extras(id uuid PRIMARY KEY,product_id uuid REFERENCES products(id),name text,price_cents int,active boolean DEFAULT true,sort_order int DEFAULT 0);
  CREATE TABLE personnel_unlocks(token_hash text,session_hash text,user_id uuid,expires_at timestamptz);
- CREATE TABLE pos_stock_links(restaurant_id uuid,active boolean);
+
  `);
-await migratePaymentCheckout(pool);await migratePartialSettlement(pool);await migrateCashReversal(pool);await migratePartialSettlement(pool);await migrateCashReversal(pool);
+await migratePosStockBridge(pool);await migratePaymentCheckout(pool);await migratePartialSettlement(pool);await migrateCashReversal(pool);await migratePartialSettlement(pool);await migrateCashReversal(pool);
 const company=uuid(),restaurant=uuid(),owner=uuid(),table=uuid(),product=uuid(),extra=uuid(),token='synthetic-partial-session',unlock='synthetic-unlock';
 await query("INSERT INTO companies(id,name) VALUES($1,'Fixture')",[company]);await query("INSERT INTO restaurants(id,company_id,name) VALUES($1,$2,'Restaurant')",[restaurant,company]);await query("INSERT INTO users(id,company_id,email,password_hash,display_name) VALUES($1,$2,'owner@example.test','fixture','Owner')",[owner,company]);await query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[hash(token),owner]);await query("INSERT INTO personnel_unlocks VALUES($1,$2,$3,now()+interval '1 day')",[hash(unlock),hash(token),owner]);await query("INSERT INTO dining_tables VALUES($1,$2,'open')",[table,restaurant]);await query("INSERT INTO products(id,restaurant_id,name,price_cents,tax_rate) VALUES($1,$2,'Pizza',1000,19)",[product,restaurant]);await query("INSERT INTO product_extras(id,product_id,name,price_cents) VALUES($1,$2,'Käse',150)",[extra,product]);
 const cash=uuid();await query('INSERT INTO pos_cash_sessions(id,restaurant_id,opening_cents,opened_by) VALUES($1,$2,5000,$3)',[cash,restaurant,owner]);
 const order=uuid(),line=uuid();await query("INSERT INTO orders(id,restaurant_id,table_id,status,total_cents) VALUES($1,$2,$3,'preparing',1200)",[order,restaurant,table]);await query('INSERT INTO order_items(id,order_id,product_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity) VALUES($1,$2,$3,\'Pizza\',400,19,3)',[line,order,product]);
+await query('INSERT INTO pos_stock_links(restaurant_id,connector_id,account_id,company_id,active) VALUES($1,$2,$3,$4,true)',[restaurant,uuid(),uuid(),company]);
 const handlers=[createPublicReceiptHandler(pool),createPartialSettlement(pool),createCashReversal(pool),createPaymentCheckout(pool)];let lose=false;
 const server=http.createServer(async(req,res)=>{const sink=lose?{writeHead(){},end(){}}:res;const lost=lose;lose=false;try{for(const handler of handlers)if(await handler(req,sink))break;if(lost)res.destroy();}catch(e){console.error(e);if(lost)res.destroy();else{res.writeHead(500);res.end('{}')}}});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const base='http://127.0.0.1:'+server.address().port;
@@ -54,6 +56,7 @@ try{
  lose=true;await assert.rejects(call(path,reversal));const replay=await call(path,reversal);assert.equal(replay.body.replayed,true);assert.equal(replay.body.refundedCents,1200);assert.equal((await query('SELECT state FROM tse_transactions WHERE id=$1',[tx])).rows[0].state,'reversal_pending');assert.equal(await count('pos_cash_movements'),1);assert.equal(await count('receipts'),2);assert.equal((await call(path,{...reversal,requestKey:uuid()})).status,409);
  const publicToken=(await query('SELECT public_token FROM receipts WHERE id=$1',[replay.body.receiptId])).rows[0].public_token;const publicResponse=await fetch(base+'/beleg/'+publicToken);assert.equal(publicResponse.status,200);const html=await publicResponse.text();assert.match(html,/Barerstattung/);assert.match(html,new RegExp(receipt.receipt_number));
  const original=receiptLines((await query('SELECT * FROM order_items WHERE order_id=$1',[order])).rows),credit=receiptLines((await query('SELECT oi.* FROM order_items oi JOIN receipts rc ON rc.order_id=oi.order_id WHERE rc.id=$1',[replay.body.receiptId])).rows);assert.equal(credit.reduce((s,l)=>s+l.netCents,0),-original.reduce((s,l)=>s+l.netCents,0));
+ await query('UPDATE pos_stock_links SET active=false WHERE restaurant_id=$1',[restaurant]);
  const checkout={requestKey:uuid(),restaurantId:restaurant,items:[{productId:product,qty:2,extraIds:[extra]}],payments:[{method:'cash',amountCents:2300}]};const sale=await call('/orders/checkout',checkout);assert.equal(sale.status,201,JSON.stringify(sale));const sold=(await query('SELECT * FROM order_items WHERE order_id=$1',[sale.body.id])).rows[0];assert.equal(sold.unit_price_cents,1150);assert.match(sold.product_name_snapshot,/Käse/);assert.equal(sold.extras_snapshot[0].id,extra);
  await query('UPDATE product_extras SET price_cents=9999,active=false WHERE id=$1',[extra]);assert.equal((await call('/orders/checkout',checkout)).body.replayed,true);assert.equal((await call('/orders/checkout',{...checkout,requestKey:uuid()})).status,400);
  assert.throws(()=>allocatePartial([{id:line,order_id:order,gross_cents:1200,paid_cents:333,unit_price_cents:400}],{items:[{lineId:line,qty:3}]}));
