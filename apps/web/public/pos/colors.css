@@ -13,7 +13,7 @@
 .posapp button.primary,.posapp a.primary,.posapp button.pay,.posapp #pay,
 .posapp #tradePay,.posapp #tradeSavePrices,.posapp [data-issue],
 .posapp #catForm>button,.posapp #productForm>button,.posapp #employeeForm>button{
- background:var(--bn-action);border-color:var(--bn-action);color:#fff;font-weight:750}
+ background:var(--bn-action);border-color:var(--bn-action);color:#000;font-weight:750;-webkit-text-fill-color:#000}
 .posapp button.primary:hover:not(:disabled),.posapp button.pay:hover:not(:disabled),.posapp #tradePay:hover:not(:disabled){background:var(--bn-action-hover)}
 .posapp button.danger,.posapp button[data-danger]{background:#fff0f0;color:var(--bn-danger);border-color:#e5a8ae}
 .posapp button:disabled{opacity:.48;cursor:not-allowed}
@@ -38,7 +38,7 @@
 @media(prefers-reduced-motion:no-preference){.posapp button{transition:background-color .12s,border-color .12s}}
 @media print{.posapp{background:#fff}}
 
-.bn-drink-deposit{width:min(390px,calc(100vw - 48px));border:1px solid #bdd2e7;border-radius:14px;padding:20px;background:#f3f8ff;color:#18334c}.bn-drink-deposit::backdrop{background:#10263d66}.bn-drink-deposit h3{margin:0 0 8px}.bn-drink-deposit label{display:grid;gap:6px;margin:12px 0}.bn-drink-deposit input:not([type=checkbox]),.bn-drink-deposit select{box-sizing:border-box;width:100%;padding:10px;border:1px solid #b4c9dc;border-radius:8px;font:inherit;background:#fff}.bn-drink-deposit .bn-deposit-switch{display:flex;align-items:center;font-weight:700}.bn-drink-deposit button{padding:10px 12px;border:1px solid #b4c9dc;border-radius:8px;background:#fff;color:#18334c;cursor:pointer}.bn-drink-deposit .primary{background:var(--bn-action);color:#fff;border-color:var(--bn-action)}.bn-drink-deposit button:disabled{opacity:.5}.bn-drink-deposit :focus-visible{outline:3px solid var(--bn-focus);outline-offset:2px}.bn-deposit-presets{display:flex;gap:6px}.bn-drink-deposit small{font-size:12px}.bn-drink-deposit [role=status]{color:#ab2530}
+.bn-drink-deposit{width:min(390px,calc(100vw - 48px));border:1px solid #bdd2e7;border-radius:14px;padding:20px;background:#f3f8ff;color:#18334c}.bn-drink-deposit::backdrop{background:#10263d66}.bn-drink-deposit h3{margin:0 0 8px}.bn-drink-deposit label{display:grid;gap:6px;margin:12px 0}.bn-drink-deposit input:not([type=checkbox]),.bn-drink-deposit select{box-sizing:border-box;width:100%;padding:10px;border:1px solid #b4c9dc;border-radius:8px;font:inherit;background:#fff}.bn-drink-deposit .bn-deposit-switch{display:flex;align-items:center;font-weight:700}.bn-drink-deposit button{padding:10px 12px;border:1px solid #b4c9dc;border-radius:8px;background:#fff;color:#18334c;cursor:pointer}.bn-drink-deposit .primary{background:var(--bn-action);color:#000;border-color:var(--bn-action);-webkit-text-fill-color:#000}.bn-drink-deposit button:disabled{opacity:.5}.bn-drink-deposit :focus-visible{outline:3px solid var(--bn-focus);outline-offset:2px}.bn-deposit-presets{display:flex;gap:6px}.bn-drink-deposit small{font-size:12px}.bn-drink-deposit [role=status]{color:#ab2530}
 
 /* Product actions must sit above adjacent product cards and remain easy to tap. */
 .cash>.goods>div:has(.product-options[open]){z-index:40}
@@ -51,3 +51,6 @@
 .bn-deposit-line [data-deposit-count]{font-size:12px;white-space:nowrap}.bn-tender-summary[data-balance=due] [data-change]{color:#ad4100}.bn-tender-summary[data-balance=change] [data-change]{color:#12633b}
 
 .artikelmanage{scroll-margin-top:110px}
+
+/* Explicit text fill also prevents Safari default blue action labels. */
+.posapp .btn:not(.ghost),.posapp .kitchenfoot button,.posapp .brandingcard button{color:#000;-webkit-text-fill-color:#000}
