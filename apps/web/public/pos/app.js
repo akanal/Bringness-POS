@@ -262,3 +262,5 @@ function productPicture(product){const value=String(product.emoji||'🍽️');if
 
 
 document.addEventListener('bringness:service-kitchen-changed',()=>{const rid=$('restaurant')?.value;if(rid&&document.body.dataset.posView==='kueche')renderOrderBoard('kueche',rid);});
+
+window.posMaintenanceIdle=()=>{try{return currentModule==="kasse"&&cart.length===0&&!document.querySelector("dialog[open]")&&!localStorage.getItem("bringness.checkout.pending.v1:"+$("restaurant").value)&&canLeavePosOperations()}catch{return false}};

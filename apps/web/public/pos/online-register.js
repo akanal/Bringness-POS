@@ -6,7 +6,7 @@
  async function identify(){
   if(desktop())return null;
   const rid=document.getElementById('restaurant')?.value,token=localStorage.getItem('bringness-pos-token');if(!rid||!token||!document.getElementById('workspace')?.classList.contains('show')){current=null;lastIdentity='';return null}
-  const identity=rid+'|'+token;if(identity===lastIdentity&&Date.now()-lastSeen<30000)return current;
+  const identity=rid+'|'+token;if(identity===lastIdentity&&Date.now()-lastSeen<5000)return current;
   if(busy)return null;busy=true;try{let key=localStorage.getItem('bringness-online-register:'+rid);if(!/^[a-f0-9]{64}$/.test(key||'')){const bytes=crypto.getRandomValues(new Uint8Array(32));key=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('');localStorage.setItem('bringness-online-register:'+rid,key)}const d=await request('self',{restaurantId:rid,deviceKey:key});if(document.getElementById('restaurant')?.value!==rid||localStorage.getItem('bringness-pos-token')!==token)return null;current={...d,deviceKey:key};lastIdentity=identity;lastToken=token;lastSeen=Date.now();return current}finally{busy=false}
  }
  window.renderOnlineRegister=async area=>{
