@@ -20,3 +20,27 @@ test('basket events update the display immediately without waiting for the polli
 test('opening the display from Settings publishes the existing retail basket without returning to Kasse',async()=>{
  const f=setup(),w=f.w;w.localStorage.setItem('bringness.customer-display.enabled.v1:owner:r1','yes');w.document.getElementById('moduleBody').replaceChildren();w.bnRenderCustomerDisplaySettings(w.document.getElementById('moduleBody'));let target;const open=w.open;w.open=url=>{target=url;return open()};w.document.getElementById('customerDisplayOpen').click();assert.equal(w.document.body.dataset.posView,'einstellungen');w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,source:f.popup,data:{type:'bringness:customer-display-ready',channel:target.split('#')[1]}}));assert.equal(f.messages.at(-1).snapshot.state,'cart');assert.equal(f.messages.at(-1).snapshot.items[0].qty,2);assert.equal(f.messages.at(-1).snapshot.totalCents,1950);w.document.body.dataset.posView='belege';w.document.dispatchEvent(new w.CustomEvent('bringness:pos-view'));assert.equal(f.messages.at(-1).snapshot.state,'cart');w.eval('cart=[]');w.document.dispatchEvent(new w.CustomEvent('bringness:cart-changed'));assert.equal(f.messages.at(-1).snapshot.state,'idle');w.close();
 });
+test('paid receipt survives tab changes and reopening, expires at five minutes without restarting its deadline',async()=>{
+ const f=setup(),w=f.w;let now=100000;w.Date.now=()=>now;
+ w.localStorage.setItem('bringness.customer-display.enabled.v1:owner:r1','yes');w.document.getElementById('moduleBody').replaceChildren();w.bnRenderCustomerDisplaySettings(w.document.getElementById('moduleBody'));
+ let target;const open=w.open;w.open=url=>{target=url;return open()};
+ const ready=()=>w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,source:f.popup,data:{type:'bringness:customer-display-ready',channel:target.split('#')[1]}}));
+ w.document.getElementById('customerDisplayOpen').click();ready();w.eval('cart=[]');
+ w.api=async()=>({receiptNumber:'BN-5',qrDataUrl:'data:image/png;base64,AA=='});
+ w.bnCustomerDisplayPaid({id:'five',restaurantId:'r1',receiptNumber:'BN-5',status:'paid'});await turn();
+ now+=61000;w.document.dispatchEvent(new w.Event('visibilitychange'));w.dispatchEvent(new w.Event('focus'));
+ assert.equal(f.messages.at(-1).snapshot.state,'paid');assert.equal(f.messages.at(-1).snapshot.qrDataUrl,'data:image/png;base64,AA==');
+ f.popup.close();f.tick();w.document.getElementById('customerDisplayOpen').click();ready();
+ assert.equal(f.messages.at(-1).snapshot.state,'paid');assert.equal(f.messages.at(-1).snapshot.qrDataUrl,'data:image/png;base64,AA==');
+ now=399999;f.tick();assert.equal(f.messages.at(-1).snapshot.state,'paid');
+ now=400000;f.tick();assert.equal(f.messages.at(-1).snapshot.state,'idle');w.close();
+});
+test('new basket while display is closed invalidates the old receipt before reopening',async()=>{
+ const f=setup(),w=f.w;w.localStorage.setItem('bringness.customer-display.enabled.v1:owner:r1','yes');w.document.getElementById('moduleBody').replaceChildren();w.bnRenderCustomerDisplaySettings(w.document.getElementById('moduleBody'));
+ w.eval('cart=[]');w.api=async()=>({receiptNumber:'BN-6',qrDataUrl:'data:image/png;base64,AA=='});
+ w.bnCustomerDisplayPaid({id:'six',restaurantId:'r1',receiptNumber:'BN-6',status:'paid'});await turn();
+ w.eval("cart=[{id:'new',name:'Neu',qty:1,price:1}]");w.document.dispatchEvent(new w.CustomEvent('bringness:cart-changed'));
+ w.eval('cart=[]');let target;const open=w.open;w.open=url=>{target=url;return open()};w.document.getElementById('customerDisplayOpen').click();
+ w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,source:f.popup,data:{type:'bringness:customer-display-ready',channel:target.split('#')[1]}}));
+ assert.equal(f.messages.at(-1).snapshot.state,'idle');w.close();
+});
