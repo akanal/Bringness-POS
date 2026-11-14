@@ -3,7 +3,7 @@
  // removing both made a customer-window reload permanently lose the live basket.
  const source=window.opener,origin=location.origin,channel=location.hash.slice(1);
  const $=id=>document.getElementById(id);let seen=0,lastSequence=0;
- const clear=(text,preserveArtwork=false)=>{const art=$('display-artwork');if(art&&!preserveArtwork){art.hidden=true;art.removeAttribute('src');}$('display-order').hidden=true;$('display-lines').replaceChildren();$('display-adjustments').replaceChildren();$('display-total').textContent='';$('display-business').textContent='';$('display-status').textContent=text;const welcome=$('display-welcome');if(welcome)welcome.hidden=false;const receipt=$('display-receipt');if(receipt)receipt.hidden=true;const qr=$('display-receipt-qr');if(qr){qr.removeAttribute('src');qr.hidden=true;}};
+ const clear=(text,preserveArtwork=false)=>{document.body.classList.toggle('customer-display-artwork',preserveArtwork);const art=$('display-artwork');if(art&&!preserveArtwork){art.hidden=true;art.removeAttribute('src');}$('display-order').hidden=true;$('display-lines').replaceChildren();$('display-adjustments').replaceChildren();$('display-total').textContent='';$('display-business').textContent='';$('display-status').textContent=text;const welcome=$('display-welcome');if(welcome)welcome.hidden=false;const receipt=$('display-receipt');if(receipt)receipt.hidden=true;const qr=$('display-receipt-qr');if(qr){qr.removeAttribute('src');qr.hidden=true;}};
  const money=n=>(n/100).toLocaleString('de-DE',{style:'currency',currency:'EUR'}),amount=n=>Number.isSafeInteger(n)&&Math.abs(n)<=1000000000000;
  if(!source||!/^[a-f0-9]{64}$/.test(channel)){clear('Bitte das Kundendisplay aus der Kasse öffnen.');return;}
  window.addEventListener('message',event=>{
