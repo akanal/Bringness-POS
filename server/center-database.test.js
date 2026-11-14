@@ -376,3 +376,19 @@ test('database migration and delegated setup lifecycle',async()=>{
  await db.query("UPDATE sessions SET expires_at=now()+interval '1 hour' WHERE user_id=$1",[owner]);
  }finally{await db.close();}
 });
+
+test('customer receipt QR database isolation rejects foreign, unpaid and non-checkout receipts',async()=>{
+ const schema='customer_receipt_'+crypto.randomBytes(6).toString('hex');
+ let admin,db;
+ if(process.env.CENTER_TEST_DATABASE_URL){admin=new engine.default.Pool({connectionString:process.env.CENTER_TEST_DATABASE_URL});await admin.query('CREATE SCHEMA '+schema);db=new engine.default.Pool({connectionString:process.env.CENTER_TEST_DATABASE_URL,options:'-c search_path='+schema});db.exec=sql=>db.query(sql);db.close=()=>db.end();}else db=new engine.PGlite();
+ try{
+  await db.exec('CREATE TABLE users(id uuid,company_id uuid,role text,status text,must_change_password boolean);CREATE TABLE sessions(user_id uuid,token_hash text,expires_at timestamptz);CREATE TABLE restaurants(id uuid,company_id uuid);CREATE TABLE orders(id uuid,restaurant_id uuid,status text);CREATE TABLE receipts(order_id uuid,receipt_number text,public_token uuid);CREATE TABLE pos_checkout_requests(order_id uuid,company_id uuid);');
+  const company=crypto.randomUUID(),foreign=crypto.randomUUID(),user=crypto.randomUUID(),rid=crypto.randomUUID(),other=crypto.randomUUID(),order=crypto.randomUUID(),publicToken=crypto.randomUUID(),session='customer-qr-synthetic';
+  await db.query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[user,company]);await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[user,crypto.createHash('sha256').update(session).digest('hex')]);await db.query('INSERT INTO restaurants VALUES($1,$2),($3,$4)',[rid,company,other,foreign]);await db.query("INSERT INTO orders VALUES($1,$2,'paid')",[order,rid]);await db.query("INSERT INTO receipts VALUES($1,'BN-QR',$2)",[order,publicToken]);
+  const h=createPaymentReceiptHandler(db,null,{toDataURL:async()=> 'data:image/png;base64,AA=='},(_,token)=>'https://receipt.test/beleg/'+token);
+  async function status(restaurantId=rid){const res={writeHead(s){this.status=s},end(body){this.body=JSON.parse(body)}};await h({method:'GET',url:'/api/v1/receipts/customer-display?orderId='+order+'&restaurantId='+restaurantId,headers:{authorization:'Bearer '+session}},res);return res.status;}
+  assert.equal(await status(),404);await db.query('INSERT INTO pos_checkout_requests VALUES($1,$2)',[order,company]);assert.equal(await status(),200);assert.equal(await status(other),404);
+  await db.query("UPDATE orders SET status='pending'");assert.equal(await status(),404);await db.query("UPDATE orders SET status='paid',restaurant_id=$1",[other]);assert.equal(await status(other),404);
+  await db.query('UPDATE orders SET restaurant_id=$1',[rid]);await db.query("UPDATE users SET role='waiter'");assert.equal(await status(),403);await db.query("UPDATE users SET role='owner',status='inactive'");assert.equal(await status(),401);
+ }finally{await db?.close();if(admin){await admin.query('DROP SCHEMA '+schema+' CASCADE');await admin.end();}}
+});

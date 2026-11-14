@@ -135,6 +135,7 @@
    if(result.requestKey!==pending.requestKey||result.restaurantId!==rid||result.status!=='paid'||result.totalCents!==pending.payments.reduce((s,p)=>s+p.amountCents,0)||typeof result.receiptNumber!=='string'||!/^[-a-f0-9]{36}$/i.test(result.receiptId||''))throw Error('Zahlungsbestätigung nicht eindeutig. Ursprünglichen Verkauf abgleichen.');
    // Retain the immutable request on any uncertain response or failed local cleanup.
    localStorage.removeItem(key(rid));pending=null;lines=[];tools?.reset();status('Barverkauf gespeichert: '+result.receiptNumber+'. Nicht TSE-signiert; Fiskalstatus im Beleg prüfen.');
+   try{window.bnCustomerDisplayPaid?.(result)}catch{}
    const receipt=result.receiptId?{id:result.receiptId}:null;
    if(receipt){const b=document.createElement('button');b.textContent='Letzte Rechnung '+result.receiptNumber+' öffnen';b.onclick=()=>openInvoice(receipt.id,result.receiptNumber).catch(e=>status(e.message));$('tradeDocuments').replaceChildren(b);loadInvoices();try{await openInvoice(receipt.id,result.receiptNumber)}catch{status('Rechnung '+result.receiptNumber+' gespeichert. Anzeige nicht verfügbar; über gespeicherte Rechnungen erneut öffnen.');}}
    return {ok:true};

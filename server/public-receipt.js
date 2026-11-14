@@ -25,7 +25,7 @@ export function receiptUrl(req, token) {
   return `${process.env.NODE_ENV === "production" ? "https" : "http"}://${host}/beleg/${token}`;
 }
 
-const ordinaryReceipt=createPublicReceiptHandler(pool);
+const ordinaryReceipt=createPublicReceiptHandler(pool,{PDFDocument,QRCode,receiptUrl});
 const tradeInvoice=createPublicTradeInvoiceHandler(pool,PDFDocument,QRCode,receiptUrl);
 export async function handlePublicReceipt(req,res){
   if(await tradeInvoice(req,res))return true;

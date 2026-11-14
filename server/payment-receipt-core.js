@@ -23,6 +23,19 @@ const euro = cents => (Number(cents || 0) / 100).toLocaleString("de-DE", { minim
 
 return async function handlePaymentReceipt(req, res) {
   const pathname = new URL(req.url, "http://localhost").pathname;
+  if(pathname==='/api/v1/receipts/customer-display'&&req.method==='GET'){
+    const user=await currentUser(req);
+    if(!user){send(res,401,{error:'Nicht angemeldet'});return true;}
+    if(!['owner','admin','manager'].includes(user.role)){send(res,403,{error:'Kein Kassenzugang'});return true;}
+    const params=new URL(req.url,'http://local').searchParams,orderId=params.get('orderId'),restaurantId=params.get('restaurantId');
+    const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if(!uuid.test(orderId||'')||!uuid.test(restaurantId||'')){send(res,400,{error:'Verkauf und Betrieb erforderlich'});return true;}
+    const result=await pool.query("SELECT rc.receipt_number,rc.public_token FROM receipts rc JOIN orders o ON o.id=rc.order_id JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=$1 AND r.id=$2 AND r.company_id=$3 AND o.status='paid' AND EXISTS(SELECT 1 FROM pos_checkout_requests cr WHERE cr.order_id=o.id AND cr.company_id=r.company_id)",[orderId,restaurantId,user.company_id]);
+    const receipt=result.rows[0];if(!receipt||!uuid.test(receipt.public_token||'')){send(res,404,{error:'Bezahlter Kassenbeleg nicht gefunden'});return true;}
+    try{const qrDataUrl=await QRCode.toDataURL(receiptUrl(req,receipt.public_token)+'/pdf',{width:320,margin:4,errorCorrectionLevel:'M'});send(res,200,{receiptNumber:receipt.receipt_number,qrDataUrl});}
+    catch{send(res,503,{error:'Quittungs-QR-Code derzeit nicht verfügbar'});}
+    return true;
+  }
   const match = pathname.match(/^\/api\/v1\/receipts\/([0-9a-f-]{36})\/(pdf|invoice)$/);
   if (!match || req.method !== "GET") return false;
 
