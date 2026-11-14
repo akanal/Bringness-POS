@@ -5,7 +5,7 @@
  const idle=state=>({business:'',state,items:[],adjustments:[],totalCents:0});
  function retail(c){
   if(document.body.dataset.posView==='handel')return window.bnTradeCustomerDisplay?.(c.rid)||idle('unavailable');
-  if(document.body.dataset.posView!=='kasse'||!cart.length)return idle('idle');
+  if(!cart.length)return idle('idle');
   completed=null;
   const subtotal=Math.round(cart.reduce((n,x)=>n+x.qty*x.price,0)*100),tools=window.bnRetailSales,extras=tools?.extras()||{},discount=extras.discount?subtotal-window.bnDiscountTotal(subtotal,extras.discount):0;
   const total=tools?tools.total(subtotal):subtotal;if(!Number.isSafeInteger(total))throw Error();
