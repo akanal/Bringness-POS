@@ -24,3 +24,6 @@ Warenkorbänderungen in Einzelhandel und Händlerverkauf senden `bringness:cart-
 
 ### Vorhandenen Einkauf beim Öffnen aus Einstellungen erhalten
 Ein nichtleerer Einzelhandelswarenkorb läuft unabhängig von der aktuell geöffneten Verwaltungsansicht weiter. Die frühere Bedingung `posView === 'kasse'` zeigte beim Öffnen des Displays aus den Einstellungen fälschlich „Willkommen“, obwohl der bestehende Einkauf noch vorhanden war. Nur ein tatsächlich leerer Warenkorb zeigt die Begrüßung. Betriebs-/Sitzungsbindung, Abmeldung, Händleransicht, geprüfte Gesamtbeträge und Zahlungsregeln bleiben erhalten. Regression: Display aus Einstellungen mit bereits gefülltem Warenkorb öffnen, ohne anschließend zur Kassenansicht zurückzukehren; einschließlich vollständiger Anwendung in der isolierten Browserabnahme.
+
+### Beleganzeige nach Zahlung
+Dankestext und Quittungs-QR bleiben bis zu fünf Minuten ab bestätigter Zahlung erhalten. Tab-/Fokuswechsel und erneutes Öffnen des Kundenfensters innerhalb derselben Kassensitzung starten die Frist nicht neu und löschen den Beleg nicht. Der erste Artikel des nächsten Einkaufs verwirft die alte Anzeige sofort, auch bei geschlossenem Kundenfenster. Abmeldung, Betriebswechsel, Deaktivierung oder Ablauf löschen den Zustand. Kein neuer dauerhafter Belegspeicher im Browser; reines Kamera-Scannen wird nicht erkannt.
