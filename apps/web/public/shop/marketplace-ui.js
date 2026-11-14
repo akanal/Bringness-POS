@@ -1,3 +1,4 @@
+import {prepareMarketReorder} from './market-reorder.js';
 import {mountMarketComparison} from './market-comparison.js?v=quantities-20261114';
 import {categories as shopCategories} from './departments.js';
 import {mountCustomerAddressSelect} from './customer-address-select.js';
@@ -9,7 +10,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
  const $=id=>d.getElementById(id),el=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
  const categories=new Set(shopCategories.filter(c=>c!=='Alle'));
  const edits=new Map();let rows=[],cart=[],quote=null,busy=false,searchEpoch=0,cartEpoch=0,activeSeller='',sellerContext='',detailId='',nextCursor='';
- const client=provided||createMarketClient({window:w,onPrivacy:()=>{if($('market-account-next'))$('market-account-next').hidden=true;quote=null;busy=false;cartEpoch++;$('market-recipient').reset();$('market-confirm').hidden=true;status('Ansicht gewechselt. Auswahl vor dem Senden erneut prüfen.');}});
+ const client=provided||createMarketClient({window:w,onPrivacy:()=>{closeReorder();if($('market-account-next'))$('market-account-next').hidden=true;quote=null;busy=false;cartEpoch++;$('market-recipient').reset();$('market-confirm').hidden=true;status('Ansicht gewechselt. Auswahl vor dem Senden erneut prüfen.');}});
  const status=(text,error=false)=>{$('market-status').textContent=text;$('market-status').classList.toggle('market-error',error);};
  const link=(label,params)=>{const a=el('a',label);a.href='/shop/marketplace.html?'+new URLSearchParams(params);return a;};
  const cartKey='bringness.market.cart.v1';
@@ -129,5 +130,26 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   busy=true;renderCart();try{const result=await client.write('orders',{requestId:w.crypto.randomUUID(),lines:frozen.lines,method:frozen.method,shippingNetCents:frozen.shippingNetCents,recipient});showOrder(result,frozen.lines);}catch(error){quote=null;$('market-confirm').hidden=true;status(marketError(error),true);}finally{busy=false;renderCart();}
  });
  for(const [id,fn]of [['market-retry',()=>client.retry('orders')],['market-recover',()=>client.recoverOrder()]])$(id).addEventListener('click',async()=>{if(busy)return;busy=true;renderCart();try{const pending=await client.pending('orders');if(!pending)throw Object.assign(Error(),{code:'NO_PENDING_REQUEST'});showOrder(await fn(),marketLines(pending.lines));}catch(error){status(marketError(error),true);}finally{busy=false;renderCart();}});
- mountCustomerAddressSelect({window:w,form:$('market-recipient')});mountMarketOrderViews({window:w,document:d,client,seller:false});readLocation();renderCart();search();return {search,client,getCart:()=>structuredClone(cart)};
+ let reorderEpoch=0,reorderPanel=null;
+ function closeReorder(){reorderEpoch++;reorderPanel?.remove();reorderPanel=null;}
+ w.addEventListener('pagehide',closeReorder);w.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-shop-token')closeReorder();});d.addEventListener('visibilitychange',()=>{if(d.hidden)closeReorder();});
+ async function reorder(order){
+  if(busy||d.hidden)return;closeReorder();const version=reorderEpoch,token=w.localStorage.getItem('bringness-shop-token'),current=()=>version===reorderEpoch&&!d.hidden&&token===w.localStorage.getItem('bringness-shop-token');
+  const panel=el('section');reorderPanel=panel;$('my-market-orders').append(panel);panel.append(el('p','Aktuelle Angebote werden geprüft.'));
+  try{
+   if(await client.pending('orders')){if(current())panel.replaceChildren(el('p','Zuerst die unbestätigte Übergabe über den gespeicherten Bestellstand abgleichen.'));return;}
+   const result=await prepareMarketReorder(order,id=>client.call('/offers/'+encodeURIComponent(id)));if(!current())return;
+   panel.replaceChildren(el('h3','Neue Auswahl aus '+order.reference),el('p','Ursprünglicher Gesamtbetrag: '+money(order.grossCents)+' inkl. MwSt. Aktuelle Stückpreise folgen; Versand und Gesamtbetrag werden anschließend erneut geprüft.'));
+   for(const item of result.items)panel.append(el('p',item.display));for(const reason of result.unavailable)panel.append(el('p',reason));
+   const cancel=el('button','Vorschau schließen');cancel.type='button';cancel.addEventListener('click',closeReorder);panel.append(cancel);
+   if(result.items.length){const apply=el('button','Verfügbare Positionen in neue Auswahl übernehmen');apply.type='button';panel.append(apply);apply.addEventListener('click',async()=>{
+    if(!current()||busy)return;apply.disabled=true;
+    try{if(await client.pending('orders')){if(current())status('Zuerst die unbestätigte Übergabe abgleichen.',true);return;}if(!current())return;
+     if(cart.length){status('Deine vorhandene Auswahl bleibt erhalten. Bitte zuerst abschließen oder die Positionen bewusst entfernen und danach die Vorschau erneut öffnen.',true);return;}
+     cart=result.items.map(({display,...item})=>item);activeSeller=order.sellerId;$('market-method').value=order.method;changed();closeReorder();status('Neue Auswahl vorbereitet. Bitte Preise, Bestand und Versand prüfen und die neue Bestellung ausdrücklich bestätigen. Keine Bestellung oder Zahlung ausgelöst.');
+    }catch(e){if(current())status(marketError(e),true);}finally{apply.disabled=false;}
+   });}
+  }catch(e){if(current())panel.replaceChildren(el('p',marketError(e)));}
+ }
+ mountCustomerAddressSelect({window:w,form:$('market-recipient')});mountMarketOrderViews({window:w,document:d,client,seller:false,onReorder:reorder});readLocation();renderCart();search();return {search,client,getCart:()=>structuredClone(cart)};
 }
