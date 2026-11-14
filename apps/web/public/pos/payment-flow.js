@@ -58,6 +58,7 @@
       if(!result||typeof result.id!=='string'||typeof result.receiptNumber!=='string'||!result.receiptNumber.trim()||result.status!=='paid'||result.restaurantId!==restaurantId||result.requestKey!==pending.body.requestKey||!Number.isSafeInteger(result.totalCents)||result.totalCents!==pending.body.payments.reduce((sum,p)=>sum+p.amountCents,0))throw Error('Unvollständige Zahlungsbestätigung');
       // Preserve any new basket edits made while the earlier request was uncertain.
       if(document.getElementById('restaurant').value===restaurantId&&signature(cart,restaurantId)===pending.cartSignature&&(!pending.basketSnapshot||basketSnapshot(cart)===pending.basketSnapshot)){cart=[];window.bnRetailSales?.reset();renderCart();if(window.bnResetTender)window.bnResetTender();}
+      try{window.bnCustomerDisplayPaid?.(result)}catch{}
       try{localStorage.removeItem(storageKey(restaurantId));}catch{}
       const total=pending.body.payments.reduce((sum,p)=>sum+p.amountCents,0);
       status.textContent='Verkauf gespeichert: '+result.receiptNumber+'. Rückgeld: '+euro(pending.given-total)+'. Beleg unter „Belege“.';

@@ -1,20 +1,31 @@
 (()=>{
- let popup=null,channel='',bound='',sequence=0,ready=false;const settingsKey='bringness.customer-display.enabled.v1:';
+ let popup=null,channel='',bound='',sequence=0,ready=false,completed=null;const settingsKey='bringness.customer-display.enabled.v1:';
  const context=()=>{try{const rid=document.getElementById('restaurant')?.value,user=data.user?.id;return token&&localStorage.getItem('bringness-pos-token')===token&&user&&rid&&document.getElementById('workspace')?.classList.contains('show')?{rid,user,scope:user+':'+rid}:null}catch{return null}};
  const enabled=c=>{try{return !!c&&localStorage.getItem(settingsKey+c.scope)==='yes'}catch{return false}};
  const idle=state=>({business:'',state,items:[],adjustments:[],totalCents:0});
  function retail(c){
   if(document.body.dataset.posView==='handel')return window.bnTradeCustomerDisplay?.(c.rid)||idle('unavailable');
   if(document.body.dataset.posView!=='kasse'||!cart.length)return idle('idle');
+  completed=null;
   const subtotal=Math.round(cart.reduce((n,x)=>n+x.qty*x.price,0)*100),tools=window.bnRetailSales,extras=tools?.extras()||{},discount=extras.discount?subtotal-window.bnDiscountTotal(subtotal,extras.discount):0;
   const total=tools?tools.total(subtotal):subtotal;if(!Number.isSafeInteger(total))throw Error();
   const adjustments=[...(discount?[{name:'Rabatt',totalCents:-discount}]:[]),...(window.bnDepositBreakdown?.(c.rid,cart.map(x=>({productId:x.id,qty:x.qty})))||[]).map(x=>({name:x.label,totalCents:x.totalCents}))];
   if(window.bnDepositLocked?.(c.rid))throw Error();
-  return {business:String(data.restaurants.find(r=>r.id===c.rid)?.name||'Bringness').slice(0,120),state:'cart',items:cart.map(x=>({name:String(x.name).slice(0,500),qty:x.qty,totalCents:Math.round(x.qty*x.price*100)})),adjustments,totalCents:total};
+  return {business:String(data.restaurants.find(r=>r.id===c.rid)?.name||'').slice(0,120),state:'cart',items:cart.map(x=>({name:String(x.name).slice(0,500),qty:x.qty,totalCents:Math.round(x.qty*x.price*100)})),adjustments,totalCents:total};
  }
  function send(snapshot){if(popup&&!popup.closed&&ready)popup.postMessage({type:'bringness:customer-display',channel,sequence:++sequence,snapshot},location.origin);}
- function disconnect(){try{send(idle('idle'));popup?.close()}catch{}popup=null;ready=false;channel='';bound='';}
- function update(){const c=context();if(!popup)return;if(popup.closed){disconnect();return;}if(!c||c.scope!==bound||!enabled(c)){disconnect();return;}try{send(retail(c))}catch{send(idle('unavailable'));}}
+ function disconnect(){try{send(idle('idle'));popup?.close()}catch{}popup=null;ready=false;channel='';bound='';completed=null;}
+ function update(){const c=context();if(!popup)return;if(popup.closed){disconnect();return;}if(!c||c.scope!==bound||!enabled(c)){disconnect();return;}try{let snapshot=retail(c);if(snapshot.state==='cart')completed=null;else if(snapshot.state==='idle'&&completed?.scope===c.scope&&Date.now()<completed.until)snapshot={...snapshot,state:'paid',receiptNumber:completed.number,qrDataUrl:completed.qr||''};snapshot.business=String(data.restaurants.find(r=>r.id===c.rid)?.name||'').slice(0,120);send(snapshot)}catch{send(idle('unavailable'));}}
+ // Only the validated checkout path calls this; receipt lookup is independent of payment completion.
+ window.bnCustomerDisplayPaid=result=>{try{
+  const c=context();if(!c||!enabled(c)||result?.status!=='paid'||result.restaurantId!==c.rid||typeof result.id!=='string'||typeof result.receiptNumber!=='string')return;
+  if(completed?.orderId===result.id)return;
+  const sale=completed={scope:c.scope,orderId:result.id,number:result.receiptNumber.slice(0,80),until:Date.now()+60000,qr:''};update();
+  Promise.resolve().then(()=>api('/receipts/customer-display?orderId='+encodeURIComponent(result.id)+'&restaurantId='+encodeURIComponent(c.rid))).then(receipt=>{
+   if(completed!==sale||context()?.scope!==sale.scope||receipt.receiptNumber!==sale.number||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(receipt.qrDataUrl||'')||receipt.qrDataUrl.length>100000)return;
+   sale.qr=receipt.qrDataUrl;update();
+  }).catch(()=>{});
+ }catch{}};
  window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==popup||event.data?.type!=='bringness:customer-display-ready'||event.data.channel!==channel)return;ready=true;update();});
  window.addEventListener('pagehide',disconnect);window.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token'||e.key?.startsWith(settingsKey))update();});document.getElementById('restaurant')?.addEventListener('change',update);document.addEventListener('bringness:pos-view',update);setInterval(update,1500);
  window.bnRenderCustomerDisplaySettings=area=>{
