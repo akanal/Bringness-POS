@@ -8,7 +8,7 @@ Autorisiert am 14.11.2026: Wiederbestellung umsetzen und nach bestandenen Prüfu
 
 ## Verbindlicher Ablauf
 
-1. Bei künftig angelegten Händlerbestellungen die validierten Angebots-ID/SKU/Menge-Referenzen getrennt vom unveränderlichen Finanzsnapshot mitführen. Beim Speichern sind sie bereits durch den bestehenden Checkout geprüft.
+1. Die bereits vorhandenen unveränderlichen Angebots-ID/SKU/Menge-Referenzen aus `shop_market_allocations` verwenden. Beim Speichern sind sie durch den bestehenden Checkout geprüft. Keine doppelte Referenzablage und keine Migration.
 2. In der angemeldeten Käuferbestellansicht „Erneut auswählen“ anbieten, nur wenn eindeutige Referenzen verfügbar sind. Historische Bestellungen ohne Referenzen zeigen stattdessen den vorhandenen Link zum Händlerprofil. Keine rückwirkend geratenen Zuordnungen.
 3. Lesende Vorschau ausschließlich für die eigene Käuferfirma und Originalbestellung. Jede Referenz erneut auf veröffentlichte Ware, freigegebenen Händler und exakte Variante prüfen. Gleiche Händlerzuordnung verlangen. Entfernte Varianten ausdrücklich als nicht verfügbar anzeigen; keine automatische Ersatzware.
 4. Aktuelle Menge/Bestand, Steuersatz, Preis, Versand/Abholung und Angebotsrevision anzeigen. Ursprüngliche und aktuelle Warenpreise getrennt benennen; Änderungen nicht verstecken. Fehlende Menge nicht automatisch reduzieren.
@@ -30,4 +30,8 @@ Die Wiederbestellung schafft eine Grundlage für einen Einkaufsassistenten, der 
 - „Erneut auswählen“ öffnet eine lesende Vorschau mit aktuellen öffentlichen Angeboten, Originalgesamtbetrag und aktuellen Bruttopreisen. Fehlende Angebote/Varianten, niedriger Bestand und entfallene Erhaltart sind sichtbar; keine Ersatzware, Mengenreduzierung oder Bestandsreservierung.
 - Explizite Übernahme nur in leere Auswahl; vorhandene Auswahl und unbestätigte Bestellübergabe blockieren die Übernahme. Danach bestehende Serverprüfung für Gesamtpreis/Versand und ausdrückliche neue Bestellbestätigung mit neuer Vorgangskennung.
 - Konto-/Ansichtswechsel und geschlossene Vorschau verwerfen verspätete Antworten. Keine privaten Bestellinformationen in URL oder dauerhaftem Browserzustand.
-- Lokal: 37 fokussierte Prüfungen sowie 734 allgemeine Tests erfolgreich. Vollständige Shop- und native Browserabnahme werden vor Veröffentlichung geprüft.
+- Lokal: 37 fokussierte Prüfungen sowie 734 allgemeine Tests erfolgreich. Vollständige Shopabnahme: 865 Tests ohne Fehler/Skip. Alle fünf PR-Prüfläufe erfolgreich; echter PostgreSQL-/Browserlauf einschließlich Wiederbestellvorschau, ausdrücklicher Übernahme und erneuter Serverquote bei390/768/1280px bestanden.
+
+
+## Veröffentlichung geprüft — 14.11.2026
+PR323, Anwendung c795b4223db08695ca379df68239afcafc4a8912, Tree551491c6647c68aec5191ef5f587724e3cdc812f. Alle fünf PR-Workflows erfolgreich: Checks43620057086, Release43620057098, isoliert43620057101, POS/AI43620057085, Shop43620057065/job132523511716. Mergeaae10a5758deb1eaed64b3cfff0f10fb73dee482 über Netcup43620650330/job132525345422 erfolgreich veröffentlicht; vorheriger Container und Datenbanksicherung behalten. Live HTML, Seitenmodul, Marketplace-UI, Order-UI und Reorder-Modul jeweils200 und bytegleich; Health200/status:ok/database:ok. Keine produktiven Testbestellungen oder Zahlungen. Altbestellungen ohne exakte Referenzen bieten weiterhin nur das Händlerprofil. Empfohlener späterer Ausbau: bewusst gespeicherte Einkaufslisten, kein automatisch ausgelöstes Abo.
