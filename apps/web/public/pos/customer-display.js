@@ -23,7 +23,7 @@
  window.bnCustomerDisplayPaid=result=>{try{
   const c=context();if(!c||!enabled(c)||result?.status!=='paid'||result.restaurantId!==c.rid||typeof result.id!=='string'||typeof result.receiptNumber!=='string')return;
   if(completed?.orderId===result.id)return;
-  const sale=completed={scope:c.scope,orderId:result.id,number:result.receiptNumber.slice(0,80),until:Date.now()+120000,qr:''};update();
+  const sale=completed={scope:c.scope,orderId:result.id,number:result.receiptNumber.slice(0,80),until:Date.now()+60000,qr:''};update();
   Promise.resolve().then(()=>api('/receipts/customer-display?orderId='+encodeURIComponent(result.id)+'&restaurantId='+encodeURIComponent(c.rid))).then(receipt=>{
    if(completed!==sale||context()?.scope!==sale.scope||receipt.receiptNumber!==sale.number||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(receipt.qrDataUrl||'')||receipt.qrDataUrl.length>100000)return;
    sale.qr=receipt.qrDataUrl;update();
@@ -41,7 +41,7 @@
   const copy=document.createElement('button');copy.type='button';copy.id='customerDisplayDiagnosticCopy';copy.textContent='Letzte Fehlerdiagnose kopieren';copy.hidden=true;
   const diagnosticText=document.createElement('textarea');diagnosticText.id='customerDisplayDiagnosticText';diagnosticText.readOnly=true;diagnosticText.hidden=true;diagnosticText.setAttribute('aria-label','Fehlerdiagnose zum Kopieren');
   let diagnostic=null;
-  const report=(target,message,code='')=>{target.textContent=message+(code?' ['+code+']':'');if(code){diagnostic={code,time:new Date().toISOString(),appVersion:'customer-display-image-fit-20261114',online:navigator.onLine===true,displayEnabled:enabled(c),windowState:!popup?'not-open':popup.closed?'closed':ready?'connected':'waiting'};copy.hidden=false;diagnosticText.hidden=true;diagnosticText.value='';}};
+  const report=(target,message,code='')=>{target.textContent=message+(code?' ['+code+']':'');if(code){diagnostic={code,time:new Date().toISOString(),appVersion:'customer-display-receipt60-20261114',online:navigator.onLine===true,displayEnabled:enabled(c),windowState:!popup?'not-open':popup.closed?'closed':ready?'connected':'waiting'};copy.hidden=false;diagnosticText.hidden=true;diagnosticText.value='';}};
   copy.onclick=async()=>{if(!diagnostic)return;if(context()?.scope!==c.scope){diagnostic=null;copy.hidden=true;diagnosticText.hidden=true;diagnosticText.value='';return;}const text=JSON.stringify(diagnostic,null,2);try{if(!navigator.clipboard?.writeText)throw Error();await navigator.clipboard.writeText(text);copy.textContent='Diagnose kopiert';}catch{diagnosticText.value=text;diagnosticText.hidden=false;diagnosticText.focus();diagnosticText.select();copy.textContent='Diagnose markieren und kopieren';}};
 
   const current=()=>context()?.scope===c.scope&&document.body.dataset.posView==='einstellungen'&&card.isConnected;
@@ -61,7 +61,7 @@
   const artworkGroup=document.createElement('fieldset');artworkGroup.id='customerDisplayArtworkGroup';const legend=document.createElement('legend');legend.textContent='Werbebild im Ruhezustand';artworkGroup.append(legend);
   const uploadLabel=document.createElement('label');uploadLabel.textContent='Werbebild auswählen';
   const upload=document.createElement('input');upload.type='file';upload.id='customerDisplayArtwork';upload.accept='image/png,image/jpeg,image/webp';uploadLabel.append(upload);
-  const hint=document.createElement('p');hint.textContent='PNG, JPEG oder WebP, maximal 2 MB. Das Bild wird für diesen Betrieb in diesem Browser gespeichert. Dankestext und Quittungs-QR bleiben zwei Minuten sichtbar; der nächste Einkauf erscheint sofort.';
+  const hint=document.createElement('p');hint.textContent='PNG, JPEG oder WebP, maximal 2 MB. Das Bild wird für diesen Betrieb in diesem Browser gespeichert. Dankestext und Quittungs-QR bleiben eine Minute sichtbar; der nächste Einkauf erscheint sofort.';
   const preview=document.createElement('img');preview.alt='Vorschau des Werbebildes';preview.style.maxWidth='100%';preview.style.maxHeight='180px';preview.hidden=!artwork(c);if(artwork(c))preview.src=artwork(c);
   const remove=document.createElement('button');remove.type='button';remove.id='customerDisplayArtworkRemove';remove.textContent='Werbebild entfernen';
   const refresh=()=>{const value=artwork(c);preview.hidden=!value;if(value)preview.src=value;else preview.removeAttribute('src');update();};
