@@ -1,4 +1,4 @@
-import {mountMarketComparison} from './market-comparison.js?v=20261114';
+import {mountMarketComparison} from './market-comparison.js?v=quantities-20261114';
 import {categories as shopCategories} from './departments.js';
 import {mountCustomerAddressSelect} from './customer-address-select.js';
 import {mountMarketOrderViews} from './market-order-ui.js';
