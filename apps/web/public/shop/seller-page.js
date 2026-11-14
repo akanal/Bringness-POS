@@ -1,5 +1,5 @@
 import {offerCsv} from './personal-policy.js';
-import {mountOfferImport} from './offer-import-ui.js';
+import {mountOfferImport} from './offer-import-ui.js?v=csv-20261114';
 import {readSellerOffer,sendSellerCommand,pendingSellerRequest,sellerIdentity,onSellerPrivacy,sellerMessage} from './seller-account-client.js';
 import {offerId} from './offer-policy.js';
 import {offerHints,filterOffers,kindLabels} from './offer-review.js';
