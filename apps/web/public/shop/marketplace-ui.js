@@ -1,3 +1,4 @@
+import {categories as shopCategories} from './departments.js';
 import {mountCustomerAddressSelect} from './customer-address-select.js';
 import {mountMarketOrderViews} from './market-order-ui.js';
 import {createMarketClient,marketError} from './market-client.js';
@@ -5,7 +6,7 @@ import {marketMoney as money,marketGross as gross,marketLines} from './market-po
 const publicId=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function mountMarketplace({window:w,document:d=w.document,client:provided}){
  const $=id=>d.getElementById(id),el=(tag,text)=>{const e=d.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
- const categories=new Set();
+ const categories=new Set(shopCategories.filter(c=>c!=='Alle'));
  const edits=new Map();let rows=[],cart=[],quote=null,busy=false,searchEpoch=0,cartEpoch=0,activeSeller='',sellerContext='',detailId='',nextCursor='';
  const client=provided||createMarketClient({window:w,onPrivacy:()=>{if($('market-account-next'))$('market-account-next').hidden=true;quote=null;busy=false;cartEpoch++;$('market-recipient').reset();$('market-confirm').hidden=true;status('Ansicht gewechselt. Auswahl vor dem Senden erneut prüfen.');}});
  const status=(text,error=false)=>{$('market-status').textContent=text;$('market-status').classList.toggle('market-error',error);};
@@ -49,7 +50,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   const persisted=changed();if(persisted)status('Zur Händlerauswahl hinzugefügt. Jede Händlerbestellung wird einzeln geprüft und bestätigt.');
  }
  function render(){
-  const host=$('market-results');host.replaceChildren();
+  const host=$('market-results');host.replaceChildren();if($('market-result-summary'))$('market-result-summary').textContent=rows.length+' Angebote geladen'+(nextCursor?' · weitere Ergebnisse verfügbar':'');
   for(const p of rows){
    const box=el('article');box.dataset.offerId=p.id;
    if(typeof p.imageUrl==='string'&&/^\/api\/v1\/shop\/marketplace\/images\/public\/[a-f0-9-]{36}$/.test(p.imageUrl)){const img=el('img');img.src=p.imageUrl;img.alt=p.title;img.loading='lazy';img.width=240;img.height=180;img.className='market-product-image';box.append(img);}
@@ -60,7 +61,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
    if(detailId){const facts=el('section');facts.className='offer-purchase-facts';facts.setAttribute('aria-label','Verkäufer, Lieferung und Rückgabe');facts.append(el('h4','Dein Einkauf auf einen Blick'),el('p','Verkauft von '+p.seller.name),el('p',p.shipping?'Lieferzeit: '+p.delivery:'Versand wird nicht angeboten'),el('p',p.pickup?'Abholort: '+p.pickupAddress:'Keine Abholung'));const contact=el('a','Verkäufer zu Produkt, Rückgabe oder Reklamation kontaktieren');if(typeof p.seller.email==='string'&&/^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(p.seller.email))contact.href='mailto:'+encodeURIComponent(p.seller.email);facts.append(contact,el('p','Es gelten die tatsächlichen Bedingungen des Verkäufers. Rückfragen zu den Rückgabe- und Reklamationsbedingungen kannst du direkt an den Verkäufer richten.'));box.append(facts);}
    const select=el('select');select.setAttribute('aria-label','Variante für '+p.title);
    for(const v of p.variants){const o=el('option',v.label+' · '+money(gross(v.netCents,v.vatBasisPoints))+' inkl. MwSt. · Bestand '+v.stock);o.value=v.sku;o.disabled=v.stock===0;select.append(o);}
-   const first=p.variants.find(v=>v.stock>0);if(first)select.value=first.sku;
+   const min=$('market-min-price')?.value.trim(),max=$('market-max-price')?.value.trim(),matching=v=>(!$('market-available').checked||v.stock>0)&&(!min||gross(v.netCents,v.vatBasisPoints)>=Math.round(Number(min.replace(',','.'))*100))&&(!max||gross(v.netCents,v.vatBasisPoints)<=Math.round(Number(max.replace(',','.'))*100));const first=p.variants.find(v=>v.stock>0&&matching(v))||p.variants.find(matching)||p.variants.find(v=>v.stock>0);if(first)select.value=first.sku;
    const availability=el('p'),addButton=el('button','Zur Händlerauswahl');addButton.type='button';
    const update=()=>{const v=p.variants.find(v=>v.sku===select.value);addButton.disabled=!v?.stock;availability.textContent=v?v.stock+' verfügbar · '+money(gross(v.netCents,v.vatBasisPoints))+' inkl. MwSt.':'';};select.addEventListener('change',update);update();
    addButton.addEventListener('click',()=>add(p,p.variants.find(v=>v.sku===select.value)));box.append(select,availability,addButton);host.append(box);
@@ -74,8 +75,8 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   for(const category of [...categories].sort((a,b)=>a.localeCompare(b,'de'))){const option=el('option',category);option.value=category;select.append(option);}
   select.value=value;
  }
- function parameters(){return new URLSearchParams(Object.entries({q:$('market-search').value.trim(),category:$('market-category').value.trim(),seller:sellerContext,method:$('market-filter-method').value,available:$('market-available').checked?'1':'',offer:detailId}).filter(([,v])=>v));}
- function readLocation(){const u=new URL(w.location.href);$('market-search').value=u.searchParams.get('ad')||u.searchParams.get('q')||'';updateCategories(u.searchParams.get('category')||'');$('market-filter-method').value=['shipping','pickup'].includes(u.searchParams.get('method'))?u.searchParams.get('method'):'';$('market-available').checked=u.searchParams.get('available')==='1';sellerContext=u.searchParams.get('seller')||'';detailId=u.searchParams.get('offer')||'';}
+ function parameters(){return new URLSearchParams(Object.entries({q:$('market-search').value.trim(),category:$('market-category').value.trim(),seller:sellerContext,method:$('market-filter-method').value,available:$('market-available').checked?'1':'',offer:detailId,minPrice:$('market-min-price')?.value.trim()||'',maxPrice:$('market-max-price')?.value.trim()||''}).filter(([,v])=>v));}
+ function readLocation(){const u=new URL(w.location.href);for(const [id,key] of [['market-min-price','minPrice'],['market-max-price','maxPrice']])if($(id))$(id).value=(u.searchParams.get(key)||'').slice(0,10);$('market-search').value=u.searchParams.get('ad')||u.searchParams.get('q')||'';updateCategories(u.searchParams.get('category')||'');$('market-filter-method').value=['shipping','pickup'].includes(u.searchParams.get('method'))?u.searchParams.get('method'):'';$('market-available').checked=u.searchParams.get('available')==='1';sellerContext=u.searchParams.get('seller')||'';detailId=u.searchParams.get('offer')||'';}
  async function search(append=false){
   const current=++searchEpoch,params=parameters(),cursor=nextCursor;$('market-next').disabled=true;
   try{
@@ -84,7 +85,7 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
    else{params.delete('offer');if(append)params.set('cursor',cursor);[result,profile]=await Promise.all([client.call('?'+params),sellerContext?client.call('/sellers/'+encodeURIComponent(sellerContext)):Promise.resolve(null)]);}
    if(current!==searchEpoch)return;
    if(!Array.isArray(result.offers)||!result.offers.every(p=>publicId(p.sellerId)&&Array.isArray(p.variants)))throw Object.assign(Error(),{code:'INVALID_RESPONSE'});
-   rows=append?[...rows,...result.offers]:result.offers;updateCategories();render();
+   rows=append?[...rows,...result.offers]:result.offers;nextCursor=result.nextCursor||'';updateCategories();render();status('Suche aktualisiert.');
    const context=$('market-context');context.replaceChildren();if(profile){context.append(el('h2',profile.profile.name),el('p',profile.profile.street+', '+profile.profile.postalCode+' '+profile.profile.city+' · '+profile.profile.country),el('p',profile.profile.email),el('p','Geschäftliche Kontaktdaten des freigegebenen Händlers. Onlinezahlung ist nicht freigeschaltet.'));}
    if(profile?.shopUrl&&/^\/shop\/store\.html\?shop=[a-z0-9-]{3,60}$/.test(profile.shopUrl)){const shopLink=el('a','Zum Verkäufer-Shop');shopLink.href=profile.shopUrl;context.append(shopLink);}
    if(profile||detailId)context.append(link('Alle Händlerangebote',{}));
@@ -92,8 +93,8 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   }catch(e){if(current===searchEpoch){rows=[];nextCursor='';render();$('market-context').replaceChildren();$('market-next').hidden=true;status(marketError(e),true);}}
   finally{if(current===searchEpoch)$('market-next').disabled=false;}
  }
- $('market-search-form').addEventListener('submit',e=>{e.preventDefault();detailId='';const p=parameters();w.history.pushState(null,'',w.location.pathname+(p.size?'?'+p:''));search();});
- $('market-category').addEventListener('change',()=>{$('market-search-form').requestSubmit();});
+ $('market-search-form').addEventListener('submit',e=>{e.preventDefault();const values=['market-min-price','market-max-price'].map(id=>$(id)?.value.trim()||'');if(values.some(v=>v&&!/^\d{1,7}([.,]\d{1,2})?$/.test(v))||values.every(Boolean)&&Number(values[0].replace(',','.'))>Number(values[1].replace(',','.'))){status('Bitte einen gültigen Preisbereich angeben (ab kleiner oder gleich bis).',true);return;}detailId='';const p=parameters();w.history.pushState(null,'',w.location.pathname+(p.size?'?'+p:''));search();});
+ for(const id of ['market-category','market-filter-method','market-available'])$(id).addEventListener('change',()=>{$('market-search-form').requestSubmit();});
  $('market-reset').addEventListener('click',()=>{sellerContext='';detailId='';$('market-search-form').reset();w.history.pushState(null,'',w.location.pathname);search();});
  w.addEventListener('popstate',()=>{readLocation();search();});$('market-next').addEventListener('click',()=>search(true));
  $('market-method').addEventListener('change',()=>{invalidate();renderCart();});$('market-cart-seller').addEventListener('change',()=>{activeSeller=$('market-cart-seller').value;invalidate();renderCart();});

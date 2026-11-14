@@ -26,3 +26,5 @@ body:not(.portal-home) .preview{background:#124a39;color:#dcece3;border-bottom-c
 @media(max-width:560px){.marketplace-legal header .brand-shop{display:none}}
 @media(max-width:380px){.marketplace-legal header .brand{font-size:25px}}
 @media(min-width:1151px) and (max-width:1350px){.marketplace-legal header .brand{font-size:27px}}
+
+.market-header-filters input[inputmode=decimal]{width:100px;max-width:100%;min-height:36px;padding:6px;box-sizing:border-box}.market-header-filters{flex-wrap:wrap}
