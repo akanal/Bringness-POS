@@ -1,5 +1,5 @@
 (()=>{
- let popup=null,channel='',bound='',sequence=0,ready=false,completed=null;const settingsKey='bringness.customer-display.enabled.v1:';
+ let popup=null,channel='',bound='',sequence=0,ready=false,completed=null,connectionReport=null;const settingsKey='bringness.customer-display.enabled.v1:';
  const context=()=>{try{const rid=document.getElementById('restaurant')?.value,user=data.user?.id;return token&&localStorage.getItem('bringness-pos-token')===token&&user&&rid&&document.getElementById('workspace')?.classList.contains('show')?{rid,user,scope:user+':'+rid}:null}catch{return null}};
  const enabled=c=>{try{return !!c&&localStorage.getItem(settingsKey+c.scope)==='yes'}catch{return false}};
  const artworkKey='bringness.customer-display.artwork.v1:';
@@ -29,34 +29,53 @@
    sale.qr=receipt.qrDataUrl;update();
   }).catch(()=>{});
  }catch{}};
- window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==popup||event.data?.type!=='bringness:customer-display-ready'||event.data.channel!==channel)return;ready=true;update();});
+ window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==popup||event.data?.type!=='bringness:customer-display-ready'||event.data.channel!==channel)return;ready=true;connectionReport?.();update();});
  window.addEventListener('pagehide',()=>disconnect());window.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token'||e.key?.startsWith(settingsKey)||e.key?.startsWith(artworkKey))update();});document.getElementById('restaurant')?.addEventListener('change',update);document.addEventListener('bringness:pos-view',update);document.addEventListener('bringness:cart-changed',update);document.addEventListener('visibilitychange',update);window.addEventListener('focus',update);setInterval(update,1500);
  window.bnRenderCustomerDisplaySettings=area=>{
   const c=context();if(!c)return;const card=document.createElement('section');card.className='modulecard';card.dataset.settingsGroup='devices';
   const title=document.createElement('h3');title.textContent='Kundendisplay';const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.id='customerDisplayEnabled';input.checked=enabled(c);label.append(input,document.createTextNode(' Kundendisplay für diese Kasse aktivieren'));
   const text=document.createElement('p');text.textContent='Artikel, Mengen, Rabatt, Pfand und Gesamtbetrag laufen ohne Bedienung mit. Die Auswahl bleibt für diesen Betrieb und dieses Browserprofil gespeichert. Beim Kassenstart das Anzeigefenster bei Bedarf öffnen und auf den zweiten Monitor ziehen; dort kann es über die Browsersteuerung im Vollbild laufen.';
   const open=document.createElement('button');open.type='button';open.id='customerDisplayOpen';open.textContent='Kundendisplay öffnen';open.disabled=false;
-  const status=document.createElement('p');status.setAttribute('role','status');
+  const status=document.createElement('p');status.id='customerDisplayStatus';status.setAttribute('role','status');
+  const artworkStatus=document.createElement('p');artworkStatus.id='customerDisplayArtworkStatus';artworkStatus.setAttribute('role','status');
+  const copy=document.createElement('button');copy.type='button';copy.id='customerDisplayDiagnosticCopy';copy.textContent='Letzte Fehlerdiagnose kopieren';copy.hidden=true;
+  const diagnosticText=document.createElement('textarea');diagnosticText.id='customerDisplayDiagnosticText';diagnosticText.readOnly=true;diagnosticText.hidden=true;diagnosticText.setAttribute('aria-label','Fehlerdiagnose zum Kopieren');
+  let diagnostic=null;
+  const report=(target,message,code='')=>{target.textContent=message+(code?' ['+code+']':'');if(code){diagnostic={code,time:new Date().toISOString(),appVersion:'customer-display-support-20261114',online:navigator.onLine===true,displayEnabled:enabled(c),windowState:!popup?'not-open':popup.closed?'closed':ready?'connected':'waiting'};copy.hidden=false;diagnosticText.hidden=true;diagnosticText.value='';}};
+  copy.onclick=async()=>{if(!diagnostic)return;if(context()?.scope!==c.scope){diagnostic=null;copy.hidden=true;diagnosticText.hidden=true;diagnosticText.value='';return;}const text=JSON.stringify(diagnostic,null,2);try{if(!navigator.clipboard?.writeText)throw Error();await navigator.clipboard.writeText(text);copy.textContent='Diagnose kopiert';}catch{diagnosticText.value=text;diagnosticText.hidden=false;diagnosticText.focus();diagnosticText.select();copy.textContent='Diagnose markieren und kopieren';}};
+
   const current=()=>context()?.scope===c.scope&&document.body.dataset.posView==='einstellungen'&&card.isConnected;
-  input.onchange=async()=>{const wanted=input.checked;input.disabled=true;try{if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');localStorage.setItem(settingsKey+c.scope,wanted?'yes':'no');input.checked=enabled(c);if(input.checked!==wanted)throw Error('Einstellung konnte nicht gespeichert werden.');open.disabled=false;if(!wanted)disconnect();status.textContent=wanted?'Kundendisplay aktiviert. Anzeigefenster bei Bedarf öffnen.':'Kundendisplay ausgeschaltet.';}catch(error){input.checked=enabled(c);open.disabled=false;status.textContent=error.message}finally{input.disabled=false}};
-  open.onclick=()=>{if(!current()||!enabled(c)){status.textContent='Bitte zuerst „Kundendisplay für diese Kasse aktivieren“ einschalten. Bei blockiertem Fenster Pop-ups in den Browsereinstellungen erlauben.';return;}if(popup&&!popup.closed&&bound===c.scope){try{popup.focus();status.textContent='Das Kundendisplay ist bereits geöffnet. Bitte auch die offenen Browser-Tabs prüfen.';update();return;}catch{disconnect(true);}}disconnect(completed?.scope===c.scope);try{channel=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');bound=c.scope;sequence=0;popup=window.open('/pos/customer-display.html#'+channel,'_blank');if(!popup){disconnect();throw Error('Der Browser hat das Fenster blockiert. Pop-ups für diese Kasse erlauben und erneut öffnen.');}status.textContent='Anzeigefenster geöffnet. Auf den Kundenmonitor ziehen; die Artikel erscheinen beim Verkauf.';}catch(error){status.textContent=error.message}};
-  const uploadLabel=document.createElement('label');uploadLabel.textContent='Werbebild im Ruhezustand';
+  input.onchange=async()=>{const wanted=input.checked;input.disabled=true;try{if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');localStorage.setItem(settingsKey+c.scope,wanted?'yes':'no');input.checked=enabled(c);if(input.checked!==wanted)throw Error('Einstellung konnte nicht gespeichert werden.');open.disabled=false;if(!wanted)disconnect();report(status,wanted?'Kundendisplay aktiviert. Anzeigefenster bei Bedarf öffnen.':'Kundendisplay ausgeschaltet.');}catch(error){input.checked=enabled(c);open.disabled=false;report(status,error.message,'CD-ACTIVATION');}finally{input.disabled=false}};
+  connectionReport=()=>{if(current())report(status,'Kundendisplay verbunden. Warenkorb und Quittung werden übertragen.');};
+  open.onclick=()=>{
+   if(!current()){report(status,'Bitte die Kundendisplay-Einstellungen für den aktuellen Betrieb erneut öffnen.','CD-CONTEXT');return;}
+   if(!enabled(c)){report(status,'Bitte zuerst „Kundendisplay für diese Kasse aktivieren“ einschalten.','CD-DISABLED');return;}
+   if(popup&&!popup.closed&&bound===c.scope){try{popup.focus();report(status,'Das Kundendisplay ist bereits geöffnet. Bitte auch die offenen Browser-Tabs prüfen.');update();return;}catch{disconnect(true);}}
+   disconnect(completed?.scope===c.scope);
+   try{channel=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');bound=c.scope;sequence=0;popup=window.open('/pos/customer-display.html#'+channel,'_blank');
+    if(!popup){disconnect(true);report(status,'Der Browser hat das Fenster blockiert. Pop-ups für diese Kasse erlauben und erneut öffnen.','CD-POPUP-BLOCKED');return;}
+    report(status,'Anzeigefenster geöffnet. Verbindung zur Anzeige wird geprüft …');
+    const openedChannel=channel;setTimeout(()=>{if(current()&&channel===openedChannel&&!ready&&popup&&!popup.closed)report(status,'Das Fenster wurde geöffnet, aber die Anzeige hat die Verbindung noch nicht bestätigt. Bitte den geöffneten Tab prüfen.','CD-CONNECTION-TIMEOUT');},8000);
+   }catch{report(status,'Das Kundendisplay konnte nicht geöffnet werden. Bitte erneut versuchen.','CD-OPEN-FAILED');}
+  };
+  const artworkGroup=document.createElement('fieldset');artworkGroup.id='customerDisplayArtworkGroup';const legend=document.createElement('legend');legend.textContent='Werbebild im Ruhezustand';artworkGroup.append(legend);
+  const uploadLabel=document.createElement('label');uploadLabel.textContent='Werbebild auswählen';
   const upload=document.createElement('input');upload.type='file';upload.id='customerDisplayArtwork';upload.accept='image/png,image/jpeg,image/webp';uploadLabel.append(upload);
   const hint=document.createElement('p');hint.textContent='PNG, JPEG oder WebP, maximal 2 MB. Das Bild wird für diesen Betrieb in diesem Browser gespeichert. Dankestext und Quittungs-QR bleiben zwei Minuten sichtbar; der nächste Einkauf erscheint sofort.';
   const preview=document.createElement('img');preview.alt='Vorschau des Werbebildes';preview.style.maxWidth='100%';preview.style.maxHeight='180px';preview.hidden=!artwork(c);if(artwork(c))preview.src=artwork(c);
   const remove=document.createElement('button');remove.type='button';remove.id='customerDisplayArtworkRemove';remove.textContent='Werbebild entfernen';
   const refresh=()=>{const value=artwork(c);preview.hidden=!value;if(value)preview.src=value;else preview.removeAttribute('src');update();};
-  let editing=false;
+  let editing=false,artworkCode='CD-IMAGE-READ';
   upload.onchange=async()=>{if(editing)return;const file=upload.files?.[0];if(!file)return;editing=true;upload.disabled=remove.disabled=true;try{
-   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2000000)throw Error('Bitte PNG, JPEG oder WebP mit maximal 2 MB auswählen.');
-   if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');
-   const image=new Image(),url=URL.createObjectURL(file);try{await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('Das Bild konnte nicht gelesen werden.'));image.src=url;});}finally{URL.revokeObjectURL(url);}
+   artworkCode='CD-IMAGE-FORMAT';if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2000000)throw Error('Bitte PNG, JPEG oder WebP mit maximal 2 MB auswählen.');
+   artworkCode='CD-ACCESS';if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');
+   artworkCode='CD-IMAGE-DECODE';const image=new Image(),url=URL.createObjectURL(file);try{await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('Das Bild konnte nicht gelesen werden.'));image.src=url;});}finally{URL.revokeObjectURL(url);}
    if(!current()||!image.naturalWidth||!image.naturalHeight)throw Error('Bitte Einstellungen für den aktuellen Betrieb erneut öffnen.');
    const ratio=Math.min(1,1920/image.naturalWidth,1080/image.naturalHeight),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*ratio));canvas.height=Math.max(1,Math.round(image.naturalHeight*ratio));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);const value=canvas.toDataURL('image/webp',0.85);
-   if(!validArtwork(value))throw Error('Das Bild ist nach der Verarbeitung zu groß. Bitte ein kleineres Bild verwenden.');
-   localStorage.setItem(artworkKey+c.scope,value);refresh();status.textContent='Werbebild gespeichert. Es erscheint im Ruhezustand.';
-  }catch(error){status.textContent=error.name==='QuotaExceededError'?'Nicht genügend Browserspeicher. Bitte ein kleineres Bild verwenden.':error.message;}finally{editing=false;upload.disabled=remove.disabled=false;upload.value='';}};
-  remove.onclick=async()=>{if(editing)return;editing=true;upload.disabled=remove.disabled=true;try{if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');localStorage.removeItem(artworkKey+c.scope);refresh();status.textContent='Werbebild entfernt. Im Ruhezustand erscheint Willkommen.';}catch(error){status.textContent=error.message;}finally{editing=false;upload.disabled=remove.disabled=false;}};
-  card.append(title,label,text,open,uploadLabel,hint,preview,remove,status);area.append(card);
+   artworkCode='CD-IMAGE-SIZE';if(!validArtwork(value))throw Error('Das Bild ist nach der Verarbeitung zu groß. Bitte ein kleineres Bild verwenden.');
+   artworkCode='CD-STORAGE';localStorage.setItem(artworkKey+c.scope,value);refresh();report(artworkStatus,'Werbebild gespeichert. Es erscheint im Ruhezustand.');
+  }catch(error){report(artworkStatus,error.name==='QuotaExceededError'?'Nicht genügend Browserspeicher. Bitte ein kleineres Bild verwenden.':error.message,artworkCode);}finally{editing=false;upload.disabled=remove.disabled=false;upload.value='';}};
+  remove.onclick=async()=>{if(editing)return;editing=true;upload.disabled=remove.disabled=true;try{if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');localStorage.removeItem(artworkKey+c.scope);refresh();report(artworkStatus,'Werbebild entfernt. Im Ruhezustand erscheint Willkommen.');}catch(error){report(artworkStatus,error.message,'CD-IMAGE-REMOVE');}finally{editing=false;upload.disabled=remove.disabled=false;}};
+  artworkGroup.append(uploadLabel,hint,preview,remove,artworkStatus);card.append(title,label,text,open,status,artworkGroup,copy,diagnosticText);area.append(card);
  };
 })();
