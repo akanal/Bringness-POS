@@ -35,7 +35,12 @@ try{
  await display.locator('#display-lines').filter({hasText:'Vorschau Kaffee'}).waitFor();assert.match(await display.locator('#display-total').textContent(),/2,50/);
  await display.reload();await display.locator('#display-lines').filter({hasText:'Vorschau Kaffee'}).waitFor();
  await page.locator('#products button.product').filter({hasText:'Vorschau Kaffee'}).click();await display.locator('#display-lines').filter({hasText:'2 × Vorschau Kaffee'}).waitFor();assert.match(await display.locator('#display-total').textContent(),/5,00/);
- await page.evaluate(()=>{cart=[];renderCart();});await display.locator('#display-welcome').waitFor();await display.close();
+ // Reopening from Settings must immediately show the existing basket without returning to Kasse.
+ await display.close();await page.click('#userMenuBtn');await page.click('[data-user-view="einstellungen"]');
+ await page.locator('input[name="pin"]').fill('583921');await page.getByRole('button',{name:'Freigeben',exact:true}).click();
+ await page.locator('[data-settings-section="devices"] > summary').click();const reopened=page.waitForEvent('popup');await page.locator('#customerDisplayOpen').click();const settingsDisplay=await reopened;
+ await settingsDisplay.locator('#display-lines').filter({hasText:'2 × Vorschau Kaffee'}).waitFor();assert.match(await settingsDisplay.locator('#display-total').textContent(),/5,00/);
+ await page.evaluate(()=>{cart=[];renderCart();});await settingsDisplay.locator('#display-welcome').waitFor();await settingsDisplay.close();
  console.log('Actual POS customer display passed: real bootstrap, PIN/settings activation, live product clicks, quantity change and reload without sender polling; no payment made.');
  const aiResponse=await context.request.post(origin+'/api/ai/login',{data:{email:'preview@example.test',password:env.PREVIEW_OWNER_PASSWORD}});assert.equal(aiResponse.status(),200);const token=(await aiResponse.json()).token;secrets.push(token);
  await page.evaluate(token=>sessionStorage.setItem('bringness-ai-session',token),token);await page.goto(origin+'/ai-workspace.html');
