@@ -41,7 +41,7 @@
   const copy=document.createElement('button');copy.type='button';copy.id='customerDisplayDiagnosticCopy';copy.textContent='Letzte Fehlerdiagnose kopieren';copy.hidden=true;
   const diagnosticText=document.createElement('textarea');diagnosticText.id='customerDisplayDiagnosticText';diagnosticText.readOnly=true;diagnosticText.hidden=true;diagnosticText.setAttribute('aria-label','Fehlerdiagnose zum Kopieren');
   let diagnostic=null;
-  const report=(target,message,code='')=>{target.textContent=message+(code?' ['+code+']':'');if(code){diagnostic={code,time:new Date().toISOString(),appVersion:'customer-display-support-20261114',online:navigator.onLine===true,displayEnabled:enabled(c),windowState:!popup?'not-open':popup.closed?'closed':ready?'connected':'waiting'};copy.hidden=false;diagnosticText.hidden=true;diagnosticText.value='';}};
+  const report=(target,message,code='')=>{target.textContent=message+(code?' ['+code+']':'');if(code){diagnostic={code,time:new Date().toISOString(),appVersion:'customer-display-image-fit-20261114',online:navigator.onLine===true,displayEnabled:enabled(c),windowState:!popup?'not-open':popup.closed?'closed':ready?'connected':'waiting'};copy.hidden=false;diagnosticText.hidden=true;diagnosticText.value='';}};
   copy.onclick=async()=>{if(!diagnostic)return;if(context()?.scope!==c.scope){diagnostic=null;copy.hidden=true;diagnosticText.hidden=true;diagnosticText.value='';return;}const text=JSON.stringify(diagnostic,null,2);try{if(!navigator.clipboard?.writeText)throw Error();await navigator.clipboard.writeText(text);copy.textContent='Diagnose kopiert';}catch{diagnosticText.value=text;diagnosticText.hidden=false;diagnosticText.focus();diagnosticText.select();copy.textContent='Diagnose markieren und kopieren';}};
 
   const current=()=>context()?.scope===c.scope&&document.body.dataset.posView==='einstellungen'&&card.isConnected;
@@ -66,14 +66,21 @@
   const remove=document.createElement('button');remove.type='button';remove.id='customerDisplayArtworkRemove';remove.textContent='Werbebild entfernen';
   const refresh=()=>{const value=artwork(c);preview.hidden=!value;if(value)preview.src=value;else preview.removeAttribute('src');update();};
   let editing=false,artworkCode='CD-IMAGE-READ';
-  upload.onchange=async()=>{if(editing)return;const file=upload.files?.[0];if(!file)return;editing=true;upload.disabled=remove.disabled=true;try{
+  upload.onchange=async()=>{if(editing)return;const file=upload.files?.[0];if(!file)return;editing=true;upload.disabled=remove.disabled=true;report(artworkStatus,'Bild wird geprüft und für die Anzeige verkleinert …');try{
    artworkCode='CD-IMAGE-FORMAT';if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2000000)throw Error('Bitte PNG, JPEG oder WebP mit maximal 2 MB auswählen.');
    artworkCode='CD-ACCESS';if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');
    artworkCode='CD-IMAGE-DECODE';const image=new Image(),url=URL.createObjectURL(file);try{await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('Das Bild konnte nicht gelesen werden.'));image.src=url;});}finally{URL.revokeObjectURL(url);}
    if(!current()||!image.naturalWidth||!image.naturalHeight)throw Error('Bitte Einstellungen für den aktuellen Betrieb erneut öffnen.');
-   const ratio=Math.min(1,1920/image.naturalWidth,1080/image.naturalHeight),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*ratio));canvas.height=Math.max(1,Math.round(image.naturalHeight*ratio));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);const value=canvas.toDataURL('image/webp',0.85);
-   artworkCode='CD-IMAGE-SIZE';if(!validArtwork(value))throw Error('Das Bild ist nach der Verarbeitung zu groß. Bitte ein kleineres Bild verwenden.');
-   artworkCode='CD-STORAGE';localStorage.setItem(artworkKey+c.scope,value);refresh();report(artworkStatus,'Werbebild gespeichert. Es erscheint im Ruhezustand.');
+   // Canvas may fall back to PNG for an unsupported requested codec. Bound the
+   // actual encoded result, not the original file size or requested MIME type.
+   let ratio=Math.min(1,1920/image.naturalWidth,1080/image.naturalHeight),value='';const canvas=document.createElement('canvas');
+   artworkCode='CD-IMAGE-SIZE';for(let attempt=0;attempt<5&&!value;attempt++){
+    canvas.width=Math.max(1,Math.round(image.naturalWidth*ratio));canvas.height=Math.max(1,Math.round(image.naturalHeight*ratio));const ctx=canvas.getContext('2d');if(!ctx)throw Error('Bildverarbeitung ist in diesem Browser nicht verfügbar.');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    for(const quality of [0.85,0.65,0.45]){const candidate=canvas.toDataURL('image/jpeg',quality);if(validArtwork(candidate)&&candidate.length<=1000000){value=candidate;break;}}
+    ratio*=0.7;
+   }
+   if(!value)throw Error('Das Bild konnte nicht ausreichend verkleinert werden. Bitte ein anderes Bild verwenden.');
+   artworkCode='CD-STORAGE';localStorage.setItem(artworkKey+c.scope,value);if(artwork(c)!==value)throw Error('Das Werbebild konnte nicht bestätigt gespeichert werden.');refresh();report(artworkStatus,'Werbebild gespeichert. Es erscheint im Ruhezustand.');
   }catch(error){report(artworkStatus,error.name==='QuotaExceededError'?'Nicht genügend Browserspeicher. Bitte ein kleineres Bild verwenden.':error.message,artworkCode);}finally{editing=false;upload.disabled=remove.disabled=false;upload.value='';}};
   remove.onclick=async()=>{if(editing)return;editing=true;upload.disabled=remove.disabled=true;try{if(!current()||!await window.ensurePersonnelAccess?.()||!current())throw Error('Verwaltungsfreigabe und aktueller Betrieb erforderlich.');localStorage.removeItem(artworkKey+c.scope);refresh();report(artworkStatus,'Werbebild entfernt. Im Ruhezustand erscheint Willkommen.');}catch(error){report(artworkStatus,error.message,'CD-IMAGE-REMOVE');}finally{editing=false;upload.disabled=remove.disabled=false;}};
   artworkGroup.append(uploadLabel,hint,preview,remove,artworkStatus);card.append(title,label,text,open,status,artworkGroup,copy,diagnosticText);area.append(card);
