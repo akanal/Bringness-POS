@@ -20,7 +20,7 @@ test('basket events update the display immediately without waiting for the polli
 test('opening the display from Settings publishes the existing retail basket without returning to Kasse',async()=>{
  const f=setup(),w=f.w;w.localStorage.setItem('bringness.customer-display.enabled.v1:owner:r1','yes');w.document.getElementById('moduleBody').replaceChildren();w.bnRenderCustomerDisplaySettings(w.document.getElementById('moduleBody'));let target;const open=w.open;w.open=url=>{target=url;return open()};w.document.getElementById('customerDisplayOpen').click();assert.equal(w.document.body.dataset.posView,'einstellungen');w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,source:f.popup,data:{type:'bringness:customer-display-ready',channel:target.split('#')[1]}}));assert.equal(f.messages.at(-1).snapshot.state,'cart');assert.equal(f.messages.at(-1).snapshot.items[0].qty,2);assert.equal(f.messages.at(-1).snapshot.totalCents,1950);w.document.body.dataset.posView='belege';w.document.dispatchEvent(new w.CustomEvent('bringness:pos-view'));assert.equal(f.messages.at(-1).snapshot.state,'cart');w.eval('cart=[]');w.document.dispatchEvent(new w.CustomEvent('bringness:cart-changed'));assert.equal(f.messages.at(-1).snapshot.state,'idle');w.close();
 });
-test('paid receipt survives tab changes and reopening, expires at five minutes without restarting its deadline',async()=>{
+test('paid receipt survives tab changes and reopening, expires at two minutes without restarting its deadline',async()=>{
  const f=setup(),w=f.w;let now=100000;w.Date.now=()=>now;
  w.localStorage.setItem('bringness.customer-display.enabled.v1:owner:r1','yes');w.document.getElementById('moduleBody').replaceChildren();w.bnRenderCustomerDisplaySettings(w.document.getElementById('moduleBody'));
  let target;const open=w.open;w.open=url=>{target=url;return open()};
@@ -32,8 +32,8 @@ test('paid receipt survives tab changes and reopening, expires at five minutes w
  assert.equal(f.messages.at(-1).snapshot.state,'paid');assert.equal(f.messages.at(-1).snapshot.qrDataUrl,'data:image/png;base64,AA==');
  f.popup.close();f.tick();w.document.getElementById('customerDisplayOpen').click();ready();
  assert.equal(f.messages.at(-1).snapshot.state,'paid');assert.equal(f.messages.at(-1).snapshot.qrDataUrl,'data:image/png;base64,AA==');
- now=399999;f.tick();assert.equal(f.messages.at(-1).snapshot.state,'paid');
- now=400000;f.tick();assert.equal(f.messages.at(-1).snapshot.state,'idle');w.close();
+ now=219999;f.tick();assert.equal(f.messages.at(-1).snapshot.state,'paid');
+ now=220000;f.tick();assert.equal(f.messages.at(-1).snapshot.state,'idle');w.close();
 });
 test('new basket while display is closed invalidates the old receipt before reopening',async()=>{
  const f=setup(),w=f.w;w.localStorage.setItem('bringness.customer-display.enabled.v1:owner:r1','yes');w.document.getElementById('moduleBody').replaceChildren();w.bnRenderCustomerDisplaySettings(w.document.getElementById('moduleBody'));
@@ -43,4 +43,18 @@ test('new basket while display is closed invalidates the old receipt before reop
  w.eval('cart=[]');let target;const open=w.open;w.open=url=>{target=url;return open()};w.document.getElementById('customerDisplayOpen').click();
  w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,source:f.popup,data:{type:'bringness:customer-display-ready',channel:target.split('#')[1]}}));
  assert.equal(f.messages.at(-1).snapshot.state,'idle');w.close();
+});
+test('idle artwork is tenant scoped, never included in a cart, and inactive opening explains activation',()=>{
+ const f=setup(),w=f.w;
+ w.document.getElementById('customerDisplayOpen').click();assert.match(w.document.querySelector('[role=status]').textContent,/zuerst/);assert.equal(f.popup,undefined);
+ w.localStorage.setItem('bringness.customer-display.enabled.v1:owner:r1','yes');w.localStorage.setItem('bringness.customer-display.artwork.v1:owner:r1','data:image/png;base64,AA==');w.eval('cart=[]');let target;const open=w.open;w.open=url=>{target=url;return open()};w.document.getElementById('customerDisplayOpen').click();w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,source:f.popup,data:{type:'bringness:customer-display-ready',channel:target.split('#')[1]}}));assert.equal(f.messages.at(-1).snapshot.artwork,'data:image/png;base64,AA==');
+ w.eval("cart=[{id:'p',name:'Neu',qty:1,price:1}]");f.tick();assert.equal(f.messages.at(-1).snapshot.artwork,undefined);
+ w.document.getElementById('restaurant').append(new w.Option('Andere','r2'));w.document.getElementById('restaurant').value='r2';f.tick();assert.equal(f.popup.closed,true);w.close();
+});
+test('receiver displays only validated idle artwork and clears it for receipts and stale connections',async()=>{
+ const html=await readFile(new URL('../../apps/web/public/pos/customer-display.html',import.meta.url),'utf8');const dom=new JSDOM(html,{url:'https://bringness.de/pos/customer-display.html#'+'c'.repeat(64),runScripts:'outside-only'}),w=dom.window,parent={postMessage(){}};w.opener=parent;let tick;w.setInterval=fn=>tick=fn;w.eval(view);let sequence=0;
+ const send=snapshot=>w.dispatchEvent(new w.MessageEvent('message',{origin:w.location.origin,source:parent,data:{type:'bringness:customer-display',channel:'c'.repeat(64),sequence:++sequence,snapshot:{business:'Test',items:[],adjustments:[],totalCents:0,...snapshot}}}));
+ send({state:'idle',artwork:'data:image/png;base64,AA=='});assert.equal(w.document.getElementById('display-artwork').hidden,false);assert.equal(w.document.getElementById('display-welcome').hidden,true);
+ send({state:'paid',receiptNumber:'B1'});assert.equal(w.document.getElementById('display-artwork').hasAttribute('src'),false);send({state:'idle',artwork:'https://external.test/tracker'});assert.equal(w.document.getElementById('display-artwork').hidden,true);assert.equal(w.document.getElementById('display-welcome').hidden,false);
+ send({state:'idle',artwork:'data:image/png;base64,AA=='});w.Date.now=()=>Number.MAX_SAFE_INTEGER;tick();assert.equal(w.document.getElementById('display-artwork').hasAttribute('src'),false);w.close();
 });
