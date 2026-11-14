@@ -55,6 +55,7 @@
    $('tradeResume').hidden=!pending;$('tradeResume').disabled=busy;
    host.querySelectorAll('[data-qty]').forEach(el=>{el.disabled=busy||savingPrices||!!pending;el.onchange=()=>{const l=lines.find(l=>l.id===el.dataset.qty),n=Number(el.value);if(Number.isSafeInteger(n)&&n>=1&&n<=999999)l.qty=n;draw()}});
    host.querySelectorAll('[data-remove]').forEach(el=>{el.disabled=busy||savingPrices||!!pending;el.onclick=()=>{lines=lines.filter(l=>l.id!==el.dataset.remove);draw()}});
+   document.dispatchEvent(new CustomEvent('bringness:cart-changed'));
   }
   let openCategory=null;
   function catalog(){

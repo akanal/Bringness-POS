@@ -25,5 +25,6 @@
   $('display-lines').replaceChildren(...s.items.map(x=>row(x.qty+' × '+x.name,x.totalCents)));$('display-adjustments').replaceChildren(...s.adjustments.map(x=>row(x.name,x.totalCents)));$('display-total').textContent=money(s.totalCents);$('display-order').hidden=false;
  });
  const ready=()=>source.postMessage({type:'bringness:customer-display-ready',channel},origin);ready();
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)ready()});window.addEventListener('focus',ready);
  setInterval(()=>{if(!seen||Date.now()-seen>7000){clear('Verbindung zur Kasse unterbrochen · bitte warten.');ready();}},2000);
 })();
