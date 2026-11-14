@@ -670,6 +670,12 @@ Die bisherige Pflicht zu einem Händlergrundpreis ab Menge1 blockiert die gewün
 - CSV lokal bis4MB/200Zeilen, 50 lokale Entwürfe insgesamt. Nettopreise, echte Kategorien/Lieferdaten, Art/Zustand prüfen; Steuer bei fehlender Angabe review, keine erratenen Steuersätze. Änderungen der Zuordnung verwerfen Auswahl; ausdrückliche Bestätigung, neue Kennungen, kein Überschreiben und kein automatischer Kontoupload.
 - Dauerhafter Nutzerwunsch: Nach abgeschlossener Arbeit kurz erklären, welcher nächste sinnvolle Schritt empfohlen wird und warum; Vorschlag nicht als bereits ausgeführte Arbeit darstellen.
 
+## Kundendisplay und fünf Einstellungsgruppen — 14.11.2026
+- Eigentümer beauftragt reines Mitlaufen auf zweitem Kundenmonitor: Artikel/Mengen/Rabatt/Pfand/Gesamtbetrag, kein Zahlbestätigen oder Kundenbedienen. Aktivierung in geschützten Einstellungen je Betreiber/Betrieb/Browserprofil speichern; Anzeigefenster ausdrücklich öffnen, manuell auf zweiten Monitor verschieben. Keine automatische Browser-/OS-Monitorsteuerung oder separate Tabletverbindung behaupten.
+- Einstellungskacheln in fünf standardmäßig geschlossene Gruppen zusammenfassen: Betrieb & Produkte, Geräte & Anzeigen, Mitarbeiter & Zugriff, Zahlung & Buchhaltung, Konto & Module. Formularzustände, Rechte/PIN, Geräteschutz und bestehende Module erhalten.
+- Eigentümer hat die Livebereitstellung beider Änderungen ausdrücklich freigegeben, nach bestandenen erforderlichen Prüfungen über vorhandenen Netcup-Weg mit Sicherung und Live-Abgleich. Anleitung docs/customer-display-settings.md. Keine produktiven Kunden-/Finanzdaten zur Abnahme anlegen.
+
+
 ## Händlerangebotsvergleich beauftragt — 14.11.2026
 - Neuester Auftrag: bis zu drei ausdrücklich ausgewählte Händlerangebotsvarianten mit Verkäufer, Bruttopreis, Versand und Gesamtpreis gegenüberstellen. Bestehenden Bringness-Lizenzvergleich erhalten. Konkrete SKU vergleichen, keine automatische Produktgleichwertigkeit oder marktweite Bestpreisbehauptung.
 - Bestehende anonyme öffentliche Angebots-/Quote-APIs nutzen; ein Stück je Spalte als getrennte Händlerbestellung. Vergleich erzeugt weder Reservierung noch Bestellung/Zahlung. Bei veraltetem/unverfügbarem Angebot keinen bestätigten Gesamtpreis zeigen. Nur IDs/SKUs im Tab speichern; aktuelle Preise erneut prüfen.
