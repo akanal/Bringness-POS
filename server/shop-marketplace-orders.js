@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import {marketplaceTransaction as tx,requireMarketplaceSeller as approved} from './shop-marketplace.js';
+import {marketplaceTransaction as tx,requireMarketplaceSeller as approved,readMarketplace} from './shop-marketplace.js';
 import {validateMarketOrderCommand,nextMarketOrder,marketOrderActions} from '../apps/web/public/shop/market-order-policy.js';
 import {marketInteger} from '../apps/web/public/shop/market-policy.js';
 import {shopError} from './shop-account.js';
@@ -34,5 +34,23 @@ export async function transitionMarketplaceOrder(pool,{token,command}){
  await db.query('INSERT INTO shop_market_order_events(order_id,revision,status,actor_id) VALUES($1,$2,$3,$4)',[order.id,revision+1,next,user]);
  const result={requestId:c.requestId,orderId:order.id,status:next,revision:revision+1,updatedAt:new Date(saved.updated_at).toISOString(),replay:false,...flags};
  await db.query('INSERT INTO shop_market_commands VALUES($1,$2,$3,$4)',[company,c.requestId,digest,result]);return result;
+ });
+}
+
+// Reuse immutable allocation identities; never infer an offer from a display name or SKU alone.
+export async function previewMarketplaceReorder(pool,{token,orderId}){
+ if(typeof orderId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId))fail('INVALID_MARKET_INPUT');
+ return tx(pool,token,async(db,buyer)=>{
+  const order=(await db.query('SELECT o.shipment,o.company_id FROM shop_market_seller_orders o JOIN shop_market_orders b ON b.order_id=o.id WHERE o.id=$1 AND b.buyer_company_id=$2',[orderId,buyer])).rows[0];if(!order)fail('ORDER_NOT_FOUND');
+  const refs=(await db.query('SELECT offer_id,sku,quantity FROM shop_market_allocations WHERE order_id=$1 ORDER BY offer_id,sku',[orderId])).rows;
+  if(!refs.length||refs.length>20)return {orderId,items:[],available:false,reason:'Keine eindeutigen Artikelreferenzen vorhanden.',...flags};
+  const items=[];for(const ref of refs){
+   try{const offer=await readMarketplace(db,{id:ref.offer_id}),variant=offer.variants.find(v=>v.sku===ref.sku);
+    const owner=(await db.query('SELECT company_id FROM shop_market_publications WHERE id=$1',[ref.offer_id])).rows[0];
+    if(owner?.company_id!==order.company_id||!variant||variant.stock<ref.quantity||!Number.isSafeInteger(ref.quantity)||ref.quantity<1||ref.quantity>999||offer[order.shipment.method]!==true)throw Error();
+    items.push({offer,sku:ref.sku,quantity:ref.quantity});
+   }catch(error){if(error.code&&error.code!=='OFFER_NOT_FOUND')throw error;return {orderId,items:[],available:false,reason:'Mindestens ein Artikel oder die ursprüngliche Lieferart ist nicht in der benötigten Menge verfügbar.',...flags};}
+  }
+  return {orderId,items,method:order.shipment.method,available:true,...flags};
  });
 }

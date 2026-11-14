@@ -129,5 +129,12 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   busy=true;renderCart();try{const result=await client.write('orders',{requestId:w.crypto.randomUUID(),lines:frozen.lines,method:frozen.method,shippingNetCents:frozen.shippingNetCents,recipient});showOrder(result,frozen.lines);}catch(error){quote=null;$('market-confirm').hidden=true;status(marketError(error),true);}finally{busy=false;renderCart();}
  });
  for(const [id,fn]of [['market-retry',()=>client.retry('orders')],['market-recover',()=>client.recoverOrder()]])$(id).addEventListener('click',async()=>{if(busy)return;busy=true;renderCart();try{const pending=await client.pending('orders');if(!pending)throw Object.assign(Error(),{code:'NO_PENDING_REQUEST'});showOrder(await fn(),marketLines(pending.lines));}catch(error){status(marketError(error),true);}finally{busy=false;renderCart();}});
- mountCustomerAddressSelect({window:w,form:$('market-recipient')});mountMarketOrderViews({window:w,document:d,client,seller:false});readLocation();renderCart();search();return {search,client,getCart:()=>structuredClone(cart)};
+ mountCustomerAddressSelect({window:w,form:$('market-recipient')});mountMarketOrderViews({window:w,document:d,client,seller:false,onReorder:preview=>{
+  if(busy||cart.length)throw Error('Bitte die vorhandene Händlerauswahl zuerst abschließen oder leeren. Sie wurde nicht verändert.');
+  if(!['shipping','pickup'].includes(preview.method)||preview.items.length>20)throw Error('Ungültige Wiederbestellauswahl.');
+  const next=preview.items.map(({offer:p,sku,quantity})=>{const v=p?.variants?.find(x=>x.sku===sku);if(!publicId(p?.sellerId)||!v||v.stock<quantity||p[preview.method]!==true)throw Error('Artikel inzwischen nicht verfügbar.');return {title:p.title,label:v.label,seller:p.seller.name+' · '+p.seller.email,sellerId:p.sellerId,shipping:p.shipping,pickup:p.pickup,shippingNetCents:p.shippingNetCents,line:{id:p.id,revision:p.revision,sku,quantity,unitNetCents:v.netCents}};});
+  marketLines(next.map(x=>x.line));if(new Set(next.map(x=>x.sellerId)).size!==1)throw Error('Händlerzuordnung nicht bestätigt.');
+  if(!w.confirm('Diese Artikel zu aktuellen Preisen erneut auswählen? Versand und Gesamtpreis werden danach neu geprüft. Es wird noch keine Bestellung ausgelöst.'))return false;
+  cart=next;activeSeller=next[0].sellerId;$('market-method').value=preview.method;changed();status('Erneut ausgewählt. Aktuelle Gesamtkosten prüfen und Bestellung ausdrücklich bestätigen.');return true;
+ }});readLocation();renderCart();search();return {search,client,getCart:()=>structuredClone(cart)};
 }
