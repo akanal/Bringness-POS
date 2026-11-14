@@ -1,0 +1,11 @@
+# Kundendisplay und kompakte Einstellungen
+
+Unter **Einstellungen → Geräte & Anzeigen → Kundendisplay** aktivieren und **Kundendisplay öffnen** drücken. Das neue Fenster auf den zweiten Monitor ziehen und dort gegebenenfalls über die Browsersteuerung Vollbild aktivieren. Nur Anzeige: Artikel, Mengen, Rabatt, Pfand und aktueller Gesamtbetrag. Keine Zahlungsbestätigung und keine Kundenbedienung. Keine zusätzliche Modulbuchung.
+
+Die Aktivierung gilt für angemeldeten Betreiber, Betrieb und dieses Browserprofil; sie bleibt nach Neuladen erhalten. Browser erlauben das automatische Öffnen neuer Fenster nicht zuverlässig, deshalb bei jedem Kassenstart das Fenster bei Bedarf ausdrücklich öffnen. Kein Zugriff auf ein separates Tablet oder eine IP-Anzeige; vorgesehen ist ein zweiter Monitor am selben Kassencomputer. Monitorposition/Browservollbild werden nicht automatisch gesteuert.
+
+Daten nur per origin- und fenstergebundener Nachricht mit zufälliger flüchtiger Kennung. Keine Anmeldedaten, Käuferadressen, Mitarbeiterdaten oder Zahlungsaktionen im Anzeigeprotokoll. Kein Server-/Broadcast-Kanal, keine zusätzlichen Konto-/Zahlungsrechte. Artikeltexte als Text rendern. Kennung sofort aus Anzeige-URL entfernen. Nach sieben Sekunden ohne gültige Aktualisierung alte Beträge entfernen. Kasse schließen/abmelden, Betrieb wechseln oder deaktivieren beendet das Fenster. Die Anzeige ist kein fiskalischer Beleg; kein „bezahlt“ ohne bestätigte Zahlung behaupten.
+
+Einstellungen bestehen aus fünf standardmäßig geschlossenen Gruppen: Betrieb & Produkte, Geräte & Anzeigen, Mitarbeiter & Zugriff, Zahlung & Buchhaltung, Konto & Module. Bestehende Kacheln werden mit ihren Formularen/Listenern verschoben, nicht kopiert oder gelöscht. Tests bleiben unter Geräte & Anzeigen, Verwaltungsfreigaben und Schutz ungespeicherter Geräteangaben bleiben erhalten. Nachträgliche Einrichtungs-/Importkarten werden der Betriebsgruppe zugeordnet.
+
+Prüfungen: `node --test ops/shop/customer-display.test.mjs`, `npm test`, bestehende Pfand-/Händler-/Modulprüfungen und `server/pos-payment-browser.test.js` in Chromium/WebKit. Nur synthetische Daten. Browserprüfung belegt zwei Fenster, nicht die physische Monitorzuordnung beim Kunden.
