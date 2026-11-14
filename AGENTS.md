@@ -669,3 +669,8 @@ Die bisherige Pflicht zu einem Händlergrundpreis ab Menge1 blockiert die gewün
 - Preisfilter serverseitig über alle öffentlichen Angebote vor Pagination: inklusive MwSt. pro passender Variante, ohne Versand; bei verfügbar=1 muss dieselbe Variante Bestand haben. Keine globale Sortierung aus nur geladenen Seiten behaupten.
 - CSV lokal bis4MB/200Zeilen, 50 lokale Entwürfe insgesamt. Nettopreise, echte Kategorien/Lieferdaten, Art/Zustand prüfen; Steuer bei fehlender Angabe review, keine erratenen Steuersätze. Änderungen der Zuordnung verwerfen Auswahl; ausdrückliche Bestätigung, neue Kennungen, kein Überschreiben und kein automatischer Kontoupload.
 - Dauerhafter Nutzerwunsch: Nach abgeschlossener Arbeit kurz erklären, welcher nächste sinnvolle Schritt empfohlen wird und warum; Vorschlag nicht als bereits ausgeführte Arbeit darstellen.
+
+## Händlerangebotsvergleich beauftragt — 14.11.2026
+- Neuester Auftrag: bis zu drei ausdrücklich ausgewählte Händlerangebotsvarianten mit Verkäufer, Bruttopreis, Versand und Gesamtpreis gegenüberstellen. Bestehenden Bringness-Lizenzvergleich erhalten. Konkrete SKU vergleichen, keine automatische Produktgleichwertigkeit oder marktweite Bestpreisbehauptung.
+- Bestehende anonyme öffentliche Angebots-/Quote-APIs nutzen; ein Stück je Spalte als getrennte Händlerbestellung. Vergleich erzeugt weder Reservierung noch Bestellung/Zahlung. Bei veraltetem/unverfügbarem Angebot keinen bestätigten Gesamtpreis zeigen. Nur IDs/SKUs im Tab speichern; aktuelle Preise erneut prüfen.
+- Anleitung und Vergleichsquellen: docs/shop-offer-comparison.md. Bestehende entfernte Anmeldezeile bleibt entfernt; Screenshot allein beweist keine aktuell ausgelieferte Version.

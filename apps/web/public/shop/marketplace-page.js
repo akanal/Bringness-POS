@@ -1,4 +1,4 @@
 import {mountMarketplaceApproval} from './marketplace-approval-ui.js';
-import {mountMarketplace} from './marketplace-ui.js?v=search-20261114';
+import {mountMarketplace} from './marketplace-ui.js?v=compare-20261114';
 import {mountMarketplaceSeller} from './marketplace-seller-ui.js';
 if(document.body.dataset.market==='seller'){mountMarketplaceSeller({window});mountMarketplaceApproval({window});}else if(document.body.dataset.market==='review')mountMarketplaceApproval({window,admin:true,tokenStorageKey:'bringness-market-admin-token'});else mountMarketplace({window});
