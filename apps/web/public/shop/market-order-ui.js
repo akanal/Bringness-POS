@@ -5,7 +5,7 @@ import {marketError} from './market-client.js';
 import {marketOrderLabels,marketOrderActions} from './market-order-policy.js';
 import {marketTracking,marketCarriers,marketTrackingUrl} from './market-tracking-policy.js';
 const labels={accept:'Bestellung annehmen',reject:'Bestellung ablehnen',cancel:'Bestellung stornieren',ready:'Als abholbereit markieren',ship:'Als versendet markieren'};
-export function mountMarketOrderViews({window:w,document:d=w.document,client,seller}){
+export function mountMarketOrderViews({window:w,document:d=w.document,client,seller,onReorder}){
  const prefix=seller?'seller':'buyer',host=d.getElementById(prefix+'-orders'),status=d.getElementById(prefix+'-orders-status'),load=d.getElementById(prefix+'-orders-load');
  if(!host||!load||!status)return;
  let epoch=0,busy=false,rows=[],lastToken=w.localStorage.getItem('bringness-shop-token');const drafts=new Map();
@@ -33,6 +33,13 @@ export function mountMarketOrderViews({window:w,document:d=w.document,client,sel
    if(seller){box.append(el('p',r.recipient.name+' · '+r.recipient.street+' · '+r.recipient.postalCode+' '+r.recipient.city+' · '+r.recipient.country),el('p',r.recipient.email));}
    else{box.append(el('p',r.seller.name));if(typeof r.sellerId==='string'&&/^[a-f0-9-]{36}$/i.test(r.sellerId)){const a=el('a','Aktuelles Händlerprofil');a.href='/shop/marketplace.html?'+new URLSearchParams({seller:r.sellerId});box.append(a);}}
    for(const l of r.lines)box.append(el('p',l.quantity+' × '+l.name));box.append(el('p',marketMoney(r.grossCents)+' inkl. MwSt. · Unbezahlt'),el('p',r.delivery),el('p','Zuletzt gespeichert: '+new Date(r.updatedAt).toLocaleString('de-DE')));
+   if(!seller&&onReorder){const again=el('button','Erneut auswählen');again.type='button';again.disabled=busy;again.addEventListener('click',async()=>{
+    if(busy||d.hidden)return;const version=++epoch;busy=true;again.disabled=true;
+    try{if(await client.pending?.('orders'))throw Error('Bitte zuerst die ungeklärte Bestellung abgleichen.');const preview=await client.call('/reorder/'+encodeURIComponent(r.id),{auth:true});if(version!==epoch||d.hidden)return;
+     if(preview.orderId!==r.id||preview.available!==true||!Array.isArray(preview.items)||!preview.items.length){message(preview.reason||'Diese Bestellung kann nicht erneut ausgewählt werden.',true);return;}
+     if(onReorder(preview)===false)return;message('Aktuelle Artikel geprüft. Bitte die Händlerauswahl und die aktuellen Gesamtkosten vor dem Bestellen prüfen.');
+    }catch(e){if(version===epoch)message(e.code?marketError(e):e.message,true);}finally{busy=false;if(version===epoch)render();}
+   });box.append(again);}
    if(seller){const c=r.commission;if(c?.version==='net-goods-5-v1'&&c.currency==='EUR'&&c.basis==='goods-net-excluding-shipping'&&c.rateBasisPoints===500&&c.monthlyFeeCents===0&&Number.isSafeInteger(c.goodsNetCents)&&c.goodsNetCents>=0&&Number.isSafeInteger(c.feeNetCents)&&c.feeNetCents===Number((BigInt(c.goodsNetCents)*5n+50n)/100n)){box.append(el('p','Vorgesehene Bringness-Provision: '+marketMoney(c.feeNetCents)+' netto · 5 % von '+marketMoney(c.goodsNetCents)+' Nettowarenwert ohne Versand. Noch kein Provisionsabzug bestätigt.'));}else{box.append(el('p','Für diese Bestellung ist keine geprüfte Provisionsberechnung hinterlegt.'));}}
    if(r.tracking){box.append(el('p','Versandangabe des Händlers: '+r.tracking.carrierName+' · '+r.tracking.number+' · Stand '+r.trackingRevision));const url=marketTrackingUrl(r.tracking);if(url){const a=el('a','Sendung bei DHL verfolgen (externe Seite)');a.href=url;a.target='_blank';a.rel='noopener noreferrer nofollow';a.referrerPolicy='no-referrer';box.append(a);}box.append(el('p','Versandangabe bestätigt weder Zahlung noch Zustellung.'));}
    if(r.testPayment?.mode==='test')box.append(el('p','Testzahlung: '+r.testPayment.status+' · Keine Warenfreigabe.'));
