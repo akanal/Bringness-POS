@@ -674,3 +674,9 @@ Die bisherige Pflicht zu einem Händlergrundpreis ab Menge1 blockiert die gewün
 - Eigentümer beauftragt reines Mitlaufen auf zweitem Kundenmonitor: Artikel/Mengen/Rabatt/Pfand/Gesamtbetrag, kein Zahlbestätigen oder Kundenbedienen. Aktivierung in geschützten Einstellungen je Betreiber/Betrieb/Browserprofil speichern; Anzeigefenster ausdrücklich öffnen, manuell auf zweiten Monitor verschieben. Keine automatische Browser-/OS-Monitorsteuerung oder separate Tabletverbindung behaupten.
 - Einstellungskacheln in fünf standardmäßig geschlossene Gruppen zusammenfassen: Betrieb & Produkte, Geräte & Anzeigen, Mitarbeiter & Zugriff, Zahlung & Buchhaltung, Konto & Module. Formularzustände, Rechte/PIN, Geräteschutz und bestehende Module erhalten.
 - Eigentümer hat die Livebereitstellung beider Änderungen ausdrücklich freigegeben, nach bestandenen erforderlichen Prüfungen über vorhandenen Netcup-Weg mit Sicherung und Live-Abgleich. Anleitung docs/customer-display-settings.md. Keine produktiven Kunden-/Finanzdaten zur Abnahme anlegen.
+
+
+## Händlerangebotsvergleich beauftragt — 14.11.2026
+- Neuester Auftrag: bis zu drei ausdrücklich ausgewählte Händlerangebotsvarianten mit Verkäufer, Bruttopreis, Versand und Gesamtpreis gegenüberstellen. Bestehenden Bringness-Lizenzvergleich erhalten. Konkrete SKU vergleichen, keine automatische Produktgleichwertigkeit oder marktweite Bestpreisbehauptung.
+- Bestehende anonyme öffentliche Angebots-/Quote-APIs nutzen; ein Stück je Spalte als getrennte Händlerbestellung. Vergleich erzeugt weder Reservierung noch Bestellung/Zahlung. Bei veraltetem/unverfügbarem Angebot keinen bestätigten Gesamtpreis zeigen. Nur IDs/SKUs im Tab speichern; aktuelle Preise erneut prüfen.
+- Anleitung und Vergleichsquellen: docs/shop-offer-comparison.md. Bestehende entfernte Anmeldezeile bleibt entfernt; Screenshot allein beweist keine aktuell ausgelieferte Version.

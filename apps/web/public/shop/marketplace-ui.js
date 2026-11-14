@@ -1,3 +1,4 @@
+import {mountMarketComparison} from './market-comparison.js?v=20261114';
 import {categories as shopCategories} from './departments.js';
 import {mountCustomerAddressSelect} from './customer-address-select.js';
 import {mountMarketOrderViews} from './market-order-ui.js';
@@ -49,8 +50,10 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
   activeSeller=p.sellerId;if(!selected().every(x=>x[$('market-method').value]))$('market-method').value=selected().every(x=>x.shipping)?'shipping':'pickup';
   const persisted=changed();if(persisted)status('Zur Händlerauswahl hinzugefügt. Jede Händlerbestellung wird einzeln geprüft und bestätigt.');
  }
+ let compareControls=[];
+ const comparison=mountMarketComparison({window:w,document:d,client,onChange:()=>compareControls.forEach(update=>update())});
  function render(){
-  const host=$('market-results');host.replaceChildren();if($('market-result-summary'))$('market-result-summary').textContent=rows.length+' Angebote geladen'+(nextCursor?' · weitere Ergebnisse verfügbar':'');
+  compareControls=[];const host=$('market-results');host.replaceChildren();if($('market-result-summary'))$('market-result-summary').textContent=rows.length+' Angebote geladen'+(nextCursor?' · weitere Ergebnisse verfügbar':'');
   for(const p of rows){
    const box=el('article');box.dataset.offerId=p.id;
    if(typeof p.imageUrl==='string'&&/^\/api\/v1\/shop\/marketplace\/images\/public\/[a-f0-9-]{36}$/.test(p.imageUrl)){const img=el('img');img.src=p.imageUrl;img.alt=p.title;img.loading='lazy';img.width=240;img.height=180;img.className='market-product-image';box.append(img);}
@@ -64,7 +67,8 @@ export function mountMarketplace({window:w,document:d=w.document,client:provided
    const min=$('market-min-price')?.value.trim(),max=$('market-max-price')?.value.trim(),matching=v=>(!$('market-available').checked||v.stock>0)&&(!min||gross(v.netCents,v.vatBasisPoints)>=Math.round(Number(min.replace(',','.'))*100))&&(!max||gross(v.netCents,v.vatBasisPoints)<=Math.round(Number(max.replace(',','.'))*100));const first=p.variants.find(v=>v.stock>0&&matching(v))||p.variants.find(matching)||p.variants.find(v=>v.stock>0);if(first)select.value=first.sku;
    const availability=el('p'),addButton=el('button','Zur Händlerauswahl');addButton.type='button';
    const update=()=>{const v=p.variants.find(v=>v.sku===select.value);addButton.disabled=!v?.stock;availability.textContent=v?v.stock+' verfügbar · '+money(gross(v.netCents,v.vatBasisPoints))+' inkl. MwSt.':'';};select.addEventListener('change',update);update();
-   addButton.addEventListener('click',()=>add(p,p.variants.find(v=>v.sku===select.value)));box.append(select,availability,addButton);host.append(box);
+   const compareButton=el('button');compareButton.type='button';compareButton.dataset.compareOffer=p.id;const updateCompare=()=>{const selected=comparison?.has(p.id,select.value);compareButton.textContent=selected?'Aus Vergleich entfernen':'Zum Vergleich';compareButton.setAttribute('aria-pressed',String(!!selected));};compareControls.push(updateCompare);select.addEventListener('change',updateCompare);compareButton.addEventListener('click',()=>{comparison?.toggle(p.id,select.value);updateCompare();});updateCompare();
+   addButton.addEventListener('click',()=>add(p,p.variants.find(v=>v.sku===select.value)));box.append(select,availability,addButton);if(comparison)box.append(compareButton);host.append(box);
   }
   if(!rows.length)host.append(el('p','Keine veröffentlichten Händlerangebote für diese Suche.'));
  }
