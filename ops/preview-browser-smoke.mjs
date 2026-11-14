@@ -20,8 +20,23 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.PREVIEW_TEST_BROWSER_CHANNEL==='chrome'?{channel:'chrome'}:{})});
  const context=await browser.newContext({ignoreHTTPSErrors:true,httpCredentials:{username:'bringness-preview',password:env.PREVIEW_ACCESS_PASSWORD}});
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.addInitScript(()=>{const original=window.setInterval;window.setInterval=(fn,ms,...args)=>typeof fn==='function'&&fn.name==='update'&&ms===1500?0:original.call(window,fn,ms,...args);});
  await page.goto(origin+'/pos/');await page.fill('#email','preview@example.test');await page.fill('#password',env.PREVIEW_OWNER_PASSWORD);await page.click('#authSubmit');await page.waitForSelector('#workspace.show');
  await page.waitForFunction(()=>document.getElementById('who')?.textContent.includes('Vorschau'));
+ // Actual app/bootstrap/PIN/settings/product clicks, with customer sender polling disabled.
+ await page.click('#userMenuBtn');await page.click('[data-user-view="einstellungen"]');
+ await page.locator('input[name="pin"]').waitFor();
+ const setupPassword=page.locator('input[name="password"]');if(await setupPassword.count())await setupPassword.fill(env.PREVIEW_OWNER_PASSWORD);
+ await page.locator('input[name="pin"]').fill('583921');await page.getByRole('button',{name:'Freigeben',exact:true}).click();
+ await page.locator('[data-settings-section="devices"] > summary').click();await page.locator('#customerDisplayEnabled').check();
+ const opened=page.waitForEvent('popup');await page.locator('#customerDisplayOpen').click();const display=await opened;display.on('pageerror',error=>errors.push(error.message));
+ await display.locator('#display-welcome').waitFor();await page.locator('#mainnav button[data-view="kasse"]').click();
+ await page.locator('#products button.product').filter({hasText:'Vorschau Kaffee'}).click();
+ await display.locator('#display-lines').filter({hasText:'Vorschau Kaffee'}).waitFor();assert.match(await display.locator('#display-total').textContent(),/2,50/);
+ await display.reload();await display.locator('#display-lines').filter({hasText:'Vorschau Kaffee'}).waitFor();
+ await page.locator('#products button.product').filter({hasText:'Vorschau Kaffee'}).click();await display.locator('#display-lines').filter({hasText:'2 × Vorschau Kaffee'}).waitFor();assert.match(await display.locator('#display-total').textContent(),/5,00/);
+ await page.evaluate(()=>{cart=[];renderCart();});await display.locator('#display-welcome').waitFor();await display.close();
+ console.log('Actual POS customer display passed: real bootstrap, PIN/settings activation, live product clicks, quantity change and reload without sender polling; no payment made.');
  const aiResponse=await context.request.post(origin+'/api/ai/login',{data:{email:'preview@example.test',password:env.PREVIEW_OWNER_PASSWORD}});assert.equal(aiResponse.status(),200);const token=(await aiResponse.json()).token;secrets.push(token);
  await page.evaluate(token=>sessionStorage.setItem('bringness-ai-session',token),token);await page.goto(origin+'/ai-workspace.html');
  await page.waitForFunction(()=>!document.getElementById('workspace').hidden&&document.getElementById('identity').textContent.includes('Vorschau'));

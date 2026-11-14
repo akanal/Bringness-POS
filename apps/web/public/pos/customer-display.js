@@ -27,7 +27,7 @@
   }).catch(()=>{});
  }catch{}};
  window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==popup||event.data?.type!=='bringness:customer-display-ready'||event.data.channel!==channel)return;ready=true;update();});
- window.addEventListener('pagehide',disconnect);window.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token'||e.key?.startsWith(settingsKey))update();});document.getElementById('restaurant')?.addEventListener('change',update);document.addEventListener('bringness:pos-view',update);setInterval(update,1500);
+ window.addEventListener('pagehide',disconnect);window.addEventListener('storage',e=>{if(e.key===null||e.key==='bringness-pos-token'||e.key?.startsWith(settingsKey))update();});document.getElementById('restaurant')?.addEventListener('change',update);document.addEventListener('bringness:pos-view',update);document.addEventListener('bringness:cart-changed',update);document.addEventListener('visibilitychange',update);window.addEventListener('focus',update);setInterval(update,1500);
  window.bnRenderCustomerDisplaySettings=area=>{
   const c=context();if(!c)return;const card=document.createElement('section');card.className='modulecard';card.dataset.settingsGroup='devices';
   const title=document.createElement('h3');title.textContent='Kundendisplay';const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.id='customerDisplayEnabled';input.checked=enabled(c);label.append(input,document.createTextNode(' Kundendisplay für diese Kasse aktivieren'));
