@@ -22,6 +22,51 @@ async function fixture(onApi){
  await page.goto('https://payment.test/pos/');return {browser,page,errors};
 }
 const cashResult=body=>({requestKey:body.requestKey,id:'33333333-3333-4333-8333-333333333333',restaurantId:restaurant,status:'paid',receiptNumber:'BN-1',totalCents:250});
+// Use the complete POS document and every shipped extension for fresh sign-in.
+async function authFixture({brokenMain=false}={}){
+ const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[],requests=[];
+ page.on('pageerror',error=>errors.push(error.message));let breakOnce=brokenMain;
+ await page.route('https://auth.test/**',async route=>{
+  const request=route.request(),url=new URL(request.url()),p=url.pathname;
+  if(p==='/pos/')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8')});
+  if(p==='/pos/app.js'&&breakOnce){breakOnce=false;return route.fulfill({contentType:'text/javascript',body:'const = invalid register script;'});}
+  if(p.startsWith('/api/v1/auth/')){
+   requests.push({path:p,headers:request.headers(),body:request.postDataJSON()});
+   if(p.endsWith('/forgot-password'))return route.fulfill({json:{message:'Reset-Link angefordert.'}});
+   if(request.postDataJSON().password==='incorrect')return route.fulfill({status:401,json:{error:'E-Mail oder Passwort stimmen nicht.'}});
+   return route.fulfill({json:{token:'synthetic-session',user:{role:'owner'}}});
+  }
+  if(p==='/api/v1/bootstrap')return route.fulfill({json:{user:{name:'Synthetic owner'},restaurants:[{id:restaurant,name:'Synthetic business',mode:'restaurant'}],products:[],categories:[],orders:[]}});
+  if(p==='/api/v1/billing/status')return route.fulfill({json:{features:{pos_base:true,restaurant:true,table_management:true}}});
+  if(p==='/health')return route.fulfill({json:{status:'ok',database:'ok'}});
+  if(p.startsWith('/api/'))return route.fulfill({json:{}});
+  try{return route.fulfill({body:await readFile(new URL('../apps/web/public'+p,import.meta.url)),contentType:p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'application/octet-stream'});}catch{return route.abort();}
+ });
+ await page.goto('https://auth.test/pos/');return {browser,page,errors,requests};
+}
+test('fresh POS sign-in and password recovery work with the full register script chain',async()=>{
+ const f=await authFixture();try{
+  await f.page.fill('#email','fixture@example.test');await f.page.fill('#password','incorrect');await f.page.click('#authSubmit');
+  await f.page.waitForFunction(()=>document.getElementById('authMsg').textContent.includes('stimmen nicht'));
+  assert.equal(await f.page.locator('#workspace').isVisible(),false);
+  await f.page.click('#forgotPassword');await f.page.waitForFunction(()=>document.getElementById('authMsg').textContent==='Reset-Link angefordert.');
+  await f.page.fill('#password','synthetic password');await f.page.click('#authSubmit');await f.page.waitForSelector('#workspace.show');
+  assert.equal(await f.page.textContent('#who'),'Synthetic owner');assert.equal(await f.page.locator('#auth').isVisible(),false);
+  assert.deepEqual(f.requests.map(request=>request.path),['/api/v1/auth/login','/api/v1/auth/forgot-password','/api/v1/auth/login']);
+  for(const request of f.requests)assert.equal(request.headers.authorization,undefined);
+  assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
+test('a failed POS main script keeps recovery usable and a new login reloads the register',async()=>{
+ const f=await authFixture({brokenMain:true});try{
+  await f.page.waitForFunction(()=>document.getElementById('authMsg').textContent.includes('POS-START'));
+  await f.page.fill('#email','fixture@example.test');await f.page.click('#forgotPassword');
+  await f.page.waitForFunction(()=>document.getElementById('authMsg').textContent==='Reset-Link angefordert.');
+  await f.page.fill('#password','synthetic password');await f.page.click('#authSubmit');await f.page.waitForSelector('#workspace.show');
+  assert.equal(await f.page.textContent('#who'),'Synthetic owner');assert.equal(f.requests.filter(request=>request.path.endsWith('/login')).length,1);
+  assert(f.errors.some(message=>/Unexpected token|expected/.test(message)));
+ }finally{await f.browser.close();}
+});
 test('per-business place terminology renders rooms across POS and resets when selecting another business',async()=>{
  const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const index=await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8'),source=await readFile(new URL('../apps/web/public/pos/app.js',import.meta.url),'utf8'),copy=await readFile(new URL('../apps/web/public/place-terminology-copy.js',import.meta.url),'utf8');
