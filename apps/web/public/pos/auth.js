@@ -25,7 +25,7 @@
   let timer;const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>{reject(Error('Die Verbindung dauert zu lange. Bitte erneut versuchen.'));controller?.abort();},path==='forgot-password'?60000:20000);});
   try{
    return await Promise.race([deadline,(async()=>{
-    const response=await fetch('/api/v1/auth/'+path,{method:'POST',credentials:'omit',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify(body),...(controller?{signal:controller.signal}:{})});
+    const response=await fetch('/api/v1/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify(body),...(controller?{signal:controller.signal}:{})});
     let result;try{result=await response.json();}catch{throw Error('Die Serverantwort ist unvollständig. Bitte erneut versuchen.');}
     if(!result||typeof result!=='object'||Array.isArray(result))throw Error('Die Serverantwort ist unvollständig. Bitte erneut versuchen.');
     if(!response.ok)throw Error(typeof result.error==='string'&&result.error.trim()?result.error:'Anfrage fehlgeschlagen. Bitte erneut versuchen.');
