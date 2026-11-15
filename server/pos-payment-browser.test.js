@@ -22,6 +22,32 @@ async function fixture(onApi){
  await page.goto('https://payment.test/pos/');return {browser,page,errors};
 }
 const cashResult=body=>({requestKey:body.requestKey,id:'33333333-3333-4333-8333-333333333333',restaurantId:restaurant,status:'paid',receiptNumber:'BN-1',totalCents:250});
+test('per-business place terminology renders rooms across POS and resets when selecting another business',async()=>{
+ const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const index=await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8'),source=await readFile(new URL('../apps/web/public/pos/app.js',import.meta.url),'utf8'),copy=await readFile(new URL('../apps/web/public/place-terminology-copy.js',import.meta.url),'utf8');
+ const second='33333333-3333-4333-8333-333333333333',features={pos_base:true,restaurant:true,table_management:true,kitchen:true};
+ await page.addInitScript(()=>localStorage.setItem('bringness-pos-token','fixture'));
+ await page.route('https://terms.test/**',async route=>{
+  const url=new URL(route.request().url()),p=url.pathname;
+  if(p==='/pos/')return route.fulfill({contentType:'text/html',body:index.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'').replace('</body>','<script src="/place-terminology-copy.js"></script><script src="/pos/app.js"></script></body>')});
+  if(p==='/place-terminology-copy.js')return route.fulfill({contentType:'text/javascript',body:copy});
+  if(p==='/pos/app.js')return route.fulfill({contentType:'text/javascript',body:source});
+  if(p==='/api/v1/bootstrap')return route.fulfill({json:{user:{name:'Fixture'},restaurants:[{id:restaurant,name:'Hotel',mode:'restaurant',placeTerminology:{singular:'Zimmer',plural:'Zimmer'}},{id:second,name:'Restaurant',mode:'restaurant',placeTerminology:{singular:'Tisch',plural:'Tische'}}],products:[],categories:[],orders:[]}});
+  if(p==='/api/v1/billing/status')return route.fulfill({json:{features}});
+  if(p==='/api/v1/tables')return route.fulfill({json:{tables:[{id:product,name:url.searchParams.get('restaurantId')===restaurant?'Zimmer 101':'1',area:'Stockwerk 1',status:'free'}]}});
+  if(p.endsWith('/details'))return route.fulfill({json:{orders:[]}});
+  if(p==='/health')return route.fulfill({json:{status:'ok',database:'ok'}});
+  if(p.startsWith('/api/'))return route.fulfill({json:{}});
+  try{return route.fulfill({body:await readFile(new URL('../apps/web/public'+p,import.meta.url)),contentType:p.endsWith('.css')?'text/css':'application/octet-stream'})}catch{return route.abort()}
+ });
+ try{
+  await page.goto('https://terms.test/pos/');await page.waitForFunction(()=>document.getElementById('workspace').classList.contains('show'));
+  assert.equal(await page.textContent('#mainnav [data-view="tische"]'),'Zimmer');await page.click('#mainnav [data-view="tische"]');await page.waitForSelector('[data-table]');
+  assert.equal(await page.textContent('.tableaction'),'Zimmer öffnen →');assert.equal(await page.textContent('.tabletile b'),'Zimmer 101');assert.match(await page.textContent('.tableareahead'),/Stockwerk 1/);
+  await page.click('[data-table]');assert.match(await page.textContent('.tabledetail h3'),/Zimmer 101/);assert.match(await page.textContent('[data-table-action="settle"]'),/Zimmer abrechnen/);
+  await page.selectOption('#restaurant',second);await page.waitForFunction(()=>document.querySelector('.tableaction')?.textContent==='Tisch öffnen →');assert.equal(await page.textContent('#mainnav [data-view="tische"]'),'Tische');assert.equal(await page.textContent('.tabletile b'),'Tisch 1');assert.deepEqual(errors,[]);
+ }finally{await browser.close()}
+});
 test('cash checkout retries the same persisted operation after browser reload and a lost reply',async()=>{
  const requests=[],committed=new Set();const f=await fixture(async route=>{
   const b=route.request().postDataJSON();requests.push(b);if(!committed.has(b.requestKey)){committed.add(b.requestKey);return route.abort('failed');}
@@ -428,6 +454,7 @@ async function serviceAuthFixture(onApi,{fragment='',signedIn=false}={}){
   const path=new URL(route.request().url()).pathname;
   if(path==='/service/')return route.fulfill({contentType:'text/html',body:document});
   if(path==='/service/app.js')return route.fulfill({contentType:'text/javascript',body:script});
+  if(path==='/place-terminology-copy.js')return route.fulfill({contentType:'text/javascript',body:await readFile(new URL('../apps/web/public/place-terminology-copy.js',import.meta.url),'utf8')});
   if(path==='/personnel-report.js')return route.fulfill({contentType:'text/javascript',body:await readFile(new URL('../apps/web/public/personnel-report.js',import.meta.url),'utf8')});
   if(['/service/standby.js','/service/standby.css','/service/team.js','/service/team.css'].includes(path))return route.fulfill({contentType:path.endsWith('.css')?'text/css':'text/javascript',body:await readFile(new URL('../apps/web/public'+path,import.meta.url),'utf8')});
   if(path.startsWith('/api/v1/'))return onApi(route,path.slice('/api/v1'.length));
@@ -436,6 +463,19 @@ async function serviceAuthFixture(onApi,{fragment='',signedIn=false}={}){
  await page.goto('https://service-auth.test/service/'+fragment);return {browser,page,errors};
 }
 const serviceJson=(route,body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+test('hotel service uses room labels in headings, table details, basket and QR orders',async()=>{
+ const f=await serviceAuthFixture(async(route,path)=>{
+  if(path==='/waiter/bootstrap')return serviceJson(route,{employee:{id:product,restaurant_id:restaurant,restaurant_name:'Hotel',table_term:'Zimmer',table_term_plural:'Zimmer',stamp_pin_digits:4,duty_state:'working'},tables:[{id:restaurant,name:'Zimmer 101',area:'Stockwerk 1',open_total_cents:0}],products:[]});
+  if(path==='/waiter/extras')return serviceJson(route,{extras:[]});
+  if(path==='/waiter/qr-orders')return serviceJson(route,{orders:[{id:product,table_id:restaurant,table_name:'Zimmer 101',table_area:'Stockwerk 1',status:'open',total_cents:500,items:[]}]});
+  if(path.startsWith('/waiter/tables/'))return serviceJson(route,{table:{id:restaurant,name:'Zimmer 101',area:'Stockwerk 1'},orders:[]});
+  return serviceJson(route,{orders:[],tables:[],coworkers:[],requests:[],messages:[],swaps:[]});
+ },{signedIn:true});
+ try{
+  await f.page.waitForSelector('[data-table]');assert.equal(await f.page.textContent('[data-place-text="Meine Tische"]'),'Meine Zimmer');assert.equal(await f.page.textContent('[data-table] strong'),'Stockwerk 1 · Zimmer 101');assert.match(await f.page.textContent('#qrOrders .row b'),/Stockwerk 1 · Zimmer 101/);
+  await f.page.click('[data-table]');await f.page.waitForFunction(()=>document.querySelector('#tableName').textContent.includes('Zimmer 101'));assert.equal(await f.page.textContent('#selectedTable'),'Für Stockwerk 1 · Zimmer 101');assert(!await f.page.locator('#app').innerText().then(s=>s.includes('Tisch Zimmer')));assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close()}
+});
 for(const kind of ['password','pin'])test('Service auth: '+kind+' reset shows success after a delayed native submit',{timeout:45000},async()=>{
  const capability='a'.repeat(64),value=kind==='pin'?'5678':'NewServicePass2!',requests=[];let release,entered;
  const gate=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});

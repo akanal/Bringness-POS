@@ -7,7 +7,7 @@ const stable=v=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fro
 const send=(res,status,value)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value));return true};
 const assigned=(t,id)=>t.waiter_employee_id===id||(t.waiter_employee_ids||[]).includes(id);
 const ids=t=>[...new Set([t.waiter_employee_id,...t.waiter_employee_ids||[]].filter(Boolean))];
-const label=t=>(t.area||'Ohne Bereich')+' · '+(/^Tisch\b/i.test(t.name)?t.name:'Tisch '+t.name);
+const label=t=>(t.area||'Ohne Bereich')+' · '+(/^\d+$/.test(t.name)?'Tisch '+t.name:t.name);
 function text(v,max=500){if(typeof v!=='string'||v.length>max||/[\x00-\x08\x0b-\x1f\x7f]/.test(v))fail('Hinweis ist ungültig oder zu lang.');return v.trim();}
 export async function migrateServiceTeam(pool){await pool.query(`
 CREATE TABLE IF NOT EXISTS service_team_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),company_id uuid NOT NULL REFERENCES companies(id),restaurant_id uuid NOT NULL REFERENCES restaurants(id),table_id uuid NOT NULL REFERENCES dining_tables(id) ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('help','handover','payment')),from_employee_id uuid NOT NULL REFERENCES employees(id),target_employee_id uuid REFERENCES employees(id),state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','accepted','done','declined','cancelled')),note text NOT NULL DEFAULT '',assignment_ids uuid[] NOT NULL,snapshot jsonb NOT NULL,revision integer NOT NULL DEFAULT 1,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
