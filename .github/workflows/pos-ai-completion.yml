@@ -121,6 +121,7 @@ jobs:
       - run: node server/ai-tests/remote-support.mjs
       - run: node server/ai-tests/online-registers.mjs
       - run: node server/ai-tests/pos-setup.mjs
+      - run: node server/ai-tests/place-terminology.mjs
       - run: node server/ai-tests/menu-import.mjs
       - run: node server/ai-tests/menu-import-ocr.mjs
       - run: node server/ai-tests/browser-support.mjs

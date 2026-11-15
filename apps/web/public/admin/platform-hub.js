@@ -5,11 +5,11 @@
  let mounted=false,lastToken='',sequence=0;
  async function render(){
   const current=++sequence,p=document.getElementById('platformHub');
-  p.innerHTML='<div class="card"><h2>Bringness POS</h2><p>Plattformverwaltung für alle Kunden. Kundenkassen, Geräte, Konten und Lizenzen über die POS-Bereiche verwalten.</p><div class="toolbar"><a class="btn" href="/admin/systems.html">Bildschirme, Personal & Center verwalten</a><button type="button" id="hubRefresh">Status aktualisieren</button></div></div><div class="grid"><div class="card"><h2>Offline-Verkäufe & Lagerabgleich</h2><div id="hubOffline">Wird geladen…</div></div></div>';
+  p.innerHTML='<div class="card"><h2>Bringness POS</h2><p>Plattformverwaltung für alle Kunden. Kundenkassen, Geräte, Konten und Lizenzen über die POS-Bereiche verwalten.</p><div class="toolbar"><a class="btn" href="/admin/systems.html">Bildschirme, Personal & Center verwalten</a><button type="button" id="hubRefresh">Status aktualisieren</button></div></div><div class="card"><h2>Bezeichnungen je Betrieb</h2><p>Nach Absprache Tisch, Zimmer oder eine eigene Bezeichnung ändern. Ausschließlich für die Bringness-Plattformverwaltung.</p><div id="hubTerms">Wird geladen…</div></div><div class="grid"><div class="card"><h2>Offline-Verkäufe & Lagerabgleich</h2><div id="hubOffline">Wird geladen…</div></div></div>';
   p.querySelector('#hubRefresh').onclick=render;
-  const results=await Promise.allSettled([api('/api/v1/platform/control/offline')]);
+  const results=await Promise.allSettled([api('/api/v1/platform/control/offline'),api('/api/v1/platform/control/registers')]);
   if(current!==sequence)return;
-  const [offline]=results;
+  const [offline,registers]=results;const terms=p.querySelector('#hubTerms');if(registers.status==='fulfilled'){terms.innerHTML=registers.value.restaurants.map(r=>'<div class="row"><b>'+esc(r.company_name)+' · '+esc(r.name)+'</b> <a href="/pos/place-terminology.html?admin=1&amp;restaurantId='+encodeURIComponent(r.id)+'">Bezeichnung verwalten</a></div>').join('')||'Keine Betriebe vorhanden.';}else terms.textContent=registers.reason.message;
   if(offline.status==='fulfilled'){const d=offline.value;p.querySelector('#hubOffline').innerHTML='<p>'+d.counts.map(c=>esc(c.stock_state)+': <b>'+esc(c.count)+'</b>').join(' · ')+'</p><p class="muted">Zeigt bereits übertragene Verkäufe. Noch lokal wartende Verkäufe sind erst nach einer Online-Verbindung sichtbar.</p>'+(d.limited?'<p>Die neuesten 100 offenen Abgleiche werden gezeigt.</p>':'')+d.sales.map(s=>'<div class="row"><b>'+esc(s.company_name)+' · '+esc(s.restaurant_name)+'</b><p>'+esc(s.device_name)+' · '+esc(s.stock_state)+' · '+esc(s.stock_error||'Abgleich ausstehend')+'</p></div>').join('')}else p.querySelector('#hubOffline').textContent=offline.reason.message;
  }
  async function check(){const next=token();if(next===lastToken)return;lastToken=next;

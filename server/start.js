@@ -1,6 +1,7 @@
 import {createCashReversal,migrateCashReversal} from './cash-reversal.js';
 import {createPartialSettlement} from './partial-settlement.js';
 import {createPosSetup,migratePosSetup} from './pos-setup.js';
+import {createPlaceTerminology,migratePlaceTerminology} from './place-terminology.js';
 import {readFiscalSetupStatus} from './tse-integration.js';
 import {createMenuImport,migrateMenuImport} from './menu-import.js';
 import {createOnlineRegisters,migrateOnlineRegisters} from './online-registers.js';
@@ -112,6 +113,7 @@ const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handleOnlineRegisters=createOnlineRegisters(platformGatewayPool);
 const handlePosSetup=createPosSetup(platformGatewayPool,{fiscalStatus:readFiscalSetupStatus});
+const handlePlaceTerminology=createPlaceTerminology(platformGatewayPool);
 const handleMenuImport=createMenuImport(platformGatewayPool);
 const handlePackageAccess=createPackageAccess(platformGatewayPool);
 const handlePersonnel=createPersonnel(platformGatewayPool);
@@ -188,6 +190,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformAiGateway(req,res)) return;
       if (await handlePosSetup(req,res)) return;
+      if (await handlePlaceTerminology(req,res)) return;
       if (await handleMenuImport(req,res)) return;
       if (await handleOnlineRegisters(req,res)) return;
       if (await handleRemoteSupport(req,res)) return;
@@ -258,7 +261,7 @@ fs.createReadStream = function patchedCreateReadStream(filePath, options) {
       if (normalized.endsWith("/apps/web/public/admin/index.html")) {
         if (!html.includes('/admin/support-center.js')) html = html.replace("</body>", '<script src="/admin/support-center.js?v=time24-complete-20261021"></script></body>');
         if (!html.includes('/admin/remote-support.js')) html = html.replace("</body>", '<script src="/admin/remote-support.js?v=online-register-20261113"></script></body>');
-        if (!html.includes('/admin/platform-hub.js')) html = html.replace("</body>", '<script src="/admin/platform-hub.js"></script></body>');
+        if (!html.includes('/admin/platform-hub.js')) html = html.replace("</body>", '<script src="/admin/platform-hub.js?v=place-terminology-20261115"></script></body>');
         if (!html.includes('/admin/control-center.js')) html = html.replace("</body>", '<script src="/admin/control-center.js?v=time24-complete-20261021"></script></body>');
       }
       return Readable.from([Buffer.from(html, "utf8")]);
@@ -299,6 +302,7 @@ async function migrateWithRetry(){
       await migrateOnlineRegisters(platformGatewayPool);
       await migrateMenuImport(platformGatewayPool);
       await migratePosSetup(platformGatewayPool);
+      await migratePlaceTerminology(platformGatewayPool);
       setInterval(()=>cleanupRemoteSupport(platformGatewayPool).catch(()=>{}),30000).unref();
       await migrateOfflineSales();
       await migrateAccountantAccess();
