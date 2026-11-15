@@ -1,5 +1,12 @@
 # Bringness project continuity
 
+## Dauerhafte Freigaberegel für beauftragte Live-Schaltungen — 15.11.2026
+
+- Ahmet Kanal bestätigt ausdrücklich: Enthält ein Auftrag die Live-Schaltung, ist diese damit bereits freigegeben. Nach erfolgreichem Abschluss der erforderlichen Prüfungen selbstständig über den bestehenden Netcup-Ablauf veröffentlichen; keine zusätzliche routinemäßige Bestätigung beim Inhaber einholen.
+- Veröffentlichung einschließlich bestehender Sicherung/Rückfallmöglichkeit und anschließender Live-Kontrolle vollständig abschließen. Commit, bestandene Tests, Deployment und Live-Abgleich getrennt und wahrheitsgemäß berichten.
+- Diese dauerhafte Regel ersetzt ältere Vorgaben zum erneuten Warten auf Bestätigung für denselben bereits zur Veröffentlichung beauftragten Umfang. Eine ausdrücklich neuere Vorgabe wie „nur Entwurf“ oder „nicht live schalten“ bleibt maßgeblich.
+- Fehlgeschlagene Pflichtprüfungen oder echte fehlende Zugänge bleiben Blocker; keine ungeprüfte Veröffentlichung. Nicht blockierte, autorisierte Arbeiten fortsetzen und offene Probleme sammeln. Der Auftrag zur Codeveröffentlichung ersetzt keine gesondert erforderliche Kunden-/Anbieterzustimmung, Zahlungsfreigabe oder Berechtigung zu destruktiven Datenänderungen.
+
 Current consolidated handoff: [docs/PROJECT-HANDOFF.md](docs/PROJECT-HANDOFF.md). Read it after this file before continuing in a new chat. It records current access references/settings, live releases and IDrive activation; never contains secret values.
 
 ## Start here for every new development session
