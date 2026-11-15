@@ -45,6 +45,13 @@ jobs:
 
       - name: Complete isolated shop suite
         run: node ops/shop/run.mjs
+      - name: Ten-point audit registration and seller journey on tablet
+        run: node ops/shop/night-audit-entrypoint.mjs
+        env:
+          SHOP_NIGHT_DATABASE_URL: postgres://shop_test:shop_test@localhost:5432/bringness_shop_night_audit
+          SHOP_DESIGN_ARTIFACTS: ${{ runner.temp }}/shop-design
+          SHOP_PLAYWRIGHT_PATH: ${{ runner.temp }}/shop-browser/node_modules/playwright/index.mjs
+
       - name: Current production entrypoint with real PostgreSQL and browser
         run: node ops/shop/production-entrypoint-smoke.mjs
         env:
