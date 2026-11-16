@@ -50,3 +50,19 @@ Lagerauftrag-/Pending-Eigenschaften bleiben erhalten.
 Automatisierte Abnahme: `node server/ai-tests/pos-diagnostics.mjs` (isolierte jsdom-
 Abhängigkeit aus server/ai-tests), bestehende Authregression und neuer nativer
 Chromium-/WebKit-Fall in `server/pos-payment-browser.test.js`. Nur synthetische Daten.
+
+## Eigenständige Erweiterungen
+
+Die eigenen JSON-API-Helfer von Bildschirmverwaltung (`DISPLAY`),
+Personalverwaltung (`PERSONNEL`), Artikelzusätzen/Dienstplan (`CATALOG`),
+Steuerberaterzugriff (`TAX`) und Verfügbarkeitsregeln (`AVAILABILITY`) nutzen
+nun dieselbe flüchtige Diagnose. HTTP-Status und vorhandene Fehlercodes bleiben
+am Fehler; Personalfreigabe-Header werden weiterhin durch den bestehenden
+Fetch-Helfer ergänzt. Keine automatische Wiederholung oder neue Zeitgrenze.
+Fehlende/ungültige JSON-Antworten werden erkannt; bei verlorenen Schreibantworten
+oder Serverfehlern zuerst den gespeicherten Stand abgleichen. Antworten alter
+Anmeldesitzungen/Betriebe erzeugen kein Diagnosefeld in der neuen Sitzung.
+
+Die Erweiterung erfasst die genannten Helfer, nicht sämtliche direkten Fetchs,
+Binärdownloads, eingebetteten Fremdansichten oder eigenständigen Seiten.
+Vorhandene Rückmeldungen, Rechte, PIN-Prüfungen und Zahlungsregeln bleiben bestehen.

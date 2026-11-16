@@ -42,5 +42,27 @@ function fixture(){const w=new JSDOM(html,{url:'https://pos.test/pos/?token=neve
   let reject;Object.defineProperty(w.navigator,'clipboard',{value:{writeText:()=>new Promise((_,r)=>reject=r)}});w.bnPosDiagnostics.report('LOAD','SERVER');el('posDiagnostic').querySelector('button').click();w.bnPosDiagnostics.clear();reject(Error());await tick();assert.equal(el('posDiagnostic'),null);
  }finally{w.close();}
 }
+{
+ const {w,el}=fixture();try{
+  for(const scope of ['DISPLAY','PERSONNEL','CATALOG','TAX','AVAILABILITY']){
+   let calls=0;w.fetch=async()=>{calls++;throw new w.TypeError('private-customer-token');};
+   await assert.rejects(w.bnPosDiagnostics.jsonRequest(scope,'/private-customer',{method:'POST',body:'private-secret'}),e=>e.diagnosticCode==='POS-'+scope+'-NETWORK'&&/Speicherstatus ist unklar/.test(e.message)&&!e.message.includes('private'));
+   assert.equal(calls,1);
+   w.fetch=async()=>({ok:false,status:403,json:async()=>({error:'Keine Freigabe',code:'locked',retryAfter:12})});
+   await assert.rejects(w.bnPosDiagnostics.jsonRequest(scope,'/private-customer'),e=>e.status===403&&e.code==='locked'&&e.retryAfter===12&&e.diagnosticCode==='POS-'+scope+'-ACCESS');
+   w.fetch=async()=>({ok:false,status:401,json:async()=>{throw Error('html');}});
+   await assert.rejects(w.bnPosDiagnostics.jsonRequest(scope,'/private-customer'),e=>e.diagnosticCode==='POS-'+scope+'-AUTH');
+   w.fetch=async()=>({ok:true,status:200,json:async()=>null});
+   await assert.rejects(w.bnPosDiagnostics.jsonRequest(scope,'/private-customer',{method:'PUT'}),e=>e.diagnosticCode==='POS-'+scope+'-RESPONSE'&&/Speicherstatus ist unklar/.test(e.message));
+   w.fetch=async()=>({ok:true,status:200,json:async()=>({saved:true})});
+   assert.equal((await w.bnPosDiagnostics.jsonRequest(scope,'/private-customer',{method:'POST'})).saved,true);
+  }
+  w.bnPosDiagnostics.clear();let reject;w.fetch=()=>new Promise((_,r)=>reject=r);
+  const pending=w.bnPosDiagnostics.jsonRequest('PERSONNEL','/private');w.localStorage.setItem('bringness-pos-token','new-session');reject(new w.TypeError('private'));
+  await assert.rejects(pending);assert.equal(el('posDiagnostic'),null,'old session cannot report into new session');
+  let sent;w.fetch=async(url,options)=>{sent=options;return {ok:true,json:async()=>({ok:true})}};
+  const headers={'x-personnel-unlock':'private-unlock'},body='private-body';await w.bnPosDiagnostics.jsonRequest('PERSONNEL','/private',{method:'POST',headers,body});assert.equal(sent.headers,headers);assert.equal(sent.body,body);
+ }finally{w.close();}
+}
 assert(html.indexOf('/pos/diagnostics.js?')<html.indexOf('/pos/auth.js?'));
 console.log('POS diagnostics passed: auth/reset/network/deadline, API status preservation, unknown write status, no retries, fixed privacy fields, clipboard fallback, stale-copy and scope clearing.');
