@@ -1,0 +1,4 @@
+.pos-diagnostic{margin:16px auto;padding:12px 16px;max-width:680px;box-sizing:border-box;border:1px solid #d6dee5;border-radius:10px;background:#fff;color:#102536;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}
+.pos-diagnostic p{margin:0 0 8px}.pos-diagnostic button{font:inherit;padding:8px 12px;margin:0 8px 8px 0;border:1px solid #b9c6d0;border-radius:7px;background:#f4f6f8;color:#102536;cursor:pointer}
+.pos-diagnostic textarea{box-sizing:border-box;display:block;width:100%;min-height:145px;font:13px/1.4 monospace}.pos-diagnostic [hidden]{display:none}
+@media(max-width:720px){.pos-diagnostic{margin:12px;max-width:calc(100% - 24px)}}
