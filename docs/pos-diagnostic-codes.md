@@ -66,3 +66,32 @@ Anmeldesitzungen/Betriebe erzeugen kein Diagnosefeld in der neuen Sitzung.
 Die Erweiterung erfasst die genannten Helfer, nicht sämtliche direkten Fetchs,
 Binärdownloads, eingebetteten Fremdansichten oder eigenständigen Seiten.
 Vorhandene Rückmeldungen, Rechte, PIN-Prüfungen und Zahlungsregeln bleiben bestehen.
+
+## Bestand und Händler
+
+`STOCK` kennzeichnet die separate Bestands-/Zählverwaltung einschließlich Historie
+sowie Lagerauftragsanfragen der gemeinsamen POS-API. Geräteprüfungen auf derselben
+Seite behalten die allgemeinen Bereiche LOAD/SAVE. `TRADE` kennzeichnet Anfragen
+unter `/trade` und den gespeicherten PDF-Aufruf einer Händlerrechnung. Die separate
+Bestandsseite lädt Diagnosecode und Styles selbst; das Feld steht bei der bestehenden
+Statusmeldung, nicht nur im übergeordneten Kassenfenster.
+
+Bestandsfehler erhalten weiterhin HTTP-Status, fachlichen Code und die bisherige
+Unterscheidung zwischen eindeutiger Ablehnung und unbestätigtem Speichern. Fehlerhafte
+oder nicht zuordenbare Bestätigungen behalten den bestehenden Auftrag zum ausdrücklichen
+Abgleich; keine neue Kennung oder automatische Wiederholung. JSON-fremde 4xx-Antworten
+werden nicht als fachlich eindeutige Ablehnung ausgegeben. Alte Konto-/Betriebs-/
+Seitenantworten erzeugen kein neues Diagnosefeld. Lager-Polling erhält seine Kennung,
+pending-Eigenschaft und bestehenden Zeitgrenzen. Ein Fehler dieses Abgleichs erhält
+auch dann STOCK, wenn die ursprüngliche Anfrage beispielsweise eine Artikeländerung war.
+
+`pdfRequest` liest ein PDF einmal mit den vom Aufrufer gesetzten Berechtigungen.
+HTTP-Fehler, Transportfehler, abgebrochene/ungültige Blob-Antworten, leere Dateien
+und falsche MIME-Typen erhalten den passenden Code. Es werden keine Inhalte exportiert,
+keine zusätzlichen Verkäufe erzeugt und keine Downloads wiederholt. Die bestehende
+Rechnungsanzeige bleibt für Objekt-URLs und Lebensdauer zuständig.
+
+Diese Erweiterung umfasst nicht sämtliche separaten Geräte-/Import-/Supportseiten,
+Pfandjournale, Rechnungs-/Steuerdownloads außerhalb des Händlerdialogs oder die
+separate AI-Oberfläche. Die praktische Abnahme durch den Inhaber bleibt verschoben;
+automatisierte native Prüfungen verwenden ausschließlich synthetische Daten.

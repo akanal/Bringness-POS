@@ -5,8 +5,10 @@
  const price=(id,qty)=>tiers.filter(t=>t.product_id===id&&(discountMode==='percent'?t.min_qty===1:t.min_qty<=qty)).sort((a,b)=>b.min_qty-a.min_qty)[0]?.price_cents??(discountMode==='percent'?regularPrice(id):undefined);
  const key=rid=>'bringness.trade.pending.v1:'+rid;
  async function openInvoice(id,number,current=()=>true){
-  const r=await fetch('/api/v1/receipts/'+id+'/invoice',{headers:{authorization:'Bearer '+token}});if(!r.ok)throw Error('Gespeicherte Rechnung konnte nicht geöffnet werden.');
-  const blob=await r.blob();if(!current())return;const url=URL.createObjectURL(blob),dialog=document.createElement('dialog');dialog.className='trade-issued-invoice';
+  let blob;
+  if(window.bnPosDiagnostics?.pdfRequest)blob=await window.bnPosDiagnostics.pdfRequest('TRADE','/api/v1/receipts/'+id+'/invoice',{headers:{authorization:'Bearer '+token}});
+  else{const r=await fetch('/api/v1/receipts/'+id+'/invoice',{headers:{authorization:'Bearer '+token}});if(!r.ok)throw Error('Gespeicherte Rechnung konnte nicht geöffnet werden.');blob=await r.blob();}
+  if(!current())return;const url=URL.createObjectURL(blob),dialog=document.createElement('dialog');dialog.className='trade-issued-invoice';
   const title=document.createElement('strong');title.textContent='Rechnung '+number+' · gespeichert';const close=document.createElement('button');close.textContent='Zurück zum Verkauf';close.onclick=()=>dialog.close();
   const link=document.createElement('a');link.href=url;link.download='Rechnung-'+number+'.pdf';link.textContent='PDF herunterladen';const frame=document.createElement('iframe');frame.title='Gespeicherte Rechnung '+number;frame.src=url;
   const reviewButton=document.createElement('button');reviewButton.type='button';reviewButton.dataset.cancellationReview='';reviewButton.textContent='Storno prüfen';

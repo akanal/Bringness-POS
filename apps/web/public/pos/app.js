@@ -10,7 +10,7 @@ async function waitForStockCommand(initial,headers){
  const commandId=initial.commandId,deadline=Date.now()+20000;
  const pendingMessage="Lagerbuchung wird noch geprüft. Die Ansicht aktualisiert sich automatisch; kein neuer Auftrag nötig.";
  let state=initial;
- const pendingError=message=>Object.assign(Error(message||pendingMessage),{commandId,pending:true});
+ const pendingError=(message,kind)=>Object.assign(Error(message||pendingMessage),{commandId,pending:true,...(kind?{diagnosticKind:kind}:{})});
  for(let attempt=0;attempt<20&&Date.now()<deadline;attempt++){
   const due=Date.parse(state.retryAfter),remaining=deadline-Date.now();
   if(Number.isFinite(due)&&due>=deadline)throw pendingError();
@@ -21,17 +21,18 @@ async function waitForStockCommand(initial,headers){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),budget);
   let response;
   try{response=await fetch("/api/v1/stock-commands/"+encodeURIComponent(commandId),{headers,cache:"no-store",signal:controller.signal});state=await response.json();}
-  catch(error){throw pendingError(error?.name==="AbortError"?pendingMessage:"Verbindung zur Lagerbestätigung unterbrochen. Der Auftrag bleibt gespeichert; kein neuer Auftrag nötig.");}
+  catch(error){throw pendingError(error?.name==="AbortError"?pendingMessage:"Verbindung zur Lagerbestätigung unterbrochen. Der Auftrag bleibt gespeichert; kein neuer Auftrag nötig.",error?.name==="AbortError"?"TIMEOUT":error?.name==="SyntaxError"?"RESPONSE":"NETWORK");}
   finally{clearTimeout(timer)}
   if(!response.ok){const error=Error(state?.error||"Lagerbuchung konnte noch nicht bestätigt werden.");error.status=response.status;error.commandId=commandId;throw error;}
-  if(!state||typeof state!=="object"||state.commandId!==commandId||!([200,202].includes(response.status))||state.pending!==(response.status===202))throw pendingError("Lagerbestätigung ist unvollständig. Der gespeicherte Auftrag wird weiter geprüft; kein neuer Auftrag nötig.");
+  if(!state||typeof state!=="object"||state.commandId!==commandId||!([200,202].includes(response.status))||state.pending!==(response.status===202))throw pendingError("Lagerbestätigung ist unvollständig. Der gespeicherte Auftrag wird weiter geprüft; kein neuer Auftrag nötig.","RESPONSE");
   if(response.status===200)return state;
  }
  throw pendingError();
 }
 async function api(path,opt={}){
- const requestSession=token;
- const scope=path.startsWith('/auth/')?(path.includes('forgot')?'RESET':'LOGIN'):['GET','HEAD'].includes(String(opt.method||'GET').toUpperCase())?'LOAD':'SAVE';
+ const requestSession=token,requestRestaurant=$('restaurant')?.value||'';
+ const writing=!['GET','HEAD'].includes(String(opt.method||'GET').toUpperCase());
+ const scope=path.startsWith('/auth/')?(path.includes('forgot')?'RESET':'LOGIN'):/^\/trade(?:[/?]|$)/.test(path)?'TRADE':/^\/(?:pos-inventory|stock-commands)(?:[/?]|$)/.test(path)?'STOCK':writing?'SAVE':'LOAD';
  try{
   opt.headers={...(opt.headers||{}),"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})};
   let r,j;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),path==="/auth/forgot-password"?60000:20000);
@@ -46,9 +47,9 @@ async function api(path,opt={}){
   if(!r.ok){const error=Error((window.placeCopy||String)(j.error||"Fehler"));error.status=r.status;error.code=j.code;error.retryAfter=j.retryAfter;throw error;}
   if(r.status===202&&j.commandId)return await waitForStockCommand(j,opt.headers);return j;
  }catch(error){
-  if(scope==='SAVE'&&['NETWORK','TIMEOUT','RESPONSE'].includes(error.diagnosticKind))error.message+=' Der Speicherstatus ist unklar. Bitte zuerst den vorhandenen Vorgang abgleichen; nicht als neuen Vorgang wiederholen.';
-  if(token!==requestSession)throw error;
-  throw window.bnPosDiagnostics?.decorate(error,scope)||error;
+  if(writing&&(['NETWORK','TIMEOUT','RESPONSE'].includes(error.diagnosticKind)||error.status>=500))error.message+=' Der Speicherstatus ist unklar. Bitte zuerst den vorhandenen Vorgang abgleichen; nicht als neuen Vorgang wiederholen.';
+  if(token!==requestSession||($('restaurant')?.value||'')!==requestRestaurant)throw error;
+  throw window.bnPosDiagnostics?.decorate(error,error.commandId?'STOCK':scope)||error;
  }
 }
 function authMode(m){window.bnPosAuth?.setMode(m)}

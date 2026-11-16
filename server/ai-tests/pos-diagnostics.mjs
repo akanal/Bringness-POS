@@ -66,3 +66,32 @@ function fixture(){const w=new JSDOM(html,{url:'https://pos.test/pos/?token=neve
 }
 assert(html.indexOf('/pos/diagnostics.js?')<html.indexOf('/pos/auth.js?'));
 console.log('POS diagnostics passed: auth/reset/network/deadline, API status preservation, unknown write status, no retries, fixed privacy fields, clipboard fallback, stale-copy and scope clearing.');
+
+{
+ const {w,el}=fixture();try{
+  w.eval(app);
+  for(const [path,scope] of [['/trade/prices','TRADE'],['/pos-inventory','STOCK']]){
+   let calls=0;w.fetch=async()=>{calls++;throw new w.TypeError('secret-body');};
+   await assert.rejects(w.api(path,{method:'POST',body:'private'}),error=>error.diagnosticCode==='POS-'+scope+'-NETWORK'&&/Speicherstatus ist unklar/.test(error.message));assert.equal(calls,1);
+  }
+  w.setTimeout=(fn,ms)=>{if(ms<=1000){queueMicrotask(fn);return 0;}return 1;};w.clearTimeout=()=>{};let calls=0;
+  w.fetch=async()=>{if(calls++===0)return {ok:true,status:202,json:async()=>({commandId:'private-command',pending:true})};throw new w.TypeError('lost poll');};
+  await assert.rejects(w.api('/products/private',{method:'POST',body:'private'}),error=>error.pending===true&&error.commandId==='private-command'&&error.diagnosticCode==='POS-STOCK-NETWORK');assert.equal(calls,2);
+  w.fetch=async()=>({ok:false,status:403,json:async()=>({error:'Kein Zugriff',code:'LOCKED',retryAfter:3})});
+  await assert.rejects(w.bnPosDiagnostics.pdfRequest('TRADE','/private',{headers:{authorization:'private'}}),error=>error.status===403&&error.code==='LOCKED'&&error.retryAfter===3&&error.diagnosticCode==='POS-TRADE-ACCESS');
+  for(const blob of [new w.Blob([],{type:'application/pdf'}),new w.Blob(['private html'],{type:'text/html'})]){w.fetch=async()=>({ok:true,blob:async()=>blob});await assert.rejects(w.bnPosDiagnostics.pdfRequest('TRADE','/private'),error=>error.diagnosticCode==='POS-TRADE-RESPONSE');}
+  const blob=new w.Blob(['%PDF-fixture'],{type:'application/pdf'}),headers={authorization:'private'};let sent;
+  w.fetch=async(url,options)=>{sent=options;return {ok:true,blob:async()=>blob};};assert.equal(await w.bnPosDiagnostics.pdfRequest('TRADE','/private',{headers}),blob);assert.equal(sent.headers,headers);
+  w.bnPosDiagnostics.clear();let reject;w.fetch=()=>new Promise((_,r)=>reject=r);const pending=w.bnPosDiagnostics.pdfRequest('TRADE','/private');w.localStorage.setItem('bringness-pos-token','new');reject(new w.TypeError('private'));await assert.rejects(pending);assert.equal(el('posDiagnostic'),null);
+ }finally{w.close();}
+}
+console.log('Stock/trade diagnostics passed: uncertain count replay, stock polling metadata, scoped actions, PDF validation/status and stale-session privacy.');
+
+{
+ const {w}=fixture();try{
+  for(const method of ['jsonRequest','pdfRequest']){
+   w.fetch=async()=>{throw Object.assign(Error('private timeout'),{name:'TimeoutError'});};
+   await assert.rejects(w.bnPosDiagnostics[method]('TRADE','/private'),error=>error.diagnosticCode==='POS-TRADE-TIMEOUT');
+  }
+ }finally{w.close();}
+}

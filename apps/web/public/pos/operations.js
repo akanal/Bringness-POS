@@ -29,8 +29,27 @@ function summary(){
  for(const row of rows){const view=views.get(row.id);if(view)view.card.hidden=!visible(row)}
  lock();
 }
-function clear(){window.posDeviceChecks?.reset();resetHistory(true);epoch++;rows=[];drafts.clear();views.clear();pending=null;busy=false;restaurantId=null;$('inventory').replaceChildren();$('restaurant').replaceChildren();$('inventory-query').value='';$('inventory-filter').value='all';$('status').textContent='Private POS-Ansicht geschlossen. Bitte neu laden.';summary()}
-async function request(path,body){const token=localStorage.getItem(tokenKey);if(!token)throw Error('Bitte in der POS-Kasse anmelden.');const r=await fetch('/api/v1'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});const data=await r.json();if(token!==localStorage.getItem(tokenKey)||document.hidden)throw Error('POS-Konto oder Ansicht gewechselt.');if(!r.ok)throw Object.assign(Error(r.status>=500?'POS-Bestand derzeit nicht verfügbar.':data.error||'Zugriff nicht möglich'),{definitive:r.status>=400&&r.status<500,status:r.status,code:data.code});return data}
+function clear(){window.bnPosDiagnostics?.clear();window.posDeviceChecks?.reset();resetHistory(true);epoch++;rows=[];drafts.clear();views.clear();pending=null;busy=false;restaurantId=null;$('inventory').replaceChildren();$('restaurant').replaceChildren();$('inventory-query').value='';$('inventory-filter').value='all';$('status').textContent='Private POS-Ansicht geschlossen. Bitte neu laden.';summary()}
+async function request(path,body){
+ const token=localStorage.getItem(tokenKey),id=$('restaurant').value,current=epoch;
+ const scope=path.startsWith('/pos-device-checks')?(body?'SAVE':'LOAD'):'STOCK';
+ const valid=()=>token===localStorage.getItem(tokenKey)&&current===epoch&&id===$('restaurant').value&&!document.hidden;
+ try{
+  if(!token)throw Object.assign(Error('Bitte in der POS-Kasse anmelden.'),{status:401});
+  let r,data;
+  try{r=await fetch('/api/v1'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});}
+  catch(error){throw Object.assign(Error(['AbortError','TimeoutError'].includes(error?.name)?'Die Anfrage wurde unterbrochen.':'Verbindung zum Server fehlgeschlagen.'),{diagnosticKind:['AbortError','TimeoutError'].includes(error?.name)?'TIMEOUT':'NETWORK'});}
+  if(!valid())throw Error('POS-Konto oder Ansicht gewechselt.');
+  try{data=await r.json();}catch(error){throw Object.assign(Error('Die Serverantwort ist unvollständig.'),{status:r.status,diagnosticKind:['AbortError','TimeoutError'].includes(error?.name)?'TIMEOUT':r.ok?'RESPONSE':undefined});}
+  if(!valid())throw Error('POS-Konto oder Ansicht gewechselt.');
+  if(!data||typeof data!=='object'||Array.isArray(data))throw Object.assign(Error('Die Serverantwort ist unvollständig.'),{status:r.status,diagnosticKind:'RESPONSE'});
+  if(!r.ok)throw Object.assign(Error(r.status>=500?'POS-Bestand derzeit nicht verfügbar.':data?.error||'Zugriff nicht möglich'),{definitive:r.status>=400&&r.status<500,status:r.status,code:data?.code,retryAfter:data?.retryAfter});
+  return data;
+ }catch(error){
+  if(body&&(['NETWORK','TIMEOUT','RESPONSE'].includes(error.diagnosticKind)||error.status>=500))error.message+=' Der Speicherstatus ist unklar. Bitte zuerst dieselbe Anfrage abgleichen; nicht als neuen Vorgang wiederholen.';
+  if(!valid())throw error;throw window.bnPosDiagnostics?.decorate(error,scope)||error;
+ }
+}
 async function task(work){if(busy)return;busy=true;lock();const current=epoch;try{await work(current)}catch(error){if(current===epoch)$('status').textContent=error.message}finally{if(current===epoch){busy=false;lock()}}}
 function draftFor(row,form){
  const old=drafts.get(row.id),baseline=old?.baseline||values(row),raw=Object.fromEntries(fields.map(k=>[k,form.elements[k].value]));
@@ -83,7 +102,7 @@ async function saveCount(current){
  const command=pending;feedback(command.productId,'Zählstand wird gespeichert …');
  try{
   const ack=await request('/pos-inventory',command);if(current!==epoch)return;
-  if(ack.requestId!==command.requestId||ack.productId!==command.productId||ack.revision!==command.expectedRevision+1)throw Error('Speicherung nicht bestätigt. Dieselbe Anfrage erneut prüfen.');
+  if(ack.requestId!==command.requestId||ack.productId!==command.productId||ack.revision!==command.expectedRevision+1){const error=Object.assign(Error('Speicherung nicht bestätigt. Dieselbe Anfrage erneut prüfen.'),{diagnosticKind:'RESPONSE'});throw window.bnPosDiagnostics?.decorate(error,'STOCK')||error;}
   pending=null;drafts.delete(command.productId);invalidateHistory('Bestand gespeichert. Historie bitte neu laden.');
   rows=rows.map(row=>row.id===command.productId?{...row,revision:ack.revision,counted_units:command.countedUnits,minimum_units:command.minimumUnits,target_units:command.targetUnits,counted_at:null}:row);render();
   try{const data=await fetchRows(restaurantId);if(current!==epoch)return;rows=data.rows;render();$('status').textContent='Zählstand gespeichert. Andere offene Eingaben bleiben erhalten.';feedback(command.productId,'Zählstand gespeichert.')}
