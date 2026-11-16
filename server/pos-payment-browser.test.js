@@ -802,6 +802,7 @@ test('POS support codes preserve readable errors, private copy fallback and unce
   assert.equal(writes,1);assert.equal(result.code,'POS-SAVE-NETWORK');assert.match(result.message,/Speicherstatus ist unklar/);
   const moduleResult=await f.page.evaluate(async()=>{try{await bnPosDiagnostics.jsonRequest('PERSONNEL','/api/v1/products/private-id',{method:'POST',body:'private-personnel'});}catch(error){return {code:error.diagnosticCode,message:error.message};}});
   assert.equal(writes,2);assert.equal(moduleResult.code,'POS-PERSONNEL-NETWORK');assert.match(moduleResult.message,/Speicherstatus ist unklar/);
+  await f.page.evaluate(()=>{if(!document.getElementById('moduleBody')){const area=document.createElement('section');area.id='moduleBody';document.body.append(area);}});
   await f.page.route('**/api/v1/personnel/**',route=>route.fulfill({status:503,json:{error:'Vorübergehend nicht erreichbar'}}));
   const personnel=await f.page.evaluate(async()=>{try{await renderPersonnelModule('zeiterfassung');}catch(error){return {code:error.diagnosticCode,status:error.status};}});
   assert.equal(personnel.code,'POS-PERSONNEL-SERVER');assert.equal(personnel.status,503);
