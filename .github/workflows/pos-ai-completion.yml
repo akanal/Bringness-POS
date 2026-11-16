@@ -173,6 +173,8 @@ jobs:
         run: |
           node server/ai-tests/pos-auth.mjs
           node server/ai-tests/pos-diagnostics.mjs
+          node server/ai-tests/pos-diagnostic-reports.mjs
+          POS_DIAGNOSTIC_TEST_DATABASE_URL=postgres://device_test:device_test@localhost:5432/bringness_device_test node server/ai-tests/pos-diagnostic-reports.mjs
           node server/ai-tests/admin-reset-integration.mjs
           node server/ai-tests/personnel.mjs
           node server/ai-tests/personnel-service.mjs

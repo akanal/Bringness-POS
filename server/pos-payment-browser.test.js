@@ -29,6 +29,7 @@ async function authFixture({brokenMain=false,apiHandler}={}){
  await page.route('https://auth.test/**',async route=>{
   const request=route.request(),url=new URL(request.url()),p=url.pathname;
   if(apiHandler&&await apiHandler(route,p))return;
+  if(p==='/api/v1/pos-diagnostics')return route.fulfill({status:202,json:{accepted:true}});
   if(p==='/pos/')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8')});
   if(p==='/pos/app.js'&&breakOnce){breakOnce=false;return route.fulfill({contentType:'text/javascript',body:'const = invalid register script;'});}
   if(p.startsWith('/api/v1/auth/')){
@@ -56,6 +57,21 @@ test('fresh POS sign-in and password recovery work with the full register script
   assert.deepEqual(f.requests.map(request=>request.path),['/api/v1/auth/login','/api/v1/auth/forgot-password','/api/v1/auth/login']);
   for(const request of f.requests)assert.equal(request.headers.authorization,undefined);
   assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
+test('full POS reports actual technical faults once and leaves normal screens without codes',async()=>{
+ const reports=[];const f=await authFixture({apiHandler:async(route,path)=>{
+  if(path!=='/api/v1/pos-diagnostics')return false;
+  reports.push(route.request().postDataJSON());await route.fulfill({status:202,json:{accepted:true}});return true;
+ }});try{
+  assert.equal(await f.page.locator('#posDiagnostic').count(),0);assert.equal(reports.length,0);
+  await f.page.fill('#email','fixture@example.test');await f.page.fill('#password','synthetic password');await f.page.click('#authSubmit');await f.page.waitForSelector('#workspace.show');
+  const delivered=f.page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/pos-diagnostics');
+  await f.page.evaluate(()=>{window.bnPosDiagnostics.clear();window.bnPosDiagnostics.report('STOCK','NETWORK');window.bnPosDiagnostics.report('STOCK','NETWORK');});
+  await f.page.waitForFunction(()=>document.getElementById('posDiagnostic')?.textContent.includes('POS-STOCK-NETWORK'));
+  await delivered;
+  assert.equal(reports.length,1);assert.deepEqual(Object.keys(reports[0]).sort(),['code','eventId','online','restaurantId','version']);assert.equal(reports[0].restaurantId,restaurant);
+  await f.page.evaluate(()=>window.bnPosDiagnostics.clear());assert.equal(await f.page.locator('#posDiagnostic').count(),0);assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });
 test('a failed POS main script keeps recovery usable and a new login reloads the register',async()=>{
