@@ -50,7 +50,7 @@
   const initial=context(),writing=!['GET','HEAD'].includes(String(options.method||'GET').toUpperCase());
   try{
    let response;
-   try{response=await window.fetch(url,options);}catch(error){throw Object.assign(Error(error?.name==='AbortError'?'Die Anfrage wurde unterbrochen.':'Verbindung zum Server fehlgeschlagen.'),{diagnosticKind:error?.name==='AbortError'?'TIMEOUT':'NETWORK'});}
+   try{response=await window.fetch(url,options);}catch(error){throw Object.assign(Error(['AbortError','TimeoutError'].includes(error?.name)?'Die Anfrage wurde unterbrochen.':'Verbindung zum Server fehlgeschlagen.'),{diagnosticKind:['AbortError','TimeoutError'].includes(error?.name)?'TIMEOUT':'NETWORK'});}
    let data;
    try{data=await response.json();}catch{throw Object.assign(Error('Die Serverantwort ist unvollständig.'),{status:response.status,diagnosticKind:response.ok?'RESPONSE':undefined});}
    if(!data||typeof data!=='object'||Array.isArray(data))throw Object.assign(Error('Die Serverantwort ist unvollständig.'),{status:response.status,diagnosticKind:response.ok?'RESPONSE':undefined});
@@ -68,9 +68,9 @@
   const initial=context();
   try{
    let response;
-   try{response=await window.fetch(url,options);}catch(error){throw Object.assign(Error(error?.name==='AbortError'?'Die Anfrage wurde unterbrochen.':'Verbindung zum Server fehlgeschlagen.'),{diagnosticKind:error?.name==='AbortError'?'TIMEOUT':'NETWORK'});}
+   try{response=await window.fetch(url,options);}catch(error){throw Object.assign(Error(['AbortError','TimeoutError'].includes(error?.name)?'Die Anfrage wurde unterbrochen.':'Verbindung zum Server fehlgeschlagen.'),{diagnosticKind:['AbortError','TimeoutError'].includes(error?.name)?'TIMEOUT':'NETWORK'});}
    if(!response.ok){let data;try{data=await response.json();}catch{}throw Object.assign(Error(typeof data?.error==='string'?data.error:'Gespeichertes PDF nicht verfügbar.'),{status:response.status,code:data?.code,retryAfter:data?.retryAfter});}
-   let blob;try{blob=await response.blob();}catch(error){throw Object.assign(Error('Die PDF-Antwort ist unvollständig.'),{diagnosticKind:error?.name==='AbortError'?'TIMEOUT':'RESPONSE'});}
+   let blob;try{blob=await response.blob();}catch(error){throw Object.assign(Error('Die PDF-Antwort ist unvollständig.'),{diagnosticKind:['AbortError','TimeoutError'].includes(error?.name)?'TIMEOUT':'RESPONSE'});}
    if(!blob||!blob.size||String(blob.type).split(';')[0].toLowerCase()!=='application/pdf')throw Object.assign(Error('Die Serverantwort ist kein vollständiges PDF.'),{diagnosticKind:'RESPONSE'});
    return blob;
   }catch(error){if(initial===null||context()!==initial)throw error;throw decorate(error,scope);}

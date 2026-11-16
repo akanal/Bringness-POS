@@ -38,9 +38,9 @@ async function request(path,body){
   if(!token)throw Object.assign(Error('Bitte in der POS-Kasse anmelden.'),{status:401});
   let r,data;
   try{r=await fetch('/api/v1'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});}
-  catch(error){throw Object.assign(Error(error?.name==='AbortError'?'Die Anfrage wurde unterbrochen.':'Verbindung zum Server fehlgeschlagen.'),{diagnosticKind:error?.name==='AbortError'?'TIMEOUT':'NETWORK'});}
+  catch(error){throw Object.assign(Error(['AbortError','TimeoutError'].includes(error?.name)?'Die Anfrage wurde unterbrochen.':'Verbindung zum Server fehlgeschlagen.'),{diagnosticKind:['AbortError','TimeoutError'].includes(error?.name)?'TIMEOUT':'NETWORK'});}
   if(!valid())throw Error('POS-Konto oder Ansicht gewechselt.');
-  try{data=await r.json();}catch{throw Object.assign(Error('Die Serverantwort ist unvollständig.'),{status:r.status,diagnosticKind:r.ok?'RESPONSE':undefined});}
+  try{data=await r.json();}catch(error){throw Object.assign(Error('Die Serverantwort ist unvollständig.'),{status:r.status,diagnosticKind:['AbortError','TimeoutError'].includes(error?.name)?'TIMEOUT':r.ok?'RESPONSE':undefined});}
   if(!valid())throw Error('POS-Konto oder Ansicht gewechselt.');
   if(!data||typeof data!=='object'||Array.isArray(data))throw Object.assign(Error('Die Serverantwort ist unvollständig.'),{status:r.status,diagnosticKind:'RESPONSE'});
   if(!r.ok)throw Object.assign(Error(r.status>=500?'POS-Bestand derzeit nicht verfügbar.':data?.error||'Zugriff nicht möglich'),{definitive:r.status>=400&&r.status<500,status:r.status,code:data?.code,retryAfter:data?.retryAfter});

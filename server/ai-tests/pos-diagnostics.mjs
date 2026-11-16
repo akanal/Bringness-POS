@@ -86,3 +86,12 @@ console.log('POS diagnostics passed: auth/reset/network/deadline, API status pre
  }finally{w.close();}
 }
 console.log('Stock/trade diagnostics passed: uncertain count replay, stock polling metadata, scoped actions, PDF validation/status and stale-session privacy.');
+
+{
+ const {w}=fixture();try{
+  for(const method of ['jsonRequest','pdfRequest']){
+   w.fetch=async()=>{throw Object.assign(Error('private timeout'),{name:'TimeoutError'});};
+   await assert.rejects(w.bnPosDiagnostics[method]('TRADE','/private'),error=>error.diagnosticCode==='POS-TRADE-TIMEOUT');
+  }
+ }finally{w.close();}
+}
