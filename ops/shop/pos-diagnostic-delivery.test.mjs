@@ -37,3 +37,7 @@ test('online retry is bounded to three identical attempts and does not require a
   assert.equal(f.calls.length,3);assert.equal(pending.length,0);assert(f.calls.every(c=>c.payload.eventId===f.calls[0].payload.eventId));assert.equal(f.w.localStorage.length,1);
  }finally{f.close();}
 });
+
+test('a background connection fault reaches admin without replacing the operator action code',async()=>{
+ const f=fixture();try{f.report('SAVE','REQUEST');f.report('CONNECTION','SERVER');await tick();assert.equal(f.calls.length,1);assert.equal(f.calls[0].payload.code,'POS-CONNECTION-SERVER');assert.match(f.w.document.getElementById('posDiagnostic').textContent,/POS-SAVE-REQUEST/);}finally{f.close();}
+});

@@ -23,11 +23,12 @@
  function report(scope,kind='FAILED'){
   scope=scopes.has(scope)?scope:'LOAD';kind=kinds.has(kind)?kind:'FAILED';
   const code='POS-'+scope+'-'+kind;
-  // Background health checks must not replace a specific action's diagnosis.
-  if(scope==='CONNECTION'&&last&&!last.code.startsWith('POS-CONNECTION-'))return code;
   try{
-   last=Object.freeze({code,time:new Date().toISOString(),version,online:navigator.onLine===true});
-   try{window.bnPosDiagnosticDelivery?.enqueue(last);}catch{}
+   const record=Object.freeze({code,time:new Date().toISOString(),version,online:navigator.onLine===true});
+   try{window.bnPosDiagnosticDelivery?.enqueue(record);}catch{}
+   // Report background faults without replacing a specific action's local diagnosis.
+   if(scope==='CONNECTION'&&last&&!last.code.startsWith('POS-CONNECTION-'))return code;
+   last=record;
    mount();output.hidden=true;output.value='';status.textContent='Fehlercode: '+code+'. Bitte bei Rückfragen angeben.';
   }catch{/* Diagnostics must never prevent a business action from completing. */}
   return code;
