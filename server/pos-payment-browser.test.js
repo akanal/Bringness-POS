@@ -802,6 +802,13 @@ test('POS support codes preserve readable errors, private copy fallback and unce
   assert.equal(writes,1);assert.equal(result.code,'POS-SAVE-NETWORK');assert.match(result.message,/Speicherstatus ist unklar/);
   const moduleResult=await f.page.evaluate(async()=>{try{await bnPosDiagnostics.jsonRequest('PERSONNEL','/api/v1/products/private-id',{method:'POST',body:'private-personnel'});}catch(error){return {code:error.diagnosticCode,message:error.message};}});
   assert.equal(writes,2);assert.equal(moduleResult.code,'POS-PERSONNEL-NETWORK');assert.match(moduleResult.message,/Speicherstatus ist unklar/);
+  await f.page.route('**/api/v1/personnel/**',route=>route.fulfill({status:503,json:{error:'Vorübergehend nicht erreichbar'}}));
+  const personnel=await f.page.evaluate(async()=>{try{await renderPersonnelModule('zeiterfassung');}catch(error){return {code:error.diagnosticCode,status:error.status};}});
+  assert.equal(personnel.code,'POS-PERSONNEL-SERVER');assert.equal(personnel.status,503);
+  await f.page.route('**/api/v1/displays**',route=>route.fulfill({status:503,json:{error:'Vorübergehend nicht erreichbar'}}));
+  await f.page.evaluate(()=>renderDisplaySettings({restaurantId:'synthetic'}));
+  assert.match(await f.page.locator('#moduleBody').textContent(),/POS-DISPLAY-SERVER/);
+
 
   await f.page.getByRole('button',{name:'Fehlerdiagnose kopieren',exact:true}).click();const text=await f.page.getByRole('textbox',{name:'Fehlerdiagnose zum Kopieren',exact:true}).inputValue();assert(!/private|password|token|body/.test(text));
   await f.page.getByRole('button',{name:'Schließen',exact:true}).click();assert.equal(await f.page.locator('#posDiagnostic').count(),0);assert.deepEqual(f.errors,[]);

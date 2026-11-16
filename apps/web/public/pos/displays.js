@@ -59,7 +59,7 @@ async function saveSelection(){
 if(saving||!selected)return;
 if(!form.reportValidity())return;
 saving=true;const controls=[...area.querySelectorAll('button,input,select')],states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);
-try{await persist()}catch(err){status.textContent='Nicht gespeichert. Der Bildschirm zeigt weiterhin den bisherigen Inhalt. '+err.message;status.setAttribute('role','alert');status.scrollIntoView?.({block:'nearest'})}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}
+try{await persist()}catch(err){status.textContent='Speicherung konnte nicht bestätigt werden. '+err.message;status.setAttribute('role','alert');status.scrollIntoView?.({block:'nearest'})}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}
 }
 
 async function assign(m,replaceIndex=null){
@@ -67,7 +67,7 @@ if(saving)return;
 if(!form.reportValidity())return;
 if(replaceIndex===null&&playlist.length>=40){status.textContent='Maximal 40 Einträge.';return}
 saving=true;const before=playlist.map(x=>({...x}));const controls=[...area.querySelectorAll('button,input,select')];const states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);
-try{const entry={type:m.type,mediaId:m.id,seconds:replaceIndex===null?0:playlist[replaceIndex].seconds};if(replaceIndex===null)playlist=[entry];else playlist[replaceIndex]=entry;await persist()}catch(err){playlist=before;list();status.textContent='Datei im Serverspeicher vorhanden. Zuweisung konnte nicht gespeichert werden: '+err.message}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}
+try{const entry={type:m.type,mediaId:m.id,seconds:replaceIndex===null?0:playlist[replaceIndex].seconds};if(replaceIndex===null)playlist=[entry];else playlist[replaceIndex]=entry;await persist()}catch(err){playlist=before;list();status.textContent='Datei im Serverspeicher vorhanden. Zuweisung konnte nicht bestätigt werden: '+err.message}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}
 }
 async function upload(e,replaceIndex=null){const input=e.target,file=input.files[0];if(!file)return;if(saving||!form.reportValidity()){input.value='';return}if(file.size>25*1024*1024){status.textContent='Bitte eine Datei bis 25 MB wählen.';input.value='';return}if(replaceIndex===null&&playlist.length>=40){status.textContent='Maximal 40 Einträge.';input.value='';return}saving=true;const controls=[...area.querySelectorAll('button,input,select')],states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);status.textContent='Medium wird auf dem Server gespeichert…';let m;
 try{m=await api('/media'+q,{method:'POST',headers:{'content-type':file.type},body:file});library.media.unshift({...m,created_at:new Date().toISOString()});mediaList()}catch(err){status.textContent=err.message}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false;input.value=''}if(m)await assign(m,replaceIndex)}
@@ -81,7 +81,7 @@ try{const result=await api('/media/'+encodeURIComponent(id)+q,{method:'DELETE'})
 }
 area.querySelector('#displayMediaDelete').onclick=()=>{const id=area.querySelector('#displayMedia').value;if(id)return deleteMedia(id);else status.textContent='Bitte eine Datei aus dem Serverspeicher wählen.'};
 area.querySelector('#displayReuse').onclick=async()=>{const m=library.media.find(m=>m.id===area.querySelector('#displayMedia').value);if(m)await assign(m);else status.textContent='Bitte ein gespeichertes Bild oder Video wählen.'};
-form.oninput=preview;form.onsubmit=async e=>{e.preventDefault();if(saving)return;saving=true;const controls=[...area.querySelectorAll('button,input,select')],states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);try{await persist()}catch(err){status.textContent='Nicht gespeichert. Der Bildschirm zeigt weiterhin den bisherigen Inhalt. '+err.message;status.setAttribute('role','alert');status.scrollIntoView?.({block:'nearest'})}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}};
+form.oninput=preview;form.onsubmit=async e=>{e.preventDefault();if(saving)return;saving=true;const controls=[...area.querySelectorAll('button,input,select')],states=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);try{await persist()}catch(err){status.textContent='Speicherung konnte nicht bestätigt werden. '+err.message;status.setAttribute('role','alert');status.scrollIntoView?.({block:'nearest'})}finally{controls.forEach((el,i)=>el.disabled=states[i]);saving=false}};
 area.querySelector('#displayDelete').onclick=async()=>{if(!selected||!confirm('Diese Bildschirmverbindung entfernen? Der Verbindungslink wird ungültig.'))return;try{await api('/'+selected.id+q,{method:'DELETE'});await render(options)}catch(err){status.textContent=err.message}};let lastId='';try{lastId=localStorage.getItem(selectionKey)||''}catch{}const restored=saved.displays.find(d=>d.id===lastId)||saved.displays[0];modeControls();if(restored){area.querySelector('#displaySelect').value=restored.id;select(restored)}else list();
 }
 window.clearDisplayPreviews=()=>{generation++;previewUrls.forEach(URL.revokeObjectURL);previewUrls=[]};
