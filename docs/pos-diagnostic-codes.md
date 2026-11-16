@@ -82,7 +82,8 @@ oder nicht zuordenbare Bestätigungen behalten den bestehenden Auftrag zum ausdr
 Abgleich; keine neue Kennung oder automatische Wiederholung. JSON-fremde 4xx-Antworten
 werden nicht als fachlich eindeutige Ablehnung ausgegeben. Alte Konto-/Betriebs-/
 Seitenantworten erzeugen kein neues Diagnosefeld. Lager-Polling erhält seine Kennung,
-pending-Eigenschaft und bestehenden Zeitgrenzen.
+pending-Eigenschaft und bestehenden Zeitgrenzen. Ein Fehler dieses Abgleichs erhält
+auch dann STOCK, wenn die ursprüngliche Anfrage beispielsweise eine Artikeländerung war.
 
 `pdfRequest` liest ein PDF einmal mit den vom Aufrufer gesetzten Berechtigungen.
 HTTP-Fehler, Transportfehler, abgebrochene/ungültige Blob-Antworten, leere Dateien

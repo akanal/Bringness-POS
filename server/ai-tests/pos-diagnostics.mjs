@@ -76,7 +76,7 @@ console.log('POS diagnostics passed: auth/reset/network/deadline, API status pre
   }
   w.setTimeout=(fn,ms)=>{if(ms<=1000){queueMicrotask(fn);return 0;}return 1;};w.clearTimeout=()=>{};let calls=0;
   w.fetch=async()=>{if(calls++===0)return {ok:true,status:202,json:async()=>({commandId:'private-command',pending:true})};throw new w.TypeError('lost poll');};
-  await assert.rejects(w.api('/stock-commands/private',{method:'POST',body:'private'}),error=>error.pending===true&&error.commandId==='private-command'&&error.diagnosticCode==='POS-STOCK-NETWORK');assert.equal(calls,2);
+  await assert.rejects(w.api('/products/private',{method:'POST',body:'private'}),error=>error.pending===true&&error.commandId==='private-command'&&error.diagnosticCode==='POS-STOCK-NETWORK');assert.equal(calls,2);
   w.fetch=async()=>({ok:false,status:403,json:async()=>({error:'Kein Zugriff',code:'LOCKED',retryAfter:3})});
   await assert.rejects(w.bnPosDiagnostics.pdfRequest('TRADE','/private',{headers:{authorization:'private'}}),error=>error.status===403&&error.code==='LOCKED'&&error.retryAfter===3&&error.diagnosticCode==='POS-TRADE-ACCESS');
   for(const blob of [new w.Blob([],{type:'application/pdf'}),new w.Blob(['private html'],{type:'text/html'})]){w.fetch=async()=>({ok:true,blob:async()=>blob});await assert.rejects(w.bnPosDiagnostics.pdfRequest('TRADE','/private'),error=>error.diagnosticCode==='POS-TRADE-RESPONSE');}

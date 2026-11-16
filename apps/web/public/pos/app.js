@@ -49,7 +49,7 @@ async function api(path,opt={}){
  }catch(error){
   if(writing&&(['NETWORK','TIMEOUT','RESPONSE'].includes(error.diagnosticKind)||error.status>=500))error.message+=' Der Speicherstatus ist unklar. Bitte zuerst den vorhandenen Vorgang abgleichen; nicht als neuen Vorgang wiederholen.';
   if(token!==requestSession||($('restaurant')?.value||'')!==requestRestaurant)throw error;
-  throw window.bnPosDiagnostics?.decorate(error,scope)||error;
+  throw window.bnPosDiagnostics?.decorate(error,error.commandId?'STOCK':scope)||error;
  }
 }
 function authMode(m){window.bnPosAuth?.setMode(m)}
