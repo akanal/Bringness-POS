@@ -9,7 +9,7 @@ function localDateTime(date,time){
   const token=()=>localStorage.getItem("bringness-pos-token");
   const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
   const euro=c=>(Number(c||0)/100).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
-  async function api(path,opt={}){
+  async function api(path,opt={}){if(window.bnPosDiagnostics?.jsonRequest)return window.bnPosDiagnostics.jsonRequest('CATALOG','/api/v1'+path,{...opt,headers:{...(opt.headers||{}),'content-type':'application/json',...(token()?{authorization:'Bearer '+token()}:{})}});
     opt.headers={...(opt.headers||{}),"content-type":"application/json",...(token()?{authorization:"Bearer "+token()}:{})};
     const r=await fetch("/api/v1"+path,opt),j=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(j.error||"Fehler"); return j;

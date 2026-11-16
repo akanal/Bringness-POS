@@ -1,6 +1,6 @@
 (()=>{
   const token=()=>localStorage.getItem('bringness-pos-token');
-  async function api(path,opt={}){opt.headers={...(opt.headers||{}),'content-type':'application/json',...(token()?{authorization:'Bearer '+token()}:{})};const r=await fetch('/api/v1'+path,opt),j=await r.json();if(!r.ok)throw Error(j.error||'Fehler');return j}
+  async function api(path,opt={}){if(window.bnPosDiagnostics?.jsonRequest)return window.bnPosDiagnostics.jsonRequest('AVAILABILITY','/api/v1'+path,{...opt,headers:{...(opt.headers||{}),'content-type':'application/json',...(token()?{authorization:'Bearer '+token()}:{})}});opt.headers={...(opt.headers||{}),'content-type':'application/json',...(token()?{authorization:'Bearer '+token()}:{})};const r=await fetch('/api/v1'+path,opt),j=await r.json();if(!r.ok)throw Error(j.error||'Fehler');return j}
   const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':'&quot;',"'":'&#39;'}[m]));
   const emptyRule=()=>({enabled:false,startTime:'',endTime:'',startDate:'',endDate:''});
   async function ruleFor(id){const d=await api('/products/'+encodeURIComponent(id)+'/translations');const x=(d.translations||[]).find(t=>t.languageCode==='avl');if(!x?.allergens)return emptyRule();try{return {...emptyRule(),...JSON.parse(x.allergens)}}catch{return emptyRule()}}
