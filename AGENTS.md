@@ -705,3 +705,8 @@ Die bisherige Pflicht zu einem Händlergrundpreis ab Menge1 blockiert die gewün
 - Ein bereits angemeldeter Browser beweist nicht, dass neue Anmeldung oder Passwort-Wiederherstellung funktioniert. Bei Fehlerberichten ohne bestehende Sitzung und mit vollständiger POS-Skriptkette prüfen.
 - Eigenständige frühe Anmeldelogik in `apps/web/public/pos/auth.js`; Wiederherstellung darf nicht vom erfolgreichen Start sämtlicher Kassenmodule abhängen. Formular niemals als nativen GET mit Kennwort absenden lassen. Standard-Avatar AK ist kein Sitzungsnachweis.
 - Veraltete Bootstrap-Antworten dürfen eine inzwischen neue Anmeldung weder löschen noch ausblenden. Dokumentation: `docs/pos-login-recovery-20261115.md`.
+
+## POS-Fehlerdiagnose beauftragt — 15.11.2026
+- Inhaber autorisiert verständliche, kopierbare Fehlercodes für Anmeldung, Wiederherstellung, Speichern und Verbindung. Erster Umfang: unabhängige `pos/auth.js`, gemeinsame `api()` und bestehende Health-Prüfung; Kundendisplay-CD-Codes bewahren. Keine Behauptung flächendeckender Abdeckung eigenständiger Erweiterungen.
+- Kopie enthält ausschließlich feste Codekategorie, UTC-Zeit, Komponentenversion und Onlineflag; keine Eingaben, Konten-/Betriebs-/Vorgangskennungen, Tokens, URLs, Rohfehler oder automatische Übertragung. Flüchtig, bei Schließen/Kontextwechsel löschen; Clipboardfallback. Unklare Schreibantwort ist kein Fehlschlagsbeweis und darf keine neue Buchung auslösen. Bestehende Wiederholungskennungen/Metadaten erhalten.
+- Anleitung/Abnahme: `docs/pos-diagnostic-codes.md`, `server/ai-tests/pos-diagnostics.mjs` und nativer Fall in `server/pos-payment-browser.test.js`. Praktischen Inhabertest ausdrücklich auf später verschoben; technische Pflichtprüfungen bleiben erforderlich.

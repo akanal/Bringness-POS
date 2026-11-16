@@ -172,6 +172,7 @@ jobs:
       - name: Verify POS authentication, staff and service flows
         run: |
           node server/ai-tests/pos-auth.mjs
+          node server/ai-tests/pos-diagnostics.mjs
           node server/ai-tests/admin-reset-integration.mjs
           node server/ai-tests/personnel.mjs
           node server/ai-tests/personnel-service.mjs

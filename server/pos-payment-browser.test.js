@@ -783,3 +783,24 @@ test('customer display follows exact basket totals read-only and settings remain
   assert.equal(apiCalls,2,'only the parent POS looks up each confirmed receipt; no order or payment API');assert.deepEqual(errors,[]);await context.close();
  }finally{await browser.close();}
 });
+
+test('POS support codes preserve readable errors, private copy fallback and uncertain writes on narrow screens',async()=>{
+ const f=await authFixture();try{
+  await f.page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw Error('blocked');}}}));
+  for(const width of [390,1280]){
+   await f.page.setViewportSize({width,height:900});
+   await f.page.fill('#email','private@example.test');await f.page.fill('#password','incorrect');await f.page.click('#authSubmit');
+   await f.page.locator('#authMsg').filter({hasText:'POS-LOGIN-AUTH'}).waitFor();
+   await f.page.getByRole('button',{name:'Fehlerdiagnose kopieren',exact:true}).click();
+   const diagnostic=f.page.getByRole('textbox',{name:'Fehlerdiagnose zum Kopieren',exact:true});await diagnostic.waitFor();
+   const copied=JSON.parse(await diagnostic.inputValue());assert.deepEqual(Object.keys(copied).sort(),['code','online','time','version']);assert.equal(copied.code,'POS-LOGIN-AUTH');assert(!JSON.stringify(copied).includes('private'));
+   if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await f.page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/pos-diagnostics-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:true});}
+   assert(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+  }
+  let writes=0;await f.page.route('**/api/v1/products/private-id',route=>{writes++;return route.abort('failed');});
+  const result=await f.page.evaluate(async()=>{try{await api('/products/private-id',{method:'PUT',body:'private-body'});}catch(error){return {message:error.message,code:error.diagnosticCode};}});
+  assert.equal(writes,1);assert.equal(result.code,'POS-SAVE-NETWORK');assert.match(result.message,/Speicherstatus ist unklar/);
+  await f.page.getByRole('button',{name:'Fehlerdiagnose kopieren',exact:true}).click();const text=await f.page.getByRole('textbox',{name:'Fehlerdiagnose zum Kopieren',exact:true}).inputValue();assert(!/private|password|token|body/.test(text));
+  await f.page.getByRole('button',{name:'Schließen',exact:true}).click();assert.equal(await f.page.locator('#posDiagnostic').count(),0);assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
