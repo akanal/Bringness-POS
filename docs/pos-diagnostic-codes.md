@@ -30,8 +30,8 @@ Codeform: `POS-<Bereich>-<Ursache>`.
 Die Meldung behält ihren vorhandenen Erklärungstext. Das Diagnosefeld zeigt einen
 kopierbaren Code. Export: ausschließlich Code, UTC-Zeit, feste Komponentenversion,
 Onlineflag. Keine Pfade/URLs/Parameter, Namen, Kennungen, Formulare, Passwörter,
-Tokens, Belege, Warenkorbdaten, Rohfehler oder Stacks. Kein Versand, keine neue
-Persistenz und keine Diagnosehistorie. Schließen, Betriebswechsel, Sitzungstausch
+Tokens, Belege, Warenkorbdaten, Rohfehler oder Stacks. Die lokale Kopie bleibt
+flüchtig. Die ausdrücklich beauftragte automatische Adminmeldung ist unten beschrieben. Schließen, Betriebswechsel, Sitzungstausch
 in einem anderen Tab und Verlassen entfernen die flüchtige Diagnose.
 Clipboardfehler bieten schreibgeschützten markierbaren Text. Späte Kopierantworten
 zeigen nach dem Schließen/Wechsel nichts erneut an. Hintergrund-Healthmeldungen
@@ -95,3 +95,51 @@ Diese Erweiterung umfasst nicht sämtliche separaten Geräte-/Import-/Supportsei
 Pfandjournale, Rechnungs-/Steuerdownloads außerhalb des Händlerdialogs oder die
 separate AI-Oberfläche. Die praktische Abnahme durch den Inhaber bleibt verschoben;
 automatisierte native Prüfungen verwenden ausschließlich synthetische Daten.
+
+
+## Automatische Adminmeldung — 16.11.2026
+
+Codes erscheinen weiterhin nur nach einem erkannten Fehler. Angemeldete Kassen
+melden technische Kategorien NETWORK, TIMEOUT, RESPONSE, SERVER, STORAGE und FAILED
+best-effort an das eigene `/api/v1/pos-diagnostics`. Erwartete Ablehnungen (AUTH,
+ACCESS, LIMIT, REQUEST) bleiben lokal. Kein globaler Fetch-Interceptor und keine
+Übertragung von Rohfehlern, Formularen, URLs, Kunden-, Beleg- oder Zahlungsdaten.
+
+Die Nachricht enthält ausschließlich eine zufällige Ereigniskennung, festen Code,
+feste Komponentenversion, Onlineflag und optional die ausgewählte Betriebs-UUID.
+Der Server prüft eine aktive Sitzung und die Betriebszugehörigkeit; Mandant und
+Empfangszeit werden serverseitig ergänzt. Vor der Anmeldung oder bei blockiertem
+Sitzungsspeicher bleibt die Diagnose lokal. Bestehende Kundenfreigaben für
+Fernzugriff werden dadurch weder erteilt noch umgangen.
+
+Der Browser bündelt gleiche Codes je Betrieb für zwei Minuten. Bis zu20 Meldungen
+bleiben maximal15 Minuten im Arbeitsspeicher, ohne neue Browserpersistenz. Bei
+Online-Rückkehr bzw. nach30 Sekunden erfolgt ein erneuter Übertragungsversuch,
+maximal drei Versuche je Ereignis mit identischer Kennung. Konten-/Betriebswechsel,
+Seitenende und Neuladen verwerfen die Warteschlange. Übertragungsfehler bleiben
+still und erzeugen keine neue Diagnose. Es werden ausschließlich Diagnosemeldungen
+wiederholt, niemals Zahlungen oder andere fachliche Schreibanfragen.
+
+Der Server begrenzt auf12 Meldungen je Nutzer und120 insgesamt pro Minute und
+fasst gleiche Codes je Mandant/Betrieb/Version zusammen. Gleiche Ereignisse zählen
+auch bei parallelen Wiederholungen nur einmal. Ereigniskennungen werden nach24h,
+zusammengefasste Meldungen nach30 Tagen gelöscht (Bereinigung beim Start und
+stündlich). Die Übersicht zeigt höchstens die100 neuesten passenden Meldungen.
+
+Nur aktive Bringness-Plattformadministratoren sehen `/admin/` → POS →
+Automatische Fehlermeldungen. Der POS-Reiter zeigt die Anzahl offener Fälle;
+bei sichtbarer Adminseite wird spätestens minütlich aktualisiert. Zustände:
+offen, in Bearbeitung, als behoben markiert. Statusänderungen benötigen die aktuelle
+Revision und werden protokolliert. Neue Vorkommen öffnen behobene Fälle erneut.
+„Als behoben“ ist eine manuelle Bearbeitungsmarkierung, kein automatischer
+Reparaturnachweis. Keine externe E-Mail, kein unbeaufsichtigter Kontozugriff,
+keine automatische Reparatur oder Änderung von Kassen-/Finanzdaten.
+
+Früheres Erkennen ist möglich, aber bei Netzausfall, geschlossenem Browser,
+fehlender Sitzung oder Ausfall des Empfangsservers nicht garantiert. Für Fehler,
+die eine Bedienerentscheidung erfordern, bleiben die vorhandenen Hinweise sichtbar.
+
+Prüfung: `node server/ai-tests/pos-diagnostic-reports.mjs` (PGlite und über
+POS_DIAGNOSTIC_TEST_DATABASE_URL echtes isoliertes PostgreSQL),
+`node --test ops/shop/pos-diagnostic-delivery.test.mjs ops/shop/pos-diagnostic-admin.test.mjs`,
+native Chromium/WebKit-Fälle in `server/pos-payment-browser.test.js`.

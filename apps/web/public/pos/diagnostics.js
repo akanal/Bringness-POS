@@ -2,7 +2,7 @@
 (()=>{
  'use strict';
  if(window.bnPosDiagnostics)return;
- const version='pos-diagnostics-stock-trade-20261116',scopes=new Set(['LOGIN','REGISTER','RESET','LOAD','SAVE','CONNECTION','START','DISPLAY','PERSONNEL','CATALOG','TAX','AVAILABILITY','STOCK','TRADE']);
+ const version='pos-diagnostics-admin-20261116',scopes=new Set(['LOGIN','REGISTER','RESET','LOAD','SAVE','CONNECTION','START','DISPLAY','PERSONNEL','CATALOG','TAX','AVAILABILITY','STOCK','TRADE']);
  const kinds=new Set(['NETWORK','TIMEOUT','RESPONSE','AUTH','ACCESS','LIMIT','SERVER','REQUEST','STORAGE','FAILED']);
  let last=null,panel=null,copy=null,output=null,status=null;
  function clear(){last=null;panel?.remove();panel=null;copy=output=status=null;}
@@ -23,10 +23,12 @@
  function report(scope,kind='FAILED'){
   scope=scopes.has(scope)?scope:'LOAD';kind=kinds.has(kind)?kind:'FAILED';
   const code='POS-'+scope+'-'+kind;
-  // Background health checks must not replace a specific action's diagnosis.
-  if(scope==='CONNECTION'&&last&&!last.code.startsWith('POS-CONNECTION-'))return code;
   try{
-   last=Object.freeze({code,time:new Date().toISOString(),version,online:navigator.onLine===true});
+   const record=Object.freeze({code,time:new Date().toISOString(),version,online:navigator.onLine===true});
+   try{window.bnPosDiagnosticDelivery?.enqueue(record);}catch{}
+   // Report background faults without replacing a specific action's local diagnosis.
+   if(scope==='CONNECTION'&&last&&!last.code.startsWith('POS-CONNECTION-'))return code;
+   last=record;
    mount();output.hidden=true;output.value='';status.textContent='Fehlercode: '+code+'. Bitte bei Rückfragen angeben.';
   }catch{/* Diagnostics must never prevent a business action from completing. */}
   return code;
