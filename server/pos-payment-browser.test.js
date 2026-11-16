@@ -23,11 +23,12 @@ async function fixture(onApi){
 }
 const cashResult=body=>({requestKey:body.requestKey,id:'33333333-3333-4333-8333-333333333333',restaurantId:restaurant,status:'paid',receiptNumber:'BN-1',totalCents:250});
 // Use the complete POS document and every shipped extension for fresh sign-in.
-async function authFixture({brokenMain=false}={}){
+async function authFixture({brokenMain=false,apiHandler}={}){
  const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[],requests=[];
  page.on('pageerror',error=>errors.push(error.message));let breakOnce=brokenMain;
  await page.route('https://auth.test/**',async route=>{
   const request=route.request(),url=new URL(request.url()),p=url.pathname;
+  if(apiHandler&&await apiHandler(route,p))return;
   if(p==='/pos/')return route.fulfill({contentType:'text/html',body:await readFile(new URL('../apps/web/public/pos/index.html',import.meta.url),'utf8')});
   if(p==='/pos/app.js'&&breakOnce){breakOnce=false;return route.fulfill({contentType:'text/javascript',body:'const = invalid register script;'});}
   if(p.startsWith('/api/v1/auth/')){
@@ -813,5 +814,50 @@ test('POS support codes preserve readable errors, private copy fallback and unce
 
   await f.page.getByRole('button',{name:'Fehlerdiagnose kopieren',exact:true}).click();const text=await f.page.getByRole('textbox',{name:'Fehlerdiagnose zum Kopieren',exact:true}).inputValue();assert(!/private|password|token|body/.test(text));
   await f.page.getByRole('button',{name:'Schließen',exact:true}).click();assert.equal(await f.page.locator('#posDiagnostic').count(),0);assert.deepEqual(f.errors,[]);
+ }finally{await f.browser.close();}
+});
+
+test('standalone inventory shows a private STOCK code and replays an uncertain count once',async()=>{
+ const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:390,height:844}}),errors=[],commands=[];let ack=null;
+ page.on('pageerror',error=>errors.push(error.message));await page.addInitScript(()=>{localStorage.setItem('bringness-pos-token','synthetic');Object.defineProperty(navigator,'clipboard',{value:{writeText:async()=>{throw Error('fixture denied');}}});});
+ await page.route('https://stock.test/**',async route=>{
+  const p=new URL(route.request().url()).pathname;
+  if(p==='/api/v1/bootstrap')return route.fulfill({json:{restaurants:[{id:restaurant,name:'Fixture'}]}});
+  if(p==='/api/v1/pos-inventory'){
+   if(route.request().method()==='POST'){const body=route.request().postDataJSON();commands.push(body);if(!ack){ack={requestId:body.requestId,productId:product,revision:2};return route.abort('failed');}return route.fulfill({json:ack});}
+   return route.fulfill({json:{restaurantId:restaurant,rows:[{id:product,name:'Fixture article',revision:ack?2:1,counted_units:ack?9:5,minimum_units:2,target_units:10,counted_at:'2026-11-16T09:00:00Z'}]}});
+  }
+  if(p.startsWith('/api/'))return route.fulfill({json:{rows:[],nextCursor:null}});
+  try{return route.fulfill({body:await readFile(new URL('../apps/web/public'+p,import.meta.url)),contentType:p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'text/html'});}catch{return route.abort();}
+ });
+ try{
+  await page.goto('https://stock.test/pos/operations.html');await page.click('#load');await page.locator('[name=countedUnits]').fill('9');await page.locator('#inventory form button[type=submit]').click();
+  await page.waitForFunction(()=>document.getElementById('status').textContent.includes('POS-STOCK-NETWORK'));assert.equal(commands.length,1);assert(await page.locator('#retry').isVisible());
+  await page.getByRole('button',{name:'Fehlerdiagnose kopieren',exact:true}).click();await page.locator('#posDiagnostic textarea:visible').waitFor();const record=JSON.parse(await page.locator('#posDiagnostic textarea').inputValue());assert.deepEqual(Object.keys(record).sort(),['code','online','time','version']);assert.equal(record.code,'POS-STOCK-NETWORK');assert(!JSON.stringify(record).includes(product));
+  await page.click('#retry');await page.waitForFunction(()=>document.getElementById('retry').hidden);assert.equal(commands.length,2);assert.deepEqual(commands[0],commands[1]);assert.equal(await page.locator('[name=countedUnits]').inputValue(),'9');assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
+test('real trade invoice lookup diagnoses denied and invalid PDFs without creating another sale',async()=>{
+ let pdfMode='denied',writes=0;
+ const f=await authFixture({apiHandler:async(route,p)=>{
+  if(p.startsWith('/api/v1/trade/')){
+   if(route.request().method()!=='GET')writes++;
+   const value=p.endsWith('/settings')?{enabled:true,discountMode:'quantity'}:p.endsWith('/prices')?{tiers:[]}:p.endsWith('/invoices')?{invoices:[{id:product,receipt_number:'HR-FIXTURE',issued_at:'2026-11-16T09:00:00Z',total_cents:250}]}:{};
+   await route.fulfill({json:value});return true;
+  }
+  if(p==='/api/v1/customers'){await route.fulfill({json:{customers:[]}});return true;}
+  if(p==='/api/v1/receipts/'+product+'/invoice'){
+   if(pdfMode==='denied')await route.fulfill({status:403,json:{error:'Keine Berechtigung'}});
+   else if(pdfMode==='html')await route.fulfill({contentType:'text/html',body:'private error page'});
+   else await route.fulfill({contentType:'application/pdf',body:'%PDF-1.4\n%%EOF\n'});
+   return true;
+  }
+ }});
+ try{
+  await f.page.fill('#email','fixture@example.test');await f.page.fill('#password','synthetic password');await f.page.click('#authSubmit');await f.page.waitForSelector('#workspace.show');
+  await f.page.evaluate(()=>showModule('handel'));await f.page.locator('[data-invoice-search]').fill('HR-FIXTURE');await f.page.locator('[data-invoice-find]').click();
+  await f.page.waitForFunction(()=>document.querySelector('[data-invoice-feedback]').textContent.includes('POS-TRADE-ACCESS'));assert.equal(await f.page.locator('.trade-issued-invoice').count(),0);
+  pdfMode='html';await f.page.locator('[data-invoice-find]').click();await f.page.waitForFunction(()=>document.querySelector('[data-invoice-feedback]').textContent.includes('POS-TRADE-RESPONSE'));assert.equal(await f.page.locator('.trade-issued-invoice').count(),0);
+  pdfMode='pdf';await f.page.locator('[data-invoice-find]').click();await f.page.locator('.trade-issued-invoice[open]').waitFor();assert.equal(writes,0);assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });

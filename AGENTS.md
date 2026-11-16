@@ -714,3 +714,8 @@ Die bisherige Pflicht zu einem Händlergrundpreis ab Menge1 blockiert die gewün
 ## Eigenständige POS-Moduldiagnosen — 16.11.2026
 - Beauftragte Fortsetzung: JSON-Helfer in displays/personnel/restaurant-owner/availability/tax-export nutzen opt-in `bnPosDiagnostics.jsonRequest`. Feste Bereiche DISPLAY/PERSONNEL/CATALOG/AVAILABILITY/TAX, gleiche vier privaten Diagnosefelder. Vorhandene Anfragen/Personal-Unlock-Header/Rechte bewahren, keine globalen Fetch-Patches für Diagnosen, keine automatischen Wiederholungen oder neuen Zeitlimits.
 - Verlorene Schreibantworten/Serverfehler: Speicherstatus unklar, bestehenden Stand abgleichen. Alte Sitzungs-/Betriebsanfragen dürfen kein neues Diagnosefeld erzeugen. Direkte Binärdownloads und separate Seiten bleiben außerhalb dieses Umfangs. Anleitung docs/pos-diagnostic-codes.md; gemeinsame Regression server/ai-tests/pos-diagnostics.mjs und nativer POS-support-codes-Test.
+
+## Bestands-/Händlerdiagnose — 16.11.2026
+- Die separate `pos/operations.html` lädt die private Diagnose selbst. STOCK für Bestand/Historiendaten, TRADE für Händler-API und Händlerrechnungs-PDF; bestehende Geräteprüfungen behalten LOAD/SAVE.
+- Keine automatischen Wiederholungen, neuen Buchungskennungen oder Änderungen der Freigabe-/Zahlungsregeln. Verlorene/fehlerhafte Bestandsbestätigungen bleiben zum Abgleich offen; Fachfehler behalten Status und definitive-Eigenschaft. Nur Code/Zeit/feste Version/Onlineflag werden kopiert.
+- Scope und Grenzen in `docs/pos-diagnostic-codes.md`; synthetische Bestands-Replay-/PDF-Browserfälle in `server/pos-payment-browser.test.js` und Bestandstests in `ops/shop/pos-inventory-workflow.test.mjs`. Inhaber-Praxistest weiterhin verschoben.
