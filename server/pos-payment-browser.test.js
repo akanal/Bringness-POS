@@ -5,6 +5,40 @@ const playwright=await import(process.env.CENTER_TEST_PLAYWRIGHT||'playwright');
 const engine=playwright[process.env.CENTER_TEST_BROWSER||'chromium'];
 const restaurant='11111111-1111-4111-8111-111111111111',product='22222222-2222-4222-8222-222222222222';
 const scripts={cash:await readFile(new URL('../apps/web/public/pos/payment-flow.js',import.meta.url),'utf8'),table:await readFile(new URL('../apps/web/public/pos/settlement-flow.js',import.meta.url),'utf8')};
+test('POS admin navigation groups existing tools without duplicate entries at mobile and desktop widths',async()=>{
+ const {adminHtml,adminRoot,adminApi}=await import('./ai-tests/admin-navigation-fixture.mjs');
+ const browser=await engine.launch({headless:true});
+ try{for(const width of [390,1280]){
+  const page=await browser.newPage({viewport:{width,height:1000}}),errors=[],writes=[];let platform=true;
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.route('https://admin-navigation.test/**',async route=>{
+   const request=route.request(),url=new URL(request.url()),path=url.pathname;
+   if(path.startsWith('/api/')){if(request.method()!=='GET'){writes.push(path);return route.fulfill({status:403,json:{error:'Read-only fixture'}});}const result=adminApi(url.href,{platform});return route.fulfill({status:result.status,json:result.data});}
+   if(path==='/admin/')return route.fulfill({contentType:'text/html',body:adminHtml().replace('<head>','<head><script>localStorage.setItem("bringness-pos-token","synthetic-admin")</script>')});
+   try{return route.fulfill({body:await readFile(new URL(path.slice(1),adminRoot)),contentType:path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':path.endsWith('.png')?'image/png':'text/plain'});}catch{return route.abort();}
+  });
+  await page.goto('https://admin-navigation.test/admin/');await page.locator('[data-tab=allRegisters]').waitFor({state:'attached'});
+  await page.locator('.admin-nav-badge').waitFor();
+  assert.equal(await page.locator('#adminNavigation [data-admin-group]').count(),6);
+  assert.equal(await page.locator('#adminMore').count(),0);assert.equal(await page.locator('#dash > .tabs').isVisible(),false);
+  assert(await page.locator('#dash .topline h1').evaluate(n=>parseFloat(getComputedStyle(n).fontSize)<=40));
+  for(const group of ['overview','registers','customers','team','support','system']){
+   const button=page.locator('[data-admin-group="'+group+'"]');await button.click();
+   await page.waitForFunction(id=>document.querySelector('#adminNavigation').dataset.group===id,group);
+   assert.equal(await button.getAttribute('aria-pressed'),'true');
+   assert.equal(await page.locator('#dash > .panel.active').count(),1);
+   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'admin must not overflow at '+width+' in '+group);
+   if(group==='registers'){await page.locator('#registerList [data-register]').waitFor();assert.equal(await page.locator('#registerList a[href^="/pos/place-terminology.html"]').count(),1);assert.equal(await page.locator('[data-admin-item=devices]').count(),0);}
+   if(group==='support'){assert.equal(await page.locator('#adminNavigation a[href="/admin/mail.html"]').count(),1);assert.equal(await page.locator('[data-admin-item=mail]').isVisible(),true);}
+   if(process.env.RUNNER_TEMP&&['overview','support'].includes(group)){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/admin-navigation-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+group+'-'+width+'.png',fullPage:true});}
+  }
+  await page.goBack();await page.waitForFunction(()=>document.querySelector('#adminNavigation').dataset.group==='support');
+  await page.locator('[data-admin-group=team]').press('Enter');await page.waitForFunction(()=>document.querySelector('#adminNavigation').dataset.group==='team');
+  platform=false;await page.reload();await page.locator('[data-admin-group=registers]').click();await page.locator('[data-admin-item=devices]').waitFor();assert.equal(await page.locator('[data-admin-item=modules],[data-admin-item=online]').count(),0);
+  await page.locator('[data-admin-group=support]').click();assert.equal(await page.locator('[data-admin-item=mail]').count(),0);
+  assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);await page.close();
+ }}finally{await browser.close();}
+});
 const api=`async function api(path,options){const response=await fetch('/api/v1'+path,{...options,headers:{'content-type':'application/json'}});const body=await response.json();if(!response.ok){const error=Error(body.error);error.status=response.status;error.code=body.code;throw error;}return body;}`;
 function html({empty=false,table=false}={}){
  return '<!doctype html><meta charset="utf-8"><select id="restaurant"><option value="'+restaurant+'">Fixture</option></select><div class="basket"><select id="paymentMethod"><option value="cash">Cash</option><option value="card">Card</option></select><button id="pay">Pay</button><p id="saleMsg"></p></div><button id="settle">Settle</button><p id="tableMsg"></p><script>var cart='+JSON.stringify(empty?[]:[{id:product,qty:1,price:2.5}])+';function renderCart(){};'+api+'</script><script src="/cash.js"></script><script src="/table.js"></script><script>document.getElementById("settle").onclick=async()=>{try{const result=await bnSettleTable({tableId:'+JSON.stringify(restaurant)+',paymentMethod:document.getElementById("paymentMethod").value,orderIds:'+JSON.stringify(empty?[]:[product])+',expectedTotalCents:'+(empty?0:250)+'});document.getElementById("tableMsg").textContent=result.receiptNumbers.join(",");}catch(error){document.getElementById("tableMsg").textContent=error.message;}};</script>';

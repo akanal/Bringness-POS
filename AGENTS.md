@@ -1,5 +1,9 @@
 # Bringness project continuity
 
+## POS-Adminnavigation zusammenfassen — 17.11.2026
+- Eigentümer beauftragt ausdrücklich kompakte, übersichtliche POS-Administration mit sinnvoll zusammengefassten doppelten bzw. versteckten Funktionen. Die Navigation verwendet sechs sichtbare Bereiche und kurze Unterauswahlen; keine Rückkehr zu vielen gleichrangigen Knöpfen plus verstecktem Mehr-Menü. Details: docs/admin-pos-navigation.md.
+- Vorhandene Panel-/API-Rechte, Kundenfreigaben und ausdrückliche Schreibaktionen beibehalten. Plattformweite Kassen-/Geräte-Einstiege konsolidieren, eigene Betriebsansichten für Betriebsadministratoren erhalten. Markt/POS/AI und Kassen-/Kellneroberflächen bleiben getrennt; der bestehende schwarze/orange POS-Admin-Kopf bleibt bestehen.
+
 ## Dauerhafte Freigaberegel für beauftragte Live-Schaltungen — 15.11.2026
 
 - Ahmet Kanal bestätigt ausdrücklich: Enthält ein Auftrag die Live-Schaltung, ist diese damit bereits freigegeben. Nach erfolgreichem Abschluss der erforderlichen Prüfungen selbstständig über den bestehenden Netcup-Ablauf veröffentlichen; keine zusätzliche routinemäßige Bestätigung beim Inhaber einholen.

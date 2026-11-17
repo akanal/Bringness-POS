@@ -132,6 +132,7 @@ jobs:
       - run: node server/ai-tests/menu-import-ocr.mjs
       - run: node server/ai-tests/browser-support.mjs
       - run: node server/ai-tests/admin-audit.mjs
+      - run: node server/ai-tests/admin-navigation.mjs
       - run: node server/ai-tests/device-license.mjs
       - name: Verify simultaneous device activation on PostgreSQL
         run: node server/ai-tests/device-license.mjs
