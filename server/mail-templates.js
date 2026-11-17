@@ -1,12 +1,16 @@
 // Application-owned templates: Brevo transports the rendered message over SMTP.
+import {readFileSync} from 'node:fs';
+import {renderBringnessMail} from '../apps/web/public/admin/mail-renderer.js';
+const logo=readFileSync(new URL('../apps/web/public/assets/bringness-logo.png',import.meta.url));
+const logoCid='bringness-logo@bringness.de';
+export const composerFrom='Bringness <service@bringness.de>';
 export const supportAddress='info@bringness.de';
 export const supportFooter='Bei Fragen schreiben Sie bitte an '+supportAddress+'.';
-const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function formatMail(message){
  const text=String(message.text||'')+(String(message.text||'').includes(supportFooter)?'':'\n\n'+supportFooter);
- const footer='<p style="margin-top:28px">Bei Fragen schreiben Sie bitte an <a href="mailto:'+supportAddress+'">'+supportAddress+'</a>.</p>';
- const html=message.html?message.html+footer:'<div lang="de" style="font-family:Arial,sans-serif;color:#243746;font-size:16px;line-height:1.6;max-width:600px">'+text.split('\n\n').map(p=>'<p>'+escape(p).replace(/https:\/\/[^\s<]+/g,url=>'<a href="'+url+'">'+url+'</a>').replaceAll('\n','<br>')+'</p>').join('')+'</div>';
- return {...message,text,html,replyTo:message.replyTo||supportAddress};
+ const html=renderBringnessMail({text:message.text||'',html:message.html});
+ const attachments=[...(message.attachments||[]).filter(a=>a.cid!==logoCid),{filename:'bringness-logo.png',content:logo,cid:logoCid,contentType:'image/png',contentDisposition:'inline'}];
+ return {...message,text,html,attachments,replyTo:message.replyTo||supportAddress};
 }
 export function accessMail(kind,{restaurant='Ihr Betrieb',link}){
  if(!/^https:\/\//.test(String(link)))throw Error('HTTPS_LINK_REQUIRED');

@@ -49,6 +49,12 @@ jobs:
       - run: node server/ai-tests/pos-ean-offline.mjs
       - run: node server/ai-tests/pos-ean-licensing.mjs
       - run: node server/ai-tests/transactional-mail.mjs
+      - run: node --test server/mail-composer.test.js
+      - run: node server/ai-tests/mail-composer.mjs
+      - name: Mail composer concurrent replay (PostgreSQL)
+        run: node server/ai-tests/mail-composer.mjs
+        env:
+          MAIL_COMPOSER_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/checkout-ui.mjs
       - run: node server/ai-tests/settlement-ui.mjs
       - run: node server/ai-tests/partial-cash.mjs
