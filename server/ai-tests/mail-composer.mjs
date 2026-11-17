@@ -5,7 +5,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {JSDOM} from 'jsdom';
 import fs from 'node:fs';
 import {createMailComposer} from '../mail-composer.js';
-import {migrateTransactionalMail,createMailWorker} from '../transactional-mail.js';
+import {migrateTransactionalMail,createMailWorker,enqueueMail} from '../transactional-mail.js';
 import {renderBringnessMail} from '../../apps/web/public/admin/mail-renderer.js';
 let pool,query,close,postgres=false;
 if(process.env.MAIL_COMPOSER_TEST_DATABASE_URL){
@@ -37,19 +37,22 @@ try{
  const first=await call(base,input);assert.equal(first.httpStatus,202);
  const replay=await call(base,input);assert.equal(replay.id,first.id);
  assert.equal((await call(base,{...input,text:'changed'})).status,409);
- assert.equal((await query('SELECT count(*)::int n FROM transactional_mail')).rows[0].n,1);
- assert(!(await query('SELECT payload FROM transactional_mail')).rows[0].payload.includes('PRIVATE-CONTENT'));
+ assert.equal((await query('SELECT count(*)::int n FROM composed_mail')).rows[0].n,1);
+ assert(!(await query('SELECT payload FROM composed_mail')).rows[0].payload.includes('PRIVATE-CONTENT'));
  assert.equal((await call(base+'/'+first.id)).status,'pending');assert.equal((await call(base+'/'+first.id,null,'other')).status,403);
  await query('INSERT INTO platform_admins VALUES($1,true)',[other]);assert.equal((await call(base+'/'+first.id,null,'other')).status,404);
  if(postgres){const input2={...input,requestKey:crypto.randomUUID()};const results=await Promise.all(Array.from({length:4},()=>call(base,input2)));assert.equal(new Set(results.map(r=>r.id)).size,1);}
  let sends=0,last;const env={SMTP_HOST:'fixture',SMTP_USER:'fixture',SMTP_PASSWORD:'fixture',SMTP_FROM:'noreply@example.test'};
- const worker=createMailWorker(pool,{env,connect:async()=>({async sendMail(mail){last=mail;sends++;return {accepted:[mail.to]};},close(){}})});
+ const legacy=createMailWorker(pool,{env,connect:async()=>{throw Error('Legacy worker must not claim composed mail');}});await legacy();assert.equal((await call(base+'/'+first.id)).status,'pending');
+ const worker=createMailWorker(pool,{env,queue:'composed_mail',connect:async()=>({async sendMail(mail){last=mail;sends++;return {accepted:[mail.to]};},close(){}})});
  await worker();assert.equal(sends,postgres?2:1);assert.equal(last.from,'Bringness <service@bringness.de>');assert.equal(last.replyTo,'info@bringness.de');assert(last.html.includes('cid:bringness-logo@bringness.de'));
- assert.equal((await call(base+'/'+first.id)).status,'sent');assert.equal((await query('SELECT payload FROM transactional_mail WHERE id=$1',[first.id])).rows[0].payload,'');
+ assert.equal((await call(base+'/'+first.id)).status,'sent');assert.equal((await query('SELECT payload FROM composed_mail WHERE id=$1',[first.id])).rows[0].payload,'');
  await call(base,input);await worker();assert.equal(sends,postgres?2:1);
  const ambiguous=await call(base,{...input,requestKey:crypto.randomUUID()});
- const uncertain=createMailWorker(pool,{env,connect:async()=>({async sendMail(){throw Object.assign(Error('ambiguous DATA'),{code:'ESOCKET'});},close(){}})});await uncertain();await uncertain();assert.equal((await call(base+'/'+ambiguous.id)).status,'review');assert.equal((await query('SELECT attempts FROM transactional_mail WHERE id=$1',[ambiguous.id])).rows[0].attempts,1);
- for(let i=0;i<20;i++)await query("INSERT INTO transactional_mail(dedupe_key,recipient,payload,status) VALUES($1,'fixture@example.test','','sent')",['composer:'+admin+':rate:'+i]);
+ const uncertain=createMailWorker(pool,{env,queue:'composed_mail',connect:async()=>({async sendMail(){throw Object.assign(Error('ambiguous DATA'),{code:'ESOCKET'});},close(){}})});await uncertain();await uncertain();assert.equal((await call(base+'/'+ambiguous.id)).status,'review');assert.equal((await query('SELECT attempts FROM composed_mail WHERE id=$1',[ambiguous.id])).rows[0].attempts,1);
+ const oldKey='composer:'+admin+':legacy-fixture';await enqueueMail(pool,oldKey,input.to,{kind:'composer',subject:'Legacy test',text:'Legacy'});
+ await migrateTransactionalMail(pool);await migrateTransactionalMail(pool);assert.equal((await query('SELECT status FROM transactional_mail WHERE dedupe_key=$1',[oldKey])).rows[0].status,'review');assert.equal((await query('SELECT status FROM composed_mail WHERE dedupe_key=$1',[oldKey])).rows[0].status,'review');await legacy();await worker();assert.equal(sends,postgres?2:1);
+ for(let i=0;i<20;i++)await query("INSERT INTO composed_mail(dedupe_key,recipient,payload,status) VALUES($1,'fixture@example.test','','sent')",['composer:'+admin+':rate:'+i]);
  assert.equal((await call(base,{...input,requestKey:crypto.randomUUID()})).status,429);
  await query("UPDATE sessions SET expires_at=now()-interval '1 hour' WHERE user_id=$1",[admin]);assert.equal((await call(base,input)).status,403);
 }finally{await close();}
@@ -63,5 +66,6 @@ $('to').value='fixture@example.test';$('subject').value='Test';$('text').value='
 assert($('preview').srcdoc.includes('&lt;script&gt;'));assert.equal($('preview').getAttribute('sandbox'),'');
 $('compose').dispatchEvent(new w.Event('submit',{cancelable:true}));await new Promise(resolve=>setTimeout(resolve,0));assert($('text').readOnly);assert($('notice').textContent.includes('Bestätigung fehlt'));
 await $('check').onclick();assert.equal(posts.length,2);assert.equal(posts[0].requestKey,posts[1].requestKey);assert.deepEqual(posts[0],posts[1]);
+Object.defineProperty($('compose'),'reset',{value:$('reset'),configurable:true});
 w.confirm=()=>true;$('reset').click();assert.equal($('to').value,'');assert.equal($('text').readOnly,false);dom.window.close();
 console.log('Mail composer passed: access/origin/body limits, encrypted single-recipient queue, fixed sender, idempotency, uncertain handoff, rate limit, safe preview and lost-response reconciliation'+(postgres?', PostgreSQL concurrent replay':'')+'.');

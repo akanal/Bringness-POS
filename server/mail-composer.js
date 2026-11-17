@@ -27,7 +27,7 @@ export function createMailComposer(pool,{probe=createMailProbe(),env=process.env
   if(req.method==='GET'&&path===base)return send(res,200,{from:composerFrom,replyTo:supportAddress,smtp:await probe()});
   if(req.method==='GET'&&uuid.test(item)){
    const actor=await systemActor(pool,req,res);if(!actor)return true;
-   const row=(await pool.query("SELECT id,status,created_at,sent_at FROM transactional_mail WHERE id=$1 AND starts_with(dedupe_key,$2)",[item,'composer:'+actor.id+':'])).rows[0];
+   const row=(await pool.query("SELECT id,status,created_at,sent_at FROM composed_mail WHERE id=$1 AND starts_with(dedupe_key,$2)",[item,'composer:'+actor.id+':'])).rows[0];
    return row?send(res,200,row):send(res,404,{error:'Nachricht nicht gefunden.'});
   }
   if(req.method!=='POST'||path!==base)return send(res,405,{error:'Methode nicht erlaubt.'});
@@ -42,13 +42,13 @@ export function createMailComposer(pool,{probe=createMailProbe(),env=process.env
    const prefix='composer:'+actor.id+':'+input.requestKey+':';
    const fingerprint=crypto.createHash('sha256').update(JSON.stringify([input.to,input.subject,input.text])).digest('hex');
    const dedupe=prefix+fingerprint;
-   let row=(await client.query('SELECT id,status,dedupe_key FROM transactional_mail WHERE starts_with(dedupe_key,$1)',[prefix])).rows[0];
+   let row=(await client.query('SELECT id,status,dedupe_key FROM composed_mail WHERE starts_with(dedupe_key,$1)',[prefix])).rows[0];
    if(row&&row.dedupe_key!==dedupe)throw fail(409,'Diese Nachrichtenkennung wurde bereits anders verwendet. Bitte zuerst den Versandstatus prüfen.');
    if(!row){
-    const count=(await client.query("SELECT count(*)::int count FROM transactional_mail WHERE starts_with(dedupe_key,$1) AND created_at>now()-interval '1 hour'",['composer:'+actor.id+':'])).rows[0].count;
+    const count=(await client.query("SELECT count(*)::int count FROM composed_mail WHERE starts_with(dedupe_key,$1) AND created_at>now()-interval '1 hour'",['composer:'+actor.id+':'])).rows[0].count;
     if(count>=20)throw fail(429,'Es sind höchstens 20 einzelne Nachrichten pro Stunde möglich.');
-    await enqueueMail(client,dedupe,input.to,{kind:'composer',subject:input.subject,text:input.text});
-    row=(await client.query('SELECT id,status FROM transactional_mail WHERE dedupe_key=$1',[dedupe])).rows[0];
+    await enqueueMail(client,dedupe,input.to,{kind:'composer',subject:input.subject,text:input.text},'composed_mail');
+    row=(await client.query('SELECT id,status FROM composed_mail WHERE dedupe_key=$1',[dedupe])).rows[0];
    }
    await client.query('COMMIT');return send(res,202,{id:row.id,status:row.status});
   }catch(error){if(client)await client.query('ROLLBACK');return send(res,error.status||500,{error:error.status&&error.status<500?error.message:'Versandauftrag konnte nicht bestätigt werden. Bitte mit derselben Nachricht den Status prüfen.'});}

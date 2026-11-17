@@ -31,7 +31,7 @@ $('check').onclick=async()=>{if(busy)return;if(!messageId){await submit();return
 $('reset').onclick=()=>{
  if(locked&&!confirm(mailStatus==='sent'?'Eine neue Nachricht beginnen? Die vorherige E-Mail wurde bereits an den Versanddienst übergeben.':'Der vorherige Versand kann noch laufen oder unklar sein. Eine neue Nachricht könnte doppelt ankommen. Trotzdem eine neue Nachricht beginnen?'))return;
  if(!locked&&fields.some(id=>$(id).value)&&!confirm('Entwurf verwerfen und eine neue Nachricht beginnen?'))return;
- $('compose').reset();requestKey=crypto.randomUUID();messageId=null;mailStatus='';locked=false;$('notice').textContent='';controls();preview();$('to').focus();
+ HTMLFormElement.prototype.reset.call($('compose'));requestKey=crypto.randomUUID();messageId=null;mailStatus='';locked=false;$('notice').textContent='';controls();preview();$('to').focus();
 };
 for(const id of fields)$(id).addEventListener('input',preview);
 window.addEventListener('storage',event=>{if(event.key==='bringness-pos-token')location.reload();});
