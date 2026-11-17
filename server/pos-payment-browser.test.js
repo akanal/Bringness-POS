@@ -45,7 +45,7 @@ test('shared support retains owner and waiter labels, token scope and explicit a
    const path=new URL(route.request().url()).pathname;
    if(path==='/support-bot.js')return route.fulfill({contentType:'text/javascript',body:source});
    if(path==='/api/v1/support/message'){submissions.push({authorization:route.request().headers().authorization,body:route.request().postDataJSON()});return route.fulfill({json:{conversationId:'fixture-conversation',answer:'Fixture answer'}});}
-   return route.fulfill({contentType:'text/html',body:'<!doctype html><script>localStorage.setItem('+JSON.stringify(key)+','+JSON.stringify(token)+')</script><script src="/support-bot.js" defer></script>'});
+   return route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><script>localStorage.setItem('+JSON.stringify(key)+','+JSON.stringify(token)+')</script><script src="/support-bot.js" defer></script></head><body></body></html>'});
   });
   await page.goto('https://support-context.test/'+(service?'service/':'pos/'));const button=page.getByRole('button',{name:'Bringness Hilfe öffnen',exact:true});await button.click();assert.equal(await button.textContent(),'? Hilfe');
   await page.locator('.help-topics button').first().click();await page.getByText('Automatische Antwort: Fixture answer',{exact:true}).waitFor();assert.equal(submissions.length,1);assert.equal(submissions[0].authorization,'Bearer '+token);assert.equal(typeof submissions[0].body.question,'string');await page.close();
