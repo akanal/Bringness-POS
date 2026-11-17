@@ -50,6 +50,7 @@
  async function render(){
   reportBusy=false;++reportSequence;const current=++sequence,p=document.getElementById('platformHub');
   p.innerHTML='<div class="card"><h2>Bringness POS</h2><p>Plattformverwaltung für alle Kunden. Kundenkassen, Geräte, Konten und Lizenzen über die POS-Bereiche verwalten.</p><div class="toolbar"><a class="btn" href="/admin/systems.html">Bildschirme, Personal & Center verwalten</a><button type="button" id="hubRefresh">Status aktualisieren</button></div></div><div class="card"><h2>Automatische Fehlermeldungen</h2><div id="hubDiagnostics">Wird geladen…</div></div><div class="card"><h2>Bezeichnungen je Betrieb</h2><p>Nach Absprache Tisch, Zimmer oder eine eigene Bezeichnung ändern. Ausschließlich für die Bringness-Plattformverwaltung.</p><div id="hubTerms">Wird geladen…</div></div><div class="grid"><div class="card"><h2>Offline-Verkäufe & Lagerabgleich</h2><div id="hubOffline">Wird geladen…</div></div></div>';
+  const mail=document.createElement('a');mail.className='btn';mail.href='/admin/mail.html';mail.textContent='E-Mail senden';p.querySelector('.toolbar').append(mail);
   p.querySelector('#hubRefresh').onclick=render;void loadReports();
   const results=await Promise.allSettled([api('/api/v1/platform/control/offline'),api('/api/v1/platform/control/registers')]);
   if(current!==sequence)return;
