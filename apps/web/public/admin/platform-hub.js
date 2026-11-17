@@ -5,7 +5,7 @@
  let mounted=false,lastToken='',sequence=0,reportSequence=0,reportBusy=false;
  async function refreshReportBadge(){
   if(!mounted||document.hidden)return;const session=token();
-  try{const data=await api('/api/v1/platform/control/diagnostics/summary');if(token()!==session||!mounted)return;const tab=document.getElementById('platformHubTab');if(tab)tab.textContent=data.openCount?'POS · '+data.openCount+' Fehler':'POS';}catch{/* A failed badge refresh must not invent an error count. */}
+  try{const data=await api('/api/v1/platform/control/diagnostics/summary');if(token()!==session||!mounted)return;const tab=document.getElementById('platformHubTab');if(tab){tab.dataset.adminCount=String(data.openCount);tab.textContent=data.openCount?'POS · '+data.openCount+' Fehler':'POS';}}catch{/* A failed badge refresh must not invent an error count. */}
  }
  async function loadReports(){
   const host=document.getElementById('hubDiagnostics');if(!host||reportBusy)return;
@@ -42,20 +42,18 @@
    const privacy=document.createElement('p');privacy.className='muted';privacy.textContent='Nur technische Codes und serverseitig geprüfte Betriebszuordnung. Keine Passwörter, Beleginhalte oder Kundendaten. Vor der Anmeldung oder bei fehlendem Sitzungsspeicher ist nur die lokale Diagnose verfügbar.';
    if(result.limited)privacy.textContent+=' Die neuesten 100 Meldungen werden gezeigt.';
    host.replaceChildren(picker,refresh,count,notice,rows,privacy);
-   const tab=document.getElementById('platformHubTab');if(tab)tab.textContent=result.openCount?'POS · '+result.openCount+' Fehler':'POS';
+   const tab=document.getElementById('platformHubTab');if(tab){tab.dataset.adminCount=String(result.openCount);tab.textContent=result.openCount?'POS · '+result.openCount+' Fehler':'POS';}
   }catch(error){if(valid())host.textContent='Fehlermeldungen konnten nicht geladen werden. '+error.message;}
   finally{if(current===reportSequence){reportBusy=false;if(host.isConnected)host.removeAttribute('aria-busy');}}
  }
 
  async function render(){
   reportBusy=false;++reportSequence;const current=++sequence,p=document.getElementById('platformHub');
-  p.innerHTML='<div class="card"><h2>Bringness POS</h2><p>Plattformverwaltung für alle Kunden. Kundenkassen, Geräte, Konten und Lizenzen über die POS-Bereiche verwalten.</p><div class="toolbar"><a class="btn" href="/admin/systems.html">Bildschirme, Personal & Center verwalten</a><button type="button" id="hubRefresh">Status aktualisieren</button></div></div><div class="card"><h2>Automatische Fehlermeldungen</h2><div id="hubDiagnostics">Wird geladen…</div></div><div class="card"><h2>Bezeichnungen je Betrieb</h2><p>Nach Absprache Tisch, Zimmer oder eine eigene Bezeichnung ändern. Ausschließlich für die Bringness-Plattformverwaltung.</p><div id="hubTerms">Wird geladen…</div></div><div class="grid"><div class="card"><h2>Offline-Verkäufe & Lagerabgleich</h2><div id="hubOffline">Wird geladen…</div></div></div>';
-  const mail=document.createElement('a');mail.className='btn';mail.href='/admin/mail.html';mail.textContent='E-Mail senden';p.querySelector('.toolbar').append(mail);
+  p.innerHTML='<div class="card"><h2>Diagnose & Abgleich</h2><p class="muted">Technische Meldungen und bereits übertragene Offline-Verkäufe prüfen.</p><button type="button" id="hubRefresh">Status aktualisieren</button></div><div class="card"><h2>Automatische Fehlermeldungen</h2><div id="hubDiagnostics">Wird geladen…</div></div><div class="card"><h2>Offline-Verkäufe & Lagerabgleich</h2><div id="hubOffline">Wird geladen…</div></div>';
   p.querySelector('#hubRefresh').onclick=render;void loadReports();
-  const results=await Promise.allSettled([api('/api/v1/platform/control/offline'),api('/api/v1/platform/control/registers')]);
-  if(current!==sequence)return;
-  const [offline,registers]=results;const terms=p.querySelector('#hubTerms');if(registers.status==='fulfilled'){terms.innerHTML=registers.value.restaurants.map(r=>'<div class="row"><b>'+esc(r.company_name)+' · '+esc(r.name)+'</b> <a href="/pos/place-terminology.html?admin=1&amp;restaurantId='+encodeURIComponent(r.id)+'">Bezeichnung verwalten</a></div>').join('')||'Keine Betriebe vorhanden.';}else terms.textContent=registers.reason.message;
-  if(offline.status==='fulfilled'){const d=offline.value;p.querySelector('#hubOffline').innerHTML='<p>'+d.counts.map(c=>esc(c.stock_state)+': <b>'+esc(c.count)+'</b>').join(' · ')+'</p><p class="muted">Zeigt bereits übertragene Verkäufe. Noch lokal wartende Verkäufe sind erst nach einer Online-Verbindung sichtbar.</p>'+(d.limited?'<p>Die neuesten 100 offenen Abgleiche werden gezeigt.</p>':'')+d.sales.map(s=>'<div class="row"><b>'+esc(s.company_name)+' · '+esc(s.restaurant_name)+'</b><p>'+esc(s.device_name)+' · '+esc(s.stock_state)+' · '+esc(s.stock_error||'Abgleich ausstehend')+'</p></div>').join('')}else p.querySelector('#hubOffline').textContent=offline.reason.message;
+  try{const d=await api('/api/v1/platform/control/offline');if(current!==sequence)return;
+   p.querySelector('#hubOffline').innerHTML='<p>'+d.counts.map(c=>esc(c.stock_state)+': <b>'+esc(c.count)+'</b>').join(' · ')+'</p><p class="muted">Zeigt bereits übertragene Verkäufe. Noch lokal wartende Verkäufe sind erst nach einer Online-Verbindung sichtbar.</p>'+(d.limited?'<p>Die neuesten 100 offenen Abgleiche werden gezeigt.</p>':'')+d.sales.map(s=>'<div class="row"><b>'+esc(s.company_name)+' · '+esc(s.restaurant_name)+'</b><p>'+esc(s.device_name)+' · '+esc(s.stock_state)+' · '+esc(s.stock_error||'Abgleich ausstehend')+'</p></div>').join('');
+  }catch(error){if(current===sequence)p.querySelector('#hubOffline').textContent=error.message;}
  }
  async function check(){const next=token();if(next===lastToken)return;lastToken=next;document.getElementById('platformHubTab')?.remove();document.getElementById('platformHub')?.remove();mounted=false;++sequence;++reportSequence;reportBusy=false;
   if(!next){document.getElementById('platformHubTab')?.remove();document.getElementById('platformHub')?.remove();mounted=false;++sequence;return}
