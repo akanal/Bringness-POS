@@ -5,6 +5,52 @@ const playwright=await import(process.env.CENTER_TEST_PLAYWRIGHT||'playwright');
 const engine=playwright[process.env.CENTER_TEST_BROWSER||'chromium'];
 const restaurant='11111111-1111-4111-8111-111111111111',product='22222222-2222-4222-8222-222222222222';
 const scripts={cash:await readFile(new URL('../apps/web/public/pos/payment-flow.js',import.meta.url),'utf8'),table:await readFile(new URL('../apps/web/public/pos/settlement-flow.js',import.meta.url),'utf8')};
+test('public POS page has approved navigation and white same-page Support without anonymous requests',async()=>{
+ const browser=await engine.launch({headless:true}),root=new URL('../apps/web/public/',import.meta.url);
+ try{for(const width of [390,1280]){
+  const page=await browser.newPage({viewport:{width,height:1000}}),requests=[],errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.route('**/*',async route=>{
+   const request=route.request(),url=new URL(request.url()),path=url.pathname;
+   if(url.origin!=='https://pos-public.test')return route.abort();
+   if(path.startsWith('/api/')){requests.push({path,method:request.method()});return route.fulfill({json:{plans:[]}});}
+   let file=path==='/'?'index.html':path==='/preise/'?'preise/index.html':path.slice(1);
+   try{let body=await readFile(new URL(file,root));if(file==='index.html'||file==='preise/index.html')body=body.toString().replace('</head>','<script src="/brand-logo.js"></script></head>');return route.fulfill({body,contentType:file.endsWith('.html')?'text/html':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.png')?'image/png':'application/octet-stream'});}catch{return route.abort();}
+  });
+  await page.goto('https://pos-public.test/');await page.locator('#bringness-help-button').waitFor();
+  await page.getByRole('button',{name:'Nur notwendige',exact:true}).click();
+  const header=page.locator('body > header');assert.equal(await header.locator('a[href="#produkt"],a[href="#branchen"],a[href="#workflow"],a[href="/pos/"]').count(),0);
+  assert.equal(await page.locator('a[href*="modulberater"],script[src*="modulberater"],link[href*="modulberater"]').count(),0,'private advisor must not be published');
+  assert.equal(await page.locator('a.bringness-support[href*="/pos/"]').count(),0);
+  await page.locator('body > header img[data-bringness-logo]').waitFor();
+  if(width===390){await page.getByRole('button',{name:'Menü öffnen',exact:true}).click();assert.equal(await page.locator('#site-nav').isVisible(),true);assert.equal(await page.locator('#site-nav a').count(),5);await page.getByRole('button',{name:'Menü schließen',exact:true}).click();}
+  const button=page.getByRole('button',{name:'Bringness Support öffnen',exact:true});
+  assert.equal(await button.evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(255, 255, 255)');
+  await button.click();await page.locator('#bringness-help-panel').waitFor({state:'visible'});assert.equal(page.url(),'https://pos-public.test/');
+  await page.locator('#bringness-help-panel .help-topics button').first().click();assert.equal(await page.locator('.help-message.bot').count(),2);
+  await page.getByRole('button',{name:'Verlauf',exact:true}).click();await page.getByText('Bitte anmelden, damit dein Supportverlauf gespeichert werden kann.',{exact:true}).waitFor();
+  assert.deepEqual(requests,[],'public quick help and unauthenticated history must stay local');
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+  if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/public-pos-support-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:false});}
+  await page.locator('#bringness-help-panel input').press('Escape');assert.equal(await page.locator('#bringness-help-panel').isVisible(),false);
+  await page.goto('https://pos-public.test/preise/');assert.equal(await page.locator('body > header nav a[href="/pos/"]').count(),0);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+  assert.deepEqual(errors,[]);await page.close();
+ }}finally{await browser.close();}
+});
+test('shared support retains owner and waiter labels, token scope and explicit authenticated submission',async()=>{
+ const browser=await engine.launch({headless:true}),source=await readFile(new URL('../apps/web/public/support-bot.js',import.meta.url),'utf8');
+ try{for(const service of [false,true]){
+  const page=await browser.newPage(),submissions=[],key=service?'bringness-waiter-token':'bringness-pos-token',token=service?'fixture-waiter':'fixture-owner';
+  await page.route('https://support-context.test/**',async route=>{
+   const path=new URL(route.request().url()).pathname;
+   if(path==='/support-bot.js')return route.fulfill({contentType:'text/javascript',body:source});
+   if(path==='/api/v1/support/message'){submissions.push({authorization:route.request().headers().authorization,body:route.request().postDataJSON()});return route.fulfill({json:{conversationId:'fixture-conversation',answer:'Fixture answer'}});}
+   return route.fulfill({contentType:'text/html',body:'<!doctype html><script>localStorage.setItem('+JSON.stringify(key)+','+JSON.stringify(token)+')</script><script src="/support-bot.js" defer></script>'});
+  });
+  await page.goto('https://support-context.test/'+(service?'service/':'pos/'));const button=page.getByRole('button',{name:'Bringness Hilfe öffnen',exact:true});await button.click();assert.equal(await button.textContent(),'? Hilfe');
+  await page.locator('.help-topics button').first().click();await page.getByText('Automatische Antwort: Fixture answer',{exact:true}).waitFor();assert.equal(submissions.length,1);assert.equal(submissions[0].authorization,'Bearer '+token);assert.equal(typeof submissions[0].body.question,'string');await page.close();
+ }}finally{await browser.close();}
+});
 test('POS admin navigation groups existing tools without duplicate entries at mobile and desktop widths',async()=>{
  const {adminHtml,adminRoot,adminApi}=await import('./ai-tests/admin-navigation-fixture.mjs');
  const browser=await engine.launch({headless:true});

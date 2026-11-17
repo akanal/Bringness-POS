@@ -1,5 +1,6 @@
 (()=>{
   if(document.getElementById('bringness-help-button'))return;
+  const entryLabel=document.currentScript?.dataset.buttonLabel;
   const isService=location.pathname.startsWith('/service');
   const topics=[
   {
@@ -97,7 +98,7 @@
 ];
   const visible=topics.filter(t=>t.role==='both'||t.role===(isService?'waiter':'owner'));
   const normalize=s=>String(s).toLocaleLowerCase('de-DE').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
-  const button=document.createElement('button');button.id='bringness-help-button';button.type='button';button.textContent='? Hilfe';button.setAttribute('aria-label','Bringness Hilfe öffnen');button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls','bringness-help-panel');
+  const button=document.createElement('button');button.id='bringness-help-button';button.type='button';button.textContent=entryLabel||'? Hilfe';button.setAttribute('aria-label',entryLabel?'Bringness Support öffnen':'Bringness Hilfe öffnen');button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls','bringness-help-panel');
   const panel=document.createElement('section');panel.id='bringness-help-panel';panel.className='bringness-help';panel.hidden=true;panel.setAttribute('aria-label','Bringness Support-Assistent');
   panel.innerHTML='<header><strong>Bringness Hilfe</strong><button type="button" aria-label="Hilfe schließen">×</button></header><section class="help-context" aria-label="Hilfe zur aktuellen Seite" style="padding:14px;border-bottom:1px solid #ddd" hidden></section><div class="help-log" role="log" aria-live="polite"></div><div class="help-topics" aria-label="Häufige Fragen"></div><form><input type="search" maxlength="2000" aria-label="Frage eingeben" placeholder="Deine Frage …" required><button type="submit">Fragen</button></form><footer>Antworten aus der Bringness-Schnellhilfe · <button type="button" id="supportHistory">Verlauf</button> <button type="button" id="supportNew">Neue Anfrage</button> <button type="button" id="supportEscalate">An Support weitergeben</button><p id="supportNotice">Angemeldete Supportgespräche werden für die Bearbeitung und Problemanalyse gespeichert. Bitte keine Passwörter eingeben.</p></footer>';
   document.body.append(button,panel);
@@ -138,8 +139,8 @@
   function message(value,who='bot',topic){const item=document.createElement('div');item.className='help-message '+who;item.textContent=value;if(topic){const action=topic.view&&!isService?document.querySelector('[data-view="'+topic.view+'"], [data-user-view="'+topic.view+'"]'):null;const link=document.createElement(action?'button':'a');link.textContent=action?'Bereich öffnen →':topic.href?'Servicebereich öffnen →':'';if(action){link.type='button';link.style.cssText='display:block;margin-top:9px;border:0;background:transparent;color:#075a81;font:700 14px system-ui;cursor:pointer;padding:0';link.onclick=()=>{action.click();close()}}else if(topic.href){link.href=topic.href;link.style.display='block';link.style.marginTop='9px'}if(link.textContent)item.append(link)}log.append(item);log.scrollTop=log.scrollHeight}
   function close(){panel.hidden=true;button.setAttribute('aria-expanded','false');button.focus()}
   let conversationId=null,lastToken=null,busy=false;
-  const authToken=()=>localStorage.getItem(isService?'bringness-waiter-token':'bringness-pos-token');
-  async function request(path,body){const r=await fetch('/api/v1'+path,{method:body?'POST':'GET',headers:{'content-type':'application/json',authorization:'Bearer '+(authToken()||'')},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.error||'Support konnte nicht geladen werden.');return j}
+  const authToken=()=>{try{return localStorage.getItem(isService?'bringness-waiter-token':'bringness-pos-token')}catch{return null}};
+  async function request(path,body){const token=authToken();if(!token)throw Error('Bitte anmelden, damit dein Supportverlauf gespeichert werden kann.');const r=await fetch('/api/v1'+path,{method:body?'POST':'GET',headers:{'content-type':'application/json',authorization:'Bearer '+token},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.error||'Support konnte nicht geladen werden.');return j}
   function identity(){const current=authToken();if(current!==lastToken){lastToken=current;conversationId=null;log.replaceChildren()}return current}
   button.onclick=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){identity();updatePageHelp();if(!log.childElementCount)message('Hallo! Ich bin der automatische Bringness-Supportassistent. Häufige Fragen beantworte ich sofort. Spezielle Fragen übernimmt unser Supportteam.');input.focus()}};
   panel.querySelector('header button').onclick=close;
