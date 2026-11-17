@@ -1,5 +1,9 @@
 # Bringness project continuity
 
+## Öffentliche POS-Seite ausdrücklich live schalten — 17.11.2026
+- Nach Klarstellung, dass die Website-Anpassungen bisher nur privat vorbereitet waren, beauftragt der Eigentümer ausdrücklich die Live-Schaltung der POS-Seite. Freigegebene Navigationsbereinigung und weißen Supportbutton mit Hilfe auf derselben Seite veröffentlichen; Details docs/pos-public-page-20261117.md.
+- Die separate ursprüngliche Modulberater-Vorschau bleibt privat. Keine pauschale Übernahme ihres gestagten Integrationspatches, keine Berater-Dateien/-Links öffentlich veröffentlichen. Bestehende Preis-/Kauf-/Kassenfunktionen und serverseitige Supportberechtigungen erhalten.
+
 ## POS-Adminnavigation zusammenfassen — 17.11.2026
 - Eigentümer beauftragt ausdrücklich kompakte, übersichtliche POS-Administration mit sinnvoll zusammengefassten doppelten bzw. versteckten Funktionen. Die Navigation verwendet sechs sichtbare Bereiche und kurze Unterauswahlen; keine Rückkehr zu vielen gleichrangigen Knöpfen plus verstecktem Mehr-Menü. Details: docs/admin-pos-navigation.md.
 - Vorhandene Panel-/API-Rechte, Kundenfreigaben und ausdrückliche Schreibaktionen beibehalten. Plattformweite Kassen-/Geräte-Einstiege konsolidieren, eigene Betriebsansichten für Betriebsadministratoren erhalten. Markt/POS/AI und Kassen-/Kellneroberflächen bleiben getrennt; der bestehende schwarze/orange POS-Admin-Kopf bleibt bestehen.

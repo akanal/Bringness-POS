@@ -1,0 +1,15 @@
+/* Approved public POS navigation and same-page Support entry. */
+body.pos-product-page .bringness-help footer{display:block;grid-template-columns:none;background:#fff}
+@media(min-width:1121px){
+ body.pos-product-page>header{gap:18px}
+ #site-nav{display:flex;gap:14px;align-items:center;justify-content:flex-end}
+ #site-nav>a{margin:0;white-space:nowrap;font-size:13px}
+}
+@media(max-width:1120px){
+ body.pos-product-page>header{flex-wrap:wrap;gap:12px}
+ body.pos-product-page>header .menu-toggle{display:block;margin-left:auto;background:transparent;color:#fff;border:1px solid #ffffff55;border-radius:9px;padding:7px 11px;font-size:20px;cursor:pointer;line-height:1}
+ #site-nav{display:none;order:3;width:100%;margin:0;padding:10px 0 4px;border-top:1px solid #ffffff33}
+ #site-nav.open{display:flex;flex-direction:column;align-items:stretch}
+ #site-nav>a{display:block;margin:0;padding:12px 8px;font-size:16px}
+}
+body.pos-product-page #bringness-help-button{background:#fff;color:#071a2b;border:1px solid #dfe5ea}
