@@ -1,5 +1,10 @@
 # Bringness project continuity
 
+## Artikelfotos prüfen und ergänzen — 18.11.2026
+- Eigentümer meldet ein Problem mit Artikelfotos und beauftragt Prüfung/Ergänzung. Konkrete Lücke: normale Online-POS-Artikelanlage bot nur Bild/Emoji-Text, ohne Fotoauswahl; Admin-Upload beschränkte Originalfotos auf150KB. Neue Online-Fotoauswahl mit lokaler Verkleinerung/Vorschau, bestehende Artikel über ihr Menü „Artikelfoto“ bearbeiten/entfernen. Anleitung docs/pos-article-photos-20261118.md.
+- Vorhandenes products.image_url und bestehende Betriebs-/Artikelstruktur verwenden. Keine Bilddaten als sichtbaren Text ausgeben; Preise, Varianten, Pfand, Warenkorb und Belege erhalten. Keine produktiven Testartikel/Fotos anlegen. Technische Abnahme mit isolierten Dateien/Daten.
+- Windows/Offline bleiben gesperrt: neue POS-Fotobedienung und ihre Styles werden bei Download-/Desktopkennzeichnung nicht aktiviert; keine Desktop-/Offline-Dateien bearbeiten. AI und privater Modulberater bleiben außerhalb dieses Auftrags.
+
 ## Fortsetzung POS-Adminbackend — 18.11.2026
 - Nach abgeschlossenem Steuerberaterblock beauftragt der Eigentümer die Fortsetzung. Konkrete Lücke: Legacy `/platform/overview` liefert numerische Systemkennzahlen, während POS-Admin Kunden-/Planlisten erwartet. POS verwendet dafür nun die eigene lesende `/platform/control/overview`; numerischer Altvertrag bleibt erhalten. Details docs/pos-admin-backend-20261118.md.
 - Vollständige Gesamtzahlen getrennt von maximal 250 Kunden und jeweils letzter Zahlung; Ladefehler nicht als fehlenden Plattformzugang darstellen. Übersicht/Protokoll und Protokolldownload gegen verspätete Antworten nach Konto-/Zeitraumwechsel absichern; bestehende Berechtigungen beibehalten.

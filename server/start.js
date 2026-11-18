@@ -74,6 +74,7 @@ import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import {createPlatformAiGateway} from "./platform-ai-gateway.js";
 import { handlePlatformControl } from "./platform-control.js";
 import { createPosAdminOverview } from "./pos-admin-overview.js";
+import {createProductPhotos} from "./product-photos.js";
 import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
 import { handleSupport, migrateSupport } from "./support-center.js";
 import { handleAdminTeam } from "./admin-team.js";
@@ -114,6 +115,7 @@ if(appMode!=='ai'&&!isolatedPreview())try{imageStore=await configuredIdriveDocum
 const imageRuntime=createMarketplaceImagesRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)&&!isolatedPreview(),store:imageStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
 const handlePosAdminOverview=createPosAdminOverview(platformGatewayPool);
+const handleProductPhotos=createProductPhotos(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handleOnlineRegisters=createOnlineRegisters(platformGatewayPool);
 const handlePosDiagnosticReports=createPosDiagnosticReports(platformGatewayPool,{publicOrigin:process.env.PUBLIC_BASE_URL||'https://bringness.de'});
@@ -170,6 +172,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (appMode!=='ai' && await handleDisplays(req,res)) return;
       if (appMode!=='ai' && await handleMailStatus(req,res)) return;
       if (appMode!=='ai' && await handleMailComposer(req,res)) return;
+      if (appMode!=='ai' && await handleProductPhotos(req,res)) return;
       if (await handleLanguageCatalog(req,res)) return;
       if (await handlePlatformAiAssets(req,res)) return;
       if (blockAiRequest(req,res,appMode)) return;
