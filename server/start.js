@@ -73,6 +73,7 @@ import { handleBillingStatus } from "./billing-status.js";
 import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import {createPlatformAiGateway} from "./platform-ai-gateway.js";
 import { handlePlatformControl } from "./platform-control.js";
+import { createPosAdminOverview } from "./pos-admin-overview.js";
 import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
 import { handleSupport, migrateSupport } from "./support-center.js";
 import { handleAdminTeam } from "./admin-team.js";
@@ -112,6 +113,7 @@ let imageStore=null;
 if(appMode!=='ai'&&!isolatedPreview())try{imageStore=await configuredIdriveDocumentStore(process.env,{objectKey:marketplaceImageKey});}catch{console.error('Product image storage unavailable.');}
 const imageRuntime=createMarketplaceImagesRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)&&!isolatedPreview(),store:imageStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
+const handlePosAdminOverview=createPosAdminOverview(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handleOnlineRegisters=createOnlineRegisters(platformGatewayPool);
 const handlePosDiagnosticReports=createPosDiagnosticReports(platformGatewayPool,{publicOrigin:process.env.PUBLIC_BASE_URL||'https://bringness.de'});
@@ -200,6 +202,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleOnlineRegisters(req,res)) return;
       if (await handleRemoteSupport(req,res)) return;
       if (appMode!=='ai' && await handlePosDiagnosticReports(req,res)) return;
+      if (appMode!=='ai' && await handlePosAdminOverview(req,res)) return;
       if (await handlePlatformControl(req,res)) return;
       if (await handleBillingAccess(req,res)) return;
       if (await handleBillingStatus(req,res)) return;

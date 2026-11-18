@@ -65,6 +65,7 @@ test('POS admin navigation groups existing tools without duplicate entries at mo
   });
   await page.goto('https://admin-navigation.test/admin/');await page.locator('[data-tab=allRegisters]').waitFor({state:'attached'});
   await page.locator('.admin-nav-badge').waitFor();
+  await page.locator('#platformSummary').waitFor({state:'visible'});assert.equal(await page.locator('#platformCompanyCount').textContent(),'1');assert.equal(await page.locator('#platformPrices [data-save-plan]').count(),1);
   assert.equal(await page.locator('#adminNavigation [data-admin-group]').count(),6);
   assert.equal(await page.locator('#adminMore').count(),0);assert.equal(await page.locator('#dash > .tabs').isVisible(),false);
   assert(await page.locator('#dash .topline h1').evaluate(n=>parseFloat(getComputedStyle(n).fontSize)<=40));
@@ -80,6 +81,21 @@ test('POS admin navigation groups existing tools without duplicate entries at mo
   }
   await page.goBack();await page.waitForFunction(()=>document.querySelector('#adminNavigation').dataset.group==='support');
   await page.locator('[data-admin-group=team]').press('Enter');await page.waitForFunction(()=>document.querySelector('#adminNavigation').dataset.group==='team');
+  await page.locator('[data-admin-group=system]').click();await page.locator('[data-admin-item=system]').click();await page.locator('#auditExport').waitFor({state:'visible'});
+  const auditDownloads=[];page.on('download',download=>auditDownloads.push(download));
+  for(const change of ['filter','session']){
+   let release,arrived;const gate=new Promise(r=>release=r),started=new Promise(r=>arrived=r);
+   const auditRoute=async route=>{arrived();await gate;await route.fulfill({contentType:'text/csv; charset=utf-8',body:'Zeitpunkt;Aktion\r\n2026-01-01;fixture\r\n'});};
+   await page.route('https://admin-navigation.test/api/v1/admin/audit/export**',auditRoute);
+   await page.locator('#auditExport').click();await started;
+   if(change==='filter')await page.locator('#auditFrom').fill('2026-01-01');
+   else await page.evaluate(()=>{localStorage.setItem('bringness-pos-token','other-fixture');window.dispatchEvent(new StorageEvent('storage',{key:'bringness-pos-token',newValue:'other-fixture'}));});
+   const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/admin/audit/export');release();await response;
+   await page.waitForFunction(()=>!document.getElementById('auditExport').disabled);
+   if(change==='filter')await page.getByText('Auswahl geändert. Bitte den Export erneut starten.',{exact:true}).waitFor();
+   else{assert.equal(await page.locator('#dash').isVisible(),false);assert.equal(await page.locator('#platformCustomers').textContent(),'');}
+   assert.equal(auditDownloads.length,0,'late '+change+' audit must not download');await page.unroute('https://admin-navigation.test/api/v1/admin/audit/export**',auditRoute);
+  }
   platform=false;await page.reload();await page.locator('[data-admin-group=registers]').click();await page.locator('[data-admin-item=devices]').waitFor();assert.equal(await page.locator('[data-admin-item=modules],[data-admin-item=online]').count(),0);
   await page.locator('[data-admin-group=support]').click();assert.equal(await page.locator('[data-admin-item=mail]').count(),0);
   assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);await page.close();

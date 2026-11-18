@@ -105,6 +105,9 @@ jobs:
           node --test server/mail-composer.test.js
           node server/ai-tests/mail-composer.mjs
           node server/ai-tests/admin-navigation.mjs
+          node server/ai-tests/admin-audit.mjs
+          node server/ai-tests/pos-admin-ui.mjs
+          POS_ADMIN_TEST_DATABASE_URL=postgres://device_test:device_test@localhost:5432/bringness_device_test node server/ai-tests/pos-admin-backend.mjs
           MAIL_COMPOSER_TEST_DATABASE_URL=postgres://device_test:device_test@localhost:5432/bringness_device_test node server/ai-tests/mail-composer.mjs
           node server/ai-tests/billing-mail.mjs
           node server/ai-tests/personnel.mjs

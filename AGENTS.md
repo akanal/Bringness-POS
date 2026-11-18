@@ -1,5 +1,10 @@
 # Bringness project continuity
 
+## Fortsetzung POS-Adminbackend — 18.11.2026
+- Nach abgeschlossenem Steuerberaterblock beauftragt der Eigentümer die Fortsetzung. Konkrete Lücke: Legacy `/platform/overview` liefert numerische Systemkennzahlen, während POS-Admin Kunden-/Planlisten erwartet. POS verwendet dafür nun die eigene lesende `/platform/control/overview`; numerischer Altvertrag bleibt erhalten. Details docs/pos-admin-backend-20261118.md.
+- Vollständige Gesamtzahlen getrennt von maximal 250 Kunden und jeweils letzter Zahlung; Ladefehler nicht als fehlenden Plattformzugang darstellen. Übersicht/Protokoll und Protokolldownload gegen verspätete Antworten nach Konto-/Zeitraumwechsel absichern; bestehende Berechtigungen beibehalten.
+- Windows und Offline-Synchronisierung bleiben gesperrt; keine Bearbeitung. AI folgt erst nach POS. Kassen-/Kellnergestaltung und produktive Kunden-/Finanzdaten bleiben außerhalb dieses Blocks. Der Modulberater bleibt privat.
+
 ## POS-Backend und Steuerberaterzugang — Auftrag 17.11.2026
 - Eigentümer beauftragt Weiterentwicklung des vorhandenen Backends und des Steuerberaterzugangs. Vorhandene Freigabelinks/Belegexporte übernehmen; gespeicherte Kassenabschlüsse und Positions-CSV ergänzen, Konto-/Betriebswechsel sowie aktuelle Sitzung/Freigabe serverseitig absichern. Keine zweite Backendarchitektur beginnen.
 - Windows-Version und Offline-Synchronisierung bleiben ausdrücklich gesperrt; keine Bearbeitung. Bringness AI folgt erst nach POS. Technische Prüfungen eigenständig durchführen; praktische Inhaberabnahme bleibt auf später verschoben.
