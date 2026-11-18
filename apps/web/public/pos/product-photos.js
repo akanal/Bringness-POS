@@ -37,7 +37,8 @@
   let current=null,selected=null,dirty=false,busy=false,pending=null,read=0;
   const valid=()=>box.isConnected&&same(snapshot);
   const controls=()=>{input.disabled=!current||busy||!!pending;remove.disabled=!current||busy||!!pending;save.disabled=!current||busy||(!dirty&&!pending);reload.disabled=busy;};
-  function display(){const src=photo.source(selected);img.hidden=!src;if(src)img.src=src;else img.removeAttribute('src');empty.hidden=Boolean(src);controls();}
+  function display(){const src=photo.source(selected);empty.textContent='Kein Artikelfoto gespeichert.';img.hidden=!src;if(src)img.src=src;else img.removeAttribute('src');empty.hidden=Boolean(src);controls();}
+  img.onerror=()=>{if(!valid())return;img.hidden=true;empty.hidden=false;empty.textContent='Das gespeicherte Foto ist nicht erreichbar oder beschädigt. Bitte das Originalfoto erneut auswählen und speichern.';};
   const close=(force=false)=>{if(!force&&(busy||pending||dirty)&&!confirm('Fotoänderung verwerfen? Bei unklarem Speicherstatus das Foto danach neu laden.'))return;read++;box.close();box.remove();if(dialog===box){dialog=null;closeEditor=null;}if(opener?.isConnected)opener.focus();};closeEditor=close;
   box.querySelector('[data-close]').onclick=()=>close();box.addEventListener('cancel',e=>{e.preventDefault();close();});box.showModal();
   async function load(){

@@ -32,6 +32,7 @@ const f=await fixture();try{
  const original=f.requests.filter(r=>r.options.method==='PUT')[0].options.body;assert.equal(f.$('dialog input').disabled,true);f.$('dialog [data-save]').click();await until(()=>f.saved.length===1);assert.equal(f.requests.filter(r=>r.options.method==='PUT')[1].options.body,original);assert.equal(f.saved[0][1],png);
  f.$('dialog [data-remove]').click();assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,2,'remove requires explicit save');f.$('dialog [data-save]').click();await until(()=>f.saved.length===2);assert.equal(f.saved[1][1],null);
 }finally{f.close();}
+const broken=await fixture({intercept:()=>({ok:true,status:200,json:async()=>({id,restaurantId:rid,image:'/api/v1/product-images/missing',version:'a'.repeat(64)})})});try{await broken.w.bnProductPhotos.open(id);broken.$('dialog img').dispatchEvent(new broken.w.Event('error'));assert.equal(broken.$('dialog img').hidden,true);assert.match(broken.$('dialog [data-empty]').textContent,/Originalfoto erneut auswählen/);assert.equal(broken.$('dialog input').disabled,false);assert.equal(broken.requests.filter(r=>r.options.method==='PUT').length,0);}finally{broken.close();}
 for(const phase of ['new-photo','load','prepare','save']){
  const pending=deferred();let started=false;
  const f=await fixture({prepare:phase==='prepare'||phase==='new-photo'?()=>{started=true;return pending.promise;}:async()=>png,intercept:(path,o)=>{

@@ -2,6 +2,8 @@
 
 Eigentümerauftrag18.11.2026: Problem mit Artikelfotos prüfen und bei Bedarf ergänzen. Die normale Artikelanlage hatte nur ein Textfeld für Bild/Emoji. Der vorhandene freigabegeschützte Adminupload lehnte übliche Handydateien oberhalb150KB direkt ab. Ohne eine konkrete betroffene Eigentümerdatei lässt sich nicht behaupten, damit jede mögliche gerätespezifische Ursache reproduziert zu haben.
 
+Live-Leseprüfung: Ein vorhandenes Foto verwies auf `/api/v1/product-images/:id`; dieser bisher gespeicherte Pfad antwortete404 und besitzt im aktuellen Repository keinen Auslieferungshandler. Das Original wurde nicht ersetzt oder erfunden. Die neue Bearbeitung erklärt unerreichbare/beschädigte gespeicherte Fotos und ermöglicht das ausdrückliche erneute Hochladen des Originals.
+
 ## Bedienung
 
 - **Mehr → Artikel:** Foto auswählen, lokale Vorschau prüfen und den Artikel wie gewohnt anlegen. Ohne Foto bleibt das vorhandene Emoji-/Bildlinkfeld verfügbar. Bilddaten werden nicht in dieses sichtbare Textfeld geschrieben. „Fotoauswahl entfernen“ verwirft nur die lokale Auswahl.
