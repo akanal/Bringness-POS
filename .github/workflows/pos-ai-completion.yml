@@ -135,6 +135,7 @@ jobs:
       - run: node server/ai-tests/admin-navigation.mjs
       - run: node server/ai-tests/pos-admin-ui.mjs
       - run: node server/ai-tests/product-photos-ui.mjs
+      - run: node server/ai-tests/article-entry-ui.mjs
       - name: Verify article photo scope, replay and concurrent changes
         run: node server/ai-tests/product-photos.mjs
         env:

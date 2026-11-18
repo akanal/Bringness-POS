@@ -28,19 +28,19 @@
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
   try{const r=await fetch('/api/v1/products/'+encodeURIComponent(id)+'/image'+(options.method?'':'?restaurantId='+encodeURIComponent(snapshot.restaurantId)),{...options,signal:controller.signal,cache:'no-store',headers:{'content-type':'application/json',authorization:'Bearer '+snapshot.session}});const d=await r.json();if(!r.ok)throw Object.assign(Error(d.error||'Das Foto konnte nicht geladen werden.'),{status:r.status});if(d.id!==id||d.restaurantId!==snapshot.restaurantId||!/^[a-f0-9]{64}$/.test(d.version||''))throw Error('Unvollständige Bildantwort. Bitte erneut laden.');return d;}finally{clearTimeout(timer);}
  }
- async function open(id){
+ async function open(id,host=null){
   if(!config)return;closeEditor?.(true);const snapshot=context(),product=config.product(id);if(!product||!same(snapshot))return;
-  const opener=document.activeElement,box=document.createElement('dialog');dialog=box;box.className='product-photo-dialog';box.setAttribute('aria-label','Artikelfoto bearbeiten');
+  const opener=document.activeElement,box=document.createElement(host?'section':'dialog');dialog=box;box.className=host?'product-photo-inline':'product-photo-dialog';box.setAttribute('aria-label','Artikelfoto bearbeiten');if(host)box.setAttribute('role','region');
   box.innerHTML='<h3></h3><img class="product-photo-preview" alt="Vorschau des Artikelfotos" hidden><p data-empty>Kein Artikelfoto gespeichert.</p><label>Foto auswählen (bis 8 MB)<input type="file" accept="image/jpeg,image/png,image/webp" disabled></label><p>Das Bild wird automatisch verkleinert. Gespeichert wird erst mit „Foto speichern“.</p><div class="product-photo-actions"><button type="button" data-remove disabled>Foto entfernen</button><button type="button" data-save disabled>Foto speichern</button><button type="button" data-reload>Neu laden</button><button type="button" data-close>Schließen</button></div><p role="status">Foto wird geladen…</p>';
-  box.querySelector('h3').textContent=product.name+' · Artikelfoto';document.body.append(box);
+  box.querySelector('h3').textContent=product.name+' · Artikelfoto';(host||document.body).append(box);
   const input=box.querySelector('input'),img=box.querySelector('img'),empty=box.querySelector('[data-empty]'),notice=box.querySelector('[role=status]'),save=box.querySelector('[data-save]'),remove=box.querySelector('[data-remove]'),reload=box.querySelector('[data-reload]');
   let current=null,selected=null,dirty=false,busy=false,pending=null,read=0;
   const valid=()=>box.isConnected&&same(snapshot);
   const controls=()=>{input.disabled=!current||busy||!!pending;remove.disabled=!current||busy||!!pending;save.disabled=!current||busy||(!dirty&&!pending);reload.disabled=busy;};
   function display(){const src=photo.source(selected);empty.textContent='Kein Artikelfoto gespeichert.';img.hidden=!src;if(src)img.src=src;else img.removeAttribute('src');empty.hidden=Boolean(src);controls();}
   img.onerror=()=>{if(!valid())return;img.hidden=true;empty.hidden=false;empty.textContent='Das gespeicherte Foto ist nicht erreichbar oder beschädigt. Bitte das Originalfoto erneut auswählen und speichern.';};
-  const close=(force=false)=>{if(!force&&(busy||pending||dirty)&&!confirm('Fotoänderung verwerfen? Bei unklarem Speicherstatus das Foto danach neu laden.'))return;read++;box.close();box.remove();if(dialog===box){dialog=null;closeEditor=null;}if(opener?.isConnected)opener.focus();};closeEditor=close;
-  box.querySelector('[data-close]').onclick=()=>close();box.addEventListener('cancel',e=>{e.preventDefault();close();});box.showModal();
+  const close=(force=false)=>{if(!force&&(busy||pending||dirty)&&!confirm('Fotoänderung verwerfen? Bei unklarem Speicherstatus das Foto danach neu laden.'))return;read++;if(!host)box.close();box.remove();if(dialog===box){dialog=null;closeEditor=null;}if(opener?.isConnected)opener.focus();};closeEditor=close;
+  box.querySelector('[data-close]').onclick=()=>close();box.addEventListener('cancel',e=>{e.preventDefault();close();});if(host)box.querySelector('[data-close]').hidden=true;else box.showModal();
   async function load(){
    if(!valid())return;if(dirty&&!confirm('Ungespeicherte Fotoänderung verwerfen und den gespeicherten Stand laden?'))return;
    busy=true;controls();notice.textContent='Foto wird geladen…';try{const d=await request(id,snapshot);if(!valid())return;current=d;selected=d.image;dirty=false;pending=null;save.textContent='Foto speichern';display();notice.textContent='';}catch(e){if(valid())notice.textContent=e.message;}finally{busy=false;if(valid())controls();}
