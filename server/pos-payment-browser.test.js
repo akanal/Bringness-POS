@@ -957,3 +957,49 @@ test('real trade invoice lookup diagnoses denied and invalid PDFs without creati
   pdfMode='pdf';await f.page.locator('[data-invoice-find]').click();await f.page.locator('.trade-issued-invoice[open]').waitFor();assert.equal(writes,0);assert.deepEqual(f.errors,[]);
  }finally{await f.browser.close();}
 });
+
+test('accountant access exports original positions and closed cash reports and clears private state at mobile and desktop widths',async()=>{
+ const browser=await engine.launch({headless:true}),root=new URL('../apps/web/public/',import.meta.url);
+ const meta={restaurantId:restaurant,from:'2026-01-01',to:'2026-12-31',asOf:'2026-11-17T12:00:00.123456Z',nextCursor:null};
+ const receipt={id:product,receipt_number:'BN-fixture',issued_at:'2026-01-15T10:00:00Z',fiscal_status:'pending',total_cents:250,payments:[{method:'cash',amountCents:250}],items:[{id:product,name:'Fixture item',quantity:1,unitPriceCents:300,discountCents:50,lineTotalCents:250,taxRate:19}]};
+ const closing={id:restaurant,opened_at:'2026-01-15T09:00:00Z',closed_at:'2026-01-15T18:00:00Z',openingCents:10000,expectedCents:10250,countedCents:10225,differenceCents:-25,payments:[{method:'cash',mode:'retail',amount_cents:250}],reason:'Fixture difference'};
+ try{for(const width of [390,1280]){
+  const page=await browser.newPage({viewport:{width,height:1000}}),errors=[],requests=[];let hold=null;
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.route('**/*',async route=>{
+   const request=route.request(),url=new URL(request.url());if(url.origin!=='https://accountant.test')return route.abort();
+   if(url.pathname.startsWith('/api/')){
+    requests.push({path:url.pathname,method:request.method(),auth:request.headers().authorization});assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-accountant');assert(!url.href.includes('synthetic-accountant'));
+    if(url.pathname.endsWith('/cash-closings')){if(hold)await hold;return route.fulfill({json:{...meta,closings:[closing]}})}
+    return route.fulfill({json:{...meta,receipts:[receipt]}});
+   }
+   try{return route.fulfill({body:await readFile(new URL(url.pathname.slice(1),root)),contentType:url.pathname.endsWith('.html')?'text/html; charset=utf-8':'text/javascript; charset=utf-8'});}catch{return route.abort();}
+  });
+  await page.goto('https://accountant.test/accountant.html#synthetic-accountant');await page.locator('#status').filter({hasText:'1 Belege ·'}).waitFor();assert(!page.url().includes('#'));
+  const positionDownload=page.waitForEvent('download');await page.locator('#positions').click();const positions=await positionDownload;
+  assert.equal(positions.suggestedFilename(),'Bringness-Belegpositionen.csv');assert((await readFile(await positions.path(),'utf8')).includes('"2,50"'));
+  const closingDownload=page.waitForEvent('download');await page.locator('#closingsJson').click();const json=JSON.parse(await readFile(await (await closingDownload).path(),'utf8'));
+  assert.equal(json.officialDsfinvk,false);assert.equal(json.closings[0].differenceCents,-25);assert(!JSON.stringify(json).includes('synthetic-accountant'));
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+  let release;hold=new Promise(resolve=>{release=resolve});let unexpected=0;page.on('download',()=>unexpected++);
+  await page.locator('#closings').click();await page.waitForFunction(()=>document.getElementById('closings').disabled);await page.locator('#leave').click();release();await page.waitForLoadState('networkidle');
+  assert.equal(unexpected,0);assert.equal(await page.locator('#rows tr').count(),0);assert.equal(await page.locator('#csv').isDisabled(),true);assert.equal(await page.locator('#closings').isDisabled(),true);assert.deepEqual(errors,[]);
+  assert(requests.length>=3);await page.close();
+ }}finally{await browser.close();}
+});
+
+test('owner accounting cancels a pending export after changing restaurant without financial writes',async()=>{
+ const browser=await engine.launch({headless:true}),root=new URL('../apps/web/public/',import.meta.url);
+ try{
+  const page=await browser.newPage(),errors=[];let pending=false,release,entered;page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.dismiss());
+  const arrived=new Promise(resolve=>{entered=resolve}),barrier=new Promise(resolve=>{release=resolve});
+  await page.route('https://owner-accounting.test/**',async route=>{
+   const req=route.request(),url=new URL(req.url());if(url.pathname==='/pos/')return route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><head><meta charset="utf-8"><script>localStorage.setItem("bringness-pos-token","synthetic-owner")</script></head><body><select id="restaurant"><option value="'+restaurant+'">First</option><option value="'+product+'">Second</option></select><div class="modulepage">Belege</div><script src="/pos/accounting-export.js"></script><script src="/pos/tax-export.js"></script></body></html>'});
+   if(url.pathname.startsWith('/api/')){assert.equal(req.method(),'GET');if(pending&&url.pathname.endsWith('/receipts')){pending=false;entered();await barrier}
+    const data=url.pathname.endsWith('/grants')?{grants:[]}:url.pathname.includes('/fiscal/')?{certified:false}: {restaurantId:url.searchParams.get('restaurantId'),from:url.searchParams.get('from'),to:url.searchParams.get('to'),asOf:'2026-11-17T12:00:00.123456Z',receipts:[],nextCursor:null};return route.fulfill({json:data});}
+   return route.fulfill({body:await readFile(new URL(url.pathname.slice(1),root)),contentType:'text/javascript; charset=utf-8'});
+  });
+  await page.goto('https://owner-accounting.test/pos/');await page.locator('#taxExportCenter > summary').click();await page.locator('#taxExportStatus').filter({hasText:'0 Belege'}).waitFor();
+  let downloads=0;page.on('download',()=>downloads++);pending=true;await page.locator('#taxAuditJson').click();await arrived;await page.locator('#restaurant').selectOption(product);release();await page.waitForLoadState('networkidle');assert.equal(downloads,0);assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});

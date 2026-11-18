@@ -1,5 +1,11 @@
 # Bringness project continuity
 
+## POS-Backend und Steuerberaterzugang — Auftrag 17.11.2026
+- Eigentümer beauftragt Weiterentwicklung des vorhandenen Backends und des Steuerberaterzugangs. Vorhandene Freigabelinks/Belegexporte übernehmen; gespeicherte Kassenabschlüsse und Positions-CSV ergänzen, Konto-/Betriebswechsel sowie aktuelle Sitzung/Freigabe serverseitig absichern. Keine zweite Backendarchitektur beginnen.
+- Windows-Version und Offline-Synchronisierung bleiben ausdrücklich gesperrt; keine Bearbeitung. Bringness AI folgt erst nach POS. Technische Prüfungen eigenständig durchführen; praktische Inhaberabnahme bleibt auf später verschoben.
+- Anleitung und Grenzen: docs/accountant-backend-20261117.md. Neue Kassenabschluss-API ist ausschließlich lesend, verwendet gespeicherte Abschlüsse, Berlin-Abschlussdatum und vorhandene Freigabegrenzen. Interne Formate, kein offizieller DSFinV-K-/vollständiger fiskalischer Z-Export.
+
+
 ## Öffentliche POS-Seite ausdrücklich live schalten — 17.11.2026
 - Nach Klarstellung, dass die Website-Anpassungen bisher nur privat vorbereitet waren, beauftragt der Eigentümer ausdrücklich die Live-Schaltung der POS-Seite. Freigegebene Navigationsbereinigung und weißen Supportbutton mit Hilfe auf derselben Seite veröffentlichen; Details docs/pos-public-page-20261117.md.
 - Die separate ursprüngliche Modulberater-Vorschau bleibt privat. Keine pauschale Übernahme ihres gestagten Integrationspatches, keine Berater-Dateien/-Links öffentlich veröffentlichen. Bestehende Preis-/Kauf-/Kassenfunktionen und serverseitige Supportberechtigungen erhalten.
