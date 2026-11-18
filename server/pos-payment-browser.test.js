@@ -999,7 +999,7 @@ test('owner accounting cancels a pending export after changing restaurant withou
     const data=url.pathname.endsWith('/grants')?{grants:[]}:url.pathname.includes('/fiscal/')?{certified:false}: {restaurantId:url.searchParams.get('restaurantId'),from:url.searchParams.get('from'),to:url.searchParams.get('to'),asOf:'2026-11-17T12:00:00.123456Z',receipts:[],nextCursor:null};return route.fulfill({json:data});}
    return route.fulfill({body:await readFile(new URL(url.pathname.slice(1),root)),contentType:'text/javascript; charset=utf-8'});
   });
-  await page.goto('https://owner-accounting.test/pos/');await page.locator('#taxExportStatus').filter({hasText:'0 Belege'}).waitFor();await page.locator('#taxExportCenter > summary').click();
+  await page.goto('https://owner-accounting.test/pos/');await page.locator('#taxExportCenter > summary').click();await page.locator('#taxExportStatus').filter({hasText:'0 Belege'}).waitFor();
   let downloads=0;page.on('download',()=>downloads++);pending=true;await page.locator('#taxAuditJson').click();await arrived;await page.locator('#restaurant').selectOption(product);release();await page.waitForLoadState('networkidle');assert.equal(downloads,0);assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 });
