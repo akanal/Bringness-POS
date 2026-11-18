@@ -138,6 +138,8 @@ jobs:
           node server/ai-tests/menu-import.mjs
           node server/ai-tests/menu-import-ocr.mjs
           node server/ai-tests/browser-support.mjs
+          node server/ai-tests/accountant-ui.mjs
+          ACCOUNTANT_TEST_DATABASE_URL=postgres://device_test:device_test@localhost:5432/bringness_device_test node server/ai-tests/accountant-access.mjs
           node server/ai-tests/offline-accountant.mjs
           node server/ai-tests/stock-lifecycle.mjs
           node server/ai-tests/pos-stock-bridge.mjs
