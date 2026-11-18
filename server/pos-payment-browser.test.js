@@ -118,6 +118,41 @@ async function fixture(onApi){
  await page.goto('https://payment.test/pos/');return {browser,page,errors};
 }
 const cashResult=body=>({requestKey:body.requestKey,id:'33333333-3333-4333-8333-333333333333',restaurantId:restaurant,status:'paid',receiptNumber:'BN-1',totalCents:250});
+test('online article photos resize real camera-sized files, persist and remove safely without changing the cart',async()=>{
+ const {createHash}=await import('node:crypto'),hash=value=>createHash('sha256').update(value||'').digest('hex');
+ for(const width of [390,1280]){
+  let stored=null,loseReply=true;const writes=[],created=[],category='33333333-3333-4333-8333-333333333333';
+  const f=await authFixture({apiHandler:async(route,path)=>{
+   if(path==='/api/v1/deposit/rules'){await route.fulfill({json:{rules:[]}});return true;}
+   if(path==='/api/v1/bootstrap'){await route.fulfill({json:{user:{name:'Photo fixture'},restaurants:[{id:restaurant,name:'Testbetrieb',mode:'counter'}],categories:[{id:category,restaurantId:restaurant,name:'Speisen'}],products:[{id:product,restaurantId:restaurant,categoryId:category,name:'Fototest',price:12.99,tax:7,emoji:stored||'🍽️'},...created],orders:[]}});return true;}
+   if(path==='/api/v1/products/'+product+'/image'){
+    const request=route.request();if(request.method()==='PUT'){const b=request.postDataJSON();writes.push(b);assert.equal(b.restaurantId,restaurant);assert(b.image===null||b.image.length<=190000);if(b.expectedVersion!==hash(stored)&&b.image!==stored){await route.fulfill({status:409,json:{error:'Foto wurde inzwischen geändert.'}});return true;}stored=b.image;if(loseReply){loseReply=false;await route.fulfill({status:503,json:{error:'Synthetic lost acknowledgement'}});return true;}}
+    await route.fulfill({json:{id:product,restaurantId:restaurant,image:stored,version:hash(stored)}});return true;
+   }
+   if(path==='/api/v1/products'&&route.request().method()==='POST'){const b=route.request().postDataJSON();assert.equal(b.price,4.5);assert(b.emoji.startsWith('data:image/'));assert(b.emoji.length<=190000);created.push({...b,id:'44444444-4444-4444-8444-444444444444'});await route.fulfill({status:201,json:created.at(-1)});return true;}
+   return false;
+  }});
+  try{
+   await f.page.setViewportSize({width,height:1000});await f.page.fill('#email','fixture@example.test');await f.page.fill('#password','synthetic password');await f.page.click('#authSubmit');await f.page.waitForSelector('#workspace.show');
+   const camera=await f.page.evaluate(()=>{const c=document.createElement('canvas');c.width=1600;c.height=1200;const ctx=c.getContext('2d'),image=ctx.createImageData(c.width,c.height);let seed=12345;for(let i=0;i<image.data.length;i+=4){seed=(seed*1664525+1013904223)>>>0;image.data[i]=seed&255;image.data[i+1]=(seed>>>8)&255;image.data[i+2]=(seed>>>16)&255;image.data[i+3]=255;}ctx.putImageData(image,0,0);return c.toDataURL('image/jpeg',.95).split(',')[1];});
+   const cameraBytes=Buffer.from(camera,'base64');assert(cameraBytes.length>150000);
+   await f.page.locator('#products .product').first().click();await f.page.waitForFunction(()=>document.querySelector('#total').textContent.includes('12,99'));const total=await f.page.textContent('#total');
+   await f.page.locator('#products .product-options summary').first().click();await f.page.getByRole('button',{name:'Artikelfoto',exact:true}).click();const editor=f.page.getByRole('dialog',{name:'Artikelfoto bearbeiten',exact:true});await editor.locator('input').waitFor({state:'visible'});await f.page.waitForFunction(()=>!document.querySelector('.product-photo-dialog input').disabled);
+   await editor.locator('input').setInputFiles({name:'camera.jpg',mimeType:'image/jpeg',buffer:cameraBytes});await f.page.getByText('Vorschau bereit. Bitte Foto speichern.',{exact:true}).waitFor();
+   assert.equal(writes.length,0,'preview must not write');await f.page.waitForFunction(()=>{const img=document.querySelector('.product-photo-dialog img');return img?.complete&&img.naturalWidth>0;});assert(await editor.locator('img').evaluate(n=>n.complete&&n.naturalWidth>0&&n.naturalWidth<=1200));assert.equal(await f.page.locator('#productEmoji').inputValue(),'🍽️');
+   if(process.env.RUNNER_TEMP){const {mkdir}=await import('node:fs/promises');await mkdir(process.env.RUNNER_TEMP+'/module-previews',{recursive:true});await f.page.screenshot({path:process.env.RUNNER_TEMP+'/module-previews/article-photo-'+(process.env.CENTER_TEST_BROWSER||'chromium')+'-'+width+'.png',fullPage:false});}
+   await editor.getByRole('button',{name:'Foto speichern',exact:true}).click();await f.page.getByText('Speicherstatus unklar. Bitte denselben Vorgang erneut prüfen oder den gespeicherten Stand neu laden.',{exact:true}).waitFor();
+   await editor.getByRole('button',{name:'Speicherung erneut prüfen',exact:true}).click();await f.page.getByText('Artikelfoto gespeichert.',{exact:true}).waitFor().catch(async error=>{throw Error(error.message+'; photo state: '+JSON.stringify({dialog:await editor.count(),status:await f.page.locator('.product-photo-dialog [role=status]').allTextContents(),errors:f.errors,writes:writes.length}));});assert.equal(writes.length,2);assert.deepEqual(writes[0],writes[1]);assert.equal(await f.page.textContent('#total'),total);
+   await editor.getByRole('button',{name:'Schließen',exact:true}).click();await f.page.locator('#products .pic img').waitFor();assert.equal(await f.page.locator('#products .pic img').getAttribute('src'),stored);assert.equal(await f.page.locator('#products .pic img').evaluate(n=>getComputedStyle(n).objectFit),'contain');assert(await f.page.locator('#products .pic img').evaluate(n=>{const a=n.getBoundingClientRect(),b=n.closest('button').getBoundingClientRect();return a.height>0&&a.bottom<=b.bottom+2&&a.right<=b.right+2;}),'photo remains inside its product tile');
+   await f.page.reload();await f.page.waitForSelector('#workspace.show');await f.page.locator('#products .pic img').waitFor();assert.equal(await f.page.locator('#products .pic img').getAttribute('src'),stored,'image survives reload');
+   await f.page.locator('#products .product-options summary').first().click();await f.page.getByRole('button',{name:'Artikelfoto',exact:true}).click();await f.page.waitForFunction(()=>!document.querySelector('.product-photo-dialog input').disabled);
+   await editor.locator('input').setInputFiles({name:'broken.jpg',mimeType:'image/jpeg',buffer:Buffer.from('not an image')});await f.page.getByText('Das Foto ist beschädigt oder wird von diesem Browser nicht unterstützt.',{exact:true}).waitFor();assert.equal(writes.length,2);
+   await editor.getByRole('button',{name:'Foto entfernen',exact:true}).click();assert.equal(writes.length,2);await editor.getByRole('button',{name:'Foto speichern',exact:true}).click();await f.page.getByText('Artikelfoto gespeichert.',{exact:true}).waitFor();assert.equal(stored,null);await editor.getByRole('button',{name:'Schließen',exact:true}).click();assert.equal(await f.page.locator('#products .pic img').count(),0);
+   await f.page.locator('#moreBtn').click();await f.page.locator('#moreMenu [data-view=artikel]').click();await f.page.locator('#productPhotoFile').setInputFiles({name:'new-camera.jpg',mimeType:'image/jpeg',buffer:cameraBytes});await f.page.getByText('Foto vorbereitet. Es wird beim Anlegen des Artikels gespeichert.',{exact:true}).waitFor();
+   await f.page.locator('#productName').fill('Neuer Fotoartikel');await f.page.locator('#productPrice').fill('4.50');await f.page.locator('#productForm button:not([type=button])').click();await f.page.waitForFunction(()=>document.querySelector('#productPhotoPreview').hidden);assert.equal(created.length,1);assert.deepEqual(f.errors,[]);
+  }finally{await f.browser.close();}
+ }
+});
 // Use the complete POS document and every shipped extension for fresh sign-in.
 async function authFixture({brokenMain=false,apiHandler}={}){
  const browser=await engine.launch({headless:true}),page=await browser.newPage({viewport:{width:1024,height:768}}),errors=[],requests=[];

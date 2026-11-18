@@ -134,6 +134,11 @@ jobs:
       - run: node server/ai-tests/admin-audit.mjs
       - run: node server/ai-tests/admin-navigation.mjs
       - run: node server/ai-tests/pos-admin-ui.mjs
+      - run: node server/ai-tests/product-photos-ui.mjs
+      - name: Verify article photo scope, replay and concurrent changes
+        run: node server/ai-tests/product-photos.mjs
+        env:
+          PRODUCT_PHOTO_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - name: Verify POS admin overview, audit scope and concurrent revocation
         run: node server/ai-tests/pos-admin-backend.mjs
         env:
