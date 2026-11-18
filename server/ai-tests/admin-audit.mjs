@@ -11,7 +11,8 @@ try{
  const company=crypto.randomUUID(),other=crypto.randomUUID(),owner=crypto.randomUUID();
  await db.query("INSERT INTO users(id,company_id,email,role,status) VALUES($1,$2,$3,'owner','active')",[owner,company,' \t=untrusted']);
  await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",[owner,crypto.createHash('sha256').update('fixture').digest('hex')]);
- const handler=createAdminAuditExport({query:async(...args)=>{const r=await db.query(...args);return {...r,rowCount:r.rows.length};}});
+ const query=async(...args)=>{const r=await db.query(...args);return {...r,rowCount:r.rows.length};};
+ const handler=createAdminAuditExport({connect:async()=>({query,release(){}})});
  async function http(from,to=from){let status,body;await handler({url:'/api/v1/admin/audit/export?from='+from+'&to='+to,method:'GET',headers:{authorization:'Bearer fixture'}},{writeHead(code){status=code},end(raw){body=raw}});return {status,body};}
  for(const [day,start,end] of [
   ['2026-10-16','2026-10-15T22:00:00Z','2026-10-16T22:00:00Z'],
