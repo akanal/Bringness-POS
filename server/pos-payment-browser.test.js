@@ -123,6 +123,7 @@ test('online article photos resize real camera-sized files, persist and remove s
  for(const width of [390,1280]){
   let stored=null,loseReply=true;const writes=[],created=[],category='33333333-3333-4333-8333-333333333333';
   const f=await authFixture({apiHandler:async(route,path)=>{
+   if(path==='/api/v1/deposit/rules'){await route.fulfill({json:{rules:[]}});return true;}
    if(path==='/api/v1/bootstrap'){await route.fulfill({json:{user:{name:'Photo fixture'},restaurants:[{id:restaurant,name:'Testbetrieb',mode:'counter'}],categories:[{id:category,restaurantId:restaurant,name:'Speisen'}],products:[{id:product,restaurantId:restaurant,categoryId:category,name:'Fototest',price:12.99,tax:7,emoji:stored||'🍽️'},...created],orders:[]}});return true;}
    if(path==='/api/v1/products/'+product+'/image'){
     const request=route.request();if(request.method()==='PUT'){const b=request.postDataJSON();writes.push(b);assert.equal(b.restaurantId,restaurant);assert(b.image===null||b.image.length<=190000);if(b.expectedVersion!==hash(stored)&&b.image!==stored){await route.fulfill({status:409,json:{error:'Foto wurde inzwischen geändert.'}});return true;}stored=b.image;if(loseReply){loseReply=false;await route.fulfill({status:503,json:{error:'Synthetic lost acknowledgement'}});return true;}}
