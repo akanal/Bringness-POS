@@ -28,3 +28,13 @@ Der Steuerberater öffnet den vollständigen Link. Das Geheimnis verschwindet di
 - PostgreSQL-16-Prüfung einschließlich gleichzeitigem Widerruf und die nativen Chromium-/WebKit-Tests bei 390/1280px sind in bestehende CI aufgenommen. Der lokale Browserstart ist in dieser Ausführungsumgebung durch ein nicht erlaubtes Betriebssystem-Socket blockiert; keine bestandene lokale native Browserprüfung behaupten. Tatsächliche CI-/Veröffentlichungsergebnisse separat dokumentieren.
 
 Keine produktiven Kundenkonten, Kassenabschlüsse, Belege, Zahlungen oder Freigaben wurden zur Prüfung angelegt.
+
+## Verifiziert live
+
+Diese Ergebnisse ersetzen den oben dokumentierten CI-/Bereitstellungsstatus:
+
+- PR342, endgültiger Prüfstand `82f9e56c2532ff0013eed8b49afe9550a033b008`, Quellbaum `42475e69625f271cfa8459dd4fc57361fd4106e3`. Alle sieben PR-Abläufe erfolgreich: Checks44259955639, Release44259955572, Farben/Navigation44259955653, isolierte Vorschau44259955659, POS/AI44259955541, Center/Chromium/WebKit44259955686, Shop44259955588. Der neue native Test öffnet den absichtlich geschlossenen Exportbereich vor der Sichtbarkeitsprüfung; die vorherige falsche Testreihenfolge wurde korrigiert.
+- PostgreSQL16 bestätigt 205 paginierte Abschlüsse, Mikrosekunden, Berlin-Datumsgrenzen, Sitzungserneutprüfung und gleichzeitigen Widerruf. Beide nativen Browser bestätigen Positions-/Abschlussdownload, mobilen/normalen Seitenrahmen, spätes Antworten nach lokaler Zugangsschließung und verhinderten Download nach Betriebswechsel.
+- Merge `b94dd0d47c66030570bb00f6f2566d96318aee60` über Netcup44260875537/job134653632384 erfolgreich veröffentlicht. Der authentifizierte Serverlauf bestätigt genau diese Revision sowie erhaltenen vorherigen Container und Datenbankbackup.
+- Live: `/accountant.html`, `/accountant.js`, `/pos/accounting-export.js`, `/pos/tax-export.js` und `/pos/deposit-journal.js` jeweils HTTP200 und bytegleich mit geprüftem Quelltext. POS-Einstieg lädt beide neuen Exportskripte. Drei geschützte Export-/Freigabe-Endpunkte ohne Anmeldung jeweils401/no-store. Health200 mit Anwendung und Datenbank `ok`.
+- Es wurden keine produktiven Testfreigaben, Kassenabschlüsse, Belege oder Zahlungen angelegt. Praktische Inhaberabnahme, offizieller DSFinV-K-/vollständiger fiskalischer Z-Export bleiben getrennt. Windows/Offline und AI wurden nicht weiterentwickelt.
