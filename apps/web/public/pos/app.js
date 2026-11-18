@@ -289,4 +289,4 @@ document.addEventListener('bringness:service-kitchen-changed',()=>{const rid=$('
 
 window.posMaintenanceIdle=()=>{try{return currentModule==="kasse"&&cart.length===0&&!document.querySelector("dialog[open]")&&!localStorage.getItem("bringness.checkout.pending.v1:"+$("restaurant").value)&&canLeavePosOperations()}catch{return false}};
 
-window.bnProductPhotos?.connect({context:()=>({session:token,restaurantId:$("restaurant").value}),product:id=>data.products.find(p=>p.id===id),saved:(id,image)=>{const p=data.products.find(p=>p.id===id);if(p)p.emoji=image||"🍽️";render();}});
+window.bnProductPhotos?.connect({context:()=>({session:token,restaurantId:$("restaurant").value}),product:id=>data.products.find(p=>p.id===id),saved:(id,image)=>{const p=data.products.find(p=>p.id===id);if(!p)return;p.emoji=image||"🍽️";document.querySelectorAll("#products [data-photo-product]").forEach(button=>{if(button.dataset.photoProduct===id){const picture=button.closest(".product-options").parentElement.querySelector(".pic");if(picture)picture.innerHTML=productPicture(p);}});}});
