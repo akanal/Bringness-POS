@@ -1,5 +1,10 @@
 # Bringness project continuity
 
+## Zentrale Artikeleingabe — 18.11.2026
+- Neue Eigentümervorgabe: Foto direkt bei der Artikeleingabe, Getränkepfand/Allergene & Zusatzstoffe/Verfügbarkeit dort kompakt zusammenfassen. Übersetzungszugang aus diesem Online-POS-Bereich entfernen; neuer Ort nicht beauftragt/festgelegt. Keine Übersetzungen löschen.
+- Ein Einstieg „Artikelangaben“ je bestehender Kachel und Artikelauswahl unter Mehr → Artikel; Fotos dort inline statt separatem Fotofenster. Zusatzangaben schon vor Neuanlage auswählbar, tatsächliche bestehende APIs verwenden. Details docs/pos-article-entry-20261118.md.
+- Windows/Offline bleiben gesperrt; Online-Modul dort nicht aktivieren. Keine produktiven Artikel/Fotos zur Abnahme schreiben. Teilfehler mit bekanntem Artikel-ID nur an verbleibenden Schritten fortsetzen; unklarer Neuanlagestatus sperrt Wiederholung bis zur Standprüfung.
+
 ## Artikelfotos prüfen und ergänzen — 18.11.2026
 - Eigentümer meldet ein Problem mit Artikelfotos und beauftragt Prüfung/Ergänzung. Konkrete Lücke: normale Online-POS-Artikelanlage bot nur Bild/Emoji-Text, ohne Fotoauswahl; Admin-Upload beschränkte Originalfotos auf150KB. Neue Online-Fotoauswahl mit lokaler Verkleinerung/Vorschau, bestehende Artikel über ihr Menü „Artikelfoto“ bearbeiten/entfernen. Anleitung docs/pos-article-photos-20261118.md.
 - Vorhandenes products.image_url und bestehende Betriebs-/Artikelstruktur verwenden. Keine Bilddaten als sichtbaren Text ausgeben; Preise, Varianten, Pfand, Warenkorb und Belege erhalten. Keine produktiven Testartikel/Fotos anlegen. Technische Abnahme mit isolierten Dateien/Daten.
