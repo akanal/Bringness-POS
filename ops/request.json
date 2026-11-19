@@ -1,5 +1,5 @@
 {
-  "operation": "status",
-  "target": "all",
-  "requestId": "owner-access-status-20261117-1794874646835"
+  "operation": "deploy",
+  "target": "ai",
+  "requestId": "ai-events-learning-20261118"
 }
