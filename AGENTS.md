@@ -1,5 +1,12 @@
 # Bringness project continuity
 
+## Bringness AI: öffentliche Termine und Lernvergleich — 18.11.2026
+- Eigentümer beauftragt nach akzeptierter POS-Artikeleingabe den vorgeschlagenen AI-Block: öffentliche Veranstaltungsdaten und Prognoseverbesserungen. Vorhandene AI-Planung weiterverwenden; Windows/Offline bleiben gesperrt.
+- Öffentliche kulturdaten.berlin-Termine mit Quelle, Abrufzeit, Umkreis und gekennzeichneter GeoNames-PLZ-Näherung. Überlappende Seiten deduplizieren und Unvollständigkeit zeigen. Keine Restaurant-/Verkaufsdaten zur Quelle senden. Einfluss auf vorhandene Beschaffungsregeln benötigt die neue standardmäßig ausgeschaltete Standortwahl.
+- Lernkorrektur aus frühen eingefrorenen Prognosen und abgeschlossenen POS-Tagen; mindestens42 geeignete Tage, chronologisch getrennte Prüfung mit mindestens5% MAE-Verbesserung, begrenzt±25%. Optionale Übernahme ersetzt heutige Szenariowerte; automatische Beschaffung und Folgetage behalten ihre bestehenden Regeln. Kein trainiertes Kundenmodell oder bestätigte Echtbetriebsverbesserung aus synthetischen Tests behaupten.
+- Grenzen, Quellen und Abnahme: docs/ai-events-learning-20261118.md. Veröffentlichung ausschließlich AI über bestehenden Netcup-Weg; lokale Prüfungen, CI, Deployment und Live-Abgleich getrennt nachweisen. Praktische Inhaberabnahme weiterhin später.
+
+
 ## Zentrale Artikeleingabe — 18.11.2026
 - Neue Eigentümervorgabe: Foto direkt bei der Artikeleingabe, Getränkepfand/Allergene & Zusatzstoffe/Verfügbarkeit dort kompakt zusammenfassen. Übersetzungszugang aus diesem Online-POS-Bereich entfernen; neuer Ort nicht beauftragt/festgelegt. Keine Übersetzungen löschen.
 - Ein Einstieg „Artikelangaben“ je bestehender Kachel und Artikelauswahl unter Mehr → Artikel; Fotos dort inline statt separatem Fotofenster. Zusatzangaben schon vor Neuanlage auswählbar, tatsächliche bestehende APIs verwenden. Details docs/pos-article-entry-20261118.md.
