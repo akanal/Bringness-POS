@@ -21,7 +21,8 @@ try{
  let version=0;const settings=async(enabled=true)=>{const r=await call('/settings','POST',{locationId:loc,enabled,readCosts:true,readStock:true,version});version=r.settings.version;};await settings();
  const data=await call('');assert.equal(data.recipes.length,1);assert.equal(data.recipes[0].cost.netCents,null);
  const content={title:'Unsere Karte',items:[{recipeId:recipe,name:'Suppe',category:'Suppen',description:'',priceCents:650,visible:true}]};
- const make=async(overrides={})=>{const b={locationId:loc,id:randomUUID(),settingsVersion:version,baseRevision:(await call('')).card?.revision||0,content,...overrides};await call('/draft','POST',b);return b};
+ const make=async(overrides={})=>{const preview=await call('');const b={locationId:loc,id:randomUUID(),settingsVersion:version,baseRevision:preview.card?.revision||0,sourceDigest:preview.sourceDigest,content,...overrides};await call('/draft','POST',b);return b};
+ const stalePreview=await call('');await query('UPDATE ai_stock SET quantity=4 WHERE id=$1',[stock]);await assert.rejects(make({sourceDigest:stalePreview.sourceDigest}),e=>e.status===409);await query('UPDATE ai_stock SET quantity=3 WHERE id=$1',[stock]);
  const first=await make();assert.equal((await call('')).card,null);assert.equal((await call('/draft','POST',first)).replayed,true);
  await assert.rejects(call('/draft','POST',{...first,content:{...content,title:'Andere Karte'}}),e=>e.status===409);
  const decide=(b,decision='approve',confirmed=true)=>call('/decide','POST',{locationId:loc,id:b.id,version:1,decision,confirmed});
