@@ -45,7 +45,7 @@ source=source.replace("import {migrateAiAds,adRoutes} from './ai-ads.js';","cons
 source=source.replace("import {migrateAiSuppliers,supplierAccountRoutes,supplierPublicRoutes} from './ai-suppliers.js';","const {migrateAiSuppliers,supplierAccountRoutes,supplierPublicRoutes}=globalThis.aiSupplierModule;");
 source=source.replace("import {migrateAiBarcodes,barcodeRoutes} from './ai-barcodes.js';","const {migrateAiBarcodes,barcodeRoutes}=globalThis.aiBarcodeModule;");
 const {handleAiPlatform,migrateAiPlatform}=await import('data:text/javascript;base64,'+Buffer.from(absoluteImports(source)).toString('base64'));
-const {hash,passwordHash}=await import('file://'+root+'/server/ai-policy.js');await migrateAiPlatform();
+const {hash,passwordHash}=await import('file://'+root+'/server/ai-policy.js');await db.exec('CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid,name text);');await migrateAiPlatform();
 await db.exec('CREATE TABLE users(id uuid primary key,status text,must_change_password boolean,display_name text);CREATE TABLE sessions(token_hash text,user_id uuid,expires_at timestamptz);CREATE TABLE platform_admins(user_id uuid,active boolean);');
 const ids={buyer:crypto.randomUUID(),other:crypto.randomUUID(),supplier:crypto.randomUUID(),admin:crypto.randomUUID(),pending:crypto.randomUUID()};
 for(const role of ['buyer','other','supplier','pending'])await query('INSERT INTO ai_accounts(id,email,password_hash,name,business_name,role,status,address,city) VALUES($1,$2,$3,$4,$4,$5,$6,$7,$8)',[ids[role],role+'@example.org',passwordHash('testing-password-123'),role,role==='supplier'?'wholesaler':'restaurant',role==='pending'?'pending':'active','Testweg 1','Berlin']);
@@ -223,7 +223,7 @@ assert.equal((await call('connector-key',{id:link.id},tokens.other)).status,404)
 const rotated=await call('connector-key',{id:link.id},tokens.buyer);assert.equal(rotated.status,200);await call('connector-status',{id:link.id,active:true},tokens.buyer);assert.equal((await call('v1/status',null,key.token)).status,401);assert.equal((await call('v1/status',null,rotated.token)).status,200);await call('connector-status',{id:link.id,active:false},tokens.buyer);
 
 // POS adapter needs a real owner authorization and imports only linked paid sales.
-await db.exec('ALTER TABLE users ADD COLUMN company_id uuid;ALTER TABLE users ADD COLUMN role text;CREATE TABLE restaurants(id uuid,company_id uuid,name text);CREATE TABLE products(id uuid,restaurant_id uuid,name text,active boolean);CREATE TABLE orders(id uuid,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);CREATE TABLE order_items(order_id uuid,product_id uuid,quantity numeric);CREATE TABLE pos_stock_commands(id uuid,order_id uuid,state text,attempts int NOT NULL DEFAULT 0,retry_after timestamptz,created_at timestamptz);CREATE TABLE pos_stock_links(restaurant_id uuid,connector_id uuid,active boolean);CREATE TABLE pos_offline_catalogs(id uuid,company_id uuid);CREATE TABLE pos_offline_sales(id uuid,catalog_id uuid,order_id uuid,stock_state text,stock_error text,stock_attempts int NOT NULL DEFAULT 0,stock_retry_after timestamptz,created_at timestamptz);');
+await db.exec('ALTER TABLE users ADD COLUMN company_id uuid;ALTER TABLE users ADD COLUMN role text;CREATE TABLE products(id uuid,restaurant_id uuid,name text,active boolean);CREATE TABLE orders(id uuid,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);CREATE TABLE order_items(order_id uuid,product_id uuid,quantity numeric);CREATE TABLE pos_stock_commands(id uuid,order_id uuid,state text,attempts int NOT NULL DEFAULT 0,retry_after timestamptz,created_at timestamptz);CREATE TABLE pos_stock_links(restaurant_id uuid,connector_id uuid,active boolean);CREATE TABLE pos_offline_catalogs(id uuid,company_id uuid);CREATE TABLE pos_offline_sales(id uuid,catalog_id uuid,order_id uuid,stock_state text,stock_error text,stock_attempts int NOT NULL DEFAULT 0,stock_retry_after timestamptz,created_at timestamptz);');
 // Background worker errors are intentionally isolated in production; the fixture must still expose them as test failures.
 const bridgeFixtureErrors=[],originalBridgeError=console.error;
 console.error=(...args)=>{if(args[0]==='AI kitchen sync stage failed:')bridgeFixtureErrors.push(args.slice(1));else originalBridgeError(...args);};
@@ -640,7 +640,7 @@ d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').
 d.querySelector('[data-auth="register"]').click();assert.equal(d.getElementById('role').options.length,4);const newInput=d.getElementById('newPassword');for(const password of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x']){newInput.value=password;assert(!newInput.checkValidity())}newInput.value='Ab1!xy';assert(newInput.checkValidity());d.querySelector('[data-auth="login"]').click();
 submit('login',{email:'other@example.org',password:'testing-password-123'});await until(()=>d.querySelector('[data-view="stock"]'));
 assert.equal(d.querySelectorAll('#tabs > button').length,1);assert.equal(d.querySelectorAll('#tabs > details').length,4);
-const navViews=[...d.querySelectorAll('#tabs [data-view]')].map(button=>button.dataset.view);assert.equal(navViews.length,21);assert.equal(new Set(navViews).size,21);
+const navViews=[...d.querySelectorAll('#tabs [data-view]')].map(button=>button.dataset.view);assert.equal(navViews.length,22);assert.equal(new Set(navViews).size,22);assert(navViews.includes('menu'));
 let menu=d.querySelector('#tabs details');menu.querySelector('summary').click();assert(menu.open);menu.querySelector('summary').focus();menu.querySelector('summary').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert(!menu.open);assert.equal(d.activeElement,menu.querySelector('summary'));
 menu.open=true;d.getElementById('content').click();assert(!menu.open);
 menu.open=true;d.querySelectorAll('#tabs details')[1].querySelector('summary').click();assert(!menu.open);assert(d.querySelectorAll('#tabs details')[1].open);
@@ -1130,5 +1130,23 @@ assert.equal(await ledgerNextBalance(),-0.1);assert.equal(Number((await query('S
 assert.equal((await call('v1/sales',atomicEvent,ledgerNextAccess.token)).duplicate,true);
 assert.equal(Number((await query('SELECT count(*)::int n FROM ai_stock_moves')).rows[0].n),atomicMovesBefore+2);
 console.log('Multi-ingredient sales rollback passed: injected movement error rolls back event and every stock balance, then the unchanged event retries once without partial or duplicate movements.');
+
+// Speisekarten approval uses the actual authenticated HTTP router and migrated tables.
+const menuLocation=ledgerNextLocation.id,menuPath='menu?locationId='+menuLocation;
+assert.equal((await call(menuPath,null)).status,401);
+assert.equal((await call(menuPath,null,tokens.other)).status,404);
+assert.equal((await call(menuPath,null,tokens.supplier)).status,403);
+assert.equal((await call(menuPath,null,tokens.buyer)).settings.enabled,false);
+assert.equal((await call('menu/settings',{locationId:menuLocation,enabled:true,readCosts:true,readStock:true,version:0},tokens.buyer)).status,200);
+const menuSource=await call('menu?locationId='+menuLocation,null,tokens.buyer);
+const menuDraftBody={sourceDigest:menuSource.sourceDigest,id:crypto.randomUUID(),locationId:menuLocation,settingsVersion:1,baseRevision:0,content:{title:'Geprüfte Karte',items:[{recipeId:ledgerNextRecipe.id,name:'Precision recipe',category:'Speisen',description:'',priceCents:650,visible:true}]}};
+assert.equal((await call('menu/draft',menuDraftBody,tokens.buyer)).status,200);
+assert.equal((await call(menuPath,null,tokens.buyer)).card,null);
+const menuDecision={id:menuDraftBody.id,locationId:menuLocation,version:1,decision:'approve',confirmed:false};
+assert.equal((await call('menu/decide',menuDecision,tokens.buyer)).status,400);
+assert.equal((await call('menu/decide',{...menuDecision,confirmed:true},tokens.buyer)).status,200);
+assert.equal((await call(menuPath,null,tokens.buyer)).card.content.items[0].priceCents,650);
+assert.equal((await call('menu/decide',{...menuDecision,confirmed:true},tokens.buyer)).replayed,true);
+console.log('Menu HTTP acceptance passed: migrated production router, authentication, tenant isolation, disabled defaults, explicit approval and repeat-safe decisions.');
 
 await db.close();

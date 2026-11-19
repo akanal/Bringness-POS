@@ -1,5 +1,10 @@
 # Bringness project continuity
 
+## Speisekartenassistenz mit Betreiberfreigabe — 19.11.2026
+- Eigentümer beauftragt ausdrücklich, vor Veröffentlichung Mengen-/Preisempfehlungen und reale POS-Übernahme vollständig zu ergänzen. Implementierung `server/ai-menu*.js`, eigener AI-Einstieg. Standortschalter für Rezepte/Kosten/Bestand/Verkäufe/POS standardmäßig aus; optionaler Ziel-Wareneinsatz vom Betreiber. Vorhandene Prognose/Artikelhistorie verwenden, keine Zielmarge oder Daten erfinden.
+- AI-Kartenfreigabe und zusätzliche POS-Übernahme getrennt ausdrücklich bestätigen, vorher/nachher prüfen. Genau eine aktive POS-Anbindung, aktuelle Inhaberberechtigung, eindeutige Rezept-Artikelzuordnung, aktuelle Sitzung/Konto/Standort und unveränderte Quell-/POS-Stände erforderlich. POS schreibt nur enthaltene bestehende Artikel: Name/Beschreibung/Bruttopreis/Sichtbarkeit/bestehende aktive Kategorie. Reihenfolge, Steuern, Übersetzungen, Bilder, Extras, Rezepte, Lager und Bestellungen bleiben erhalten.
+- Getrennte AI-/POS-Datenbanken beibehalten. POS-Änderungen plus dauerhafter Nachweis in einer POS-Transaktion; verlorene AI-Bestätigung durch identische Entwurfskennung wieder abrufbar, niemals spätere Änderungen überschreiben. Keine verteilte Atomarität behaupten. Planmengen/Überschuss sind Hinweise, keine Verwendungsfreigabe oder automatische Beschaffung. Details/Prüf-/Veröffentlichungsstand `docs/ai-menu-assistant-20261119.md`.
+
 ## Mehrjähriges Lernen und optionale Küchenempfehlungen — 19.11.2026
 - Eigentümer beauftragt Umsetzung der mehrjährigen Lernfunktion sowie Verderbvermeidung und Vorbereitungsmengen. Neueste Vorgabe: zwei getrennte, standortweise gespeicherte Schalter, beide standardmäßig aus. Ausschalten beendet die jeweilige Empfehlung, löscht keine Historie oder Chargenangaben.
 - Langzeithistorie aus autorisierten POS-Tagen, fehlend/geschlossen getrennt, revisionsgebunden; keine feste Jahresgrenze. Saisonvergleiche und eingefrorene Prognosen je Vorlauf0–6; Kenntniszeit für zeitlich getrennte Prüfung. Historische Übernahme in begrenzten Schritten sichtbar; keine rückwirkend erfundenen Prognosen/Wetterdaten.
