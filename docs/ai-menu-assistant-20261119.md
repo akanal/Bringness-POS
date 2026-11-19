@@ -40,4 +40,13 @@ Mehrere Gestaltungsvorlagen, druckfertiger Export und freie sprachliche KI-Gesta
 
 Lokal: 773 allgemeine Unit-Tests; gezielte Datenbank- und DOM-Prüfung einschließlich POS-Übernahme, geändertem Vorschau-/Artikelstand, widerrufener Inhaberberechtigung, verlorenem AI-Nachweis und Wiederholung ohne Überschreiben sowie verkaufsbasierter Vorbereitung bestanden. Vollständiger bestehender HTTP-/DOM-Ablauf mit migriertem produktivem Router bestanden. Die POS/AI-Prüfung führt dieselben Datenbankfälle auf PostgreSQL16 aus; der bestehende AI-Bereitstellungsworkflow verlangt sie nun ebenfalls vor der Serveroperation.
 
-CI, Merge, technische Livebereitstellung und Live-Abgleich sind getrennt nachzuweisen und werden nach tatsächlichem Erfolg ergänzt. Produktive Restaurantdaten nicht zur Abnahme verändern; Windows/Offline bleiben unverändert. Bereitstellungsziel ausschließlich vorhandenes AI-Ziel mit Sicherung/Rückfall. Keine Betreiberfreigabe oder tatsächliche Kartenänderung aus einer technischen Bereitstellung ableiten.
+Alle fünf PR-Prüfungen des endgültigen Anwendungskopfs 625c8fd21df19d40f44dce843b8e7c76c055ffc2 erfolgreich: Bringness44506709045, POS-Release44506709018, isolierte Vorschau44506709206, POS/AI44506709140/job135500097525 einschließlich PostgreSQL16 und Center Chromium/WebKit44506709024. Geprüfter Tree eb78530b75ff6ac1a2985c61106a8145fb26ea45.
+
+PR357 als bb5d0ab5ef4ae7627509e40a2b1378b6da66dc32 zusammengeführt. Netcup44507396378/job135502456935 erfolgreich: Pflichtprüfungen einschließlich neuer PostgreSQL-/DOM-/HTTP-Kartenannahme bestanden; Log bestätigt exakt `ai deployed: bb5d0ab5ef4ae7627509e40a2b1378b6da66dc32` sowie erhaltenen vorherigen Container und Datenbanksicherung. Ausschließlich bestehendes AI-Ziel bereitgestellt.
+
+Öffentliche Live-Kontrolle https://bringness-ai.com: /health200 mit status/database jeweilsok. /ai-workspace.html, /ai-workspace.js und /ai-menu.js200 und jeweils bytegleich mit dem geprüften Tree. SHA256:
+- ai-workspace.html: f1586ee44b79446487a5daaf9fee5f61378c85db709828b75b76f3783687e810
+- ai-workspace.js: 83488cd2b6afc6cb16a73b9d81ca135d725e39da8ce7282dc74fe36da63e6a2d
+- ai-menu.js: ee54379a8321ea10dfa74bbc28a0c64c0bc95ce85a69af790a762d02f81f9bd8
+
+/api/ai/menu, /api/ai/menu/recommendations und /api/ai/menu/publish ohne Anmeldung jeweils401. Keine produktiven Restaurantdaten oder Zugriffsschalter zur Abnahme verändert. Windows/Offline unverändert. Technische Bereitstellung ist keine Betreiberfreigabe und keine tatsächliche Kartenänderung; praktische Betreiberabnahme weiterhin später.
