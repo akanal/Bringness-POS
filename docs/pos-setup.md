@@ -3,7 +3,7 @@
 In **Einstellungen → Betrieb einrichten → Einrichtungsassistent öffnen** starten. Der Foto-/PDF-/CSV-Import verlinkt ebenfalls auf den Assistenten. Zugriff nur mit gültiger Inhaber-/Admin-Sitzung für den eigenen Betrieb. Kein automatischer Start, keine neue Kopfzeile und keine Änderung von Verkauf, Kellner-App oder gebuchten Modulen. Download-Clients erhalten den neuen Online-Einstieg nicht.
 
 Die sechs Schritte:
-1. **Betrieb & Rechnungsdaten:** vorhandenen Betriebsnamen und Rechnungsanschrift prüfen. Schaltflächen öffnen die bisherigen Formulare für denselben Betrieb; keine zweite Datenerfassung im Assistenten.
+1. **Betrieb & Rechnungsdaten:** Betriebsname und Rechnungsanschrift direkt im Assistenten ergänzen oder ändern. Einmaliges Speichern schreibt beide Angaben gemeinsam in den vorhandenen Standort- bzw. Firmenstammsatz. Die Rechnungsanschrift gilt firmenweit. Parallel geänderte Daten erfordern erneutes Laden.
 2. **Speisekarte:** aktive Artikel werden erkannt. Bestehende Verwaltung oder Foto-/PDF-/CSV-Import öffnen; Preise/MwSt. ausdrücklich prüfen.
 3. **Module:** gewünschte Zusatzfunktionen auswählen und speichern. Vorhandene Berechtigungen werden angezeigt. Abhängigkeiten und Trennung von Center/anderen QR-Modulen bleiben erhalten. Wunschliste ist keine Buchung oder Kündigung. Jede kostenpflichtige Aktion bleibt im bisherigen Lizenzablauf.
 4. **Geräte & Displays:** tatsächlich benötigte Geräte wählen. Vorhandene Drucker-/Scanner-Prüfprotokolle wiederverwenden; deren Bestätigung ist ein Kundennachweis, keine automatische Hardwarediagnose. Displays müssen eingerichtet und am echten Bildschirm geprüft werden. Scanner-/Displaymodul muss bei entsprechendem Wunsch tatsächlich verfügbar sein.
