@@ -1,5 +1,11 @@
 # Bringness project continuity
 
+## Mehrjähriges Lernen und optionale Küchenempfehlungen — 19.11.2026
+- Eigentümer beauftragt Umsetzung der mehrjährigen Lernfunktion sowie Verderbvermeidung und Vorbereitungsmengen. Neueste Vorgabe: zwei getrennte, standortweise gespeicherte Schalter, beide standardmäßig aus. Ausschalten beendet die jeweilige Empfehlung, löscht keine Historie oder Chargenangaben.
+- Langzeithistorie aus autorisierten POS-Tagen, fehlend/geschlossen getrennt, revisionsgebunden; keine feste Jahresgrenze. Saisonvergleiche und eingefrorene Prognosen je Vorlauf0–6; Kenntniszeit für zeitlich getrennte Prüfung. Historische Übernahme in begrenzten Schritten sichtbar; keine rückwirkend erfundenen Prognosen/Wetterdaten.
+- Chargenangaben sind geprüfte Metadaten, keine Lagerbuchungen. Bei fehlendem Datum, unklarem Anbruch, anderem Prüftag oder verändertem Bestand keine Gerichtsidee daraus. Gerichtsidee ist keine Verwendungsfreigabe. Vorbereitung aus Artikelmengen/aktuellen Rezepten, Zeitaufteilung vor/ab17Uhr nach Zahlungszeit; keine Reservierungsanbindung behaupten.
+- Details und Prüfgrenzen docs/ai-multiyear-kitchen-assistant-20261119.md. Technische Bereitstellung nur AI mit vorhandener Sicherung/Rückfall; POS, Windows/Offline und betriebliche Einkaufsfreigaben bewahren. Aktuelle Freigabe-/Livebelege im Paketdokument prüfen.
+
 ## Mehrjähriges AI-Lernen ausdrücklich gefordert — 18.11.2026
 - Neueste Eigentümervorgabe: Lernfunktion ganz genau gestalten und Betriebe jahrelang beobachten können. Die Sechs-Tage-Vorschau ist nur der Planungshorizont, keine Begrenzung der Lernhistorie. Die bisherige bloße Ausweitung der Tageskorrektur genügt nicht.
 - Zuerst langfristige, konto-/standort-/quellengebundene Betriebs- und Qualitätsdaten sowie Jahres-/Saisonvergleiche konzipieren, danach lernende Mehrtagesplanung. Herkunft, damaliger Kenntnisstand, wirksame Öffnungszeiten/Preise/Rezepturen und spätere Konzeptwechsel beachten. Fehlende Historie nicht erfinden; Mengen- und Preisentwicklung trennen.

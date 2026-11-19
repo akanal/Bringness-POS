@@ -732,3 +732,7 @@ Eigentümer beauftragt die Weiterentwicklung bei AI und den Ausbau der angekünd
 
 ## Neue Zielanforderung: mehrjähriges AI-Lernen — 18.11.2026
 Der Eigentümer präzisiert die Lernfunktion: ganz genau gestalten und jahrelang beobachten, statt nur mehrere Tage vorauszuplanen. Architekturentwurf docs/ai-long-term-learning-20261118.md trennt Langzeitgedächtnis, aktuelle/saisonale Modelle, unveränderliche Prognosestände und spätere Ist-Ergebnisse. Die beschriebene Zielarchitektur soll vorhandene Betriebsdaten über Jahre auswerten können, mit Datenlücken, Rezept-/Preis-/Standortänderungen und getrennten Vorlaufzeiten. Heutige180-/400-Tage-Auswertefenster erfüllen dies noch nicht; keine bereits produktive Mehrjahresfunktion behaupten. Nächster Entwicklungsumfang beginnt mit der dauerhaften Datenbasis und sauberen mehrjährigen Vergleichslogik, danach Mehrtagesplanung und Vorschläge. Einkaufsfreigaben und praktische Abnahme bleiben wie festgelegt.
+
+## Mehrjähriges Lernen und abschaltbare Küchenempfehlungen — 19.11.2026
+- Neuester Auftrag: mehrjährige Historie/Saisonlernen plus Verderbvermeidung und Vorbereitung. Zwei getrennte standortweise Schalter, beide initial aus; Ausschalten entfernt Empfehlungen, Historie bleibt erhalten. Bestehende Betriebsfreigaben unverändert.
+- Laufzeit-/Prüfgrenzen docs/ai-multiyear-kitchen-assistant-20261119.md. Lokale Umsetzung ist noch kein bestätigter Live-Stand; abschließende CI-/Deploymentbelege dort nachtragen. Keine ungeprüfte Veröffentlichung.
