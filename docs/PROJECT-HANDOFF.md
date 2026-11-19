@@ -735,4 +735,4 @@ Der Eigentümer präzisiert die Lernfunktion: ganz genau gestalten und jahrelang
 
 ## Mehrjähriges Lernen und abschaltbare Küchenempfehlungen — 19.11.2026
 - Neuester Auftrag: mehrjährige Historie/Saisonlernen plus Verderbvermeidung und Vorbereitung. Zwei getrennte standortweise Schalter, beide initial aus; Ausschalten entfernt Empfehlungen, Historie bleibt erhalten. Bestehende Betriebsfreigaben unverändert.
-- Laufzeit-/Prüfgrenzen docs/ai-multiyear-kitchen-assistant-20261119.md. Lokale Umsetzung ist noch kein bestätigter Live-Stand; abschließende CI-/Deploymentbelege dort nachtragen. Keine ungeprüfte Veröffentlichung.
+- Laufzeit-/Prüfgrenzen docs/ai-multiyear-kitchen-assistant-20261119.md. PR355 vollständig geprüft und als70d872bf9020abc44f94049f7ee09aff608fe6ce live auf AI. Alle fünf PR-Prüfungen erfolgreich; Netcup44488307666/job135437223168 bestätigt exakte Revision plus erhaltene Sicherung/Vorversion. Live HTML/JS bytegleich, Health/DBok, beide privaten neuen APIs anonym401. Einzelbelege im Paketdokument. Beide Schalter weiterhin initial aus; keine Betriebsdaten zur Abnahme geändert.
