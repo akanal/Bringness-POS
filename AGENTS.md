@@ -1,5 +1,11 @@
 # Bringness project continuity
 
+## Speisekartenassistenz mit Betreiberfreigabe — 19.11.2026
+- Neuer ausdrücklicher Auftrag: aktuellen AI-Stand auseinanderhalten, fehlende Funktionen ergänzen; KI darf mit freigegebenen Restaurantdaten Speisekarten gestalten und Änderungen an Gerichten/Mengen/Preisen empfehlen. Jede Übernahme braucht ausdrückliche Betreiberfreigabe. Eigener ausschaltbarer Zugriff.
+- Erster Entwicklungsbaustein in `server/ai-menu*.js` und `apps/web/public/ai-menu.js`: Standortschalter für Rezepte/Kosten/Bestand, bearbeitbare Kartenentwürfe, unveränderliche genehmigte AI-Kartenfassung, aktive Sitzung/Konto/Standort, Versions-/Quellabgleich und protokollierte Entscheidungen. Ausschalten stoppt neue Entwürfe/Freigaben. Keine POS-, Rezept-, Bestands- oder Bestellschreibaktionen.
+- Gesamtauftrag noch nicht vollständig: Verkaufs-/Prognosebezug, begründete Mengen-/Preisänderungsempfehlungen und bestätigte Übernahme in tatsächlich angebundene POS-/QR-Karte fehlen. Keine vollständige KI-Gestaltung oder POS-Veröffentlichung behaupten. Details/Prüfstand `docs/ai-menu-assistant-20261119.md`. Bisher keine Livebereitstellung dieses ersten Bausteins; übrige vorhandene AI-Funktionen nicht erneut als fehlend behandeln.
+
+
 ## Mehrjähriges Lernen und optionale Küchenempfehlungen — 19.11.2026
 - Eigentümer beauftragt Umsetzung der mehrjährigen Lernfunktion sowie Verderbvermeidung und Vorbereitungsmengen. Neueste Vorgabe: zwei getrennte, standortweise gespeicherte Schalter, beide standardmäßig aus. Ausschalten beendet die jeweilige Empfehlung, löscht keine Historie oder Chargenangaben.
 - Langzeithistorie aus autorisierten POS-Tagen, fehlend/geschlossen getrennt, revisionsgebunden; keine feste Jahresgrenze. Saisonvergleiche und eingefrorene Prognosen je Vorlauf0–6; Kenntniszeit für zeitlich getrennte Prüfung. Historische Übernahme in begrenzten Schritten sichtbar; keine rückwirkend erfundenen Prognosen/Wetterdaten.

@@ -640,7 +640,7 @@ d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').
 d.querySelector('[data-auth="register"]').click();assert.equal(d.getElementById('role').options.length,4);const newInput=d.getElementById('newPassword');for(const password of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x']){newInput.value=password;assert(!newInput.checkValidity())}newInput.value='Ab1!xy';assert(newInput.checkValidity());d.querySelector('[data-auth="login"]').click();
 submit('login',{email:'other@example.org',password:'testing-password-123'});await until(()=>d.querySelector('[data-view="stock"]'));
 assert.equal(d.querySelectorAll('#tabs > button').length,1);assert.equal(d.querySelectorAll('#tabs > details').length,4);
-const navViews=[...d.querySelectorAll('#tabs [data-view]')].map(button=>button.dataset.view);assert.equal(navViews.length,21);assert.equal(new Set(navViews).size,21);
+const navViews=[...d.querySelectorAll('#tabs [data-view]')].map(button=>button.dataset.view);assert.equal(navViews.length,22);assert.equal(new Set(navViews).size,22);assert(navViews.includes('menu'));
 let menu=d.querySelector('#tabs details');menu.querySelector('summary').click();assert(menu.open);menu.querySelector('summary').focus();menu.querySelector('summary').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert(!menu.open);assert.equal(d.activeElement,menu.querySelector('summary'));
 menu.open=true;d.getElementById('content').click();assert(!menu.open);
 menu.open=true;d.querySelectorAll('#tabs details')[1].querySelector('summary').click();assert(!menu.open);assert(d.querySelectorAll('#tabs details')[1].open);
@@ -1130,5 +1130,22 @@ assert.equal(await ledgerNextBalance(),-0.1);assert.equal(Number((await query('S
 assert.equal((await call('v1/sales',atomicEvent,ledgerNextAccess.token)).duplicate,true);
 assert.equal(Number((await query('SELECT count(*)::int n FROM ai_stock_moves')).rows[0].n),atomicMovesBefore+2);
 console.log('Multi-ingredient sales rollback passed: injected movement error rolls back event and every stock balance, then the unchanged event retries once without partial or duplicate movements.');
+
+// Speisekarten approval uses the actual authenticated HTTP router and migrated tables.
+const menuLocation=ledgerNextLocation.id,menuPath='menu?locationId='+menuLocation;
+assert.equal((await call(menuPath,null)).status,401);
+assert.equal((await call(menuPath,null,tokens.other)).status,404);
+assert.equal((await call(menuPath,null,tokens.supplier)).status,403);
+assert.equal((await call(menuPath,null,tokens.buyer)).settings.enabled,false);
+assert.equal((await call('menu/settings',{locationId:menuLocation,enabled:true,readCosts:true,readStock:true,version:0},tokens.buyer)).status,200);
+const menuDraftBody={id:crypto.randomUUID(),locationId:menuLocation,settingsVersion:1,baseRevision:0,content:{title:'Geprüfte Karte',items:[{recipeId:ledgerNextRecipe.id,name:'Precision recipe',category:'Speisen',description:'',priceCents:650,visible:true}]}};
+assert.equal((await call('menu/draft',menuDraftBody,tokens.buyer)).status,200);
+assert.equal((await call(menuPath,null,tokens.buyer)).card,null);
+const menuDecision={id:menuDraftBody.id,locationId:menuLocation,version:1,decision:'approve',confirmed:false};
+assert.equal((await call('menu/decide',menuDecision,tokens.buyer)).status,400);
+assert.equal((await call('menu/decide',{...menuDecision,confirmed:true},tokens.buyer)).status,200);
+assert.equal((await call(menuPath,null,tokens.buyer)).card.content.items[0].priceCents,650);
+assert.equal((await call('menu/decide',{...menuDecision,confirmed:true},tokens.buyer)).replayed,true);
+console.log('Menu HTTP acceptance passed: migrated production router, authentication, tenant isolation, disabled defaults, explicit approval and repeat-safe decisions.');
 
 await db.close();
