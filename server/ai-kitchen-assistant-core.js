@@ -6,10 +6,10 @@ export function wasteRecommendations(stock,lots,recipes,today){
  const findings=[],eligible=new Set();
  for(const s of stock){const free=Math.max(0,Number(s.quantity)-Number(s.reserved_quantity||0)),batches=lots.filter(b=>b.stock_id===s.id&&Number(b.quantity)>0),sum=batches.reduce((n,b)=>n+Number(b.quantity),0);if(free<=0)continue;
   if(!batches.length){findings.push({stockId:s.id,name:s.name,kind:'missing',message:'Haltbarkeits- und Anbruchdaten fehlen.'});continue;}
-  let allCurrent=true;for(const b of batches){const end=[b.expires_on,b.opened_on?b.opened_expires_on:null].filter(Boolean).sort()[0];const stale=String(b.movement_at_check||0)!==String(s.movement_id||0)||Number(b.stock_at_check)!==Number(s.quantity)||b.checked_on!==today||sum>Number(s.quantity);const missing=!b.expires_on||b.opened_on&&!b.opened_expires_on;
+  let allCurrent=true;for(const b of batches){const end=[b.expires_on,b.opened_on?b.opened_expires_on:null].filter(Boolean).sort()[0];const stale=String(b.movement_at_check||0)!==String(s.movement_id||0)||Number(b.stock_at_check)!==Number(s.quantity)||b.checked_on!==today||sum>Number(s.quantity);const missing=!b.expires_on||!['sealed','opened'].includes(b.opening_state)||b.opening_state==='opened'&&(!b.opened_on||!b.opened_expires_on);
    if(stale||missing||end<today)allCurrent=false;
    const kind=stale?'recheck':missing?'missing':end<today?'expired':end<=new Date(Date.parse(today+'T12:00:00Z')+2*86400000).toISOString().slice(0,10)?'soon':'dated';
-   if(kind!=='dated')findings.push({stockId:s.id,name:s.name,lotId:b.id,label:b.label,quantity:Math.min(Number(b.quantity),free),unit:s.unit,kind,expiresOn:end||null,message:{recheck:'Chargenmenge und Zustand erneut prüfen; Bestand oder Prüftag hat sich geändert.',missing:'Haltbarkeit nach Anbruch oder ursprüngliches Datum fehlt.',expired:'Hinterlegtes Datum überschritten; keine Gerichtsempfehlung.',soon:'Hinterlegtes Datum bald erreicht; vor Verwendung Zustand und Kennzeichnung prüfen.'}[kind]});
+   if(kind!=='dated')findings.push({stockId:s.id,name:s.name,lotId:b.id,label:b.label,quantity:Math.min(Number(b.quantity),free),unit:s.unit,kind,expiresOn:end||null,message:{recheck:'Chargenmenge und Zustand erneut prüfen; Bestand oder Prüftag hat sich geändert.',missing:'Haltbarkeit oder Anbruchzustand ist unvollständig.',expired:'Hinterlegtes Datum überschritten; keine Gerichtsempfehlung.',soon:'Hinterlegtes Datum bald erreicht; vor Verwendung Zustand und Kennzeichnung prüfen.'}[kind]});
   }
   if(allCurrent&&sum>=free)eligible.add(s.id);
  }
