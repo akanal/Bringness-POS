@@ -194,6 +194,11 @@ jobs:
         run: node server/ai-tests/supplier-updates-postgres.mjs
         env:
           SUPPLIER_UPDATE_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
+      - run: node server/ai-tests/learning-assistant.mjs
+      - name: Verify multi-year archive and independent assistant switches on PostgreSQL 16
+        run: node server/ai-tests/learning-assistant.mjs
+        env:
+          LEARNING_TEST_DATABASE_URL: postgres://device_test:device_test@localhost:5432/bringness_device_test
       - run: node server/ai-tests/integration.mjs
       - name: Verify POS authentication, staff and service flows
         run: |

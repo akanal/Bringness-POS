@@ -20,17 +20,19 @@ function fit(rows,active){
  return a.map(r=>r[size]);
 }
 const factor=(coefficients,observation)=>clamp(Math.exp(coefficients[0]+features.reduce((s,k,i)=>s+(observation[k]===true?coefficients[i+1]:0),0)),0.75,1.25);
-export function learnForecast(samples,observation,today){
+export function learnForecast(samples,observation,today,{requireKnowledgeTime=false,comparisonFrom=''}={}){
  if(!validDay(today))throw Error('Invalid learning date');
  const unique=new Map(),thresholds=contextKey(observation?.thresholds);
  for(const s of Array.isArray(samples)?samples:[]){
-  if(!s||!validDay(s.day)||s.day>=today||Date.parse(today)-Date.parse(s.day)>180*86400000||!Number.isInteger(s.hour)||s.hour<0||s.hour>9||s.currentOrders!==0||!Number.isSafeInteger(s.baseline)||s.baseline<5||!Number.isSafeInteger(s.actual)||s.actual<0||s.actual>10000000||features.some(k=>typeof s.observation?.[k]!=='boolean')||contextKey(s.observation.thresholds)!==thresholds)continue;
+  if(!s||!validDay(s.day)||s.day>=today||comparisonFrom&&s.day<comparisonFrom||!Number.isInteger(s.hour)||s.hour<0||s.hour>9||s.currentOrders!==0||!Number.isSafeInteger(s.baseline)||s.baseline<5||!Number.isSafeInteger(s.actual)||s.actual<0||s.actual>10000000||features.some(k=>typeof s.observation?.[k]!=='boolean')||contextKey(s.observation.thresholds)!==thresholds)continue;
+  if(requireKnowledgeTime&&(!Number.isFinite(Date.parse(s.capturedAt))||!Number.isFinite(Date.parse(s.actualKnownAt))||s.capturedAt>=s.actualKnownAt))continue;
   const old=unique.get(s.day);if(!old||s.hour<old.hour)unique.set(s.day,s);
  }
  const rows=[...unique.values()].sort((a,b)=>a.day.localeCompare(b.day));
  const base={available:false,applied:false,factor:1,sampleDays:rows.length,requiredDays:42,method:'Chronologischer Lernvergleich mit zurückgehaltenen Tagen; statistische Zusammenhänge, keine Kausalitätsaussage.'};
  if(rows.length<42)return {...base,message:'Lernvergleich sammelt abgeschlossene Tage mit früher Prognose und vollständigem Wetter.'};
- const split=Math.floor(rows.length*2/3),train=rows.slice(0,split),validation=rows.slice(split);
+ const split=Math.floor(rows.length*2/3),validation=rows.slice(split),cutoff=Date.parse(validation[0].capturedAt),train=rows.slice(0,split).filter(r=>!requireKnowledgeTime||Date.parse(r.actualKnownAt)<=cutoff);
+ if(train.length<28||validation.length<14)return {...base,trainingDays:train.length,message:'Noch zu wenige Lerntage waren vor Beginn der getrennten Prüfung bekannt.'};
  const active=features.map(k=>train.filter(r=>r.observation[k]).length>=8&&train.filter(r=>!r.observation[k]).length>=8);
  const coefficients=fit(train,active);
  const error=(subset,learned)=>subset.reduce((s,r)=>s+Math.abs(r.actual-Math.round(r.baseline*(learned?factor(coefficients,r.observation):1))),0)/subset.length;

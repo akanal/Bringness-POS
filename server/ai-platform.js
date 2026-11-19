@@ -1,3 +1,4 @@
+import {migrateKitchenAssistant,kitchenAssistantRoutes} from './ai-kitchen-assistant.js';
 import {signedStockUnits} from './ai-stock-lifecycle-core.js';
 import {lockAiRestaurant} from './ai-write-authorization.js';
 import {issueLoginSession} from './login-session.js';
@@ -69,7 +70,7 @@ CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFE
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateStockLifecycle(pool);await migrateAiForecast();await migrateAiPlanning();await migrateAutoProcurement();await migrateDeliveryNotes();await migrateAiTariffs();await migrateAiSubscriptions();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateStockLifecycle(pool);await migrateAiForecast();await migrateAiPlanning();await migrateKitchenAssistant(pool);await migrateAutoProcurement();await migrateDeliveryNotes();await migrateAiTariffs();await migrateAiSubscriptions();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -180,7 +181,8 @@ export async function handleAiPlatform(req,res){
   if(p==='/api/ai/inventory'||p.startsWith('/api/ai/inventory/')||p==='/api/ai/monitor'||p.startsWith('/api/ai/monitor/')||p==='/api/ai/purchases')return send(res,200,await inventoryRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
   if(p==='/api/ai/order-groups'||p.startsWith('/api/ai/order-groups/')||p.startsWith('/api/ai/fulfilment/'))return send(res,200,await fulfilmentRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
   if(['/api/ai/weather-stations','/api/ai/planning-context','/api/ai/planning-settings','/api/ai/local-events','/api/ai/local-events/cancel','/api/ai/purchase-approvals','/api/ai/purchase-delegates','/api/ai/purchase-requests','/api/ai/purchase-requests/decide'].includes(p))return send(res,200,await planningRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
-  if(p==='/api/ai/forecast')return send(res,200,await forecastRoutes(p,req.method,u,url));
+  if(['/api/ai/kitchen-assistant','/api/ai/kitchen-assistant/settings','/api/ai/kitchen-assistant/lot'].includes(p))return send(res,200,await kitchenAssistantRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url,{db:pool,forecast:(accountId,locationId)=>forecastRoutes('/api/ai/forecast','GET',{id:accountId,role:'restaurant'},new URL('http://internal/?locationId='+locationId))}));
+  if(['/api/ai/forecast','/api/ai/learning-history'].includes(p))return send(res,200,await forecastRoutes(p,req.method,u,url));
   if(p==='/api/ai/subscriptions'||p.startsWith('/api/ai/subscriptions/'))return send(res,200,{...await subscriptionRoutes(p,req.method,req.method==='POST'?await body(req):{},u),setup:await tariffSetupStatus()});
   if(p==='/api/ai/me'&&req.method==='GET')return send(res,200,{account:u,launch:await settings()});
   if(p==='/api/ai/commissions'&&req.method==='GET'){

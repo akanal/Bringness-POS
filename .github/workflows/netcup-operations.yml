@@ -153,6 +153,8 @@ jobs:
           node --test server/smtp-mail.test.js server/ai-mail-health.test.js
           node server/ai-tests/admin-reset-integration.mjs
           if [ "${{ steps.request.outputs.target }}" = "ai" ]; then
+            node --test server/ai-learning-history-core.test.js server/ai-kitchen-assistant-core.test.js server/ai-forecast-learning.test.js
+            LEARNING_TEST_DATABASE_URL=postgres://device_test:device_test@localhost:5432/bringness_device_test node server/ai-tests/learning-assistant.mjs
             node server/ai-tests/integration.mjs
             node --check server/ai-suppliers.js
             npm ci --ignore-scripts --no-audit --no-fund

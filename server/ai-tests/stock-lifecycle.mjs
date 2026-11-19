@@ -100,14 +100,14 @@ for(const invalid of ['physical','reserved','recipe']){
 }
 await query('UPDATE ai_stock SET quantity=$2,reserved_quantity=$3 WHERE id=$1',[stock,validBalance.quantity,validBalance.reserved_quantity]);
 await query('UPDATE ai_recipe_items SET quantity=$3 WHERE recipe_id=$1 AND stock_id=$2',[recipe,stock,validIngredient]);
-// Render the actual kitchen view and inspect its forms, escaping and quantities.
+// Render lifecycle forms; the optional assistant has separate full-app DOM coverage in integration.mjs.
 const source=fs.readFileSync(new URL('../../apps/web/public/ai-workspace.js',import.meta.url),'utf8');
 const dom=new JSDOM('<div id="content"></div>');const document=dom.window.document;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const definitions=source.split('\n').filter(l=>/^ const (field|choice|option)=/.test(l)).join('\n');
 const table=(labels,rows)=>'<table><thead><tr>'+labels.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table>';
 const api=async path=>({locations:{locations:[{id:location,name:'Küche'}]},recipes:{recipes:[{id:recipe,location_id:location,external_code:'burger',name:'<Burger>',active:true}]},stock:{stock:[await getStock()]},'kitchen-orders':{orders:(await query('SELECT o.*,l.name location_name FROM ai_kitchen_orders o JOIN ai_locations l ON l.id=o.location_id')).rows}}[path]);
-const kitchen=source.slice(source.indexOf(' async function renderKitchen()'),source.indexOf(' function recipeForm('));
-await new Function('api','document','crypto','esc','table','date','units',definitions+'\nlet locations=[],recipes=[],stock=[],kitchenOrders=[];const $=id=>document.getElementById(id);'+kitchen+';return renderKitchen();')(api,document,crypto,esc,table,x=>String(x),{kg:'kg',l:'Liter',piece:'Stück'});
+const kitchen=source.slice(source.indexOf(' async function renderKitchen()'),source.indexOf(' async function renderKitchenAssistant('));
+await new Function('api','document','crypto','esc','table','date','units',definitions+'\nconst renderKitchenAssistant=async()=>{};let locations=[],recipes=[],stock=[],kitchenOrders=[];const $=id=>document.getElementById(id);'+kitchen+';return renderKitchen();')(api,document,crypto,esc,table,x=>String(x),{kg:'kg',l:'Liter',piece:'Stück'});
 assert(document.querySelector('[data-form="kitchen-accept"]'));assert(document.querySelector('[name="portion-'+recipe+'"]'));assert(document.getElementById('content').textContent.includes('<Burger>'));assert(!document.querySelector('burger'));assert(document.querySelector('[name="confirmed"][required]'));checks++;
 console.log(`${checks} PostgreSQL lifecycle/inventory and UI scenarios passed (PGlite + JSDOM).`);await db.close();
