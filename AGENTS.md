@@ -1,5 +1,10 @@
 # Bringness project continuity
 
+## Vorbereitung und Bestandsabgleich — 19.11.2026
+- Fortsetzung des Eigentümerplans bei AI: gemeinsame Zutaten je Tag aus Vorbereitungsmengen gegen Bestand abzüglich Reservierungen und bestätigte datierte Lieferungen rechnen. Nur einmal über Folgetage anrechnen; kein fiktiver Nachschub bei Fehlmengen. Ganze Tage, keine verbleibende Tagesnachfrage oder bestätigte Lieferuhrzeit behaupten.
+- Lesende gemeinsame Bestands-/Liefertransaktion; Einstellungen während Berechnung erneut prüfen. Unbekannte Nachfrage blockiert Folgetage, bekannte Ruhetage nicht. Hinweise ohne Lager-/Bestellwirkung; Beschaffungsübernahme folgt separat. Details/Prüfgrenzen `docs/ai-preparation-stock-20261119.md`. Windows/Offline weiter gesperrt.
+
+
 ## Optionale Vorbereitungszeitfenster — 19.11.2026
 - Eigentümer beauftragt Fortsetzung der Prognosen; eigene Frühstück-/Mittag-/Abendfenster standortweise optional speichern. Volle Zahlungsstunden Europe/Berlin, Beginn inklusive/Ende exklusiv, Übernachtfenster ohne Verschiebung des Kalendertags. Außerhalb und fehlende Zeitdaten ausdrücklich zeigen.
 - Tagesportionen und gerundete Zutatenmengen bei der Aufteilung erhalten; keine automatische Aktivierung oder Lager-/Bestellschreibaktion. Legacy-API ohne neues Feld erhält gespeicherte Fenster; explizit null setzt auf bisherige 17-Uhr-Aufteilung zurück. Versionswechsel während Berechnung verwirft alte Empfehlung.
