@@ -1,5 +1,12 @@
 # Bringness project continuity
 
+## Mehrjähriges AI-Lernen ausdrücklich gefordert — 18.11.2026
+- Neueste Eigentümervorgabe: Lernfunktion ganz genau gestalten und Betriebe jahrelang beobachten können. Die Sechs-Tage-Vorschau ist nur der Planungshorizont, keine Begrenzung der Lernhistorie. Die bisherige bloße Ausweitung der Tageskorrektur genügt nicht.
+- Zuerst langfristige, konto-/standort-/quellengebundene Betriebs- und Qualitätsdaten sowie Jahres-/Saisonvergleiche konzipieren, danach lernende Mehrtagesplanung. Herkunft, damaliger Kenntnisstand, wirksame Öffnungszeiten/Preise/Rezepturen und spätere Konzeptwechsel beachten. Fehlende Historie nicht erfinden; Mengen- und Preisentwicklung trennen.
+- Aktuell höchstens180Tage Lernfenster und400Tage Verkaufsabfrage sind Auswertefenster, kein Nachweis einer Löschfrist. Keine bloße Fensterverlängerung als fertiges Langzeitlernen behaupten. Architekturentwurf und Umsetzungsreihenfolge: docs/ai-long-term-learning-20261118.md. Dieser Eintrag veröffentlicht noch keine neue Laufzeitfunktion.
+- Vorhandene Einkaufs-/Zahlungsfreigaben, Kontentrennung, Windows-/Offline-Sperre und verschobene praktische Abnahme beibehalten. Frühere Prognosen unverändert lassen; Nachbewertungen mit damals verfügbaren Daten und getrennten Prognoseabständen durchführen.
+
+
 ## AI-Lieferantenrückmeldungen ausbauen — 18.11.2026
 - Eigentümer bleibt bei AI und beauftragt die angekündigte Erweiterung der vorhandenen Lieferantenanbindung. Konkrete Lücke: ERP-Schlüssel hatten nur Einzelannahme/-storno; bestätigte gruppenweite Liefertermine, Nichtlieferbarkeit und Ersatzvorschläge sind jetzt über eng begrenzte neue API-Pfade vorbereitet. Bestehende Geschäftslogik verwenden, keine Herstellerzugänge oder Webhooks erfinden.
 - Neue Vorgänge erfordern UUID requestId und confirmed:true. Kanonische identische Wiederholung liefert die dauerhaft gespeicherte Antwort; veränderte Daten409 und keine Rücksetzung neuerer Bestellstände. Aktive Lieferantenrolle und aktueller Schlüssel werden innerhalb derselben Transaktion vor jedem neuen Vorgang oder Replay erneut geprüft.
