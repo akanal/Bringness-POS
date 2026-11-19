@@ -2,15 +2,16 @@ import {uuid} from './ai-policy.js';
 import {validDay} from './ai-planning-core.js';
 import {berlinClock} from './ai-forecast-core.js';
 import {lockAiRestaurant} from './ai-write-authorization.js';
-import {wasteRecommendations,preparationRecommendations} from './ai-kitchen-assistant-core.js';
+import {wasteRecommendations,preparationRecommendations,normalizeServiceWindows} from './ai-kitchen-assistant-core.js';
 const fail=(m,status=400)=>{throw Object.assign(Error(m),{status})};
 const id=v=>{if(!uuid.test(String(v)))fail('Gültige Kennung erforderlich');return v};
 export async function migrateKitchenAssistant(db){await db.query(`
 CREATE TABLE IF NOT EXISTS ai_kitchen_assistant_settings(location_id uuid PRIMARY KEY REFERENCES ai_locations(id),waste_enabled boolean NOT NULL DEFAULT false,preparation_enabled boolean NOT NULL DEFAULT false,version int NOT NULL DEFAULT 0);
+ALTER TABLE ai_kitchen_assistant_settings ADD COLUMN IF NOT EXISTS service_windows jsonb;
 CREATE TABLE IF NOT EXISTS ai_stock_lots(id uuid PRIMARY KEY,account_id uuid NOT NULL REFERENCES ai_accounts(id),location_id uuid NOT NULL REFERENCES ai_locations(id),stock_id uuid NOT NULL REFERENCES ai_stock(id),label text NOT NULL,quantity numeric(15,3) NOT NULL CHECK(quantity>=0),expires_on date,date_kind text NOT NULL CHECK(date_kind IN ('best_before','use_by')),opening_state text NOT NULL DEFAULT 'unknown' CHECK(opening_state IN ('unknown','sealed','opened')),opened_on date,opened_expires_on date,checked_on date NOT NULL,stock_at_check numeric(15,3) NOT NULL,movement_at_check bigint NOT NULL DEFAULT 0,version int NOT NULL DEFAULT 1,updated_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS ai_stock_lots_location ON ai_stock_lots(account_id,location_id,stock_id);
 `);}
-const settings=r=>({wasteEnabled:r?.waste_enabled===true,preparationEnabled:r?.preparation_enabled===true,version:r?.version||0});
+const settings=r=>({wasteEnabled:r?.waste_enabled===true,preparationEnabled:r?.preparation_enabled===true,serviceWindows:r?.service_windows??null,version:r?.version||0});
 export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast}={}){
  if(user.role!=='restaurant')fail('Nur für Restaurantbetreiber',403);
  const locationId=id(method==='GET'?url.searchParams.get('locationId'):b.locationId),today=berlinClock().date;
@@ -18,8 +19,9 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
   const c=await db.connect();try{await c.query('BEGIN');await lockAiRestaurant(c,user.id);if(!(await c.query('SELECT id FROM ai_locations WHERE id=$1 AND account_id=$2 FOR SHARE',[locationId,user.id])).rowCount)fail('Standort nicht gefunden',404);
    if(path==='/api/ai/kitchen-assistant/settings'){
     if(typeof b.wasteEnabled!=='boolean'||typeof b.preparationEnabled!=='boolean'||!Number.isSafeInteger(b.version)||b.version<0)fail('Beide Schalter und aktuelle Version erforderlich');
+    const hasWindows=Object.hasOwn(b,'serviceWindows'),windows=hasWindows?normalizeServiceWindows(b.serviceWindows):null;
     await c.query('INSERT INTO ai_kitchen_assistant_settings(location_id) VALUES($1) ON CONFLICT DO NOTHING',[locationId]);
-    const saved=await c.query('UPDATE ai_kitchen_assistant_settings SET waste_enabled=$2,preparation_enabled=$3,version=version+1 WHERE location_id=$1 AND version=$4 RETURNING *',[locationId,b.wasteEnabled,b.preparationEnabled,b.version]);if(!saved.rowCount)fail('Einstellungen wurden geändert. Neu laden.',409);
+    const saved=await c.query('UPDATE ai_kitchen_assistant_settings SET waste_enabled=$2,preparation_enabled=$3,service_windows=CASE WHEN $5::boolean THEN $6::jsonb ELSE service_windows END,version=version+1 WHERE location_id=$1 AND version=$4 RETURNING *',[locationId,b.wasteEnabled,b.preparationEnabled,b.version,hasWindows,JSON.stringify(windows)]);if(!saved.rowCount)fail('Einstellungen wurden geändert. Neu laden.',409);
     await c.query("INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,'kitchen_assistant_settings')",[user.id,locationId]);await c.query('COMMIT');return {ok:true,settings:settings(saved.rows[0])};
    }
    if(path!=='/api/ai/kitchen-assistant/lot')fail('Funktion nicht gefunden',404);
@@ -44,6 +46,6 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
  const lots=(await db.query("SELECT *,to_char(expires_on,'YYYY-MM-DD') expires_on,to_char(opened_on,'YYYY-MM-DD') opened_on,to_char(opened_expires_on,'YYYY-MM-DD') opened_expires_on,to_char(checked_on,'YYYY-MM-DD') checked_on FROM ai_stock_lots l WHERE account_id=$1 AND location_id=$2 ORDER BY l.expires_on NULLS LAST,l.id LIMIT 2001",[user.id,locationId])).rows;if(lots.length>2000)fail('Chargenübersicht zu groß; Unterstützung erforderlich',409);
  const rows=(await db.query('SELECT r.id,r.name,r.external_code,r.active,i.stock_id,i.quantity FROM ai_recipes r JOIN ai_recipe_items i ON i.recipe_id=r.id WHERE r.account_id=$1 AND r.location_id=$2 ORDER BY r.id,i.stock_id',[user.id,locationId])).rows,recipeMap=new Map();for(const r of rows){if(!recipeMap.has(r.id))recipeMap.set(r.id,{...r,items:[]});recipeMap.get(r.id).items.push({stock_id:r.stock_id,quantity:Number(r.quantity)})}const recipes=[...recipeMap.values()];
  let preparation=[];let preparationMessage='Vorbereitungsempfehlungen ausgeschaltet.';
- if(initial.preparationEnabled){try{const f=await forecast(user.id,locationId);if(f.available){const history=(await db.query("SELECT to_char(day,'YYYY-MM-DD') AS day,orders::text,quality,products FROM ai_learning_days WHERE account_id=$1 AND location_id=$2 AND source_key=$3 AND day<$4::date",[user.id,locationId,f.learningSourceKey,today])).rows;preparation=preparationRecommendations([f,...f.nextDays],history,recipes);preparationMessage='Planungshinweise ohne automatische Buchung oder Bestellung.';}else preparationMessage=f.message;}catch(e){if(e.status===403)throw e;preparationMessage='Prognosedaten derzeit nicht verfügbar. Bitte später neu laden.';}}
- const current=await config();return {locationId,settings:current,stock,lots,waste:current.wasteEnabled?wasteRecommendations(stock,lots,recipes,today):null,preparation:current.preparationEnabled?preparation:[],preparationMessage:current.preparationEnabled?preparationMessage:'Vorbereitungsempfehlungen ausgeschaltet.'};
+ if(initial.preparationEnabled){try{const f=await forecast(user.id,locationId);if(f.available){const history=(await db.query("SELECT to_char(day,'YYYY-MM-DD') AS day,orders::text,quality,products FROM ai_learning_days WHERE account_id=$1 AND location_id=$2 AND source_key=$3 AND day<$4::date",[user.id,locationId,f.learningSourceKey,today])).rows;preparation=preparationRecommendations([f,...f.nextDays],history,recipes,initial.serviceWindows);preparationMessage='Planungshinweise ohne automatische Buchung oder Bestellung.';}else preparationMessage=f.message;}catch(e){if(e.status===403)throw e;preparationMessage='Prognosedaten derzeit nicht verfügbar. Bitte später neu laden.';}}
+ const current=await config();if(current.version!==initial.version){preparation=[];preparationMessage='Einstellungen wurden während der Berechnung geändert. Bitte neu laden.';}return {locationId,settings:current,stock,lots,waste:current.wasteEnabled?wasteRecommendations(stock,lots,recipes,today):null,preparation:current.preparationEnabled?preparation:[],preparationMessage:current.preparationEnabled?preparationMessage:'Vorbereitungsempfehlungen ausgeschaltet.'};
 }

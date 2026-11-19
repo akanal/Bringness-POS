@@ -1,5 +1,11 @@
 # Bringness project continuity
 
+## Optionale Vorbereitungszeitfenster — 19.11.2026
+- Eigentümer beauftragt Fortsetzung der Prognosen; eigene Frühstück-/Mittag-/Abendfenster standortweise optional speichern. Volle Zahlungsstunden Europe/Berlin, Beginn inklusive/Ende exklusiv, Übernachtfenster ohne Verschiebung des Kalendertags. Außerhalb und fehlende Zeitdaten ausdrücklich zeigen.
+- Tagesportionen und gerundete Zutatenmengen bei der Aufteilung erhalten; keine automatische Aktivierung oder Lager-/Bestellschreibaktion. Legacy-API ohne neues Feld erhält gespeicherte Fenster; explizit null setzt auf bisherige 17-Uhr-Aufteilung zurück. Versionswechsel während Berechnung verwirft alte Empfehlung.
+- Technische Prüfungen und autorisierte AI-Veröffentlichung mit bestehendem Netcup-Weg; praktische Inhaberabnahme später, Windows/Offline gesperrt. Belege: docs/ai-service-windows-20261119.md.
+
+
 ## Speisekartenassistenz mit Betreiberfreigabe — 19.11.2026
 - Eigentümer beauftragt ausdrücklich, vor Veröffentlichung Mengen-/Preisempfehlungen und reale POS-Übernahme vollständig zu ergänzen. Implementierung `server/ai-menu*.js`, eigener AI-Einstieg. Standortschalter für Rezepte/Kosten/Bestand/Verkäufe/POS standardmäßig aus; optionaler Ziel-Wareneinsatz vom Betreiber. Vorhandene Prognose/Artikelhistorie verwenden, keine Zielmarge oder Daten erfinden.
 - AI-Kartenfreigabe und zusätzliche POS-Übernahme getrennt ausdrücklich bestätigen, vorher/nachher prüfen. Genau eine aktive POS-Anbindung, aktuelle Inhaberberechtigung, eindeutige Rezept-Artikelzuordnung, aktuelle Sitzung/Konto/Standort und unveränderte Quell-/POS-Stände erforderlich. POS schreibt nur enthaltene bestehende Artikel: Name/Beschreibung/Bruttopreis/Sichtbarkeit/bestehende aktive Kategorie. Reihenfolge, Steuern, Übersetzungen, Bilder, Extras, Rezepte, Lager und Bestellungen bleiben erhalten.

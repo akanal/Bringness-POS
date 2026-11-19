@@ -11,3 +11,22 @@ test('preparation quantities use product sales separately from revenue and never
  assert.equal(preparationRecommendations([f],history.map(d=>({...d,products:[{product_code:'p',quantity:10}]})),recipes)[0].items[0].before17,null);
  assert.equal(preparationRecommendations([{...f,closed:true}],history,recipes)[0].available,false);assert.equal(preparationRecommendations([f],history.slice(0,2),recipes)[0].available,false);
 });
+const windows=[{id:'breakfast',startHour:6,endHour:11},{id:'lunch',startHour:11,endHour:17},{id:'dinner',startHour:17,endHour:0}];
+function preparationFixture(products,rs=recipes){const history=[1,2,3].map(n=>({day:`2026-11-0${n}`,quality:'sales',orders:10,products}));return preparationRecommendations([{ready:true,date:today,comparisonDates:history.map(d=>d.day),expectedOrders:11}],history,rs,windows)[0].items[0];}
+test('service windows conserve portions and rounded ingredient totals at exact boundaries',()=>{
+ const item=preparationFixture([5,6,11,17].map((hour,i)=>({product_code:'p',quantity:i+1,hour})),[{...recipes[0],items:[{stock_id:'a',quantity:.333}]}]);
+ assert.equal(item.portions,11);assert.deepEqual(item.serviceWindows.map(w=>w.portions),[2,3,5,1]);
+ assert.equal(item.serviceWindows.reduce((s,w)=>s+w.portions,0),item.portions);
+ assert.equal(Math.round(item.serviceWindows.reduce((s,w)=>s+w.ingredients[0].quantity,0)*1000),Math.round(item.ingredients[0].quantity*1000));
+});
+test('overnight windows keep calendar dates and missing hours remain unknown',()=>{
+ const history=[1,2,3].map(n=>({day:`2026-11-0${n}`,quality:'sales',orders:10,products:[0,2,3,21,22,23].map(hour=>({product_code:'p',quantity:1,hour}))})),f={ready:true,date:today,comparisonDates:history.map(d=>d.day),expectedOrders:10};
+ const r=preparationRecommendations([f],history,recipes,[{id:'dinner',startHour:22,endHour:3}])[0];assert.deepEqual(r.items[0].serviceWindows.map(w=>w.portions),[4,2]);
+ for(const hour of [undefined,null,-1,24,12.5,'12'])assert(preparationFixture([{product_code:'p',quantity:5,hour}]).serviceWindows.every(w=>w.portions===null&&w.ingredients===null));
+});
+test('invalid or overlapping windows are rejected; legacy callers retain their split',async()=>{
+ const {normalizeServiceWindows}=await import('./ai-kitchen-assistant-core.js');
+ for(const bad of [[],{},[{id:'other',startHour:6,endHour:11}],[{id:'lunch',startHour:6,endHour:6}],[{id:'lunch',startHour:6.5,endHour:11}],[{id:'lunch',startHour:6,endHour:24}],[{id:'dinner',startHour:22,endHour:3},{id:'breakfast',startHour:2,endHour:6}]])assert.throws(()=>normalizeServiceWindows(bad),e=>e.status===400);
+ assert.equal(normalizeServiceWindows(null),null);assert.deepEqual(normalizeServiceWindows(windows),windows);
+ const history=[1,2,3].map(n=>({day:`2026-11-0${n}`,quality:'sales',orders:10,products:[{product_code:'p',quantity:5,hour:12}]}));assert.equal(preparationRecommendations([{ready:true,date:today,comparisonDates:history.map(d=>d.day),expectedOrders:10}],history,recipes)[0].items[0].serviceWindows,null);
+});
