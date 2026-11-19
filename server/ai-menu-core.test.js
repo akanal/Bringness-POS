@@ -14,3 +14,13 @@ test('menu advice marks missing costs and scarce unreserved stock without invent
  assert(r.notes.some(n=>n.includes('unvollständig')));assert(r.notes.some(n=>n.includes('Freier Bestand')));assert.equal(r.priceCents,undefined);
  assert.notEqual(menuDigest(item),menuDigest({...item,priceCents:700}));
 });
+
+test('menu price advice requires confirmed costs, actual tax and explicit owner target',async()=>{
+ const {menuPriceSuggestion:price}=await import('./ai-menu-recommendations.js');
+ const r={id:recipeId,name:'Suppe',cost:{complete:true,netCents:150},previousCost:{complete:true,netCents:100}};
+ assert.equal(price(r,{tax_rate:'19',price_cents:500},3000).suggestedGrossCents,595);
+ assert.equal(price(r,{tax_rate:'19'},3000).costChangeCents,50);
+ for(const target of [null,undefined,0,99,10001,3000.5])assert.equal(price(r,{tax_rate:'19'},target).suggestedGrossCents,null);
+ assert.equal(price(r,null,3000).suggestedGrossCents,null);
+ assert.equal(price({...r,cost:{complete:false}}, {tax_rate:19},3000).suggestedGrossCents,null);
+});

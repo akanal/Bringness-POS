@@ -1,12 +1,15 @@
+import {historySourceKey} from '../ai-learning-history-core.js';
 import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {PGlite} from '@electric-sql/pglite';
 import pg from 'pg';
+import {menuRecommendations} from '../ai-menu-recommendations.js';
+import {migrateMenuPos} from '../ai-menu-pos.js';
 import {migrateAiMenu,aiMenuRoutes} from '../ai-menu.js';
 const connectionString=process.env.MENU_TEST_DATABASE_URL;let admin,schema;
 if(connectionString){const u=new URL(connectionString);assert(['localhost','127.0.0.1'].includes(u.hostname)&&u.pathname==='/bringness_device_test');admin=new pg.Pool({connectionString});schema='menu_'+randomUUID().replaceAll('-','');await admin.query('CREATE SCHEMA '+schema);}
 const engine=connectionString?new pg.Pool({connectionString,options:'-c search_path='+schema+' -c statement_timeout=15000'}):new PGlite();if(!connectionString)await engine.waitReady;else engine.exec=sql=>engine.query(sql);
 const query=async(sql,args)=>{if(sql.includes('CREATE TABLE')){await engine.exec(sql);return {rows:[],rowCount:0}}const r=await engine.query(sql,args);return {...r,rowCount:r.rowCount??(r.rows.length||r.affectedRows||0)}};
 const db={query,connect:connectionString?()=>engine.connect():async()=>({query,release(){}})},account=randomUUID(),other=randomUUID(),loc=randomUUID(),foreign=randomUUID(),recipe=randomUUID(),stock=randomUUID(),user={id:account,role:'restaurant'};
-const call=(path,method='GET',b={},u=user,extra={})=>aiMenuRoutes('/api/ai/menu'+path,method,b,u,new URL('http://local/?locationId='+loc),{db,...extra});
+const call=(path,method='GET',b={},u=user,extra={})=>aiMenuRoutes('/api/ai/menu'+path,method,b,u,new URL('http://local/?locationId='+loc),{db,posDb:db,...extra});
 try{
  await engine.exec('CREATE TABLE ai_accounts(id uuid PRIMARY KEY,role text,status text);CREATE TABLE ai_locations(id uuid PRIMARY KEY,account_id uuid);CREATE TABLE ai_sessions(token_hash text PRIMARY KEY,account_id uuid,expires_at timestamptz);CREATE TABLE ai_recipes(id uuid PRIMARY KEY,account_id uuid,location_id uuid,name text,external_code text,active boolean);CREATE TABLE ai_stock(id uuid PRIMARY KEY,account_id uuid,location_id uuid,name text,unit text,quantity numeric,reserved_quantity numeric);CREATE TABLE ai_recipe_items(recipe_id uuid,stock_id uuid,quantity numeric);CREATE TABLE ai_confirmed_purchase_prices(stock_id uuid,account_id uuid,unit text,unit_cents bigint,received_at timestamptz,source_id uuid);CREATE TABLE ai_audit(actor_id uuid,target_id uuid,action text);');
  await migrateAiMenu(db);await migrateAiMenu(db);
@@ -33,6 +36,34 @@ try{
  const costs=await make();await query("INSERT INTO ai_confirmed_purchase_prices VALUES($1,$2,'kg',200,now(),$3)",[stock,account,randomUUID()]);await assert.rejects(decide(costs),e=>e.status===409);
  assert.equal(Number((await query('SELECT quantity FROM ai_stock')).rows[0].quantity),3);assert.equal((await query('SELECT name FROM ai_recipes')).rows[0].name,'Neue Suppe');
  assert.equal((await call('')).card.content.title,'Neue Karte');
+ // Actual mapped POS writes use the same SQL engine in this isolated schema.
+ await engine.exec(`CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid);CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid,role text,status text,must_change_password boolean DEFAULT false);CREATE TABLE categories(id uuid PRIMARY KEY,restaurant_id uuid,name text,active boolean);CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid,category_id uuid,name text,description text,price_cents int,tax_rate numeric,active boolean,image_url text);CREATE TABLE audit_log(company_id uuid,actor_user_id uuid,event_type text,entity_type text,entity_id uuid,payload jsonb);CREATE TABLE ai_connectors(id uuid PRIMARY KEY,account_id uuid,location_id uuid,kind text,active boolean,pos_user_id uuid,pos_restaurant_id uuid,pos_company_id uuid);`);
+ await migrateMenuPos(db);await migrateMenuPos(db);
+ const restaurant=randomUUID(),owner=randomUUID(),company=randomUUID(),product=randomUUID(),category=randomUUID(),connector=randomUUID();
+ await query('INSERT INTO restaurants VALUES($1,$2)',[restaurant,company]);await query("INSERT INTO users VALUES($1,$2,'owner','active',false)",[owner,company]);await query("INSERT INTO categories VALUES($1,$2,'Suppen',true)",[category,restaurant]);
+ await query("INSERT INTO products VALUES($1,$2,$3,'Alte Suppe','Original',500,19,true,'keep-image')",[product,restaurant,category]);await query("INSERT INTO ai_connectors VALUES($1,$2,$3,'pos',true,$4,$5,$6)",[connector,account,loc,owner,restaurant,company]);await query('UPDATE ai_recipes SET external_code=$1 WHERE id=$2',[product,recipe]);
+ const enabled=await call('/settings','POST',{locationId:loc,version,enabled:true,readCosts:true,readStock:true,readSales:true,readPos:true,targetCostBps:3000});version=enabled.settings.version;
+ const posData=await call('');assert.equal(posData.posSnapshot.products[0].price_cents,500);assert.equal(posData.prices[0].suggestedGrossCents,397);
+ const posMake=async()=>make({posDigest:(await call('')).posDigest});
+ const preview=await call('');await query('UPDATE products SET price_cents=501 WHERE id=$1',[product]);await assert.rejects(make({posDigest:preview.posDigest}),e=>e.status===409);
+ const changed=await posMake();await decide(changed);await query('UPDATE products SET price_cents=502 WHERE id=$1',[product]);
+ const publish=(draft,confirmed=true)=>call('/publish','POST',{locationId:loc,id:draft.id,confirmed});
+ await assert.rejects(publish(changed),e=>e.status===409);assert.equal((await query('SELECT price_cents FROM products')).rows[0].price_cents,502);
+ const live=await posMake();await decide(live);await assert.rejects(publish(live,false),e=>e.status===403);
+ assert.equal((await publish(live)).published.productsUpdated,1);
+ const saved=(await query('SELECT * FROM products')).rows[0];assert.equal(saved.name,'Suppe');assert.equal(saved.price_cents,650);assert.equal(Number(saved.tax_rate),19);assert.equal(saved.image_url,'keep-image');
+ // Simulate lost AI acknowledgement after committed POS write, then an independent edit.
+ await query('UPDATE ai_menu_drafts SET pos_result=NULL WHERE id=$1',[live.id]);await query('UPDATE products SET price_cents=700 WHERE id=$1',[product]);assert.equal((await publish(live)).published.replayed,true);assert.equal((await query('SELECT price_cents FROM products')).rows[0].price_cents,700);
+ await query("UPDATE users SET status='suspended' WHERE id=$1",[owner]);await assert.rejects(publish(live),e=>e.status===403);await query("UPDATE users SET status='active' WHERE id=$1",[owner]);
+ const wrong=await make({posDigest:(await call('')).posDigest,content:{...content,items:[{...content.items[0],category:'Unknown'}]}});await decide(wrong);await assert.rejects(publish(wrong),e=>e.status===409);assert.equal((await query('SELECT price_cents FROM products')).rows[0].price_cents,700);
+ await engine.exec('CREATE TABLE ai_learning_days(account_id uuid,location_id uuid,source_key text,day date,orders bigint,quality text,products jsonb);');
+ const sourceKey=historySourceKey((await query('SELECT * FROM ai_connectors')).rows);
+ const days=['2026-11-01','2026-11-08','2026-11-15'];for(const day of days)await query("INSERT INTO ai_learning_days VALUES($1,$2,$5,$3,10,'sales',$4::jsonb)",[account,loc,day,JSON.stringify([{product_code:product,quantity:3,hour:12}]),sourceKey]);
+ const f={available:true,ready:true,closed:false,date:'2026-11-19',comparisonDates:days,expectedOrders:20,learningSourceKey:sourceKey,nextDays:[]};
+ const advice=await menuRecommendations(user,loc,{db,forecast:async()=>f});assert.equal(advice.preparation[0].items[0].portions,6);assert.equal(advice.preparation[0].items[0].before17,6);
+ await assert.rejects(menuRecommendations(user,loc,{db,forecast:async()=>f,sessionHash:'expired'}),e=>e.status===401);
+ const missing=await menuRecommendations(user,loc,{db,forecast:async()=>({...f,available:false,message:'Keine Daten'})});assert.equal(missing.message,'Keine Daten');assert.deepEqual(missing.preparation,[]);
+ await call('/settings','POST',{locationId:loc,version,enabled:true,readCosts:true,readStock:true,readSales:false,readPos:false,targetCostBps:null});version++;await assert.rejects(menuRecommendations(user,loc,{db,forecast:async()=>{throw Error('Must not fetch disabled history')}}),e=>e.status===403);
  if(connectionString){const a=await make(),b=await make({content:{...content,title:'Concurrent'}});const results=await Promise.allSettled([decide(a),decide(b)]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.status,409);
  const blocker=await engine.connect();let pid;try{await blocker.query('BEGIN');await blocker.query("UPDATE ai_accounts SET status='suspended' WHERE id=$1",[account]);const tracked={connect:async()=>{const c=await engine.connect();pid=(await c.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;return c;}};const waiting=aiMenuRoutes('/api/ai/menu','GET',{},user,new URL('http://local/?locationId='+loc),{db:tracked});waiting.catch(()=>{});let blocked=false;for(let i=0;i<200;i++){if(pid&&(await admin.query('SELECT 1 FROM pg_locks WHERE pid=$1 AND NOT granted',[pid])).rowCount){blocked=true;break}await new Promise(r=>setTimeout(r,5));}assert(blocked);await blocker.query('COMMIT');await assert.rejects(waiting,e=>e.status===403);}finally{await blocker.query('ROLLBACK');blocker.release();}}
  console.log('Menu assistant database acceptance passed: disabled defaults, account/location/session isolation, explicit approval, immutable decisions/replay, data/grant/card invalidation, required prices, and unchanged recipe/stock data.');
