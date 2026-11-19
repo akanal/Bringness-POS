@@ -2,6 +2,7 @@ import {uuid} from './ai-policy.js';
 import {validDay} from './ai-planning-core.js';
 import {berlinClock} from './ai-forecast-core.js';
 import {lockAiRestaurant} from './ai-write-authorization.js';
+import {preparationStockPlan} from './ai-preparation-stock.js';
 import {wasteRecommendations,preparationRecommendations,normalizeServiceWindows} from './ai-kitchen-assistant-core.js';
 const fail=(m,status=400)=>{throw Object.assign(Error(m),{status})};
 const id=v=>{if(!uuid.test(String(v)))fail('Gültige Kennung erforderlich');return v};
@@ -42,10 +43,22 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
  if(method!=='GET'||path!=='/api/ai/kitchen-assistant')fail('Methode nicht erlaubt',405);
  if(!(await db.query("SELECT l.id FROM ai_locations l JOIN ai_accounts a ON a.id=l.account_id WHERE l.id=$1 AND l.account_id=$2 AND a.status='active' AND a.role='restaurant'",[locationId,user.id])).rowCount)fail('Standort nicht gefunden',404);
  const config=async()=>settings((await db.query('SELECT * FROM ai_kitchen_assistant_settings WHERE location_id=$1',[locationId])).rows[0]);const initial=await config();
- const stock=(await db.query('SELECT s.*,(SELECT coalesce(max(m.id),0)::text FROM ai_stock_moves m WHERE m.stock_id=s.id) movement_id FROM ai_stock s WHERE s.account_id=$1 AND s.location_id=$2 ORDER BY s.name,s.id',[user.id,locationId])).rows;
+ let stock=(await db.query('SELECT s.*,(SELECT coalesce(max(m.id),0)::text FROM ai_stock_moves m WHERE m.stock_id=s.id) movement_id FROM ai_stock s WHERE s.account_id=$1 AND s.location_id=$2 ORDER BY s.name,s.id',[user.id,locationId])).rows;
  const lots=(await db.query("SELECT *,to_char(expires_on,'YYYY-MM-DD') expires_on,to_char(opened_on,'YYYY-MM-DD') opened_on,to_char(opened_expires_on,'YYYY-MM-DD') opened_expires_on,to_char(checked_on,'YYYY-MM-DD') checked_on FROM ai_stock_lots l WHERE account_id=$1 AND location_id=$2 ORDER BY l.expires_on NULLS LAST,l.id LIMIT 2001",[user.id,locationId])).rows;if(lots.length>2000)fail('Chargenübersicht zu groß; Unterstützung erforderlich',409);
  const rows=(await db.query('SELECT r.id,r.name,r.external_code,r.active,i.stock_id,i.quantity FROM ai_recipes r JOIN ai_recipe_items i ON i.recipe_id=r.id WHERE r.account_id=$1 AND r.location_id=$2 ORDER BY r.id,i.stock_id',[user.id,locationId])).rows,recipeMap=new Map();for(const r of rows){if(!recipeMap.has(r.id))recipeMap.set(r.id,{...r,items:[]});recipeMap.get(r.id).items.push({stock_id:r.stock_id,quantity:Number(r.quantity)})}const recipes=[...recipeMap.values()];
  let preparation=[];let preparationMessage='Vorbereitungsempfehlungen ausgeschaltet.';
  if(initial.preparationEnabled){try{const f=await forecast(user.id,locationId);if(f.available){const history=(await db.query("SELECT to_char(day,'YYYY-MM-DD') AS day,orders::text,quality,products FROM ai_learning_days WHERE account_id=$1 AND location_id=$2 AND source_key=$3 AND day<$4::date",[user.id,locationId,f.learningSourceKey,today])).rows;preparation=preparationRecommendations([f,...f.nextDays],history,recipes,initial.serviceWindows);preparationMessage='Planungshinweise ohne automatische Buchung oder Bestellung.';}else preparationMessage=f.message;}catch(e){if(e.status===403)throw e;preparationMessage='Prognosedaten derzeit nicht verfügbar. Bitte später neu laden.';}}
- const current=await config();if(current.version!==initial.version){preparation=[];preparationMessage='Einstellungen wurden während der Berechnung geändert. Bitte neu laden.';}return {locationId,settings:current,stock,lots,waste:current.wasteEnabled?wasteRecommendations(stock,lots,recipes,today):null,preparation:current.preparationEnabled?preparation:[],preparationMessage:current.preparationEnabled?preparationMessage:'Vorbereitungsempfehlungen ausgeschaltet.'};
+ let preparationStock=[];
+ if(preparation.length){
+  const lastDay=preparation.map(d=>d.date).sort().at(-1);
+  const c=await db.connect();try{
+   await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+   if(!(await c.query("SELECT l.id FROM ai_locations l JOIN ai_accounts a ON a.id=l.account_id WHERE l.id=$1 AND l.account_id=$2 AND a.status='active' AND a.role='restaurant'",[locationId,user.id])).rowCount)fail('Standort nicht gefunden',404);
+   const planStock=(await c.query('SELECT s.*,(SELECT coalesce(max(m.id),0)::text FROM ai_stock_moves m WHERE m.stock_id=s.id) movement_id FROM ai_stock s WHERE s.account_id=$1 AND s.location_id=$2 ORDER BY s.name,s.id',[user.id,locationId])).rows;
+   const deliveries=(await c.query(`SELECT o.stock_id AS "stockId",to_char(COALESCE(o.confirmed_delivery_date,o.delivery_date),'YYYY-MM-DD') AS date,sum(o.pack_quantity*o.packs)::text AS quantity FROM ai_orders o JOIN ai_stock s ON s.id=o.stock_id AND s.account_id=o.buyer_id WHERE o.buyer_id=$1 AND s.location_id=$2 AND o.status='accepted' AND NOT o.unavailable AND COALESCE(o.confirmed_delivery_date,o.delivery_date) BETWEEN $3::date AND $4::date AND NOT EXISTS(SELECT 1 FROM ai_order_replacements r WHERE r.order_id=o.id AND r.status='pending') GROUP BY o.stock_id,COALESCE(o.confirmed_delivery_date,o.delivery_date)`,[user.id,locationId,today,lastDay])).rows;
+   preparationStock=preparationStockPlan(preparation,planStock,deliveries,today);
+   await c.query('COMMIT');stock=planStock;
+  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
+ const current=await config();if(current.version!==initial.version){preparation=[];preparationStock=[];preparationMessage='Einstellungen wurden während der Berechnung geändert. Bitte neu laden.';}return {locationId,settings:current,stock,lots,waste:current.wasteEnabled?wasteRecommendations(stock,lots,recipes,today):null,preparation:current.preparationEnabled?preparation:[],preparationStock:current.preparationEnabled?preparationStock:[],preparationMessage:current.preparationEnabled?preparationMessage:'Vorbereitungsempfehlungen ausgeschaltet.'};
 }

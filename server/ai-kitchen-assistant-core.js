@@ -42,7 +42,7 @@ function splitServiceWindows(windows,selected,recipe,total,hasHours){
 }
 export function preparationRecommendations(forecasts,history,recipes,serviceWindows=null){
  serviceWindows=normalizeServiceWindows(serviceWindows);
- return forecasts.map(f=>{if(!f.ready||f.closed)return {date:f.date,available:false,message:f.closed?'Als geschlossen hinterlegt.':'Noch zu wenige Vergleichstage.',items:[]};
+ return forecasts.map(f=>{if(!f.ready||f.closed)return {date:f.date,available:false,closed:f.closed===true,message:f.closed?'Als geschlossen hinterlegt.':'Noch zu wenige Vergleichstage.',items:[]};
   const selected=history.filter(d=>d.quality==='sales'&&f.comparisonDates.includes(d.day)),actualOrders=median(selected.map(d=>Number(d.orders))),factor=actualOrders>0?Math.max(.25,Math.min(4,f.expectedOrders/actualOrders)):null;
   if(selected.length<3||factor===null)return {date:f.date,available:false,message:'Mindestens drei archivierte Verkaufstage mit Artikelmengen erforderlich.',items:[]};
   const items=recipes.filter(r=>r.active).map(r=>{const daily=selected.map(d=>(d.products||[]).filter(p=>p.product_code===r.external_code).reduce((n,p)=>n+Number(p.quantity),0)),portionEstimate=median(daily)*factor;
