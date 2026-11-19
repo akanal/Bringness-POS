@@ -1,5 +1,12 @@
 # Bringness project continuity
 
+## AI-Lieferantenrückmeldungen ausbauen — 18.11.2026
+- Eigentümer bleibt bei AI und beauftragt die angekündigte Erweiterung der vorhandenen Lieferantenanbindung. Konkrete Lücke: ERP-Schlüssel hatten nur Einzelannahme/-storno; bestätigte gruppenweite Liefertermine, Nichtlieferbarkeit und Ersatzvorschläge sind jetzt über eng begrenzte neue API-Pfade vorbereitet. Bestehende Geschäftslogik verwenden, keine Herstellerzugänge oder Webhooks erfinden.
+- Neue Vorgänge erfordern UUID requestId und confirmed:true. Kanonische identische Wiederholung liefert die dauerhaft gespeicherte Antwort; veränderte Daten409 und keine Rücksetzung neuerer Bestellstände. Aktive Lieferantenrolle und aktueller Schlüssel werden innerhalb derselben Transaktion vor jedem neuen Vorgang oder Replay erneut geprüft.
+- Restaurantzustimmung, Wareneingang, Lagerkorrektur, Zahlungen und Provisionsausgleich bleiben außerhalb des Lieferantenschlüssels. Neue API-Sammelaktionen/Detailabruf maximal500Positionen; ältere Einzelaktionen kompatibel. Anleitung, Quellenvertrag und Prüfgrenzen: docs/ai-supplier-feedback-20261118.md.
+- Windows/Offline bleiben gesperrt, praktische Inhaberprüfung später. Neue parallele PostgreSQL-Sitzungsprüfung im bestehenden POS/AI-Workflow tatsächlich bestehen lassen; technische Livebereitstellung ausschließlich über das vorhandene AI-Ziel, mit Sicherung und Live-Abgleich.
+
+
 ## Bringness AI: öffentliche Termine und Lernvergleich — 18.11.2026
 - Eigentümer beauftragt nach akzeptierter POS-Artikeleingabe den vorgeschlagenen AI-Block: öffentliche Veranstaltungsdaten und Prognoseverbesserungen. Vorhandene AI-Planung weiterverwenden; Windows/Offline bleiben gesperrt.
 - Öffentliche kulturdaten.berlin-Termine mit Quelle, Abrufzeit, Umkreis und gekennzeichneter GeoNames-PLZ-Näherung. Überlappende Seiten deduplizieren und Unvollständigkeit zeigen. Keine Restaurant-/Verkaufsdaten zur Quelle senden. Einfluss auf vorhandene Beschaffungsregeln benötigt die neue standardmäßig ausgeschaltete Standortwahl.

@@ -3,7 +3,7 @@
   "info": {
     "title": "Bringness AI Supplier API",
     "version": "1.0.0",
-    "description": "Lieferantengebundene Schnittstelle. Separaten Schlüssel unter Lieferanten-API erstellen und aktivieren. 600 Anfragen je Verbindung pro 15 Minuten. Produktimport bis 100 Produkte und 220000 Zeichen je Anfrage. Jede neue Änderung braucht eine neue requestId; Netzfehler mit gleicher ID und gleichen Daten wiederholen. API-Schlüssel und Login-Token sind getrennt. Keine Wareneingangsbestätigung, keine Änderung von Provisionen. Verfügbarkeit ist eine Lieferbar-Kennzeichnung, keine Reservierung physischer Bestände."
+    "description": "Lieferantengebundene Schnittstelle. Separaten Schlüssel unter Lieferanten-API erstellen und aktivieren. 600 Anfragen je Verbindung pro 15 Minuten. Produktimport bis 100 Produkte und 220000 Zeichen je Anfrage. Jede neue Änderung braucht eine neue requestId; Netzfehler mit gleicher ID und gleichen Daten wiederholen. API-Schlüssel und Login-Token sind getrennt. Keine Wareneingangsbestätigung, keine Änderung von Provisionen. Verfügbarkeit ist eine Lieferbar-Kennzeichnung, keine Reservierung physischer Bestände. Erweiterte Lieferantenrückmeldungen: bestätigte Liefertermine, Nichtlieferbarkeit und Ersatzvorschläge mit dauerhaft wiederholbaren requestId-Kennungen. Herstelleradapter und Webhooks sind nicht enthalten."
   },
   "servers": [
     {
@@ -1260,6 +1260,397 @@
           }
         }
       }
+    },
+    "/api/ai/v1/supplier/order-groups/{groupId}/accept": {
+      "post": {
+        "operationId": "supplierFeedbackAccept",
+        "summary": "Gesamten Lieferauftrag mit Liefertermin bestätigen",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestId",
+                  "confirmed",
+                  "deliveryDate"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "confirmed": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "deliveryDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Bestätigter Berliner Kalendertag, heute oder später."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SupplierFeedbackSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "401": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "403": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "404": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "405": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "409": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "429": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "500": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "503": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/order-groups/{groupId}/cancel": {
+      "post": {
+        "operationId": "supplierFeedbackCancel",
+        "summary": "Offenen Lieferauftrag mit Begründung stornieren",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestId",
+                  "confirmed",
+                  "reason"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "confirmed": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SupplierFeedbackSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "401": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "403": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "404": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "405": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "409": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "429": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "500": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "503": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/orders/{orderId}/unavailable": {
+      "post": {
+        "operationId": "supplierFeedbackUnavailable",
+        "summary": "Nichtlieferbarkeit einer eigenen Position melden",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestId",
+                  "confirmed",
+                  "reason"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "confirmed": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "pauseProduct": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SupplierFeedbackSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "401": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "403": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "404": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "405": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "409": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "429": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "500": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "503": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/orders/{orderId}/replacement": {
+      "post": {
+        "operationId": "supplierFeedbackReplacement",
+        "summary": "Eigenen lieferbaren Ersatz vorschlagen; Restaurant entscheidet",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestId",
+                  "confirmed",
+                  "reason",
+                  "productId",
+                  "packs"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "confirmed": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "productId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "packs": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SupplierFeedbackSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "401": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "403": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "404": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "405": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "409": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "429": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "500": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          },
+          "503": {
+            "$ref": "#/components/responses/SupplierFeedbackError"
+          }
+        }
+      }
+    },
+    "/api/ai/v1/supplier/order-groups/{groupId}": {
+      "get": {
+        "operationId": "supplierGroupDetail",
+        "summary": "Alle eigenen Positionen eines Auftrags lesen (höchstens 500, sonst 409)",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vollständiger eigener Lieferauftrag; ohne supplier_order_id wird die einzelne Bestell-ID verwendet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "groupId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "orders": {
+                      "type": "array",
+                      "maxItems": 500,
+                      "items": {
+                        "$ref": "#/components/schemas/Order"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Kein eigener Auftrag"
+          },
+          "409": {
+            "description": "Mehr als 500 Positionen; keine abgeschnittene Antwort"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1426,6 +1817,126 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "supplier_order_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "confirmed_delivery_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "unavailable": {
+            "type": "boolean"
+          },
+          "unavailable_reason": {
+            "type": "string"
+          },
+          "ordered_packs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "original_net_cents": {
+            "type": "string",
+            "nullable": true
+          },
+          "delivered_packs": {
+            "type": "string",
+            "nullable": true
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "replacement": {
+            "type": "object",
+            "nullable": true,
+            "description": "Neuester Ersatzvorschlag einschließlich gespeichertem Produkt-/Preissnapshot; Zustimmung ausschließlich durch Restaurant.",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "cancelled"
+                ]
+              },
+              "snapshot": {
+                "type": "object"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "decidedAt": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "SupplierFeedbackSuccess": {
+        "description": "Dauerhaft gespeicherte Rückmeldung. Identische requestId und Nutzdaten geben ursprüngliche Bestätigung mit replayed:true zurück, ohne spätere Zustände zurückzusetzen.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "replayed": {
+                  "type": "boolean"
+                },
+                "groupId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "positions": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "adminNotified": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SupplierFeedbackError": {
+        "description": "Keine Teiländerung. 400 Eingabe/Zustimmung prüfen; 401/403 aktuelle Freigabe prüfen; 404 kein eigener Auftrag; 409 widersprüchliche Kennung oder gesperrter Bestellzustand; 429/500/503 denselben gespeicherten Vorgang später wiederholen.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "error"
+              ],
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }

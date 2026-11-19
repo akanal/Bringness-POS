@@ -1,4 +1,5 @@
-import {ensureOrderReady,resolveOrderProblems} from './ai-fulfilment.js';
+import {supplierFulfilmentAction,authorizeSupplierConnector} from './ai-supplier-actions.js';
+import {fulfilmentRoutes,ensureOrderReady,resolveOrderProblems} from './ai-fulfilment.js';
 import {supplierMayTrade} from './ai-collection.js';
 import crypto from 'node:crypto';
 import {aiPool} from './ai-database.js';
@@ -63,14 +64,19 @@ export async function supplierAccountRoutes(p,method,b,u){
   fail('Methode nicht erlaubt',405);
 }
 
+const supplierOrderSelection=`o.id,o.product_id,p.external_code,o.product_name,o.unit,o.pack_quantity,o.packs,o.net_cents,o.commission_bps,o.commission_cents,o.status,o.supplier_order_id,(SELECT jsonb_build_object('id',r.id,'status',r.status,'snapshot',r.snapshot,'reason',r.reason,'createdAt',r.created_at,'decidedAt',r.decided_at) FROM ai_order_replacements r WHERE r.order_id=o.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) replacement,o.delivery_date,o.confirmed_delivery_date,o.unavailable,o.unavailable_reason,o.ordered_packs,o.original_net_cents,o.delivered_packs,o.received_at,o.delivery_address,o.buyer_email,o.created_at,o.updated_at,to_char(o.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') cursor_time`;
 const productFields='id,external_code,name,unit,pack_quantity,price_cents,minimum_packs,active,available';
 export async function supplierPublicRoutes(p,method,url,token,b={}){
   const pool=aiPool();
-  const link=(await pool.query("SELECT c.* FROM ai_supplier_connectors c JOIN ai_accounts a ON a.id=c.supplier_id WHERE c.token_hash=$1 AND c.active AND a.status='active' AND a.role IN ('dealer','wholesaler','manufacturer')",[hash(token)])).rows[0];
+  const link=(await pool.query("SELECT c.*,a.role AS supplier_role FROM ai_supplier_connectors c JOIN ai_accounts a ON a.id=c.supplier_id WHERE c.token_hash=$1 AND c.active AND a.status='active' AND a.role IN ('dealer','wholesaler','manufacturer')",[hash(token)])).rows[0];
   if(!link)fail('Ungültiger oder pausierter Lieferanten-Schlüssel',401);
   const count=(await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash('supplier-api:'+link.id)])).rows[0].count;
   if(count>600)fail('Anfragelimit erreicht. Bitte später wiederholen.',429);
-  if(p==='/api/ai/v1/supplier/status'&&method==='GET')return {version:'1',connectorId:link.id,lastSync:link.last_sync,commissionBps:200,permissions:['products:read','products:write','orders:read','orders:accept','orders:cancel']};
+  if(p==='/api/ai/v1/supplier/status'&&method==='GET')return {version:'1',connectorId:link.id,lastSync:link.last_sync,commissionBps:200,permissions:['products:read','products:write','orders:read','orders:accept','orders:cancel','order-groups:read','order-groups:accept','order-groups:cancel','orders:unavailable','orders:replacement-propose']};
+  if(method==='POST'){
+    const action=supplierFulfilmentAction(p,b);
+    if(action)return fulfilmentRoutes(action.path,'POST',{...action.body,apiConnectorId:link.id},{id:link.supplier_id,role:link.supplier_role},url,false,{db:pool,authorize:c=>authorizeSupplierConnector(c,link,token),requestId:action.special?action.body.requestKey:null,connectorId:link.id,maxPositions:500});
+  }
   if(p==='/api/ai/v1/supplier/products'&&method==='GET'){
     const after=url.searchParams.get('after');if(after)checkId(after);
     const rows=(await pool.query(`SELECT ${productFields} FROM ai_products WHERE supplier_id=$1 AND ($2::uuid IS NULL OR id>$2::uuid) ORDER BY id LIMIT 101`,[link.supplier_id,after])).rows;
@@ -80,7 +86,7 @@ export async function supplierPublicRoutes(p,method,url,token,b={}){
     const products=supplierProducts(b),fingerprint=hash(JSON.stringify(products)),c=await pool.connect();
     try{
       await c.query('BEGIN');
-      if(!(await c.query("SELECT c.id FROM ai_supplier_connectors c JOIN ai_accounts a ON a.id=c.supplier_id WHERE c.id=$1 AND c.token_hash=$2 AND c.active AND a.status='active' FOR UPDATE OF c",[link.id,hash(token)])).rowCount)fail('Anbindung nicht aktiv',403);
+      await authorizeSupplierConnector(c,link,token);
       const old=(await c.query('SELECT fingerprint,result FROM ai_supplier_imports WHERE connector_id=$1 AND request_id=$2',[link.id,b.requestId])).rows[0];
       if(old){if(old.fingerprint!==fingerprint)fail('Import-ID mit abweichenden Daten verwendet',409);await c.query('COMMIT');return {...old.result,duplicate:true}}
       const imported=[];
@@ -93,17 +99,23 @@ export async function supplierPublicRoutes(p,method,url,token,b={}){
       await c.query('COMMIT');return {...result,duplicate:false};
     }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
   }
+  const detail=p.match(/^\/api\/ai\/v1\/supplier\/order-groups\/([0-9a-f-]{36})$/i);
+  if(detail&&method==='GET'){
+    checkId(detail[1]);const orders=(await pool.query('SELECT '+supplierOrderSelection+' FROM ai_orders o JOIN ai_products p ON p.id=o.product_id WHERE o.supplier_id=$1 AND coalesce(o.supplier_order_id,o.id)=$2 ORDER BY o.id LIMIT 501',[link.supplier_id,detail[1]])).rows;
+    if(!orders.length)fail('Auftrag nicht gefunden',404);if(orders.length>500)fail('Auftrag zu groß für diese Schnittstelle',409);
+    return {groupId:detail[1].toLowerCase(),orders:orders.map(({cursor_time,...o})=>o)};
+  }
   if(p==='/api/ai/v1/supplier/orders'&&method==='GET'){
     let cursor=null;const raw=url.searchParams.get('cursor');
     if(raw){try{if(raw.length>512)throw Error();cursor=JSON.parse(Buffer.from(raw,'base64url').toString());if(!uuid.test(cursor.id)||typeof cursor.time!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(cursor.time)||!Number.isFinite(Date.parse(cursor.time))||new Date(cursor.time).toISOString().slice(0,19)!==cursor.time.slice(0,19))throw Error()}catch{fail('Ungültiger Cursor')}}
-    const orders=(await pool.query(`SELECT o.id,o.product_id,p.external_code,o.product_name,o.unit,o.pack_quantity,o.packs,o.net_cents,o.commission_bps,o.commission_cents,o.status,o.delivery_date,o.delivery_address,o.buyer_email,o.created_at,o.updated_at,to_char(o.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') cursor_time FROM ai_orders o JOIN ai_products p ON p.id=o.product_id WHERE o.supplier_id=$1 AND ($2::timestamptz IS NULL OR (o.updated_at,o.id)>($2::timestamptz,$3::uuid)) ORDER BY o.updated_at,o.id LIMIT 101`,[link.supplier_id,cursor?.time||null,cursor?.id||null])).rows;
+    const orders=(await pool.query(`SELECT ${supplierOrderSelection} FROM ai_orders o JOIN ai_products p ON p.id=o.product_id WHERE o.supplier_id=$1 AND ($2::timestamptz IS NULL OR (o.updated_at,o.id)>($2::timestamptz,$3::uuid)) ORDER BY o.updated_at,o.id LIMIT 101`,[link.supplier_id,cursor?.time||null,cursor?.id||null])).rows;
     const page=orders.slice(0,100),last=page.at(-1);
     return {orders:page.map(({cursor_time,...o})=>o),nextCursor:last?Buffer.from(JSON.stringify({time:last.cursor_time,id:last.id})).toString('base64url'):(raw||null),hasMore:orders.length>100};
   }
   const action=p.match(/^\/api\/ai\/v1\/supplier\/orders\/([0-9a-f-]{36})\/(accept|cancel)$/i);
   if(action&&method==='POST'){
     checkId(action[1]);const c=await pool.connect();
-    try{await c.query('BEGIN');if(!(await c.query("SELECT c.id FROM ai_supplier_connectors c JOIN ai_accounts a ON a.id=c.supplier_id WHERE c.id=$1 AND c.token_hash=$2 AND c.active AND a.status='active' FOR UPDATE OF c",[link.id,hash(token)])).rowCount)fail('Anbindung nicht aktiv',403);const o=(await c.query('SELECT * FROM ai_orders WHERE id=$1 AND supplier_id=$2 FOR UPDATE',[action[1],link.supplier_id])).rows[0];if(!o)fail('Bestellung nicht gefunden',404);
+    try{await c.query('BEGIN');await authorizeSupplierConnector(c,link,token);const o=(await c.query('SELECT * FROM ai_orders WHERE id=$1 AND supplier_id=$2 FOR UPDATE',[action[1],link.supplier_id])).rows[0];if(!o)fail('Bestellung nicht gefunden',404);
       if(action[2]==='accept')await ensureOrderReady(c,o);if(action[2]==='accept'&&!await supplierMayTrade(o.supplier_id))fail('SEPA-Freigabe erforderlich',409);const status=action[2]==='accept'?'accepted':'cancelled';
       if(o.status===status){await c.query('COMMIT');return {ok:true,duplicate:true}}
       if(action[2]==='accept'&&o.status!=='sent'||action[2]==='cancel'&&!['sent','accepted'].includes(o.status))fail('Aktion für diesen Bestellstatus nicht möglich',409);

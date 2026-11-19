@@ -39,7 +39,7 @@ Plattformadministrator:
 
 Gemeinsame Aktionen sperren alle Auftragspositionen und werden atomar gebucht. Dauerhafte Aktionskennungen verhindern doppelten Lagerzugang; gleiche Kennung mit verändertem Inhalt wird abgewiesen. Je Bestellposition ist nur ein offener Ersatzvorschlag zulässig. Es gibt keine Fremdmandanten-Aktionen und keine stille Ersetzung.
 
-Bestehende Einzelaktions- und Lieferanten-API-Annahmen prüfen ebenfalls Nichtlieferbarkeit/offene Ersatzvorschläge. Stornierung schließt diese Vorschläge und Meldungen. Die bestehenden Lieferanten-API-Schlüssel erhalten damit keinen neuen Zugriff auf Restaurantzustimmung oder Wareneingang. Neue Sammelaktionen sind derzeit Sitzungsfunktionen; die Lieferanten-API bleibt für bestehende ERP-Anbindungen positionsweise kompatibel.
+Bestehende Einzelaktions- und Lieferanten-API-Annahmen prüfen ebenfalls Nichtlieferbarkeit/offene Ersatzvorschläge. Stornierung schließt diese Vorschläge und Meldungen. Die bestehenden Lieferanten-API-Schlüssel erhalten damit keinen neuen Zugriff auf Restaurantzustimmung oder Wareneingang. Neue Sammelannahme/-stornierung sowie Nichtlieferbarkeit und Ersatzvorschläge sind inzwischen auch über bestätigte, dauerhaft wiederholbare Lieferanten-API-Rückmeldungen verfügbar. Bestehende positionsweise Aufrufe bleiben kompatibel. Siehe `ai-supplier-feedback-20261118.md`.
 
 ## Validierung
 
