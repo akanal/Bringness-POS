@@ -24,10 +24,10 @@ Ein fehlendes Rezept hält den POS-Import an. Nach Korrektur wird dieselbe Beste
 
 | Thema | Vorhanden / noch erforderlich |
 | --- | --- |
-| Lieferantensortimente | CSV und gemeinsamer Barcode-Katalog vorhanden; Lieferanten-API für Sortiment, Nettopreise, Lieferbarkeit, Bestellabruf, Annahme und Stornierung umgesetzt; konkrete ERP-Adapter und Webhooks noch offen |
+| Lieferantensortimente | CSV und gemeinsamer Barcode-Katalog vorhanden; Lieferanten-API für Sortiment, Nettopreise, Lieferbarkeit, Bestellabruf, Annahme und Stornierung umgesetzt; vollständiger Auftragsabruf, bestätigte gruppenweite Liefertermine, Nichtlieferbarkeit und Ersatzvorschläge mit dauerhafter Vorgangskennung ergänzt (siehe `ai-supplier-feedback-20261118.md`); konkrete Herstelleradapter und Webhooks bleiben offen |
 | Fremdkassen-Adapter | Allgemeine API vorhanden; konkrete Adapter brauchen Herstellerdokumentation und Testzugänge |
 | Ketten | Mehrere Standorte und getrennte Verbindungen vorhanden; standortgebundene zentrale Bedarfseinreichung/Freigabe vorhanden (siehe `bringness-ai-regional-planning.md`); feinere Teamrechte und konkrete Kettenadapter bleiben offen |
-| Einkaufsvorschläge | Verbrauch, Mindestbestände und offene bestätigte Lieferungen vorhanden; POS-Tagesprognose, rezeptbasierte Vorbereitungsmengen, DWD-MOSMIX und manuelle regionale Termine mit ausdrücklich aktivierten Szenariofaktoren vorhanden; öffentliche Eventfeeds und automatisch gelernte Faktoren bleiben offen |
+| Einkaufsvorschläge | Verbrauch, Mindestbestände und offene bestätigte Lieferungen vorhanden; POS-Tagesprognose, rezeptbasierte Vorbereitungsmengen, DWD-MOSMIX und manuelle regionale Termine mit ausdrücklich aktivierten Szenariofaktoren vorhanden; öffentliche Berliner Kulturdaten und optional historisch geprüfte Lernkorrektur inzwischen ergänzt (siehe `ai-events-learning-20261118.md`); weitere Regionen und trainierte betriebliche Modelle erfordern passende Daten |
 | Provision | 2 % vom vermittelten Netto-Warenwert in beiden Einführungsmodellen; Zahlungsnachweise, monatliche Abrechnung, unveränderliche Provisionsrechnungen und gesperrt voreingestellter SEPA-Ablauf vorhanden; reale Rechnungssteller-/Mandats-/Anbietereinrichtung und strukturierte E-Rechnung bleiben externe beziehungsweise dokumentierte Restpunkte |
 | AI Premium | einmalige 30-tägige Restaurant-Testphase und expliziter Abo-/Tarifwechselablauf implementiert; keine automatische Umwandlung kostenloser Konten, Live-Einzug erst nach vollständiger Freigabe (siehe `ai-subscriptions.md`) |
 | Trennung von POS | Eigene AI-Datenbank vorhanden; AI-Server läuft derzeit noch im kombinierten Runtime-Modus und nutzt eine POS-Datenbankbrücke für Inhaberfreigabe und Verkaufsabfrage |
@@ -55,3 +55,7 @@ Nachweise und Grenzen stehen in `pos-ai-validation-20261017.md`,
 ist kein Nachweis einer produktiven Bereitstellung oder realer Anbieterfreischaltung.
 Verschlüsselte Vorschau-Sicherung und unabhängige Rücksicherungsprüfung sind in
 `isolated-preview-recovery.md` dokumentiert.
+
+## Erweiterte Lieferantenrückmeldungen — 18.11.2026
+
+Vollständige eigene Aufträge bis500Positionen und aktuelle bestätigte Lieferdaten, Nichtlieferbarkeit, tatsächlich gelieferte Packungen und der neueste Ersatzvorschlag sind abrufbar. Neue Rückmeldungen verwenden bestätigte Aktionen und dauerhafte requestId-Kennungen. Wiederholung stellt nur die gespeicherte Antwort wieder her und ändert keinen inzwischen neueren Auftrag. Derselbe vorhandene Geschäftsablauf bleibt maßgeblich; Restaurantzustimmung, Wareneingang und Zahlungen sind nicht über Lieferantenschlüssel freigegeben. Herstelleradapter und Webhooks sind damit nicht eingerichtet. Details: `ai-supplier-feedback-20261118.md`.
