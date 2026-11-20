@@ -1,3 +1,4 @@
+import './ai-price-actions.mjs';
 import "./ai-setup-ui.mjs";
 import {JSDOM} from 'jsdom';import fs from 'node:fs';import assert from 'node:assert/strict';import {Readable} from 'node:stream';import {PGlite} from '@electric-sql/pglite';import crypto from 'node:crypto';import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../../',import.meta.url)).replace(/\/$/,'');const db=new PGlite();await db.waitReady;

@@ -1,5 +1,1 @@
-{
-  "operation": "deploy",
-  "target": "ai",
-  "requestId": "ai-setup-review-20261120"
-}
+{"operation":"deploy","target":"pos","requestId":"ai-price-actions-pos-20261120"}
