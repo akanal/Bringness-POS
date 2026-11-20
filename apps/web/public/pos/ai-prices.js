@@ -1,8 +1,12 @@
 (() => {
  const root=document.getElementById('aiPrices');
- const dialog=document.getElementById('aiPricesDialog');
  const settings=document.getElementById('aiPricesSettings');
- if(!root||!dialog||!settings)return;
+ if(!root||!settings)return;
+ const dialog=document.createElement('dialog');
+ dialog.id='aiPricesDialog';
+ dialog.setAttribute('aria-label','Automatische AI-Preisaktionen');
+ dialog.append(document.createElement('form'));
+ dialog.addEventListener('close',()=>dialog.remove());
  const format=new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
  const formatTime=new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'});
  const button=(label,action)=>{
@@ -64,7 +68,7 @@
      change(state,{action:'enable',productIds:values.getAll('product'),discountPercent:Number(values.get('discountPercent')),durationMinutes:Number(values.get('durationMinutes')),confirmed:values.has('confirmed')});
     };
    }
-   if(!dialog.open)dialog.showModal();
+   if(!dialog.open){document.body.append(dialog);dialog.showModal()}
   }
   async function refresh(){
    const state=context();
