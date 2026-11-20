@@ -21,6 +21,7 @@ try {
  await pos.exec(`
  CREATE TABLE restaurants(id uuid PRIMARY KEY,company_id uuid NOT NULL);
  CREATE TABLE users(id uuid PRIMARY KEY,company_id uuid NOT NULL,role text,status text,must_change_password boolean);
+ CREATE TABLE orders(id uuid PRIMARY KEY,restaurant_id uuid,status text,closed_at timestamptz,created_at timestamptz);
  CREATE TABLE products(id uuid PRIMARY KEY,restaurant_id uuid REFERENCES restaurants,name text,price_cents int,active boolean,ai_stock_available boolean);`);
  await ai.exec(`
  CREATE TABLE ai_accounts(id uuid PRIMARY KEY,status text,role text);
@@ -28,6 +29,8 @@ try {
  CREATE TABLE ai_stock(id uuid PRIMARY KEY,account_id uuid,location_id uuid,quantity numeric,reserved_quantity numeric);
  CREATE TABLE ai_stock_moves(id bigserial PRIMARY KEY,stock_id uuid);
  CREATE TABLE ai_stock_lots(id uuid PRIMARY KEY,account_id uuid,location_id uuid,stock_id uuid,quantity numeric,opening_state text,date_kind text,expires_on date,checked_on date,movement_at_check bigint,stock_at_check numeric);
+ CREATE TABLE ai_plan_settings(location_id uuid PRIMARY KEY,hours jsonb,closed_dates jsonb);
+ CREATE TABLE ai_forecast_snapshots(account_id uuid,location_id uuid,day date,captured_at timestamptz,result jsonb);
  CREATE TABLE ai_recipes(id uuid PRIMARY KEY,account_id uuid,location_id uuid,external_code text,active boolean);
  CREATE TABLE ai_recipe_items(recipe_id uuid,stock_id uuid,quantity numeric);`);
  await p.query('INSERT INTO restaurants VALUES($1,$2)',[ids.restaurant,ids.company]);
@@ -88,6 +91,35 @@ try {
  await act('POST',{action:'disable'});
  assert.equal(await price(),510);
  assert.equal((await act('GET')).rule.enabled,false);
+ const scenario=async(rule,expected,reason,expectedPrice=408)=>{
+  await p.query('DELETE FROM pos_ai_price_actions');
+  await act('POST',{...approval,triggers:{[ids.product]:rule}});
+  await aiPriceTick(a,p);
+  const actions=(await act('GET')).actions;
+  assert.equal(await price(),expected?expectedPrice:510);
+  assert.equal(actions[0]?.reason,expected?reason:undefined);
+  await act('POST',{action:'disable'});
+ };
+ assert.equal((await act('GET')).extraRules,true);
+ await scenario({kind:'menu',portions:13},false);
+ await scenario({kind:'menu',portions:12,offerCents:399},false);
+ await scenario({kind:'menu',portions:12,offerCents:425},true,'Menüangebot',425);
+ await a.query(`INSERT INTO ai_forecast_snapshots VALUES($1,$2,(now() AT TIME ZONE 'Europe/Berlin')::date,now()-interval '2 hours',$3)`,
+  [ids.account,ids.location,JSON.stringify({ready:true,baselineOrders:100,expectedOrders:70})]);
+ await scenario({kind:'forecast',belowPercent:20},false);
+ await a.query('UPDATE ai_forecast_snapshots SET captured_at=now()');
+ await scenario({kind:'forecast',belowPercent:20},true,'Niedrige Nachfrageprognose');
+ const quiet={kind:'quiet',start:'00:00',end:'23:59',maxOrders:0};
+ await p.query("INSERT INTO orders VALUES($1,$2,'paid',now(),now())",[randomUUID(),ids.restaurant]);
+ await scenario(quiet,false);
+ await p.query('DELETE FROM orders');
+ const clock=(await a.query("SELECT to_char(now() AT TIME ZONE 'Europe/Berlin','HH24:MI') time")).rows[0].time;
+ await scenario(quiet,clock<'23:59','Ruhige Verkaufszeit');
+ await scenario({kind:'surplus',portions:8,beforeClosing:60},false);
+ const [hour,minute]=clock.split(':').map(Number),close=Math.min(hour*60+minute+30,1439);
+ const closing=String(Math.floor(close/60)).padStart(2,'0')+':'+String(close%60).padStart(2,'0');
+ await a.query('INSERT INTO ai_plan_settings VALUES($1,$2,$3)',[ids.location,JSON.stringify(Array(7).fill({open:'00:00',close:closing})),'[]']);
+ await scenario({kind:'surplus',portions:8,beforeClosing:60},clock<closing,'Verfügbarer Bestand vor Feierabend');
  console.log('POS AI pricing passed: opt-in, tenant authorization, fresh best-before stock, price changes, daily undo, manual preservation, expiry and revocation.');
 } finally {await a.query('ROLLBACK');await p.query('ROLLBACK');await ai.close();await pos.close()}
 
@@ -109,7 +141,7 @@ try {
   setPrices:()=>{},
   api:async(_path,options)=>{
    if(options){calls.push(JSON.parse(options.body));actions=[];}
-   return {canManage:true,linked,rule,actions,prices:[]};
+   return {canManage:true,linked,extraRules:true,rule,actions,prices:[]};
   }
  });
  await refresh();
@@ -136,4 +168,9 @@ try {
  assert.equal(dialog.querySelector('[name^="floor-"]').disabled,true);
  dialog.querySelector('[name="product"]').click();
  assert.equal(dialog.querySelector('[name^="floor-"]').disabled,false);
+ const trigger=dialog.querySelector('[name^="trigger-"]');
+ trigger.value='menu';
+ trigger.dispatchEvent(new w.Event('change'));
+ assert.match(dialog.textContent,/AI-Rezept für alle Menübestandteile/);
+ assert.equal(dialog.querySelector('[name$="-portions"]').value,'8');
 } finally {w.close()}
