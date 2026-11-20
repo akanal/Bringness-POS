@@ -1,1 +1,6 @@
-{"operation":"deploy","target":"pos","requestId":"ai-price-actions-pos-20261120"}
+{
+  "operation": "deploy",
+  "target": "ai",
+  "revision": "5257f066f13c015cfcfe6ed989f5d2db5c53dd9b",
+  "requestId": "ai-price-actions-ai-20261120"
+}
