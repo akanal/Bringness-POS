@@ -11,6 +11,11 @@ export async function migratePosAiPrices(db) {
   discount_percent int NOT NULL CHECK(discount_percent BETWEEN 1 AND 50),
   duration_minutes int NOT NULL CHECK(duration_minutes BETWEEN 15 AND 240)
  );
+ ALTER TABLE pos_ai_price_rules ADD COLUMN IF NOT EXISTS minimum_prices jsonb NOT NULL DEFAULT '{}';
+ CREATE TABLE IF NOT EXISTS pos_ai_price_links (
+  restaurant_id uuid PRIMARY KEY REFERENCES restaurants(id) ON DELETE CASCADE,
+  checked_at timestamptz NOT NULL
+ );
  CREATE TABLE IF NOT EXISTS pos_ai_price_actions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   restaurant_id uuid NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
@@ -79,7 +84,7 @@ export async function applyPosAiPrice(db,link,productId,saleDay) {
  const product=(await db.query('SELECT id,name,price_cents FROM products WHERE id=$1 AND restaurant_id=$2 AND active AND ai_stock_available FOR UPDATE',[productId,link.pos_restaurant_id])).rows[0];
  if(!product)return false;
  if((await db.query('SELECT 1 FROM pos_ai_price_actions WHERE product_id=$1 AND ended_at IS NULL',[productId])).rowCount)return false;
- const actionCents=Math.ceil(product.price_cents*(100-rule.discount_percent)/100);
+ const actionCents=Math.max(rule.minimum_prices[productId]||0,Math.ceil(product.price_cents*(100-rule.discount_percent)/100));
  if(actionCents<1||actionCents>=product.price_cents)return false;
  const inserted=await db.query(`INSERT INTO pos_ai_price_actions(restaurant_id,product_id,product_name,regular_cents,action_cents,sale_day,ends_at)
   VALUES($1,$2,$3,$4,$5,(now() AT TIME ZONE 'Europe/Berlin')::date,
@@ -102,10 +107,11 @@ export async function posAiPrices(pool,user,restaurantId,method,body) {
   const canManage=['owner','admin'].includes(owner.role);
   if(method!=='GET'&&!canManage)fail('Nur für die Betriebsverwaltung.',403);
   if(method==='GET'){
-   const rule=(await db.query('SELECT enabled,product_ids,discount_percent,duration_minutes FROM pos_ai_price_rules WHERE restaurant_id=$1',[restaurantId])).rows[0];
+   const rule=(await db.query('SELECT enabled,product_ids,discount_percent,duration_minutes,minimum_prices FROM pos_ai_price_rules WHERE restaurant_id=$1',[restaurantId])).rows[0];
    const actions=(await db.query('SELECT id,product_name,regular_cents,action_cents,ends_at FROM pos_ai_price_actions WHERE restaurant_id=$1 AND ended_at IS NULL AND ends_at>now() ORDER BY created_at DESC',[restaurantId])).rows;
    const prices=(await db.query('SELECT p.id,p.price_cents FROM products p WHERE p.restaurant_id=$1 AND EXISTS(SELECT 1 FROM pos_ai_price_actions a WHERE a.product_id=p.id)',[restaurantId])).rows;
-   return {canManage,rule:canManage?(rule||{enabled:false,product_ids:[],discount_percent:10,duration_minutes:60}):null,actions,prices};
+   const linked=canManage&&(await db.query("SELECT 1 FROM pos_ai_price_links WHERE restaurant_id=$1 AND checked_at>now()-interval '2 minutes'",[restaurantId])).rowCount>0;
+   return {canManage,linked,rule:canManage?(rule||{enabled:false,product_ids:[],discount_percent:10,duration_minutes:60}):null,actions,prices};
   }
   if(method!=='POST')fail('Methode nicht erlaubt.',405);
   if(body.action==='undo'){
@@ -120,18 +126,20 @@ export async function posAiPrices(pool,user,restaurantId,method,body) {
    for(const action of actions)await endAction(db,action,'disabled');
    return {ok:true};
   }
-  const {productIds,discountPercent,durationMinutes}=body;
+  const {productIds,discountPercent,durationMinutes,minimumPrices={}}=body;
   if(body.action!=='enable'||body.confirmed!==true||!Array.isArray(productIds)||!productIds.length||productIds.length>100||
      productIds.some(id=>!uuid.test(id||''))||new Set(productIds).size!==productIds.length||
      !Number.isInteger(discountPercent)||discountPercent<1||discountPercent>50||
      !Number.isInteger(durationMinutes)||durationMinutes<15||durationMinutes>240)fail('Artikel, Rabatt, Laufzeit und Freigabe prüfen.');
+  if(!minimumPrices||typeof minimumPrices!=='object'||Array.isArray(minimumPrices)||Object.entries(minimumPrices).some(([id,cents])=>!productIds.includes(id)||!Number.isSafeInteger(cents)||cents<1||cents>10000000))fail('Preisuntergrenzen für freigegebene Artikel prüfen.');
+  if(!(await db.query("SELECT 1 FROM pos_ai_price_links WHERE restaurant_id=$1 AND checked_at>now()-interval '2 minutes'",[restaurantId])).rowCount)fail('Für diesen Standort ist keine aktive Bringness-AI-Verbindung bestätigt.',409);
   const products=await db.query('SELECT id FROM products WHERE restaurant_id=$1 AND active AND id=ANY($2::uuid[])',[restaurantId,productIds]);
   if(products.rowCount!==productIds.length)fail('Alle Artikel müssen zu diesem Betrieb gehören.');
-  const saved=await db.query(`INSERT INTO pos_ai_price_rules(restaurant_id,enabled,owner_id,product_ids,discount_percent,duration_minutes)
-   VALUES($1,true,$2,$3,$4,$5) ON CONFLICT(restaurant_id) DO UPDATE SET enabled=true,owner_id=EXCLUDED.owner_id,
-   product_ids=EXCLUDED.product_ids,discount_percent=EXCLUDED.discount_percent,duration_minutes=EXCLUDED.duration_minutes
+  const saved=await db.query(`INSERT INTO pos_ai_price_rules(restaurant_id,enabled,owner_id,product_ids,discount_percent,duration_minutes,minimum_prices)
+   VALUES($1,true,$2,$3,$4,$5,$6) ON CONFLICT(restaurant_id) DO UPDATE SET enabled=true,owner_id=EXCLUDED.owner_id,
+   product_ids=EXCLUDED.product_ids,discount_percent=EXCLUDED.discount_percent,duration_minutes=EXCLUDED.duration_minutes,minimum_prices=EXCLUDED.minimum_prices
    WHERE NOT pos_ai_price_rules.enabled RETURNING restaurant_id`,
-   [restaurantId,user.id,productIds,discountPercent,durationMinutes]);
+   [restaurantId,user.id,productIds,discountPercent,durationMinutes,JSON.stringify(minimumPrices)]);
   if(!saved.rowCount)fail('Bitte die laufende Freigabe vor dem Ändern der Regeln ausschalten.',409);
   return {ok:true};
  });

@@ -3,13 +3,28 @@ import {lockAiRestaurant} from './ai-write-authorization.js';
 import {applyPosAiPrice} from './pos-ai-prices.js';
 
 export async function aiPriceTick(ai,pos) {
- if(!(await pos.query("SELECT to_regclass('pos_ai_price_rules') rules")).rows[0]?.rules)return;
+ if(!(await pos.query("SELECT to_regclass('pos_ai_price_links') links")).rows[0]?.links)return;
+ const links=(await ai.query(`SELECT c.id,c.account_id,c.pos_restaurant_id,c.pos_company_id,c.pos_user_id FROM ai_connectors c
+   JOIN ai_accounts a ON a.id=c.account_id
+   WHERE c.kind='pos' AND c.active AND a.status='active' AND a.role='restaurant'`)).rows;
+ const active=new Map(links.map(link=>[link.pos_restaurant_id,link]));
+ if(active.size!==links.length){
+  const counts=new Map();
+  for(const {pos_restaurant_id:id} of links)counts.set(id,(counts.get(id)||0)+1);
+  for(const [id,count] of counts)if(count!==1)active.delete(id);
+ }
+ const candidates=[...active.values()];
+ await pos.query(`INSERT INTO pos_ai_price_links(restaurant_id,checked_at)
+  SELECT r.id,now() FROM unnest($1::uuid[],$2::uuid[],$3::uuid[]) AS l(restaurant_id,company_id,user_id)
+  JOIN restaurants r ON r.id=l.restaurant_id AND r.company_id=l.company_id
+  JOIN users u ON u.id=l.user_id AND u.company_id=r.company_id AND u.status='active'
+   AND u.role IN ('owner','admin') AND NOT coalesce(u.must_change_password,false)
+  ON CONFLICT(restaurant_id) DO UPDATE SET checked_at=EXCLUDED.checked_at`,
+  [candidates.map(l=>l.pos_restaurant_id),candidates.map(l=>l.pos_company_id),candidates.map(l=>l.pos_user_id)]);
  const rules=(await pos.query('SELECT restaurant_id,product_ids FROM pos_ai_price_rules WHERE enabled ORDER BY restaurant_id')).rows;
  for(const rule of rules){
-  const links=(await ai.query(`SELECT c.id,c.account_id FROM ai_connectors c JOIN ai_accounts a ON a.id=c.account_id
-   WHERE c.kind='pos' AND c.active AND c.pos_restaurant_id=$1 AND a.status='active' AND a.role='restaurant'`,[rule.restaurant_id])).rows;
-  if(links.length!==1)continue;
-  await applyRestaurantActions(ai,pos,links[0],rule.product_ids);
+  const link=active.get(rule.restaurant_id);
+  if(link)await applyRestaurantActions(ai,pos,link,rule.product_ids);
  }
 }
 

@@ -43,7 +43,10 @@ try {
  await a.query("UPDATE ai_stock_lots SET expires_on=(now() AT TIME ZONE 'Europe/Berlin')::date,checked_on=(now() AT TIME ZONE 'Europe/Berlin')::date");
  const approval={action:'enable',confirmed:true,productIds:[ids.product],discountPercent:20,durationMinutes:30};
  assert.equal((await act('GET')).rule.enabled,false);
+ assert.equal((await act('GET')).linked,false);
+ await assert.rejects(act('POST',approval),{status:409});
  await aiPriceTick(a,p);
+ assert.equal((await act('GET')).linked,true);
  assert.equal(await price(),490);
  await assert.rejects(act('POST',approval,staff),{status:403});
  await assert.rejects(act('GET',{}, {id:ids.tenant,role:'owner'}),{status:404});
@@ -74,14 +77,14 @@ try {
  await act('POST',{action:'disable'});
  assert.equal(await price(),510,'revocation preserves manually changed prices');
  await p.query('DELETE FROM pos_ai_price_actions');
- await act('POST',approval);
+ await act('POST',{...approval,minimumPrices:{[ids.product]:425}});
  await aiPriceTick(a,p);
  await p.query("UPDATE pos_ai_price_actions SET ends_at=now()-interval '1 minute' WHERE ended_at IS NULL");
  assert.equal(await expirePosAiPrices(p),1);
  assert.equal(await price(),510,'expiry restores the regular price');
  await p.query('DELETE FROM pos_ai_price_actions');
  await aiPriceTick(a,p);
- assert.equal(await price(),408);
+ assert.equal(await price(),425);
  await act('POST',{action:'disable'});
  assert.equal(await price(),510);
  assert.equal((await act('GET')).rule.enabled,false);
@@ -98,6 +101,7 @@ try {
  const rule={enabled:true,product_ids:[ids.product],discount_percent:20,duration_minutes:30};
  let actions=[{id:ids.recipe,product_name:'Suppe',regular_cents:490,action_cents:392,ends_at:'2026-11-20T17:00:00Z'}];
  const calls=[];
+ let linked=true;
  w.eval(script);
  const refresh=w.bnPosAiPrices.connect({
   context:()=>state,
@@ -105,7 +109,7 @@ try {
   setPrices:()=>{},
   api:async(_path,options)=>{
    if(options){calls.push(JSON.parse(options.body));actions=[];}
-   return {canManage:true,rule,actions,prices:[]};
+   return {canManage:true,linked,rule,actions,prices:[]};
   }
  });
  await refresh();
@@ -116,5 +120,20 @@ try {
  await new Promise(resolve=>setTimeout(resolve,0));
  assert.deepEqual(calls,[{action:'undo',id:ids.recipe}]);
  assert.equal(banner.hidden,true);
- assert.equal(w.document.getElementById('aiPricesSettings').hidden,false);
+ const settings=w.document.getElementById('aiPricesSettings');
+ assert.equal(settings.hidden,false);
+ assert.match(settings.textContent,/Bringness AI/);
+ rule.enabled=false;linked=false;
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true};
+ w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'))};
+ await refresh();settings.click();
+ let dialog=w.document.getElementById('aiPricesDialog');
+ assert.match(dialog.textContent,/keine aktive Bringness-AI-Verbindung/);
+ assert.match(dialog.querySelector('a').href,/bringness-ai.com/);
+ assert.equal(dialog.querySelector('input'),null);
+ dialog.close();linked=true;await refresh();settings.click();
+ dialog=w.document.getElementById('aiPricesDialog');
+ assert.equal(dialog.querySelector('[name^="floor-"]').disabled,true);
+ dialog.querySelector('[name="product"]').click();
+ assert.equal(dialog.querySelector('[name^="floor-"]').disabled,false);
 } finally {w.close()}

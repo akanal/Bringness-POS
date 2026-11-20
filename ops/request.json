@@ -1,6 +1,1 @@
-{
-  "operation": "deploy",
-  "target": "ai",
-  "revision": "9ed62f82a509b3605d94ba436f58ba206da03029",
-  "requestId": "ai-prices-in-articles-ai-20261120"
-}
+{"operation":"deploy","target":"pos","requestId":"ai-price-brand-pos-20261120"}
