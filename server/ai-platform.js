@@ -1,3 +1,4 @@
+import {aiPriceTick} from './ai-price-worker.js';
 import {aiSetupReviews,migrateAiSetupReview} from './ai-setup-review.js';
 import {menuRecommendations} from './ai-menu-recommendations.js';
 import {migrateMenuPos} from './ai-menu-pos.js';
@@ -278,6 +279,14 @@ export async function handleAiPlatform(req,res){
   return send(res,404,{error:'AI-Funktion nicht gefunden'});
  }catch(e){if(e.status)return send(res,e.status,{error:e.message});if(e instanceof InputError||/Menge|Nettopreis|Packungen|Bestellwert/.test(e.message))return send(res,400,{error:e.message});console.error('AI API error:',e.code||e.name);return send(res,500,{error:'Aktion fehlgeschlagen. Bitte erneut versuchen.'})}
 }
+
+let aiPriceTickRunning=false;
+setInterval(async()=>{
+ if(!aiReady||isolatedPreview()||aiPriceTickRunning)return;
+ aiPriceTickRunning=true;
+ try{await aiPriceTick(pool,platformPool)}catch{console.error('AI-Preisaktionen konnten nicht geprüft werden.')}
+ finally{aiPriceTickRunning=false;}
+},15000).unref();
 
 setInterval(()=>{if(aiReady&&!isolatedPreview())syncPosSales()},15000).unref();
 
