@@ -99,6 +99,7 @@
   }
   setInterval(()=>{if(!document.hidden)refresh()},10000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+  window.bnPosAiPrices.refresh=refresh;
   return refresh;
  }};
 })();
