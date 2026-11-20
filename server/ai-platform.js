@@ -1,3 +1,4 @@
+import {aiSetupReviews,migrateAiSetupReview} from './ai-setup-review.js';
 import {menuRecommendations} from './ai-menu-recommendations.js';
 import {migrateMenuPos} from './ai-menu-pos.js';
 import {migrateAiMenu,aiMenuRoutes} from './ai-menu.js';
@@ -73,7 +74,7 @@ CREATE TABLE IF NOT EXISTS ai_commission_payments(order_id uuid PRIMARY KEY REFE
 CREATE INDEX IF NOT EXISTS ai_stock_account_idx ON ai_stock(account_id);
 CREATE INDEX IF NOT EXISTS ai_orders_buyer_idx ON ai_orders(buyer_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_orders_supplier_idx ON ai_orders(supplier_id,created_at DESC);
-`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateStockLifecycle(pool);await migrateAiForecast();await migrateAiPlanning();await migrateKitchenAssistant(pool);await migrateAiMenu(pool);await migrateMenuPos(platformPool);await migrateAutoProcurement();await migrateDeliveryNotes();await migrateAiTariffs();await migrateAiSubscriptions();aiReady=true;console.log("Bringness AI separate database ready.")}
+`);await copyLegacyAiData();await migrateAiRecipes();await migrateAiSetupReview(pool);await migrateAiBarcodes();await migrateAiSuppliers();await migrateAiAds();await migrateAiSettlements();await migrateAiCollection();await migrateAiFulfilment();await migrateAiInventory();await migrateStockLifecycle(pool);await migrateAiForecast();await migrateAiPlanning();await migrateKitchenAssistant(pool);await migrateAiMenu(pool);await migrateMenuPos(platformPool);await migrateAutoProcurement();await migrateDeliveryNotes();await migrateAiTariffs();await migrateAiSubscriptions();aiReady=true;console.log("Bringness AI separate database ready.")}
 async function rate(key,max=8){const r=await pool.query("INSERT INTO ai_auth_attempts(key,count,expires_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET count=CASE WHEN ai_auth_attempts.expires_at<now() THEN 1 ELSE ai_auth_attempts.count+1 END,expires_at=CASE WHEN ai_auth_attempts.expires_at<now() THEN now()+interval '15 minutes' ELSE ai_auth_attempts.expires_at END RETURNING count",[hash(key)]);return r.rows[0].count<=max}
 async function email(to,name,token,kind){
  if(![process.env.SMTP_HOST,process.env.SMTP_USER,process.env.SMTP_PASSWORD,process.env.SMTP_FROM].every(Boolean))throw Error('SMTP fehlt');
@@ -139,6 +140,7 @@ export async function handleAiPlatform(req,res){
   }
   if(p.startsWith('/api/ai/admin')){
    const admin=await platformActor(req);if(!admin)return send(res,403,{error:'Nur Plattformadministratoren haben Zugriff.'});
+   if(p==='/api/ai/admin/setup-reviews')return send(res,200,await aiSetupReviews(pool,admin,req.method,req.method==='POST'?await body(req):{},true));
    if(p==='/api/ai/admin/subscriptions'&&req.method==='GET')return send(res,200,{...await subscriptionRoutes(p,req.method,{},admin,true),setup:await tariffSetupStatus()});
    if(p==='/api/ai/admin/tariffs'&&req.method==='GET')return send(res,200,{...await readAiTariffs(),setup:await tariffSetupStatus()});
    if(p==='/api/ai/admin/tariffs'&&req.method==='POST')return send(res,200,await updateAiTariff(await body(req),admin));
@@ -172,6 +174,7 @@ export async function handleAiPlatform(req,res){
    return send(res,404,{error:'Adminfunktion nicht gefunden'});
   }
   const u=await actor(req);if(!u)return send(res,401,{error:'Bitte anmelden.'});
+  if(p==='/api/ai/setup-reviews')return send(res,200,await aiSetupReviews(pool,u,req.method,req.method==='POST'?await body(req):{}));
   if(p==='/api/ai/collection'||p.startsWith('/api/ai/collection/'))return send(res,200,await collectionRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
   if(p==='/api/ai/settlements'||p.startsWith('/api/ai/settlements/'))return send(res,200,await settlementRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));
   if(p==='/api/ai/ads'||p.startsWith('/api/ai/ads/')){if(req.method==='POST'&&!await rate('ads:'+u.id,300))return send(res,429,{error:'Zu viele Werbeanfragen. Bitte später erneut versuchen.'});return send(res,200,await adRoutes(p,req.method,req.method==='POST'?await body(req):{},u,url));}

@@ -101,10 +101,25 @@ export async function recipeRoutes(p,method,b,u,url=new URL("http://local")){
  }
  if(p==='/api/ai/pos-link'&&method==='POST'){
   const owner=(await platformPool.query("SELECT u.id,u.company_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND u.role IN ('owner','admin') AND NOT COALESCE(u.must_change_password,false)",[hash(b.posToken||'')])).rows[0];if(!owner){const e=new Error('Gültige Inhaber-Anmeldung der Kasse erforderlich');e.status=403;throw e}
-  if(!b.restaurantId&&b.setupLocation!==true)return {restaurants:(await platformPool.query('SELECT id,name FROM restaurants WHERE company_id=$1',[owner.company_id])).rows};
+  if(!b.restaurantId&&b.setupLocation!==true&&b.setupPreview!==true)return {restaurants:(await platformPool.query('SELECT id,name FROM restaurants WHERE company_id=$1',[owner.company_id])).rows};
+  if(b.setupPreview===true){
+   checkId(b.restaurantId);
+   const restaurant=(await platformPool.query(`SELECT r.id,r.name,b.street,b.postal_code,b.city
+    FROM restaurants r LEFT JOIN company_billing_profiles b ON b.company_id=r.company_id
+    WHERE r.id=$1 AND r.company_id=$2`,[b.restaurantId,owner.company_id])).rows[0];
+   if(!restaurant)fail('Kassenbetrieb gehört nicht zu deinem Konto');
+   const products=(await platformPool.query('SELECT id,name FROM products WHERE restaurant_id=$1 AND active ORDER BY name,id LIMIT 100',[restaurant.id])).rows;
+   return {restaurant:{id:restaurant.id,name:restaurant.name},billingAddress:restaurant.street?{street:restaurant.street,postalCode:restaurant.postal_code,city:restaurant.city}:null,products};
+  }
   if(b.setupLocation===true){
    checkId(b.restaurantId);
-   const address=typeof b.address==='string'?b.address.trim():'';
+   const supplied=typeof b.address==='string'?b.address.trim():'';
+   let address=supplied;
+   if(b.billingMatches===true){
+    const billing=(await platformPool.query('SELECT street,postal_code,city FROM company_billing_profiles WHERE company_id=$1',[owner.company_id])).rows[0];
+    if(!billing?.street||b.billingAddress?.street!==billing.street||b.billingAddress?.postalCode!==billing.postal_code||b.billingAddress?.city!==billing.city||supplied&&supplied!==billing.street)fail('Bitte prüfe, welche Anschrift für den Standort gilt.');
+    address=billing.street;
+   }
    if(!address||address.length>300||/[\x00-\x1f\x7f]/.test(address))fail('Bitte eine gültige Standortanschrift eingeben.');
    const restaurant=(await platformPool.query('SELECT id,name FROM restaurants WHERE id=$1 AND company_id=$2',[b.restaurantId,owner.company_id])).rows[0];
    if(!restaurant)fail('Kassenbetrieb gehört nicht zu deinem Konto');

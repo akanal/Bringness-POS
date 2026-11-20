@@ -13,6 +13,7 @@ landing.window.close();
 const pages = {
  '/api/ai/me': {account:{id:'ai-account',role:'restaurant'},launch:{}},
  '/api/ai/locations': {locations:[]},
+ '/api/ai/setup-reviews': {reviews:[]},
  '/api/ai/stock': {stock:[]},
  '/api/ai/stock-moves': {moves:[]},
  '/api/ai/connectors': {connectors:[]},
@@ -34,7 +35,7 @@ for (const mode of ['manual', 'pos']) {
    denyLogin = false;
    return {ok:!deny,status:deny?401:200,json:async()=>deny?{error:'POS-Anmeldung prüfen'}:{token:'pos-token'}};
   }
-  const result = path === '/api/ai/pos-link' ? (body.setupLocation ? {ok:true} : {restaurants:[{id:'pos-location',name:'Bistro'}]}) : pages[path];
+  const result = path === '/api/ai/pos-link' ? (body.setupLocation ? {ok:true} : body.setupPreview ? {restaurant:{id:'pos-location',name:'Bistro'},billingAddress:null,products:[{id:'dish',name:'Suppe'}]} : {restaurants:[{id:'pos-location',name:'Bistro'}]}) : pages[path];
   assert.ok(result, path);
   return {ok:true,json:async()=>result};
  };
@@ -65,12 +66,15 @@ for (const mode of ['manual', 'pos']) {
    await until(()=>document.getElementById('notice').textContent==='POS-Anmeldung prüfen');
    assert.equal(w.sessionStorage.getItem('bringness-ai-session'),'ai-token');
    submit(login,credentials);
+   const preview = await until(()=>form('setup-pos-preview'));
+   assert.equal(preview.elements.restaurantId.selectedOptions[0].textContent,'Bistro');
+   submit(preview,{});
    const save = await until(()=>form('setup-pos-save'));
-   assert.equal(save.elements.restaurantId.selectedOptions[0].textContent,'Bistro');
+   assert.match(save.textContent,/Suppe/);
    assert.equal(login.elements.posPassword.value,'');
    submit(save,{address:'Marktstraße 1, Berlin'});
    await until(()=>form('connector'));
-   assert.deepEqual(calls.find(c=>c.body?.setupLocation).body,{restaurantId:'pos-location',address:'Marktstraße 1, Berlin',posToken:'pos-token',setupLocation:true});
+   assert.deepEqual(calls.find(c=>c.body?.setupLocation).body,{restaurantId:'pos-location',address:'Marktstraße 1, Berlin',posToken:'pos-token',setupLocation:true,billingMatches:false,billingAddress:null});
   }
  } finally {w.close()}
 }
