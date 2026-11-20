@@ -158,7 +158,7 @@ function localDateTime(date,time,original){
    <p><a href="/assets/Bringness-Restaurant-Einrichtungsbogen.pdf" download>Einrichtungsbogen herunterladen und ausdrucken</a></p>
    ${locs.length?`<section class="card"><h2>Angaben vervollständigen</h2><p>Welche Öffnungszeiten gelten an deinem Standort? Hinterlege sie unter Planung &amp; Termine. Ordne anschließend die Kassenartikel unter Kassen &amp; API deinen Rezepten zu.</p>
     <button class="secondary" data-view="planning">Öffnungszeiten hinterlegen</button> <button class="secondary" data-view="connections">Kassenartikel zuordnen</button>
-    <p>Automatische Preisaktionen kannst du in Bringness POS unter „Mehr“ → „AI-Preisaktionen“ freigeben und jederzeit wieder ausschalten.</p>
+    <p>Automatische Preisaktionen kannst du in Bringness POS unter „Mehr“ → „Artikel“ → „AI-Preisaktionen“ freigeben und jederzeit wieder ausschalten.</p>
     <form data-form="setup-review"><h3>Bringness um Hilfe bitten</h3>${choice('locationId','Standort',locs.map(l=>option(l.id,l.name)).join(''))}
     ${choice('topic','Thema',Object.entries(setupTopics).map(([id,label])=>option(id,label)).join(''))}
     <label>Was sollen wir klären?<textarea name="question" required maxlength="1500"></textarea></label><button type="submit">An Bringness senden</button></form>
