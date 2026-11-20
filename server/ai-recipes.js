@@ -101,7 +101,27 @@ export async function recipeRoutes(p,method,b,u,url=new URL("http://local")){
  }
  if(p==='/api/ai/pos-link'&&method==='POST'){
   const owner=(await platformPool.query("SELECT u.id,u.company_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND u.role IN ('owner','admin') AND NOT COALESCE(u.must_change_password,false)",[hash(b.posToken||'')])).rows[0];if(!owner){const e=new Error('Gültige Inhaber-Anmeldung der Kasse erforderlich');e.status=403;throw e}
-  if(!b.restaurantId)return {restaurants:(await platformPool.query('SELECT id,name FROM restaurants WHERE company_id=$1',[owner.company_id])).rows};
+  if(!b.restaurantId&&b.setupLocation!==true)return {restaurants:(await platformPool.query('SELECT id,name FROM restaurants WHERE company_id=$1',[owner.company_id])).rows};
+  if(b.setupLocation===true){
+   checkId(b.restaurantId);
+   const address=typeof b.address==='string'?b.address.trim():'';
+   if(!address||address.length>300||/[\x00-\x1f\x7f]/.test(address))fail('Bitte eine gültige Standortanschrift eingeben.');
+   const restaurant=(await platformPool.query('SELECT id,name FROM restaurants WHERE id=$1 AND company_id=$2',[b.restaurantId,owner.company_id])).rows[0];
+   if(!restaurant)fail('Kassenbetrieb gehört nicht zu deinem Konto');
+   const db=await pool.connect();
+   try{
+    await db.query('BEGIN');
+    await lockAiRestaurant(db,u.id);
+    const existing=(await db.query("SELECT location_id FROM ai_connectors WHERE kind='pos' AND pos_restaurant_id=$1 AND account_id=$2 ORDER BY active DESC,created_at DESC,id LIMIT 1",[restaurant.id,u.id])).rows[0];
+    if(existing){await db.query('COMMIT');return {ok:true,existing:true,locationId:existing.location_id}}
+    const otherActive=await db.query("SELECT 1 FROM ai_connectors WHERE kind='pos' AND pos_restaurant_id=$1 AND active",[restaurant.id]);
+    if(otherActive.rowCount)fail('Kassenbetrieb ist bereits aktiv angebunden');
+    const location=(await db.query('INSERT INTO ai_locations(account_id,name,address) VALUES($1,$2,$3) RETURNING id',[u.id,restaurant.name,address])).rows[0];
+    await db.query("INSERT INTO ai_connectors(account_id,location_id,name,kind,pos_restaurant_id,pos_user_id,pos_company_id) VALUES($1,$2,$3,'pos',$4,$5,$6)",[u.id,location.id,'Kassenanbindung',restaurant.id,owner.id,owner.company_id]);
+    await db.query('COMMIT');
+    return {ok:true,existing:false,locationId:location.id};
+   }catch(error){await db.query('ROLLBACK');throw error}finally{db.release()}
+  }
   checkId(b.restaurantId);checkId(b.locationId);if(!(await platformPool.query('SELECT id FROM restaurants WHERE id=$1 AND company_id=$2',[b.restaurantId,owner.company_id])).rowCount)fail('Kassenbetrieb gehört nicht zu deinem Konto');if(!(await pool.query('SELECT id FROM ai_locations WHERE id=$1 AND account_id=$2',[b.locationId,u.id])).rowCount)fail('AI-Standort nicht gefunden');
   const exists=await pool.query("SELECT id FROM ai_connectors WHERE kind='pos' AND pos_restaurant_id=$1 AND active",[b.restaurantId]);if(exists.rowCount)fail('Kassenbetrieb ist bereits aktiv angebunden');
   await pool.query("INSERT INTO ai_connectors(account_id,location_id,name,kind,pos_restaurant_id,pos_user_id,pos_company_id) VALUES($1,$2,$3,'pos',$4,$5,$6)",[u.id,b.locationId,clean(b.name)||'Kassenanbindung',b.restaurantId,owner.id,owner.company_id]);return {ok:true,products:(await platformPool.query('SELECT id,name FROM products WHERE restaurant_id=$1 AND active',[b.restaurantId])).rows};

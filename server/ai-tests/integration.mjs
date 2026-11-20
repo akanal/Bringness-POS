@@ -1,3 +1,4 @@
+import "./ai-setup-ui.mjs";
 import {JSDOM} from 'jsdom';import fs from 'node:fs';import assert from 'node:assert/strict';import {Readable} from 'node:stream';import {PGlite} from '@electric-sql/pglite';import crypto from 'node:crypto';import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../../',import.meta.url)).replace(/\/$/,'');const db=new PGlite();await db.waitReady;
 function absoluteImports(source){return source.replace(/from (['"])(\.\/[^'"]+\.js)\1/g,(_,q,p)=>'from '+JSON.stringify('file://'+root+'/server/'+p.slice(2)))}
@@ -640,7 +641,7 @@ d.querySelector('[data-eye]').click();assert.equal(d.getElementById('password').
 d.querySelector('[data-auth="register"]').click();assert.equal(d.getElementById('role').options.length,4);const newInput=d.getElementById('newPassword');for(const password of ['abc1!x','ABC1!X','Abcdef!','Abc123','Ab1!x']){newInput.value=password;assert(!newInput.checkValidity())}newInput.value='Ab1!xy';assert(newInput.checkValidity());d.querySelector('[data-auth="login"]').click();
 submit('login',{email:'other@example.org',password:'testing-password-123'});await until(()=>d.querySelector('[data-view="stock"]'));
 assert.equal(d.querySelectorAll('#tabs > button').length,1);assert.equal(d.querySelectorAll('#tabs > details').length,4);
-const navViews=[...d.querySelectorAll('#tabs [data-view]')].map(button=>button.dataset.view);assert.equal(navViews.length,22);assert.equal(new Set(navViews).size,22);assert(navViews.includes('menu'));
+const navViews=[...d.querySelectorAll('#tabs [data-view]')].map(button=>button.dataset.view);assert.equal(navViews.length,23);assert.equal(new Set(navViews).size,23);assert(navViews.includes('menu'));assert(navViews.includes('setup'));
 let menu=d.querySelector('#tabs details');menu.querySelector('summary').click();assert(menu.open);menu.querySelector('summary').focus();menu.querySelector('summary').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert(!menu.open);assert.equal(d.activeElement,menu.querySelector('summary'));
 menu.open=true;d.getElementById('content').click();assert(!menu.open);
 menu.open=true;d.querySelectorAll('#tabs details')[1].querySelector('summary').click();assert(!menu.open);assert(d.querySelectorAll('#tabs details')[1].open);
@@ -915,13 +916,26 @@ console.log('Subscriptions passed: explicit versioned acceptance, tenant/site ow
 const flowBuyer=crypto.randomUUID(),flowSupplier=crypto.randomUUID(),flowRestaurant=crypto.randomUUID();
 for(const [account,email,role] of [[flowBuyer,'flow-buyer@example.org','restaurant'],[flowSupplier,'flow-supplier@example.org','wholesaler']])await query('INSERT INTO ai_accounts(id,email,password_hash,name,business_name,role,status,address,city,delivery_area) VALUES($1,$2,$3,$4,$4,$5,\'active\',\'Testweg 1\',\'Berlin\',\'Berlin\')',[account,email,passwordHash('Ab1!xy'),'End-to-end test',role]);
 const flowBuyerToken=(await call('login',{email:'flow-buyer@example.org',password:'Ab1!xy'})).token,flowSupplierToken=(await call('login',{email:'flow-supplier@example.org',password:'Ab1!xy'})).token;
-const flowLocation=(await call('locations',{name:'32-piece POS flow'},flowBuyerToken)).location;
+await query("INSERT INTO restaurants VALUES($1,$2,'Flow POS')",[flowRestaurant,company]);
+const setupInput={posToken:'pos-owner-token',restaurantId:flowRestaurant,setupLocation:true,address:'Testweg 1'};
+assert.equal((await call('pos-link',{...setupInput,restaurantId:crypto.randomUUID()},flowBuyerToken)).status,400);
+assert.equal((await call('pos-link',{...setupInput,address:''},flowBuyerToken)).status,400);
+const setupLocation=await call('pos-link',setupInput,flowBuyerToken);
+assert.equal(setupLocation.status,200);
+assert.equal(setupLocation.existing,false);
+const setupReplay=await call('pos-link',setupInput,flowBuyerToken);
+assert.equal(setupReplay.existing,true);
+assert.equal(setupReplay.locationId,setupLocation.locationId);
+const flowLocations=(await call('locations',null,flowBuyerToken)).locations;
+assert.equal(flowLocations.length,1);
+const flowLocation=flowLocations[0];
+assert.equal(flowLocation.id,setupLocation.locationId);
+assert.equal(flowLocation.name,'Flow POS');
+assert.equal(flowLocation.address,setupInput.address);
 const flowStock=(await call('stock',{locationId:flowLocation.id,name:'Flow patties',unit:'piece',quantity:32,minimum:32,target:32},flowBuyerToken)).stock;
 const flowOffer=(await call('products',{name:'Flow patties',unit:'piece',packQuantity:32,priceCents:1600,minimumPacks:1},flowSupplierToken)).product;
-await query("INSERT INTO restaurants VALUES($1,$2,'Flow POS')",[flowRestaurant,company]);
 const flowDish=crypto.randomUUID(),flowSale=crypto.randomUUID();await query("INSERT INTO products VALUES($1,$2,'Flow burger',true)",[flowDish,flowRestaurant]);
-assert.equal((await call('pos-link',{posToken:'pos-owner-token',restaurantId:flowRestaurant,locationId:flowLocation.id},flowBuyerToken)).status,200);
-const flowConnector=(await call('connectors',null,flowBuyerToken)).connectors.find(c=>c.kind==='pos');await call('connector-status',{id:flowConnector.id,active:true},flowBuyerToken);
+const flowConnectors=(await call('connectors',null,flowBuyerToken)).connectors;assert.equal(flowConnectors.length,1);const flowConnector=flowConnectors[0];assert.equal(flowConnector.active,false);await call('connector-status',{id:flowConnector.id,active:true},flowBuyerToken);
 assert.equal((await call('recipes',{locationId:flowLocation.id,name:'Flow burger',productCode:flowDish,items:[{stockId:flowStock.id,quantity:1}]},flowBuyerToken)).status,200);
 await query("INSERT INTO orders(id,restaurant_id,status,closed_at,created_at,total_cents) VALUES($1,$2,'paid',now()+interval '1 minute',now(),26000)",[flowSale,flowRestaurant]);await query('INSERT INTO order_items VALUES($1,$2,20)',[flowSale,flowDish]);
 await recipeModule.syncPosSales();await recipeModule.syncPosSales();assert.equal(Number((await query('SELECT quantity FROM ai_stock WHERE id=$1',[flowStock.id])).rows[0].quantity),12);
