@@ -132,7 +132,7 @@ function localDateTime(date,time,original){
   $('content').innerHTML=`<h1>Betrieb einrichten</h1><p>Lege deinen Standort direkt an oder übernimm den Betriebsnamen aus Bringness POS.</p>
    <div class="grid">
     <form class="card" data-form="setup-manual"><h2>Standort direkt anlegen</h2>
-     ${field('name','Standortname','text','','required maxlength="150"')}${field('address','Standortanschrift','text','','required maxlength="300"')}
+     ${field('name','Standortname','text','','required maxlength="150"')}${field('address','Straße und Hausnummer des Standorts','text','','required maxlength="300"')}
      <button type="submit">Standort speichern</button>
     </form>
     <form class="card" data-form="setup-pos-login"><h2>Bringness POS verbinden</h2>
@@ -295,7 +295,7 @@ function localDateTime(date,time,original){
   if(kind==='supplier-connector'){const r=await api('supplier-connectors',b);await render();$('supplier-api-key').innerHTML=`<div class="card"><h3>Schlüssel – nur jetzt sichtbar</h3><p>${esc(r.message)}</p><input readonly aria-label="Lieferanten-API-Schlüssel" value="${esc(r.token)}"></div>`;return}
   if(kind==='connector'){const r=await api('connectors',b);$('connection-extra').innerHTML=`<div class="card"><h3 data-i18n>API-Schlüssel – nur jetzt sichtbar</h3><p>${esc(r.message)}</p><input readonly aria-label="API-Schlüssel" value="${esc(r.token)}"><p class="muted">Dieser Schlüssel erlaubt Verkaufsimporte, Testimporte und die Abfrage zugeordneter Artikel dieses Standorts.</p></div>`;notice('Schlüssel erstellt. Speichere ihn vor dem Wechsel der Ansicht.');return}
   if(kind==='setup-manual'){
-   await api('locations',b);view='stock';await render();notice('Standort gespeichert. Hier kannst du Zutaten und Bestände hinterlegen.');return;
+   await api('locations',b);view='stock';await render();notice('Standort gespeichert. Für Einkauf und Lieferung ergänze bitte das Firmenprofil.');return;
   }
   if(kind==='setup-pos-login'){
    let login=await api('/api/v1/auth/login',{email:b.posEmail,password:b.posPassword},{keepSession:true});
@@ -306,7 +306,7 @@ function localDateTime(date,time,original){
    if(!result.restaurants.length){details.textContent='In diesem POS-Konto gibt es noch keinen Kassenbetrieb.';return}
    details.innerHTML=`<form class="card" data-form="setup-pos-save"><h2>Kassenbetrieb auswählen</h2>
     ${choice('restaurantId','Kassenbetrieb',result.restaurants.map(x=>option(x.id,x.name)).join(''))}
-    ${field('address','Standortanschrift','text','','required maxlength="300"')}
+    ${field('address','Straße und Hausnummer des Standorts','text','','required maxlength="300"')}
     <p>Falls der Kassenbetrieb bereits mit diesem AI-Konto verbunden ist, wird die vorhandene Verbindung weiterverwendet.</p>
     <button type="submit">Standort übernehmen</button></form>`;
    details.querySelector('form').setupPosToken=login.token;

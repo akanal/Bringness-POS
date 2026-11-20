@@ -917,7 +917,7 @@ const flowBuyer=crypto.randomUUID(),flowSupplier=crypto.randomUUID(),flowRestaur
 for(const [account,email,role] of [[flowBuyer,'flow-buyer@example.org','restaurant'],[flowSupplier,'flow-supplier@example.org','wholesaler']])await query('INSERT INTO ai_accounts(id,email,password_hash,name,business_name,role,status,address,city,delivery_area) VALUES($1,$2,$3,$4,$4,$5,\'active\',\'Testweg 1\',\'Berlin\',\'Berlin\')',[account,email,passwordHash('Ab1!xy'),'End-to-end test',role]);
 const flowBuyerToken=(await call('login',{email:'flow-buyer@example.org',password:'Ab1!xy'})).token,flowSupplierToken=(await call('login',{email:'flow-supplier@example.org',password:'Ab1!xy'})).token;
 await query("INSERT INTO restaurants VALUES($1,$2,'Flow POS')",[flowRestaurant,company]);
-const setupInput={posToken:'pos-owner-token',restaurantId:flowRestaurant,setupLocation:true,address:'Testweg 1, Berlin'};
+const setupInput={posToken:'pos-owner-token',restaurantId:flowRestaurant,setupLocation:true,address:'Testweg 1'};
 assert.equal((await call('pos-link',{...setupInput,restaurantId:crypto.randomUUID()},flowBuyerToken)).status,400);
 assert.equal((await call('pos-link',{...setupInput,address:''},flowBuyerToken)).status,400);
 const setupLocation=await call('pos-link',setupInput,flowBuyerToken);
