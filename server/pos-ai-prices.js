@@ -125,14 +125,14 @@ export async function posAiPrices(pool,user,restaurantId,method,body) {
      productIds.some(id=>!uuid.test(id||''))||new Set(productIds).size!==productIds.length||
      !Number.isInteger(discountPercent)||discountPercent<1||discountPercent>50||
      !Number.isInteger(durationMinutes)||durationMinutes<15||durationMinutes>240)fail('Artikel, Rabatt, Laufzeit und Freigabe prüfen.');
-  const previous=(await db.query('SELECT enabled FROM pos_ai_price_rules WHERE restaurant_id=$1 FOR UPDATE',[restaurantId])).rows[0];
-  if(previous?.enabled)fail('Bitte die laufende Freigabe vor dem Ändern der Regeln ausschalten.',409);
   const products=await db.query('SELECT id FROM products WHERE restaurant_id=$1 AND active AND id=ANY($2::uuid[])',[restaurantId,productIds]);
   if(products.rowCount!==productIds.length)fail('Alle Artikel müssen zu diesem Betrieb gehören.');
-  await db.query(`INSERT INTO pos_ai_price_rules(restaurant_id,enabled,owner_id,product_ids,discount_percent,duration_minutes)
+  const saved=await db.query(`INSERT INTO pos_ai_price_rules(restaurant_id,enabled,owner_id,product_ids,discount_percent,duration_minutes)
    VALUES($1,true,$2,$3,$4,$5) ON CONFLICT(restaurant_id) DO UPDATE SET enabled=true,owner_id=EXCLUDED.owner_id,
-   product_ids=EXCLUDED.product_ids,discount_percent=EXCLUDED.discount_percent,duration_minutes=EXCLUDED.duration_minutes`,
+   product_ids=EXCLUDED.product_ids,discount_percent=EXCLUDED.discount_percent,duration_minutes=EXCLUDED.duration_minutes
+   WHERE NOT pos_ai_price_rules.enabled RETURNING restaurant_id`,
    [restaurantId,user.id,productIds,discountPercent,durationMinutes]);
+  if(!saved.rowCount)fail('Bitte die laufende Freigabe vor dem Ändern der Regeln ausschalten.',409);
   return {ok:true};
  });
 }

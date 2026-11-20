@@ -49,6 +49,7 @@ try {
  await assert.rejects(act('GET',{}, {id:ids.tenant,role:'owner'}),{status:404});
  await assert.rejects(act('POST',{...approval,confirmed:false}),{status:400});
  await act('POST',approval);
+ await assert.rejects(act('POST',{...approval,discountPercent:30}),{status:409});
  await aiPriceTick(a,p);
  assert.equal(await price(),490,'use-by batches do not trigger automatic reductions');
  await a.query("UPDATE ai_stock_lots SET date_kind='best_before',movement_at_check=1");
