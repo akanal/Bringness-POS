@@ -22,6 +22,14 @@ CREATE TABLE IF NOT EXISTS ai_daily_preparation (
  version int NOT NULL DEFAULT 1,
  PRIMARY KEY(account_id,location_id,day,recipe_id)
 );
+CREATE TABLE IF NOT EXISTS ai_preparation_feedback (
+ account_id uuid NOT NULL REFERENCES ai_accounts(id),
+ location_id uuid NOT NULL REFERENCES ai_locations(id),
+ recipe_id uuid NOT NULL REFERENCES ai_recipes(id) ON DELETE CASCADE,
+ day date NOT NULL,
+ outcome text NOT NULL CHECK(outcome IN ('enough','leftover','shortage')),
+ PRIMARY KEY(account_id,location_id,day,recipe_id)
+);
 CREATE INDEX IF NOT EXISTS ai_stock_lots_location ON ai_stock_lots(account_id,location_id,stock_id);
 `);}
 const settings=r=>({wasteEnabled:r?.waste_enabled===true,preparationEnabled:r?.preparation_enabled===true,serviceWindows:r?.service_windows??null,version:r?.version||0});
@@ -36,6 +44,20 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
     await c.query('INSERT INTO ai_kitchen_assistant_settings(location_id) VALUES($1) ON CONFLICT DO NOTHING',[locationId]);
     const saved=await c.query('UPDATE ai_kitchen_assistant_settings SET waste_enabled=$2,preparation_enabled=$3,service_windows=CASE WHEN $5::boolean THEN $6::jsonb ELSE service_windows END,version=version+1 WHERE location_id=$1 AND version=$4 RETURNING *',[locationId,b.wasteEnabled,b.preparationEnabled,b.version,hasWindows,JSON.stringify(windows)]);if(!saved.rowCount)fail('Einstellungen wurden geändert. Neu laden.',409);
     await c.query("INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,'kitchen_assistant_settings')",[user.id,locationId]);await c.query('COMMIT');return {ok:true,settings:settings(saved.rows[0])};
+   }
+   if(path==='/api/ai/kitchen-assistant/feedback'){
+    const recipeId=id(b.recipeId);
+    if(b.day!==today)fail('Der Küchentag hat gewechselt. Bitte neu laden.',409);
+    if(!['enough','leftover','shortage'].includes(b.outcome))fail('Gültige Schichtrückmeldung erforderlich');
+    const enabled=await c.query('SELECT location_id FROM ai_kitchen_assistant_settings WHERE location_id=$1 AND preparation_enabled FOR SHARE',[locationId]);
+    if(!enabled.rowCount)fail('Vorbereitungsempfehlungen sind für diesen Standort ausgeschaltet.',409);
+    const recipe=await c.query('SELECT id FROM ai_recipes WHERE id=$1 AND account_id=$2 AND location_id=$3 AND active FOR SHARE',[recipeId,user.id,locationId]);
+    if(!recipe.rowCount)fail('Aktives Rezept nicht gefunden',404);
+    await c.query(`INSERT INTO ai_preparation_feedback(account_id,location_id,recipe_id,day,outcome)
+      VALUES($1,$2,$3,$4,$5) ON CONFLICT(account_id,location_id,day,recipe_id)
+      DO UPDATE SET outcome=EXCLUDED.outcome`,[user.id,locationId,recipeId,today,b.outcome]);
+    await c.query('COMMIT');
+    return {ok:true,outcome:b.outcome};
    }
    if(path==='/api/ai/kitchen-assistant/preparation'){
     const recipeId=id(b.recipeId);
@@ -123,10 +145,14 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
  const entries=initial.preparationEnabled?(await db.query(
   'SELECT recipe_id,portions,prepared,remaining,sold_out,version FROM ai_daily_preparation WHERE account_id=$1 AND location_id=$2 AND day=$3',
   [user.id,locationId,today])).rows:[];
+ const feedback=initial.preparationEnabled?(await db.query(
+  'SELECT recipe_id,outcome FROM ai_preparation_feedback WHERE account_id=$1 AND location_id=$2 AND day=$3',
+  [user.id,locationId,today])).rows:[];
+ const feedbackByRecipe=new Map(feedback.map(row=>[row.recipe_id,row.outcome]));
  const entryByRecipe=new Map(entries.map(entry=>[entry.recipe_id,entry]));
  const recommendationByRecipe=new Map(dailyRecommendations.map(item=>[item.recipeId,item]));
  const dailyPreparation=recipes.filter(recipe=>recipe.active).map(recipe=>({
-  recipeId:recipe.id,name:recipe.name,entry:entryByRecipe.get(recipe.id)||null,
+  recipeId:recipe.id,name:recipe.name,feedback:feedbackByRecipe.get(recipe.id)||null,entry:entryByRecipe.get(recipe.id)||null,
   recommendation:recommendationByRecipe.get(recipe.id)||null
  }));
  const current=await config();if(current.version!==initial.version){preparation=[];preparationStock=[];preparationMessage='Einstellungen wurden während der Berechnung geändert. Bitte neu laden.';}return {locationId,today,dailyPreparation:current.preparationEnabled&&current.version===initial.version?dailyPreparation:[],settings:current,stock,lots,waste:current.wasteEnabled?wasteRecommendations(stock,lots,recipes,today):null,preparation:current.preparationEnabled?preparation:[],preparationStock:current.preparationEnabled?preparationStock:[],preparationMessage:current.preparationEnabled?preparationMessage:'Vorbereitungsempfehlungen ausgeschaltet.'};
