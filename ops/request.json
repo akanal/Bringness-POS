@@ -1,6 +1,5 @@
 {
   "operation": "deploy",
   "target": "ai",
-  "revision": "05b5e8b602508336467f385d23189bbf42bc3e3e",
-  "requestId": "ai-price-rules-ai-20261120"
+  "requestId": "ai-daily-kitchen-preparation-20261121"
 }
