@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS ai_connectors(id uuid PRIMARY KEY DEFAULT gen_random_
 CREATE UNIQUE INDEX IF NOT EXISTS ai_pos_active_connector ON ai_connectors(pos_restaurant_id) WHERE kind='pos' AND active;
 CREATE TABLE IF NOT EXISTS ai_sale_events(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),connector_id uuid NOT NULL REFERENCES ai_connectors(id),account_id uuid NOT NULL REFERENCES ai_accounts(id),external_id text NOT NULL,event_type text NOT NULL CHECK(event_type IN ('sale','reversal')),fingerprint text NOT NULL,reverses_id uuid UNIQUE REFERENCES ai_sale_events(id),created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(connector_id,external_id));
 ALTER TABLE ai_sale_events ADD COLUMN IF NOT EXISTS occurred_at timestamptz;
+CREATE INDEX IF NOT EXISTS ai_sale_events_connector_type_recent ON ai_sale_events(connector_id,event_type,created_at DESC);
 CREATE INDEX IF NOT EXISTS ai_sale_events_effective_time ON ai_sale_events(account_id,(COALESCE(occurred_at,created_at)));
 CREATE TABLE IF NOT EXISTS ai_sale_effects(event_id uuid NOT NULL REFERENCES ai_sale_events(id),stock_id uuid NOT NULL REFERENCES ai_stock(id),delta numeric(15,3) NOT NULL,PRIMARY KEY(event_id,stock_id));
 `)}
@@ -60,7 +61,18 @@ export async function recipeRoutes(p,method,b,u,url=new URL("http://local")){
    const seen=new Set();for(const item of b.items){checkId(item.stockId);const qty=quantity(item.quantity);if(qty<=0||seen.has(item.stockId))fail('Positive, eindeutige Zutatenmengen erforderlich');seen.add(item.stockId);if(!(await c.query('SELECT id FROM ai_stock WHERE id=$1 AND account_id=$2 AND location_id=$3',[item.stockId,u.id,b.locationId])).rowCount)fail('Zutat gehört nicht zum Rezeptstandort');await c.query('INSERT INTO ai_recipe_items VALUES($1,$2,$3)',[recipeId,item.stockId,qty])}await blockUnavailableRecipes(c,u.id);await c.query('COMMIT');return {ok:true};
   }catch(e){await c.query('ROLLBACK');if(e.code==='23505')fail('Artikelcode ist für diesen Standort bereits vergeben');throw e}finally{c.release()}
  }
- if(p==='/api/ai/connectors'&&method==='GET')return {connectors:(await pool.query('SELECT id,name,kind,location_id,active,consumption_mode,last_error,last_sync,cursor_time FROM ai_connectors WHERE account_id=$1 ORDER BY created_at DESC',[u.id])).rows};
+ if(p==='/api/ai/connectors'&&method==='GET')return {connectors:(await pool.query(`
+  SELECT c.id,c.name,c.kind,c.location_id,c.active,c.consumption_mode,c.last_error,c.last_sync,c.cursor_time,
+         sales.created_at AS last_sale_import,sales.occurred_at AS last_sale_time,
+         EXISTS(SELECT 1 FROM ai_sale_events e WHERE e.connector_id=c.id AND e.account_id=c.account_id
+                AND e.event_type='reversal') AS has_reversal
+  FROM ai_connectors c
+  LEFT JOIN LATERAL (
+   SELECT e.created_at,e.occurred_at FROM ai_sale_events e
+   WHERE e.connector_id=c.id AND e.account_id=c.account_id AND e.event_type='sale'
+   ORDER BY e.created_at DESC,e.id DESC LIMIT 1
+  ) sales ON c.kind='api'
+  WHERE c.account_id=$1 ORDER BY c.created_at DESC`,[u.id])).rows};
  if(p==='/api/ai/connectors'&&method==='POST'){
   checkId(b.locationId);const name=clean(b.name);if(!name)fail('Name erforderlich');const token=crypto.randomBytes(32).toString('hex'),c=await pool.connect();
   try{await c.query('BEGIN');await lockAiRestaurant(c,u.id);if(!(await c.query('SELECT id FROM ai_locations WHERE id=$1 AND account_id=$2',[b.locationId,u.id])).rowCount)fail('Standort nicht gefunden');
