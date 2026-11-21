@@ -200,7 +200,7 @@ function localDateTime(date,time,original){
    const review=nextWindow?assistantHour(nextWindow.startHour):!recommendation?.serviceWindows&&recommendation?.before17>0&&recommendation?.from17>0?'17:00':null;
    return `<form class="card" data-form="assistant-daily-preparation">
     <h4>${esc(name)}</h4>
-    <p>${start==null?'Für dieses Gericht liegt keine Mengenempfehlung vor.':`Startvorschlag: ${amount(start)} Portionen aus vergleichbaren POS-Verkaufstagen.`}${review?` Vor dem nächsten Zeitfenster um ${review} Uhr nachprüfen.`:''}</p>
+    <p>${start==null?'Kein Startvorschlag verfügbar. Die Vorbereitungsmenge kann direkt eingetragen werden.':`Startvorschlag: ${amount(start)} Portionen aus ${recommendation.sampleDays} vergleichbaren POS-Verkaufstagen.`}${review?` Vor dem nächsten Zeitfenster um ${review} Uhr nachprüfen.`:''}</p>
     <input type="hidden" name="locationId" value="${esc(result.locationId)}">
     <input type="hidden" name="recipeId" value="${esc(recipeId)}">
     <input type="hidden" name="day" value="${esc(result.today)}">
