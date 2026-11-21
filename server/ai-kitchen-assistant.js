@@ -10,6 +10,18 @@ export async function migrateKitchenAssistant(db){await db.query(`
 CREATE TABLE IF NOT EXISTS ai_kitchen_assistant_settings(location_id uuid PRIMARY KEY REFERENCES ai_locations(id),waste_enabled boolean NOT NULL DEFAULT false,preparation_enabled boolean NOT NULL DEFAULT false,version int NOT NULL DEFAULT 0);
 ALTER TABLE ai_kitchen_assistant_settings ADD COLUMN IF NOT EXISTS service_windows jsonb;
 CREATE TABLE IF NOT EXISTS ai_stock_lots(id uuid PRIMARY KEY,account_id uuid NOT NULL REFERENCES ai_accounts(id),location_id uuid NOT NULL REFERENCES ai_locations(id),stock_id uuid NOT NULL REFERENCES ai_stock(id),label text NOT NULL,quantity numeric(15,3) NOT NULL CHECK(quantity>=0),expires_on date,date_kind text NOT NULL CHECK(date_kind IN ('best_before','use_by')),opening_state text NOT NULL DEFAULT 'unknown' CHECK(opening_state IN ('unknown','sealed','opened')),opened_on date,opened_expires_on date,checked_on date NOT NULL,stock_at_check numeric(15,3) NOT NULL,movement_at_check bigint NOT NULL DEFAULT 0,version int NOT NULL DEFAULT 1,updated_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS ai_daily_preparation (
+ account_id uuid NOT NULL REFERENCES ai_accounts(id),
+ location_id uuid NOT NULL REFERENCES ai_locations(id),
+ recipe_id uuid NOT NULL REFERENCES ai_recipes(id) ON DELETE CASCADE,
+ day date NOT NULL,
+ portions int NOT NULL CHECK(portions BETWEEN 0 AND 1000000),
+ prepared boolean NOT NULL,
+ remaining int CHECK(remaining BETWEEN 0 AND portions),
+ sold_out boolean NOT NULL,
+ version int NOT NULL DEFAULT 1,
+ PRIMARY KEY(account_id,location_id,day,recipe_id)
+);
 CREATE INDEX IF NOT EXISTS ai_stock_lots_location ON ai_stock_lots(account_id,location_id,stock_id);
 `);}
 const settings=r=>({wasteEnabled:r?.waste_enabled===true,preparationEnabled:r?.preparation_enabled===true,serviceWindows:r?.service_windows??null,version:r?.version||0});
@@ -24,6 +36,24 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
     await c.query('INSERT INTO ai_kitchen_assistant_settings(location_id) VALUES($1) ON CONFLICT DO NOTHING',[locationId]);
     const saved=await c.query('UPDATE ai_kitchen_assistant_settings SET waste_enabled=$2,preparation_enabled=$3,service_windows=CASE WHEN $5::boolean THEN $6::jsonb ELSE service_windows END,version=version+1 WHERE location_id=$1 AND version=$4 RETURNING *',[locationId,b.wasteEnabled,b.preparationEnabled,b.version,hasWindows,JSON.stringify(windows)]);if(!saved.rowCount)fail('Einstellungen wurden geändert. Neu laden.',409);
     await c.query("INSERT INTO ai_audit(actor_id,target_id,action) VALUES($1,$2,'kitchen_assistant_settings')",[user.id,locationId]);await c.query('COMMIT');return {ok:true,settings:settings(saved.rows[0])};
+   }
+   if(path==='/api/ai/kitchen-assistant/preparation'){
+    const recipeId=id(b.recipeId);
+    const portionCount=n=>Number.isInteger(n)&&n>=0&&n<=1000000;
+    if(b.day!==today)fail('Der Küchentag hat gewechselt. Bitte neu laden.',409);
+    if(!portionCount(b.portions)||(b.remaining!==null&&(!portionCount(b.remaining)||b.remaining>b.portions))||
+       typeof b.prepared!=='boolean'||typeof b.soldOut!=='boolean'||!Number.isSafeInteger(b.version)||b.version<0)fail('Gültige Vorbereitungsmengen und aktuelle Version erforderlich');
+    const enabled=await c.query('SELECT location_id FROM ai_kitchen_assistant_settings WHERE location_id=$1 AND preparation_enabled FOR SHARE',[locationId]);
+    if(!enabled.rowCount)fail('Vorbereitungsempfehlungen sind für diesen Standort ausgeschaltet.',409);
+    const recipe=await c.query('SELECT id FROM ai_recipes WHERE id=$1 AND account_id=$2 AND location_id=$3 AND active FOR SHARE',[recipeId,user.id,locationId]);
+    if(!recipe.rowCount)fail('Aktives Rezept nicht gefunden',404);
+    const args=[user.id,locationId,recipeId,today,b.portions,b.prepared,b.remaining,b.soldOut];
+    const saved=b.version===0
+      ?await c.query('INSERT INTO ai_daily_preparation(account_id,location_id,recipe_id,day,portions,prepared,remaining,sold_out) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING RETURNING version',args)
+      :await c.query('UPDATE ai_daily_preparation SET portions=$5,prepared=$6,remaining=$7,sold_out=$8,version=version+1 WHERE account_id=$1 AND location_id=$2 AND recipe_id=$3 AND day=$4 AND version=$9 RETURNING version',[...args,b.version]);
+    if(!saved.rowCount)fail('Vorbereitung wurde geändert. Bitte neu laden.',409);
+    await c.query('COMMIT');
+    return {ok:true,version:saved.rows[0].version};
    }
    if(path!=='/api/ai/kitchen-assistant/lot')fail('Funktion nicht gefunden',404);
    const lotId=id(b.id),stockId=id(b.stockId),label=typeof b.label==='string'?b.label.trim():'';
@@ -45,9 +75,39 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
  const config=async()=>settings((await db.query('SELECT * FROM ai_kitchen_assistant_settings WHERE location_id=$1',[locationId])).rows[0]);const initial=await config();
  let stock=(await db.query('SELECT s.*,(SELECT coalesce(max(m.id),0)::text FROM ai_stock_moves m WHERE m.stock_id=s.id) movement_id FROM ai_stock s WHERE s.account_id=$1 AND s.location_id=$2 ORDER BY s.name,s.id',[user.id,locationId])).rows;
  const lots=(await db.query("SELECT *,to_char(expires_on,'YYYY-MM-DD') expires_on,to_char(opened_on,'YYYY-MM-DD') opened_on,to_char(opened_expires_on,'YYYY-MM-DD') opened_expires_on,to_char(checked_on,'YYYY-MM-DD') checked_on FROM ai_stock_lots l WHERE account_id=$1 AND location_id=$2 ORDER BY l.expires_on NULLS LAST,l.id LIMIT 2001",[user.id,locationId])).rows;if(lots.length>2000)fail('Chargenübersicht zu groß; Unterstützung erforderlich',409);
- const rows=(await db.query('SELECT r.id,r.name,r.external_code,r.active,i.stock_id,i.quantity FROM ai_recipes r JOIN ai_recipe_items i ON i.recipe_id=r.id WHERE r.account_id=$1 AND r.location_id=$2 ORDER BY r.id,i.stock_id',[user.id,locationId])).rows,recipeMap=new Map();for(const r of rows){if(!recipeMap.has(r.id))recipeMap.set(r.id,{...r,items:[]});recipeMap.get(r.id).items.push({stock_id:r.stock_id,quantity:Number(r.quantity)})}const recipes=[...recipeMap.values()];
- let preparation=[];let preparationMessage='Vorbereitungsempfehlungen ausgeschaltet.';
- if(initial.preparationEnabled){try{const f=await forecast(user.id,locationId);if(f.available){const history=(await db.query("SELECT to_char(day,'YYYY-MM-DD') AS day,orders::text,quality,products FROM ai_learning_days WHERE account_id=$1 AND location_id=$2 AND source_key=$3 AND day<$4::date",[user.id,locationId,f.learningSourceKey,today])).rows;preparation=preparationRecommendations([f,...f.nextDays],history,recipes,initial.serviceWindows);preparationMessage='Planungshinweise ohne automatische Buchung oder Bestellung.';}else preparationMessage=f.message;}catch(e){if(e.status===403)throw e;preparationMessage='Prognosedaten derzeit nicht verfügbar. Bitte später neu laden.';}}
+ const rows=(await db.query('SELECT r.id,r.name,r.external_code,r.active,i.stock_id,i.quantity FROM ai_recipes r LEFT JOIN ai_recipe_items i ON i.recipe_id=r.id WHERE r.account_id=$1 AND r.location_id=$2 ORDER BY r.id,i.stock_id',[user.id,locationId])).rows,recipeMap=new Map();for(const r of rows){if(!recipeMap.has(r.id))recipeMap.set(r.id,{...r,items:[]});if(r.stock_id)recipeMap.get(r.id).items.push({stock_id:r.stock_id,quantity:Number(r.quantity)})}const recipes=[...recipeMap.values()];
+ let preparation=[];
+ let dailyRecommendations=[];
+ let preparationMessage='Vorbereitungsempfehlungen ausgeschaltet.';
+ if(initial.preparationEnabled){
+  try{
+   const f=await forecast(user.id,locationId);
+   if(f.available){
+    const forecasts=[f,...f.nextDays];
+    const history=(await db.query("SELECT to_char(day,'YYYY-MM-DD') AS day,orders::text,quality,products FROM ai_learning_days WHERE account_id=$1 AND location_id=$2 AND source_key=$3 AND day<$4::date",[user.id,locationId,f.learningSourceKey,today])).rows;
+    const weekday=date=>new Date(date+'T00:00:00Z').getUTCDay();
+    const dailyDates=history.filter(row=>row.quality==='sales'&&weekday(row.day)===weekday(today))
+      .map(row=>row.day).sort().slice(-4);
+    const comparisonDays=[...new Set([...dailyDates,...forecasts.flatMap(day=>day.comparisonDates||[])])];
+    const soldOut=(await db.query("SELECT recipe_id,to_char(day,'YYYY-MM-DD') AS day FROM ai_daily_preparation WHERE account_id=$1 AND location_id=$2 AND sold_out AND day=ANY($3::date[])",[user.id,locationId,comparisonDays])).rows;
+    const soldOutDays=new Map();
+    for(const entry of soldOut){
+     if(!soldOutDays.has(entry.recipe_id))soldOutDays.set(entry.recipe_id,new Set());
+     soldOutDays.get(entry.recipe_id).add(entry.day);
+    }
+    preparation=preparationRecommendations(forecasts,history,recipes.filter(r=>r.items.length),initial.serviceWindows,soldOutDays);
+    dailyRecommendations=preparationRecommendations(
+     [{...f,ready:f.ready&&dailyDates.length>=3,comparisonDates:dailyDates}],
+     history,recipes,initial.serviceWindows,soldOutDays
+    )[0].items;
+    preparationMessage='Planungshinweise ohne automatische Buchung oder Bestellung.';
+   }else preparationMessage=f.message;
+  }catch(e){
+   if(e.status===403)throw e;
+   preparationMessage='Prognosedaten derzeit nicht verfügbar. Bitte später neu laden.';
+  }
+ }
+
  let preparationStock=[];
  if(preparation.length){
   const lastDay=preparation.map(d=>d.date).sort().at(-1);
@@ -60,5 +120,14 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
    await c.query('COMMIT');stock=planStock;
   }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
  }
- const current=await config();if(current.version!==initial.version){preparation=[];preparationStock=[];preparationMessage='Einstellungen wurden während der Berechnung geändert. Bitte neu laden.';}return {locationId,settings:current,stock,lots,waste:current.wasteEnabled?wasteRecommendations(stock,lots,recipes,today):null,preparation:current.preparationEnabled?preparation:[],preparationStock:current.preparationEnabled?preparationStock:[],preparationMessage:current.preparationEnabled?preparationMessage:'Vorbereitungsempfehlungen ausgeschaltet.'};
+ const entries=initial.preparationEnabled?(await db.query(
+  'SELECT recipe_id,portions,prepared,remaining,sold_out,version FROM ai_daily_preparation WHERE account_id=$1 AND location_id=$2 AND day=$3',
+  [user.id,locationId,today])).rows:[];
+ const entryByRecipe=new Map(entries.map(entry=>[entry.recipe_id,entry]));
+ const recommendationByRecipe=new Map(dailyRecommendations.map(item=>[item.recipeId,item]));
+ const dailyPreparation=recipes.filter(recipe=>recipe.active).map(recipe=>({
+  recipeId:recipe.id,name:recipe.name,entry:entryByRecipe.get(recipe.id)||null,
+  recommendation:recommendationByRecipe.get(recipe.id)||null
+ }));
+ const current=await config();if(current.version!==initial.version){preparation=[];preparationStock=[];preparationMessage='Einstellungen wurden während der Berechnung geändert. Bitte neu laden.';}return {locationId,today,dailyPreparation:current.preparationEnabled&&current.version===initial.version?dailyPreparation:[],settings:current,stock,lots,waste:current.wasteEnabled?wasteRecommendations(stock,lots,recipes,today):null,preparation:current.preparationEnabled?preparation:[],preparationStock:current.preparationEnabled?preparationStock:[],preparationMessage:current.preparationEnabled?preparationMessage:'Vorbereitungsempfehlungen ausgeschaltet.'};
 }

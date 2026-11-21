@@ -29,7 +29,17 @@ try{
  const day=berlinClock().date,batch={id:crypto.randomUUID(),locationId:loc,stockId,version:0,label:'Real label',quantity:10,dateKind:'use_by',openingState:'sealed',expiresOn:shiftDay(day,1),openedOn:'',openedExpiresOn:''};await call('kitchen-assistant/lot','POST',batch);await assert.rejects(call('kitchen-assistant/lot','POST',batch),e=>e.status===409);r=await call('kitchen-assistant');assert.equal(r.waste.dishes.length,1);
  await db.query('UPDATE ai_stock SET quantity=9 WHERE id=$1',[stockId]);r=await call('kitchen-assistant');assert.equal(r.waste.dishes.length,0);assert.equal(r.waste.findings[0].kind,'recheck');await call('kitchen-assistant/lot','POST',{...batch,quantity:9,version:1});
  await call('kitchen-assistant/settings','POST',{locationId:loc,version:1,wasteEnabled:false,preparationEnabled:true});r=await call('kitchen-assistant');assert.equal(r.waste,null);assert.equal(forecastCalls,1);
- await call('kitchen-assistant/settings','POST',{locationId:loc,version:2,wasteEnabled:false,preparationEnabled:false});r=await call('kitchen-assistant');assert.equal(forecastCalls,1);assert.equal(r.lots.length,1);assert.equal(r.preparation.length,0);assert.equal(Number((await db.query('SELECT quantity FROM ai_stock')).rows[0].quantity),9);assert.equal(Number((await db.query('SELECT count(*) FROM ai_learning_forecasts')).rows[0].count),1);
+ const daily={locationId:loc,recipeId:recipe,day,version:0,portions:12,prepared:true,remaining:2,soldOut:false};
+ assert.equal(r.dailyPreparation[0].recommendation,null);
+ await assert.rejects(call('kitchen-assistant/preparation','POST',daily,{id:other,role:'restaurant'}),e=>e.status===404);
+ await assert.rejects(call('kitchen-assistant/preparation','POST',{...daily,day:shiftDay(day,-1)}),e=>e.status===409);
+ assert.equal((await call('kitchen-assistant/preparation','POST',daily)).version,1);
+ await assert.rejects(call('kitchen-assistant/preparation','POST',daily),e=>e.status===409);
+ assert.equal((await call('kitchen-assistant/preparation','POST',{...daily,version:1,remaining:0,soldOut:true})).version,2);
+ r=await call('kitchen-assistant');
+ assert.equal(r.dailyPreparation[0].entry.portions,12);
+ assert.equal(r.dailyPreparation[0].entry.sold_out,true);
+ await call('kitchen-assistant/settings','POST',{locationId:loc,version:2,wasteEnabled:false,preparationEnabled:false});r=await call('kitchen-assistant');assert.equal(forecastCalls,2);assert.equal(r.lots.length,1);assert.equal(r.preparation.length,0);assert.equal(Number((await db.query('SELECT quantity FROM ai_stock')).rows[0].quantity),9);assert.equal(Number((await db.query('SELECT count(*) FROM ai_learning_forecasts')).rows[0].count),1);
  const windows=[{id:'breakfast',startHour:6,endHour:11},{id:'dinner',startHour:17,endHour:0}];
  let version=(await call('kitchen-assistant')).settings.version;
  const save=(v,serviceWindows)=>call('kitchen-assistant/settings','POST',{locationId:loc,version:v,wasteEnabled:false,preparationEnabled:true,serviceWindows});
