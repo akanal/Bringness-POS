@@ -3,10 +3,17 @@ set -Eeuo pipefail
 umask 077
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 request="${SSH_ORIGINAL_COMMAND:-}"
-if [[ ! "$request" =~ ^(status|backup|restart|deploy)[[:space:]](all|pos|ai)([[:space:]][0-9a-f]{40})?$ ]]; then
+source_transfer=0
+if [[ "$request" =~ ^deploy-source[[:space:]](pos|ai)[[:space:]][0-9a-f]{40}[[:space:]][0-9a-f]{64}[[:space:]][1-9][0-9]{0,8}$ ]]; then
+  read -r operation target revision source_digest source_size <<< "$request"
+  (( source_size <= 104857600 )) || exit 64
+  operation=deploy
+  source_transfer=1
+elif [[ "$request" =~ ^(status|backup|restart|deploy)[[:space:]](all|pos|ai)([[:space:]][0-9a-f]{40})?$ ]]; then
+  read -r operation target revision <<< "$request"
+else
   echo "Invalid operation" >&2; exit 64
 fi
-read -r operation target revision <<< "$request"
 if [[ "$operation" == deploy && ( "$target" == all || -z "${revision:-}" ) ]]; then exit 64; fi
 if [[ "$operation" != deploy && -n "${revision:-}" ]]; then exit 64; fi
 if [[ "$operation" == restart && "$target" == all ]]; then exit 64; fi
@@ -54,6 +61,7 @@ state(){
   say "$name: $status"
 }
 if [[ "$operation" == status ]]; then
+  if [[ -f /usr/local/lib/bringness/netcup-source.py ]]; then say "Source transfer: ssh-archive-v1"; fi
   [[ "$target" == ai ]] || state bringness-pos
   [[ "$target" == pos ]] || state bringness-app
   state bringness-db
@@ -98,11 +106,17 @@ elif [[ "$old_port" == "$port_b" ]]; then new_port=$port_a
 else say "Unexpected port mapping. Deployment stopped."; exit 65; fi
 [[ $(docker inspect --format '{{.State.Status}}' "$live") == running ]]
 work=$(mktemp -d /opt/bringness/releases/build.XXXXXX)
-stage=download
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 120 \
-  "https://codeload.github.com/akanal/Bringness-POS/tar.gz/$revision" -o "$work/source.tgz"
-mkdir "$work/source"
-tar -xzf "$work/source.tgz" -C "$work/source" --strip-components=1
+stage=source
+if (( source_transfer )); then
+  timeout 120 python3 /usr/local/lib/bringness/netcup-source.py \
+    "$work/source.tgz" "$work/source" "$revision" "$source_digest" "$source_size"
+else
+  # Compatibility only while upgrading the server. Private deployments use SSH stdin.
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 120 \
+    "https://codeload.github.com/akanal/Bringness-POS/tar.gz/$revision" -o "$work/source.tgz"
+  mkdir "$work/source"
+  tar -xzf "$work/source.tgz" -C "$work/source" --strip-components=1
+fi
 stage=tests
 docker run --rm --network none -v "$work/source:/src:ro" -w /src node:24-bookworm-slim \
   node --test server/runtime-mode.test.js server/qr-service.test.js

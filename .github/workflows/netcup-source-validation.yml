@@ -1,0 +1,27 @@
+name: Netcup private source validation
+on:
+  pull_request:
+    paths:
+      - 'ops/netcup-command*'
+      - 'ops/netcup-source*'
+      - 'ops/netcup-workflow*'
+      - 'ops/install-private-source-access.sh'
+      - '.github/workflows/netcup-operations.yml'
+      - '.github/workflows/netcup-source-validation.yml'
+permissions:
+  contents: read
+jobs:
+  source-transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate bounded source transport and deployment rollback
+        run: |
+          bash -n ops/netcup-command.sh
+          bash -n ops/install-private-source-access.sh
+          python3 ops/netcup-source.test.py
+          python3 ops/netcup-command.test.py
+          python3 ops/netcup-workflow.test.py
