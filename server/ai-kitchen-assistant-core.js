@@ -40,19 +40,26 @@ function splitServiceWindows(windows,selected,recipe,total,hasHours){
  const portions=apportion(total,weights),ingredients=recipe.items.map(i=>apportion(Math.round(total*Number(i.quantity)*1000),portions));
  return buckets.map((w,j)=>({...w,portions:hasHours?portions[j]:null,ingredients:hasHours?recipe.items.map((i,k)=>({stockId:i.stock_id,quantity:ingredients[k][j]/1000})):null}));
 }
-export function preparationRecommendations(forecasts,history,recipes,serviceWindows=null,soldOutDays=new Map()){
+function orderFactor(expectedOrders,days){
+ const actualOrders=median(days.map(day=>Number(day.orders)));
+ return actualOrders>0?Math.max(.25,Math.min(4,expectedOrders/actualOrders)):null;
+}
+export function preparationRecommendations(forecasts,history,recipes,serviceWindows=null,soldOutDays=new Map(),dailySampleSize=null){
  serviceWindows=normalizeServiceWindows(serviceWindows);
  return forecasts.map(f=>{if(!f.ready||f.closed)return {date:f.date,available:false,closed:f.closed===true,message:f.closed?'Als geschlossen hinterlegt.':'Noch zu wenige Vergleichstage.',items:[]};
-  const comparison=history.filter(d=>d.quality==='sales'&&f.comparisonDates.includes(d.day)),actualOrders=median(comparison.map(d=>Number(d.orders))),factor=actualOrders>0?Math.max(.25,Math.min(4,f.expectedOrders/actualOrders)):null;
+  const comparison=history.filter(d=>d.quality==='sales'&&f.comparisonDates.includes(d.day)),factor=orderFactor(f.expectedOrders,comparison);
   if(comparison.length<3||factor===null)return {date:f.date,available:false,message:'Mindestens drei archivierte Verkaufstage mit Artikelmengen erforderlich.',items:[]};
   const items=recipes.filter(r=>r.active).map(r=>{
-   const selected=comparison.filter(day=>!soldOutDays.get(r.id)?.has(day.day));
+   let selected=comparison.filter(day=>!soldOutDays.get(r.id)?.has(day.day));
+   if(dailySampleSize!==null)selected=selected.sort((a,b)=>b.day.localeCompare(a.day)).slice(0,dailySampleSize);
    if(selected.length<3)return null;
-   const daily=selected.map(d=>(d.products||[]).filter(p=>p.product_code===r.external_code).reduce((n,p)=>n+Number(p.quantity),0)),portionEstimate=median(daily)*factor;
+   const recipeFactor=dailySampleSize===null?factor:orderFactor(f.expectedOrders,selected);
+   if(recipeFactor===null)return null;
+   const daily=selected.map(d=>(d.products||[]).filter(p=>p.product_code===r.external_code).reduce((n,p)=>n+Number(p.quantity),0)),portionEstimate=median(daily)*recipeFactor;
    const hasHours=selected.every(d=>(d.products||[]).filter(p=>p.product_code===r.external_code).every(p=>Number.isInteger(p.hour)&&p.hour>=0&&p.hour<=23));
-   const midday=hasHours?median(selected.map(d=>(d.products||[]).filter(p=>p.product_code===r.external_code&&p.hour<17).reduce((n,p)=>n+Number(p.quantity),0)))*factor:null;
+   const midday=hasHours?median(selected.map(d=>(d.products||[]).filter(p=>p.product_code===r.external_code&&p.hour<17).reduce((n,p)=>n+Number(p.quantity),0)))*recipeFactor:null;
    const total=Math.ceil(portionEstimate),before17=midday===null?null:Math.min(total,Math.round(midday));
-   return {recipeId:r.id,name:r.name,portions:total,serviceWindows:serviceWindows?splitServiceWindows(serviceWindows,selected,r,total,hasHours):null,before17,from17:before17===null?null:total-before17,ingredients:r.items.map(i=>({stockId:i.stock_id,quantity:round(total*Number(i.quantity))}))};
+   return {recipeId:r.id,name:r.name,sampleDays:selected.length,portions:total,serviceWindows:serviceWindows?splitServiceWindows(serviceWindows,selected,r,total,hasHours):null,before17,from17:before17===null?null:total-before17,ingredients:r.items.map(i=>({stockId:i.stock_id,quantity:round(total*Number(i.quantity))}))};
   }).filter(i=>i&&i.portions>0);
   return {date:f.date,available:true,sampleDays:comparison.length,factor,items,message:serviceWindows?'Tagesmengen nach Artikelverkäufen und aktuellen Rezepten, aufgeteilt nach Zahlungsstunden in Europe/Berlin. Beginn inklusive, Ende exklusiv; Mitternacht bleibt Kalendergrenze. Außerhalb liegende Verkäufe werden separat gezeigt. Keine bestätigten Küchenzeiten, Reservierungsdaten oder automatische Lagerbuchung.':'Volle Tagesmengen aus verkauften Artikeln und aktuellen Rezepten. Zeitaufteilung nach Zahlungszeit vor/ab 17 Uhr, keine bestätigten Küchenzeiten oder Reservierungsdaten. Keine automatische Lagerbuchung.'};
  });

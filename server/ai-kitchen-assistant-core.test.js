@@ -30,3 +30,16 @@ test('invalid or overlapping windows are rejected; legacy callers retain their s
  assert.equal(normalizeServiceWindows(null),null);assert.deepEqual(normalizeServiceWindows(windows),windows);
  const history=[1,2,3].map(n=>({day:`2026-11-0${n}`,quality:'sales',orders:10,products:[{product_code:'p',quantity:5,hour:12}]}));assert.equal(preparationRecommendations([{ready:true,date:today,comparisonDates:history.map(d=>d.day),expectedOrders:10}],history,recipes)[0].items[0].serviceWindows,null);
 });
+test('daily preparation fills gaps with recent dates when the recipe was not sold out',()=>{
+ const history=[1,2,3,4,5,6,7,8].map(n=>({
+  day:`2026-11-0${n}`,quality:'sales',orders:n>=6?100:10,
+  products:[{product_code:'p',quantity:n===1?100:n,hour:12}]
+ }));
+ const forecast={ready:true,date:today,comparisonDates:history.map(day=>day.day),expectedOrders:10};
+ const soldOut=new Map([['r',new Set(history.slice(-3).map(day=>day.day))]]);
+ const [item]=preparationRecommendations([forecast],history,recipes,null,soldOut,4)[0].items;
+ assert.equal(item.sampleDays,4);
+ assert.equal(item.portions,4);
+ const insufficient=new Map([['r',new Set(history.slice(2).map(day=>day.day))]]);
+ assert.deepEqual(preparationRecommendations([forecast],history,recipes,null,insufficient,4)[0].items,[]);
+});

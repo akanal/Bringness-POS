@@ -87,7 +87,7 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
     const history=(await db.query("SELECT to_char(day,'YYYY-MM-DD') AS day,orders::text,quality,products FROM ai_learning_days WHERE account_id=$1 AND location_id=$2 AND source_key=$3 AND day<$4::date",[user.id,locationId,f.learningSourceKey,today])).rows;
     const weekday=date=>new Date(date+'T00:00:00Z').getUTCDay();
     const dailyDates=history.filter(row=>row.quality==='sales'&&weekday(row.day)===weekday(today))
-      .map(row=>row.day).sort().slice(-4);
+      .map(row=>row.day).sort().slice(-8);
     const comparisonDays=[...new Set([...dailyDates,...forecasts.flatMap(day=>day.comparisonDates||[])])];
     const soldOut=(await db.query("SELECT recipe_id,to_char(day,'YYYY-MM-DD') AS day FROM ai_daily_preparation WHERE account_id=$1 AND location_id=$2 AND sold_out AND day=ANY($3::date[])",[user.id,locationId,comparisonDays])).rows;
     const soldOutDays=new Map();
@@ -98,7 +98,7 @@ export async function kitchenAssistantRoutes(path,method,b,user,url,{db,forecast
     preparation=preparationRecommendations(forecasts,history,recipes.filter(r=>r.items.length),initial.serviceWindows,soldOutDays);
     dailyRecommendations=preparationRecommendations(
      [{...f,ready:f.ready&&dailyDates.length>=3,comparisonDates:dailyDates}],
-     history,recipes,initial.serviceWindows,soldOutDays
+     history,recipes,initial.serviceWindows,soldOutDays,4
     )[0].items;
     preparationMessage='Planungshinweise ohne automatische Buchung oder Bestellung.';
    }else preparationMessage=f.message;
