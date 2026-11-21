@@ -193,7 +193,7 @@ function localDateTime(date,time,original){
  function dailyPreparationHtml(result){
   if(!result.settings.preparationEnabled)return '';
   const rows=result.dailyPreparation||[];
-  return `<h3>Tagesvorbereitung · ${esc(result.today)}</h3>${rows.length?rows.map(({recipeId,name,entry,recommendation})=>{
+  return `<h3>Tagesvorbereitung · ${esc(result.today)}</h3>${rows.length?rows.map(({recipeId,name,entry,recommendation,feedback})=>{
    const windows=(recommendation?.serviceWindows||[]).filter(window=>window.id!=='outside'&&window.portions>0).sort((a,b)=>a.startHour-b.startHour);
    const [firstWindow,nextWindow]=windows;
    const start=firstWindow?.portions||(recommendation?.before17>0?recommendation.before17:recommendation?.portions);
@@ -210,6 +210,11 @@ function localDateTime(date,time,original){
     ${field('remaining','Restportionen (freiwillig)','number',entry?.remaining??'','min="0" max="1000000" step="1"')}
     <label><input type="checkbox" name="soldOut" ${entry?.sold_out?'checked':''}> Ausverkauft</label>
     <button type="submit">Vorbereitung speichern</button>
+    <fieldset>
+     <legend>Schichtende (freiwillig)</legend>
+     ${[['enough','Hat gereicht'],['leftover','Etwas übrig'],['shortage','Zu wenig']].map(([value,label])=>
+      `<button type="button" data-preparation-feedback="${value}" aria-pressed="${feedback===value}">${label}</button>`).join('')}
+    </fieldset>
    </form>`;
   }).join(''):'<p>Für diesen Standort sind keine aktiven Rezepte hinterlegt.</p>'}`;
  }
@@ -325,6 +330,22 @@ function localDateTime(date,time,original){
  document.addEventListener('input',e=>{if(e.target.matches('[data-admin-delivery-search]')){adminDeliverySearch=e.target.value;updateAdminDeliveryList();return}if(e.target.matches('[data-supplier-order-search]')){supplierOrderSearch=e.target.value;updateSupplierOrderList();return}if(e.target.id==='product-filter'){const q=e.target.value.toLocaleLowerCase();document.querySelectorAll('#content tbody tr').forEach(row=>row.hidden=!row.cells[0].textContent.toLocaleLowerCase().includes(q))}});
  document.addEventListener('input',e=>{if(e.target.closest('[data-form="procurement-draft"]')||e.target.closest('[data-form="planning"]')){procurementResult=null;if($('procurement-result'))$('procurement-result').innerHTML=''}if(e.target.closest('[data-form="group-action"]'))updateReceiptSummary();if(e.target.closest('[data-form="cart-preview"]')){updateCartMinimums();cartQuote=null;cartRequest='';if($('cart-review'))$('cart-review').innerHTML=''}});
  document.addEventListener('change',e=>{if(e.target.closest('[data-form="cart-preview"]')){updateCartMinimums();cartQuote=null;cartRequest='';if($('cart-review'))$('cart-review').innerHTML=''}if(e.target.id==='inventory-location'){document.querySelectorAll('[data-count-location]').forEach(row=>{row.hidden=Boolean(e.target.value&&row.dataset.countLocation!==e.target.value);row.querySelector('[data-count-stock]').checked=false})}if(e.target.closest('[data-form="inventory-loss"]')&&e.target.name==='stockId')updateLossUnit();if(e.target.name==='locationId'&&e.target.closest('[data-form="recipe"]'))$('ingredients').innerHTML=ingredientRow({},e.target.value)});
+ document.addEventListener('click',async e=>{
+  const button=e.target.closest('[data-preparation-feedback]');
+  if(!button)return;
+  const form=button.closest('form');
+  const group=button.closest('fieldset');
+  group.disabled=true;
+  try{
+   const {locationId,recipeId,day}=formData(form);
+   const saved=await api('kitchen-assistant/feedback',{locationId,recipeId,day,outcome:button.dataset.preparationFeedback});
+   for(const option of group.querySelectorAll('button')){
+    option.setAttribute('aria-pressed',String(option.dataset.preparationFeedback===saved.outcome));
+   }
+   notice('Schichtrückmeldung gespeichert.');
+  }catch(error){notice(error.message,true)}
+  finally{group.disabled=false}
+ });
  document.addEventListener('submit',async e=>{const f=e.target;if(!f.dataset.form)return;e.preventDefault();const b=formData(f),submit=f.querySelector('[type=submit]');if(submit.disabled)return;submit.disabled=true;try{
   const kind=f.dataset.form;
   if(kind==='assistant-location'){assistantLocation=b.locationId;await renderKitchenAssistant();return}
