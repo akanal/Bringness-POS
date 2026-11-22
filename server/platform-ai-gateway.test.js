@@ -22,3 +22,14 @@ test('gateway rejects invalid JSON and split invalid UTF8 without forwarding mut
  for(const body of ['null','[]','{','42',Buffer.from([0xc3,0x28])])assert.equal((await call(h,'/api/v1/platform/ai/launch','admin','POST',body)).status,400);
  assert.equal(forwarded,0);
 });
+
+test('gateway forwards participant searches under the bare admin path',async()=>{
+ const handler=createPlatformAiGateway({query:async()=>({rows:[{id:'owner'}]})},{fetcher:async(url)=>{
+  assert.equal(url.pathname,'/api/ai/admin');
+  assert.equal(url.searchParams.get('q'),'Rührei');
+  return Response.json({accounts:[]});
+ }});
+ const result=await call(handler,'/api/v1/platform/ai?q=R%C3%BChrei');
+ assert.equal(result.status,200);
+ assert.deepEqual(JSON.parse(result.data),{accounts:[]});
+});
