@@ -12,7 +12,7 @@ export function createPlatformAiGateway(pool,{fetcher=fetch,origin='https://brin
   if(!token)return send(401,{error:'Bitte als Plattforminhaber anmelden.'});
   const actor=(await pool.query(`SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id JOIN platform_admins a ON a.user_id=u.id AND a.active=true WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND NOT coalesce(u.must_change_password,false)`,[crypto.createHash('sha256').update(token).digest('hex')])).rows[0];
   if(!actor)return send(403,{error:'Nur Bringness-Plattformadministratoren.'});
-  const suffix=url.pathname.slice(prefix.length);
+  const suffix=url.pathname.slice(prefix.length)||'/';
   if(!/^\/(?:[a-z0-9-]+\/?)*$/.test(suffix)||suffix.includes('//')||url.search.length>2048)return send(400,{error:'Ungültige Admin-Adresse.'});
   if(!['GET','POST'].includes(req.method))return send(405,{error:'Methode nicht erlaubt.'});
   let body='';try{const bytes=await readRequestBytes(req,{maxBytes:16000});body=new TextDecoder('utf-8',{fatal:true}).decode(bytes);if(req.method==='POST'&&body){const parsed=JSON.parse(body);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error();}}
