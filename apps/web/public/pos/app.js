@@ -210,6 +210,7 @@ async function showTableQr(t,host){
  section.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 
+const kitchenActionsInFlight=new Set();
 let kitchenBoardSignature="",kitchenPolling=false,kitchenSeenOrders=new Map(),kitchenSoundEnabled=localStorage.getItem("bringness-kitchen-sound")==="yes";
 function kitchenChime(){if(!kitchenSoundEnabled)return;try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ctx=new C(),start=ctx.currentTime;for(const [i,freq] of [740,988].entries()){const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type="sine";osc.frequency.value=freq;gain.gain.setValueAtTime(.0001,start+i*.18);gain.gain.exponentialRampToValueAtTime(.14,start+i*.18+.02);gain.gain.exponentialRampToValueAtTime(.0001,start+i*.18+.16);osc.connect(gain).connect(ctx.destination);osc.start(start+i*.18);osc.stop(start+i*.18+.17)}setTimeout(()=>ctx.close().catch(()=>{}),900)}catch(e){console.warn("Küchensignal nicht verfügbar",e)}}
 function trackKitchenOrders(restaurantId,orders,notify){const ids=new Set(orders.filter(o=>!["paid","cancelled"].includes(o.status)).map(o=>o.id)),previous=kitchenSeenOrders.get(restaurantId);kitchenSeenOrders.set(restaurantId,ids);if(notify&&previous&&[...ids].some(id=>!previous.has(id)))kitchenChime()}
@@ -224,13 +225,38 @@ async function renderOrderBoard(view,restaurantId,prefetched){
  kitchenBoardSignature=JSON.stringify({view,restaurantId,orders});if(view==="kueche")trackKitchenOrders(restaurantId,orders,false);
  const statusNames={open:"Neu",kitchen:"Bestätigt",preparing:"In Zubereitung",ready:"Abholbereit",served:"Serviert",paid:"Bezahlt",cancelled:"Storniert"};
  const collectionButton=o=>o.source==="qr"&&o.qr_service_mode==="pickup"&&!o.qr_ready_at&&!o.pickup_collected_at&&o.status!=="cancelled"?'<button class="primary" data-collection-ready="'+esc(o.id)+'" data-collected="false">Abholbereit</button>':"";
- const buttons=o=>(o.status==='open'?'<button data-stock-status="kitchen" data-order="'+esc(o.id)+'">Annehmen</button>':o.status==='kitchen'?'<button data-stock-status="preparing" data-order="'+esc(o.id)+'">Zubereitung starten</button>':'')+(!['paid','cancelled'].includes(o.status)?'<button data-stock-status="cancelled" data-order="'+esc(o.id)+'">Stornieren</button>':'')+collectionButton(o);
+ const isKitchen=view==="kueche";
+ const isPickup=o=>o.source==="qr"&&o.qr_service_mode==="pickup";
+ const acceptButton=o=>'<button type="button" data-kitchen-accept="'+esc(o.id)+'">Annehmen</button>';
+ const buttons=o=>{
+  if(isKitchen){
+   if(o.status==="open"||o.status==="kitchen"&&!isPickup(o))return acceptButton(o);
+   return collectionButton(o);
+  }
+  return (o.status==='open'?'<button data-stock-status="kitchen" data-order="'+esc(o.id)+'">Annehmen</button>':o.status==='kitchen'?'<button data-stock-status="preparing" data-order="'+esc(o.id)+'">Zubereitung starten</button>':'')+(!['paid','cancelled'].includes(o.status)?'<button data-stock-status="cancelled" data-order="'+esc(o.id)+'">Stornieren</button>':'')+collectionButton(o);
+ };
  if(view==='kueche')window.bnTeamPos?.preserveKitchenFocus(restaurantId);
  body.innerHTML='<div class="kitchenbar"><b>'+orders.length+' '+(view==="kueche"?"aktive Küchenbestellungen":"Bestellungen")+'</b><span class="kitchenautorefresh">● Live · automatisch alle 12 Sek.</span>'+(view==="kueche"?'<button id="kitchenSound" type="button" aria-pressed="'+kitchenSoundEnabled+'">'+(kitchenSoundEnabled?"🔔 Signal an":"🔕 Signal aus")+'</button>':"")+'</div><div class="kitchengrid">'+(orders.map((o,position)=>'<article data-team-order="'+esc(o.id)+'" class="kitchenticket '+esc(o.status)+'"><div class="kitchentickethead"><span class="kitchenstatus">'+(o.pickup_collected_at?"Abgeholt":o.qr_ready_at?"Abholbereit":view==="kueche"?String(position+1)+". Bestellung":esc(statusNames[o.status]||o.status))+'</span><strong>#'+esc((o.pickup_number?String(o.pickup_number).padStart(3,'0'):o.id.slice(0,8)))+'</strong></div><h3>'+esc(o.table_name?(window.placeLabel||String)(o.table_name):"Theke")+'</h3><p class="muted">'+esc(o.table_area||"")+' · '+(o.source==="qr"?"QR-Bestellung":"Mitarbeiter / Kasse")+'</p><p class="kitchentime">'+new Date(o.created_at).toLocaleString("de-DE",{hourCycle:'h23'})+'</p><div class="kitchenitems">'+(o.items||[]).map(i=>'<div><b>'+esc(i.quantity)+' ×</b> '+esc(i.name)+(i.note?'<small> · '+esc(i.note)+'</small>':"")+(i.extras?.length?'<small> · '+i.extras.map(x=>esc(x.name)).join(", ")+'</small>':"")+'</div>').join("")+'</div><div class="kitchenfoot"><strong>'+euro(o.total_cents)+'</strong>'+buttons(o)+'</div></article>').join("")||'<p class="muted">Zurzeit keine Bestellungen.</p>')+'</div><p id="kitchenMessage" role="status"></p>';
  if(view==='kueche')window.bnTeamPos?.mountKitchen(body,restaurantId,orders);
  if(view==="kueche")body.querySelector("#kitchenSound").onclick=()=>{kitchenSoundEnabled=!kitchenSoundEnabled;localStorage.setItem("bringness-kitchen-sound",kitchenSoundEnabled?"yes":"no");const btn=body.querySelector("#kitchenSound");btn.textContent=kitchenSoundEnabled?"🔔 Signal an":"🔕 Signal aus";btn.setAttribute("aria-pressed",String(kitchenSoundEnabled));if(kitchenSoundEnabled)kitchenChime()};
  body.querySelectorAll('[data-stock-status]').forEach(btn=>btn.onclick=async()=>{const status=btn.dataset.stockStatus,reason=status==='cancelled'?prompt('Grund für das Storno:'):'';if(status==='cancelled'&&!reason?.trim())return;btn.disabled=true;try{await api('/orders/'+encodeURIComponent(btn.dataset.order)+'/status',{method:'PATCH',body:JSON.stringify({status,reason})});await renderOrderBoard(view,restaurantId)}catch(e){const message=$('kitchenMessage');if(message)message.textContent=e.message;btn.disabled=false}});
- body.querySelectorAll("[data-collection-ready]").forEach(btn=>btn.onclick=async()=>{btn.disabled=true;try{await api("/orders/"+encodeURIComponent(btn.dataset.collectionReady)+"/collection-ready",{method:"POST"});await renderOrderBoard(view,restaurantId)}catch(e){body.querySelector("#kitchenMessage").textContent=e.message;btn.disabled=false}});
+ const changeKitchenStatus=(id,status)=>api("/orders/"+encodeURIComponent(id)+"/status",{method:"PATCH",body:JSON.stringify({status})});
+ body.querySelectorAll("[data-kitchen-accept]").forEach(btn=>btn.onclick=async()=>{
+  const order=orders.find(o=>o.id===btn.dataset.kitchenAccept);
+  if(kitchenActionsInFlight.has(order.id))return;
+  kitchenActionsInFlight.add(order.id);
+  btn.disabled=true;
+  try{
+   if(order.status==="open"){await changeKitchenStatus(order.id,"kitchen");order.status="kitchen";}
+   await changeKitchenStatus(order.id,"preparing");
+   if(document.querySelector('#mainnav button[data-view].active')?.dataset.view===view&&$("restaurant").value===restaurantId)await renderOrderBoard(view,restaurantId);
+  }catch(e){const message=$("kitchenMessage");if(message&&$("restaurant").value===restaurantId)message.textContent=e.message;btn.disabled=false}
+  finally{kitchenActionsInFlight.delete(order.id)}
+ });
+ body.querySelectorAll("[data-collection-ready]").forEach(btn=>btn.onclick=async()=>{btn.disabled=true;try{
+  const order=orders.find(o=>o.id===btn.dataset.collectionReady);
+  if(isKitchen&&order.status==="kitchen")await changeKitchenStatus(order.id,"preparing");
+  await api("/orders/"+encodeURIComponent(btn.dataset.collectionReady)+"/collection-ready",{method:"POST"});await renderOrderBoard(view,restaurantId)}catch(e){body.querySelector("#kitchenMessage").textContent=e.message;btn.disabled=false}});
 }
 
 function updateHeaderClock(){const time=$("headerClockTime"),date=$("headerClockDate");if(!time||!date)return;const now=new Date();time.textContent=new Intl.DateTimeFormat("de-DE",{hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).format(now);date.textContent=new Intl.DateTimeFormat("de-DE",{weekday:"short",day:"2-digit",month:"2-digit",year:"numeric"}).format(now);time.dateTime=now.toISOString()}
@@ -240,7 +266,7 @@ async function refreshActiveOrderBoard(){
  if(kitchenPolling||document.hidden||!token)return;
  const active=document.querySelector("#mainnav button[data-view].active")?.dataset.view;
  if(!["kueche","bestellungen"].includes(active)||!$("moduleBody")||!$("restaurant").value)return;
- kitchenPolling=true;try{const rid=$("restaurant").value,j=await orderBoardData(rid);if(document.querySelector("#mainnav button[data-view].active")?.dataset.view!==active||$("restaurant").value!==rid)return;const orders=(j.orders||[]).filter(o=>active==="bestellungen"||(!["paid","cancelled"].includes(o.status)&&!o.qr_ready_at)||(o.source==="qr"&&o.qr_service_mode==="pickup"&&o.status==="paid"&&!o.qr_ready_at)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)||a.id.localeCompare(b.id)),signature=JSON.stringify({view:active,restaurantId:rid,orders});if(active==="kueche")trackKitchenOrders(rid,orders,true);if(signature!==kitchenBoardSignature&&!window.bnTeamPos?.editingKitchen())await renderOrderBoard(active,rid,j)}catch(e){const msg=$("kitchenMessage");if(msg)msg.textContent="Aktualisierung fehlgeschlagen: "+e.message}finally{kitchenPolling=false}
+ kitchenPolling=true;try{const rid=$("restaurant").value,j=await orderBoardData(rid);if(document.querySelector("#mainnav button[data-view].active")?.dataset.view!==active||$("restaurant").value!==rid)return;const orders=(j.orders||[]).filter(o=>active==="bestellungen"||(!["paid","cancelled"].includes(o.status)&&!o.qr_ready_at)||(o.source==="qr"&&o.qr_service_mode==="pickup"&&o.status==="paid"&&!o.qr_ready_at)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)||a.id.localeCompare(b.id)),signature=JSON.stringify({view:active,restaurantId:rid,orders});if(active==="kueche")trackKitchenOrders(rid,orders,true);if(signature!==kitchenBoardSignature&&!kitchenActionsInFlight.size&&!window.bnTeamPos?.editingKitchen())await renderOrderBoard(active,rid,j)}catch(e){const msg=$("kitchenMessage");if(msg)msg.textContent="Aktualisierung fehlgeschlagen: "+e.message}finally{kitchenPolling=false}
 }
 setInterval(refreshActiveOrderBoard,12000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshActiveOrderBoard()});
 
