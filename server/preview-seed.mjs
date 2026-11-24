@@ -8,7 +8,7 @@ const aiUrl=new URL(env.DATABASE_URL);aiUrl.pathname='/'+env.AI_DATABASE_NAME;ai
 const ai=new pg.Pool({connectionString:aiUrl.toString()}),uuid=()=>crypto.randomUUID();
 async function ready(db,tables){for(let attempt=0;attempt<60;attempt++){try{const r=await db.query('SELECT '+tables.map((t,i)=>'to_regclass($'+(i+1)+') IS NOT NULL').join(' AND ')+' AS ready',tables);if(r.rows[0].ready)return;}catch{}await new Promise(resolve=>setTimeout(resolve,500));}throw Error('Preview schemas are not ready');}
 try{
- await ready(pos,['companies','users','company_features','platform_admins','pos_checkout_requests','pos_table_settlements']);await ready(ai,['ai_accounts','ai_stock','ai_auto_procurement']);
+ await ready(pos,['companies','users','company_features','platform_admins','pos_checkout_requests','pos_table_settlements',...(env.BRINGNESS_DELIVERY_TEST_ORDERS==='true'?['pos_delivery_locations','pos_delivery_test_requests']:[])]);await ready(ai,['ai_accounts','ai_stock','ai_auto_procurement']);
  await pos.query('CREATE TABLE IF NOT EXISTS preview_seed_state(key text PRIMARY KEY,value jsonb NOT NULL)');
  const c=await pos.connect();let ids;
  try{
@@ -26,6 +26,10 @@ try{
    await c.query("INSERT INTO dining_tables(id,restaurant_id,name,status) VALUES($1,$2,'Vorschau Tisch 1','free')",[ids.table,ids.restaurant]);
    for(const feature of ['pos_base','restaurant','table_qr'])await c.query("INSERT INTO company_features(company_id,feature_code,status,ends_at) VALUES($1,$2,'active',now()+interval '30 days')",[ids.company,feature]);
    await c.query("INSERT INTO preview_seed_state VALUES('fixture-v1',$1::jsonb)",[JSON.stringify(ids)]);
+  }
+  if(env.BRINGNESS_DELIVERY_TEST_ORDERS==='true'){
+   const delivery={pickup:true,delivery:true,postcode:'10551',zones:['10551'],minutes:30,feeCents:250,minimumCents:1200,productIds:[ids.meal]};
+   await c.query('INSERT INTO pos_delivery_locations(restaurant_id,settings) VALUES($1,$2) ON CONFLICT DO NOTHING',[ids.restaurant,JSON.stringify(delivery)]);
   }
   await c.query('COMMIT');
  }catch(error){await c.query('ROLLBACK');throw error;}finally{c.release();}

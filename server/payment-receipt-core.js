@@ -168,7 +168,7 @@ export async function renderPaymentReceipt(pool,PDFDocument,QRCode,receiptUrl,re
   doc.moveDown().font("Helvetica-Bold").text("Gesamt: " + euro(receipt.total_cents), { align: "right" });
   doc.font("Helvetica").text("Zahlung:");
   for (const payment of payments) {
-    const label = ({cash_refund:"Barerstattung",cash:"Bar",card:"Karte",mollie_center:"Online-Zahlung"})[payment.method] || payment.method;
+    const label = ({cash_refund:"Barerstattung",cash:"Bar",card:"Karte",mollie_center:"Online-Zahlung",mollie_delivery:"Online-Zahlung"})[payment.method] || payment.method;
     doc.text("  " + label + ": " + euro(payment.amount_cents), { align: "right" });
   }
   if (itemsTotal !== Number(receipt.total_cents)) doc.text("Hinweis: Positionssumme weicht vom Zahlbetrag ab.");

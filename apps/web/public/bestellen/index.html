@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Essen bestellen · Bringness</title>
+  <link rel="stylesheet" href="./style.css">
+
+</head>
+<body>
+  <header>
+    <a class="brand" href="./">Bringness</a>
+    <nav aria-label="Kasse">
+      <a href="https://bringness-pos.de/">Kassenfunktionen</a>
+      <a href="https://bringness.de/pos/">Zur Kasse</a>
+    </nav>
+  </header>
+  <main>
+    <section class="intro" aria-label="Essen bestellen">
+<div class="scenes" aria-hidden="true">
+<div class="scene active" style="background-image:url(./pizza.webp)"></div>
+<div class="scene" style="background-image:url(./burger.webp)"></div>
+</div>
+<div class="intro-content">
+
+      <h1>Heute gibt’s <em>was Gutes.</em></h1>
+      <p>Frisch aus Berlins Küchen. Lass es dir liefern oder hol’s selbst ab.</p>
+      <form id="search">
+        <fieldset>
+          <legend>Bestellart</legend>
+          <label><input type="radio" name="mode" value="delivery" checked> Lieferung</label>
+          <label><input type="radio" name="mode" value="pickup"> Abholung</label>
+        </fieldset>
+        <div class="search-row">
+          <label>Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="z. B. 10551" required></label>
+          <button>Restaurants finden</button>
+        </div>
+      </form></div>
+<aside class="campaign" id="campaign" hidden>
+  <span>Anzeige · Beispiel</span><strong>Smashburger &amp; knusprige Pommes</strong>
+</aside>
+<div class="slide-controls" aria-label="Hintergrundmotive">
+  <button type="button" data-slide="0" aria-pressed="true">Pizza</button>
+  <button type="button" data-slide="1" aria-pressed="false">Burger</button>
+  <button type="button" id="autoplay">Pause</button>
+</div>
+    </section>
+    <section aria-labelledby="results-heading">
+      <h2 id="results-heading">Restaurants <small id="searchLabel"></small></h2>
+      <p id="status" role="status">Gib eine Postleitzahl ein, um Restaurants zu finden.</p>
+      <div id="restaurants" class="results"></div>
+      <section id="testTracking" hidden>
+        <h2 id="orderTrackingHeading">Status der letzten Testbestellung</h2>
+        <p id="testTrackingStatus" role="status"></p>
+      </section>
+      <aside id="demoBasket" hidden aria-labelledby="basketHeading">
+        <h2 id="basketHeading">Testwarenkorb</h2>
+        <p id="basketRestaurant"></p>
+        <ul id="basketItems"></ul>
+        <p id="basketTotal"></p>
+        <p id="basketMinimum"></p>
+        <fieldset id="deliveryAddress" hidden>
+          <legend>Lieferadresse für den Test</legend>
+          <p>Bitte Beispieldaten verwenden.</p>
+          <label>Name <input id="deliveryRecipient" maxlength="100" required></label>
+          <label>Straße und Hausnummer <input id="deliveryStreet" maxlength="140" required></label>
+          <label>Ort <input id="deliveryCity" maxlength="100" required></label>
+        </fieldset>
+        <button id="finishDemo" type="button">Testbestellung abschließen</button>
+        <p id="basketMessage" role="status"></p>
+      </aside>
+    </section>
+  </main>
+<script src="./preview.js?v=online-pickup" defer></script></body>
+</html>

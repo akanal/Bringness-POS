@@ -94,7 +94,7 @@ export function renderTradeInvoice(doc, receipt, items, payments) {
   if(grossTotal!==Number(receipt.total_cents))y=text('Hinweis: Positionssumme weicht vom Zahlbetrag ab.',left,y,width,9)+8;
   if(y+payments.length*18+30>bottom)y=next();
   for(const payment of payments){
-    const label=({cash_refund:'Barerstattung',cash:'Barzahlung',card:'Karte',mollie_center:'Online-Zahlung'})[payment.method]||payment.method;
+    const label=({cash_refund:'Barerstattung',cash:'Barzahlung',card:'Karte',mollie_center:'Online-Zahlung',mollie_delivery:'Online-Zahlung'})[payment.method]||payment.method;
     y=text('Zahlungsart: '+label+' · '+money(payment.amount_cents),left,y,width,10)+5;
   }
   if(receipt.fiscal_status!=='signed')text('Nicht TSE-signiert – kein fiskalisierter Kassenbeleg.',left,y,width,8);

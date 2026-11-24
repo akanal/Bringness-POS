@@ -83,6 +83,7 @@ jobs:
           npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
           node --test server/billing-status.test.js server/personnel-report.test.js server/system-access.test.js server/displays.test.js server/center-core.test.js
+          node --test ops/delivery-sandbox-compose.test.mjs server/delivery-quote.test.js server/delivery-portal.test.js server/delivery-sandbox.test.js server/ai-tests/delivery-checkout.test.mjs server/ai-tests/delivery-checkout-ui.test.mjs
           node server/ai-tests/duty-planning.mjs
           node --test server/roster-auto-core.test.js
           node server/ai-tests/service-team.mjs

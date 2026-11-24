@@ -25,12 +25,48 @@ async function platformUser(req){
   return result.rows[0]||null;
 }
 
+export async function migrateDeliveryCommission(db) {
+  await db.query(`CREATE TABLE IF NOT EXISTS pos_delivery_commission (
+    id boolean PRIMARY KEY DEFAULT true CHECK (id),
+    draft_basis_points integer NOT NULL CHECK (draft_basis_points BETWEEN 0 AND 10000),
+    updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`);
+}
+
 export async function handlePlatformControl(req,res){
   const url=new URL(req.url,"http://localhost");
   if(!url.pathname.startsWith("/api/v1/platform/control/"))return false;
   const actor=await platformUser(req);
   if(!actor){send(res,403,{error:"Nur Bringness-Plattformadministratoren"});return true}
   const p=url.pathname;
+  if(p==="/api/v1/platform/control/delivery-commission"){
+    if(req.method==="GET"){
+      const {rows}=await pool.query("SELECT draft_basis_points FROM pos_delivery_commission WHERE id=true");
+      send(res,200,{draftBasisPoints:rows[0]?.draft_basis_points??0});
+    }else if(req.method==="PUT"){
+      let input;
+      try{input=await readBody(req)}catch(error){
+        if(!error.status)throw error;
+        send(res,error.status,{error:error.message});
+        return true;
+      }
+      const value=input.draftBasisPoints;
+      if(!Number.isInteger(value)||value<0||value>10000){
+        send(res,400,{error:"Bitte einen Prozentsatz zwischen 0 und 100 eingeben."});
+        return true;
+      }
+      await pool.query(`INSERT INTO pos_delivery_commission (draft_basis_points,updated_by)
+        VALUES ($1,$2) ON CONFLICT (id) DO UPDATE
+        SET draft_basis_points=EXCLUDED.draft_basis_points,updated_by=EXCLUDED.updated_by,updated_at=now()`,[value,actor.id]);
+      send(res,200,{draftBasisPoints:value});
+    }else{
+      res.setHeader("Allow","GET, PUT");
+      send(res,405,{error:"Methode nicht erlaubt."});
+    }
+    return true;
+  }
+
   if(p==="/api/v1/platform/control/offline"&&req.method==="GET"){
     const counts=(await pool.query("SELECT stock_state,count(*)::int count FROM pos_offline_sales GROUP BY stock_state")).rows;
     const sales=(await pool.query(`SELECT s.id,s.stock_state,s.stock_error,s.created_at,o.created_at sold_at,o.total_cents,r.name restaurant_name,c.name company_name,d.name device_name

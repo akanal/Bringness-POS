@@ -1,5 +1,7 @@
+import {deliverySandboxConfig} from './delivery-sandbox.js';
 import {createCashReversal,migrateCashReversal} from './cash-reversal.js';
 import {createPartialSettlement} from './partial-settlement.js';
+import {createDeliveryPortal,migrateDeliveryPortal} from './delivery-portal.js';
 import {createPosSetup,migratePosSetup} from './pos-setup.js';
 import {createPosDiagnosticReports,migratePosDiagnosticReports,cleanupPosDiagnosticReports} from './pos-diagnostic-reports.js';
 import {createPlaceTerminology,migratePlaceTerminology} from './place-terminology.js';
@@ -72,7 +74,7 @@ import { handleBillingAccess, migrateBillingAccess } from "./billing-access.js";
 import { handleBillingStatus } from "./billing-status.js";
 import { handleDeviceLicense, migrateDeviceLicense } from "./device-license.js";
 import {createPlatformAiGateway} from "./platform-ai-gateway.js";
-import { handlePlatformControl } from "./platform-control.js";
+import { handlePlatformControl, migrateDeliveryCommission } from "./platform-control.js";
 import { createPosAdminOverview } from "./pos-admin-overview.js";
 import {createProductPhotos} from "./product-photos.js";
 import { handleAdminPasswordReset, requireAdminPasswordChange } from "./admin-password-reset.js";
@@ -119,6 +121,14 @@ const handleProductPhotos=createProductPhotos(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handleOnlineRegisters=createOnlineRegisters(platformGatewayPool);
 const handlePosDiagnosticReports=createPosDiagnosticReports(platformGatewayPool,{publicOrigin:process.env.PUBLIC_BASE_URL||'https://bringness.de'});
+const deliverySandbox=deliverySandboxConfig(process.env);
+const deliveryTestOrders=Boolean(deliverySandbox) || (isolatedPreview() && process.env.BRINGNESS_DELIVERY_TEST_ORDERS==="true");
+const deliveryLiveOrigin=!isolatedPreview() && process.env.BRINGNESS_DELIVERY_LIVE_CHECKOUT==="true"
+  ? process.env.BRINGNESS_DELIVERY_LIVE_CHECKOUT_ORIGIN : null;
+const handleDeliveryPortal=createDeliveryPortal(platformGatewayPool,{
+  testOrders:deliveryTestOrders,sandbox:deliverySandbox,
+  liveCheckoutOrigin:deliveryLiveOrigin,liveRestaurantId:process.env.BRINGNESS_DELIVERY_LIVE_RESTAURANT_ID
+});
 const handlePosSetup=createPosSetup(platformGatewayPool,{fiscalStatus:readFiscalSetupStatus});
 const handlePlaceTerminology=createPlaceTerminology(platformGatewayPool);
 const handleMenuImport=createMenuImport(platformGatewayPool);
@@ -147,6 +157,13 @@ const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(listener) {
   return originalCreateServer(async (req,res) => {
     try {
+      if (deliverySandbox) {
+        res.setHeader('x-robots-tag','noindex, nofollow, noarchive');
+        if (req.headers.host?.toLowerCase()!==new URL(deliverySandbox.origin).host) {
+          res.writeHead(421,{'cache-control':'no-store'});
+          return res.end();
+        }
+      }
       if (await handleOwnerMfa(req,res)) return;
       if (servePublicSearch(req,res,appMode)) return;
       if (redirectLegacyPosDomain(req,res,appMode)) return;
@@ -199,6 +216,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleAdminAuditExport(req,res)) return;
       if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformAiGateway(req,res)) return;
+      if (appMode!=='ai' && await handleDeliveryPortal(req,res)) return;
       if (await handlePosSetup(req,res)) return;
       if (await handlePlaceTerminology(req,res)) return;
       if (await handleMenuImport(req,res)) return;
@@ -314,6 +332,8 @@ async function migrateWithRetry(){
       await migrateOnlineRegisters(platformGatewayPool);
       await migrateMenuImport(platformGatewayPool);
       await migratePosSetup(platformGatewayPool);
+      await migrateDeliveryPortal(platformGatewayPool,{testOrders:deliveryTestOrders,liveCheckout:Boolean(deliveryLiveOrigin)});
+      await migrateDeliveryCommission(platformGatewayPool);
       await migratePlaceTerminology(platformGatewayPool);
       await migratePosDiagnosticReports(platformGatewayPool);
       await cleanupPosDiagnosticReports(platformGatewayPool);

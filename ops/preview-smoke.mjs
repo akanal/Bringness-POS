@@ -47,6 +47,44 @@ for(const [path,auth,body] of [
 ]){
  const response=await fetch(base+path,{method:'POST',headers:{cookie,authorization:'Bearer '+auth,'content-type':'application/json'},body:JSON.stringify(body)});assert.equal(response.status,400,'Nested request validation: '+path);
 }
+const portal=await fetch(base+'/bestellen/',{headers:{cookie}});
+assert.equal(portal.status,200);
+assert.match(await portal.text(),/preview\.js/);
+for(const [mode,total,steps] of [
+ ['pickup',1250,['ready','collected']],
+ ['delivery',1500,['ready','dispatched','delivered']]
+]){
+ const query=new URLSearchParams({postcode:'10551',mode});
+ const found=await request('/api/v1/delivery-portal/restaurants?'+query);
+ assert.equal(found.status,200);
+ assert(found.data.restaurants.some(restaurant=>restaurant.id===rid));
+ query.set('restaurantId',rid);
+ const menu=await request('/api/v1/delivery-portal/menu?'+query);
+ assert.equal(menu.status,200);
+ assert.equal(menu.data.testOrders,true);
+ assert.equal(menu.data.menu.length,1);
+ const requestId=crypto.randomUUID();
+ const order={restaurantId:rid,requestId,postcode:'10551',mode,items:[{id:menu.data.menu[0].id,qty:1}],expectedTotalCents:total};
+ const placed=await request('/api/v1/delivery-portal/test-order',{method:'POST',body:order});
+ assert.equal(placed.status,201);
+ const {orderId}=placed.data;
+ assert.equal((await request('/api/v1/delivery-portal/test-order',{method:'POST',body:order})).data.orderId,orderId);
+ const board=await request('/api/v1/orders/list?restaurantId='+rid,{token});
+ assert.equal(board.status,200);
+ assert(board.data.orders.some(row=>row.id===orderId&&row.status==='open'));
+ for(const status of ['kitchen','preparing']){
+  const changed=await request('/api/v1/orders/'+orderId+'/status',{method:'PATCH',token,body:{status}});
+  assert.equal(changed.status,200);
+ }
+ for(const status of steps){
+  const changed=await request('/api/v1/pos/delivery-portal/test-status',{method:'POST',token,body:{orderId,status}});
+  assert.equal(changed.status,200);
+  const guest=await request('/api/v1/delivery-portal/test-status',{token:requestId});
+  assert.deepEqual(guest.data,{status,mode});
+ }
+ const wrongGuest=await request('/api/v1/delivery-portal/test-status',{token:crypto.randomUUID()});
+ assert.equal(wrongGuest.status,404);
+}
 const revoked=await fetch(base+'/health',{headers:{cookie:cookie+'tampered'}});assert.equal(revoked.status,401);
 if(stateFile&&!previous)await writeFile(stateFile,JSON.stringify({sale,orderId:paid.data.id})+'\n',{flag:'wx',mode:0o600});
 console.log('Isolated preview smoke passed: access protection, actual POS/AI assets and logins, idempotent synthetic cash sale, separate AI stock, cookie tamper and forbidden provider actions.');
