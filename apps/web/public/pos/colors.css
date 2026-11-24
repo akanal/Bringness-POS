@@ -1,6 +1,6 @@
 /* POS colour roles: orange action, blue selection, green success, red danger.
    Document previews and printed documents keep their independent paper styles. */
-:root{--bn-action:#ad4100;--bn-action-hover:#883200;--bn-action-soft:#fff0df;--bn-blue:#174e85;--bn-blue-soft:#edf5ff;--bn-green:#12633b;--bn-green-soft:#eaf8ef;--bn-danger:#ab2530;--bn-focus:#1769aa}
+:root{--bn-action:#ff7628;--bn-action-hover:#ec641a;--bn-action-soft:#fff0df;--bn-blue:#174e85;--bn-blue-soft:#edf5ff;--bn-green:#12633b;--bn-green-soft:#eaf8ef;--bn-danger:#ab2530;--bn-focus:#1769aa}
 .posapp{background:linear-gradient(135deg,#edf5fc,#f8fbff 60%,#fff7ed)}
 .posapp .modulepage,.posapp .manage{border-color:#ccdeed}
 .posapp .modulecard{border-color:#cfdfef;background:linear-gradient(120deg,#f1f7ff,#fff)}
@@ -8,7 +8,7 @@
 .posapp .setup{background:#edf5ff;border-color:#cfdfef}
 .posapp .cats{background:#edf5ff}
 .posapp .basket{background:#fff9f1;border-color:#f1d4b3}
-.posapp .total{color:var(--bn-action)}
+.posapp .total{color:#ad4100}
 /* Use existing semantic roles; never recolour destructive actions as primary. */
 .posapp button.primary,.posapp a.primary,.posapp button.pay,.posapp #pay,
 .posapp #tradePay,.posapp #tradeSavePrices,.posapp [data-issue],
