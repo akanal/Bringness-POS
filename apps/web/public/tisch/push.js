@@ -11,7 +11,10 @@
     const button=document.createElement('button');button.id='guestPushEnable';button.className='primary';button.textContent='Abholmitteilungen erlauben';
     const disable=document.createElement('button');disable.id='guestPushDisable';disable.textContent='Mitteilungen für diese Bestellung ausschalten';disable.hidden=true;
     const status=document.createElement('p');status.id='guestPushStatus';status.setAttribute('role','status');
-    host.append(title,text,button,disable,status);(document.getElementById('status')?.parentElement||document.body).appendChild(host);
+    host.append(title,button,disable,status,text);
+    const heading=document.getElementById('heading')?.closest('.panel');
+    if(heading)heading.after(host);
+    else (document.getElementById('status')?.parentElement||document.body).prepend(host);
     button.onclick=async()=>{
       if(apple()&&!standalone()){status.textContent='Auf dem iPhone bitte diese Bestellseite geöffnet lassen. Browser-Abholmeldungen bei gesperrtem Bildschirm sind hier nicht verfügbar.';return}
       if(!('Notification'in window)||!('PushManager'in window)||!('serviceWorker'in navigator)){status.textContent='Dieser Browser unterstützt keine Hintergrundmeldungen. Die Abholmeldung erscheint weiterhin auf der geöffneten Bestellseite.';return}
