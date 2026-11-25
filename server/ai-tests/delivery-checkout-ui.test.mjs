@@ -79,3 +79,37 @@ test('return from online payment shows the POS pickup status through collection'
     dom.window.close();
   }
 });
+
+test('an older menu response cannot replace the reopened menu', async () => {
+  const requests = [];
+  const dom = page(path => {
+    if (path.includes('/restaurants?')) {
+      return Promise.resolve(Response.json({restaurants:[{id:restaurantId,name:'Pilotrestaurant',minutes:20}]}));
+    }
+    return new Promise(resolve => requests.push(resolve));
+  });
+  try {
+    const doc = dom.window.document;
+    doc.querySelector('[name=postcode]').value = '10551';
+    doc.getElementById('search').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
+    await wait();
+    const menu = doc.querySelector('#restaurants details');
+    async function setOpen(open) {
+      const toggled = new Promise(resolve => menu.addEventListener('toggle',resolve,{once:true}));
+      menu.open = open;
+      await toggled;
+    }
+    await setOpen(true);
+    await setOpen(false);
+    await setOpen(true);
+    assert.equal(requests.length,2);
+    requests[1](Response.json({menu:[{id:dishId,name:'Aktuelle Pizza',cents:900}],onlinePickup:true}));
+    await wait();
+    requests[0](Response.json({menu:[{id:dishId,name:'Alte Pizza',cents:500}],onlinePickup:true}));
+    await wait();
+    assert.match(menu.textContent,/Aktuelle Pizza/);
+    assert.doesNotMatch(menu.textContent,/Alte Pizza/);
+  } finally {
+    dom.window.close();
+  }
+});
