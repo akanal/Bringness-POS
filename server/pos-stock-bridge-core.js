@@ -1,3 +1,4 @@
+import {advanceCenterKitchen} from './center-payment-release.js';
 import {permanentStockFailure,stockBatchLimit,stockFailureMessage} from './stock-retry-policy.js';
 import {readJsonObject} from './http-body.js';
 import crypto from 'node:crypto';
@@ -59,6 +60,16 @@ export async function requestPosStockAction(pool,actor,orderId,b){
  if(!['owner','admin','manager','kitchen','waiter'].includes(actor.role))fail('Kein Zugriff auf Küchenbestellungen',403);
  if(b.reason!=null&&typeof b.reason!=='string')fail('Ungültiger Stornogrund',400);
  const reason=(b.reason??'').trim();if(reason.length>500)fail('Stornogrund zu lang',400);if(action==='cancel'&&!reason)fail('Stornogrund erforderlich',400);
+ if(action==='start'){
+  const centerOrder=(await pool.query(`SELECT o.restaurant_id FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
+   WHERE o.id=$1 AND r.company_id=$2 AND o.source='center'`,[orderId,actor.company_id])).rows[0];
+  if(centerOrder){
+   if(actor.role==='waiter')fail('Tisch nicht zugeordnet',403);
+   const result=await advanceCenterKitchen(pool,centerOrder.restaurant_id,orderId,b.status);
+   if(!result.ok)fail(result.reason==='earlier_order_waiting'?'Bitte zuerst die frühere Bestellung starten.':'Bestellstatus erlaubt diese Aktion nicht');
+   return {id:orderId,status:b.status};
+  }
+ }
  const c=await pool.connect();try{await c.query('BEGIN');
  const o=(await c.query('SELECT o.* FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=$1 AND r.company_id=$2 FOR UPDATE OF o',[orderId,actor.company_id])).rows[0];if(!o)fail('Bestellung nicht gefunden',404);
  if(actor.role==='waiter'&&!(await c.query("SELECT 1 FROM dining_tables t JOIN employees e ON (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) WHERE t.id=$1 AND e.user_id=$2 AND e.active AND e.restaurant_id=$3",[o.table_id,actor.id,o.restaurant_id])).rowCount)fail('Tisch nicht zugeordnet',403);
