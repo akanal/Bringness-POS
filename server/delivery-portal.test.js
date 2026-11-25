@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {createDeliveryPortal} from './delivery-portal.js';
+import {createDeliveryMerchant} from './delivery-merchant.js';
 
 test('public menu advertises online payment only for eligible pickup at the released restaurant',async()=>{
   const restaurantId = '00000000-0000-0000-0000-000000000001';
@@ -71,4 +72,42 @@ test('sandbox exposes only Mollie test ordering at its own host and assigned res
   assert.equal((await request(menu.replace(restaurantId,'00000000-0000-0000-0000-000000000002'),host)).body.basketPreview,undefined);
   dishes = [];
   assert.equal((await request(menu,host)).body.basketPreview,undefined);
+});
+
+test('merchant diagnostics distinguish pending Mollie checks and only save a verified matching profile', async () => {
+  let organization = 'org_1';
+  let profileStatus = 'unverified';
+  let canReceiveSettlements = false;
+  let saved = false;
+  let writes = 0;
+  const db = {async query(sql, args) {
+    if (sql.includes('INSERT INTO')) {
+      writes++;
+      assert.deepEqual(args.slice(2),['envelope','org_1','pfl_1']);
+      return {rows:saved ? [{}] : []};
+    }
+    return {rows:[{organization_id:'org_1',profile_id:'pfl_1',ready:false,linked:false,connectionReady:true}]};
+  }};
+  const handler = createDeliveryMerchant(db,{
+    access:'SELECT id FROM restaurants',
+    withToken:async (db,id,operation) => operation('test-token','envelope'),
+    fetcher:async url => Response.json(url.endsWith('/organizations/me') ? {id:organization}
+      : url.endsWith('/onboarding/me') ? {canReceivePayments:true,canReceiveSettlements}
+      : {id:'pfl_1',status:profileStatus})
+  });
+  const request = method => handler({method},(status,body)=>({status,...body}),'test-restaurant','hash');
+
+  assert.equal((await request('GET')).connectionReady,true);
+  organization = 'org_other';
+  assert.match((await request('PUT')).error,/passt nicht/);
+  organization = 'org_1';
+  assert.match((await request('PUT')).error,/noch nicht verifiziert/);
+  profileStatus = 'verified';
+  assert.match((await request('PUT')).error,/Auszahlungen/);
+  assert.equal(writes,0);
+  canReceiveSettlements = true;
+  assert.match((await request('PUT')).error,/während der Prüfung geändert/);
+  saved = true;
+  assert.equal((await request('PUT')).ready,true);
+  assert.equal(writes,2);
 });

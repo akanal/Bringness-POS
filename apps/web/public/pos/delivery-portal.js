@@ -84,6 +84,7 @@
   const merchantStatus = document.getElementById('deliveryMerchantStatus');
   const merchantUrl = '/api/v1/pos/delivery-portal/merchant?restaurantId=' + encodeURIComponent(rid);
 
+  let merchantState;
   async function loadMerchant(method = 'GET') {
     if (!current()) return;
     verify.disabled = true;
@@ -95,8 +96,10 @@
       if ([401,403].includes(response.status)) { merchant.hidden = true; return; }
       merchant.hidden = false;
       if (!response.ok) throw Error(data.error || 'Mollie-Verbindung derzeit nicht verfügbar.');
+      merchantState = data;
       merchantStatus.textContent = data.ready ? 'Mollie-Profil für diesen Standort verifiziert.'
-        : data.linked ? 'Bitte das Profil erneut prüfen.'
+        : data.configured && data.connectionReady === false ? 'Mollie-Verbindung im Bereich Center prüfen oder erneut verbinden.'
+        : data.linked ? 'Die Freigabe für das Bestellportal ist abgelaufen. Bitte das Profil erneut prüfen.'
         : data.configured ? 'Mollie-Profil vorhanden. Zuordnung für das Bestellportal steht aus.'
         : 'Für diesen Standort ist noch kein Mollie-Profil hinterlegt.';
       verify.disabled = !data.configured;
@@ -104,8 +107,8 @@
     } catch (error) {
       if (!current()) return;
       merchantStatus.textContent = error.message;
-      verify.disabled = method === 'GET';
-      unlink.disabled = method === 'GET';
+      verify.disabled = !merchantState?.configured;
+      unlink.disabled = !merchantState?.linked;
     }
   }
 

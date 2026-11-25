@@ -15,7 +15,8 @@ export function createDeliveryMerchant(db,{access,withToken=withMerchantToken,fe
     const {rows} = await db.query(`SELECT c.organization_id,c.profile_id,
       coalesce(m.verified_at>now()-interval '24 hours' AND c.organization_id=m.organization_id
         AND c.profile_id=m.profile_id AND c.verified_at IS NOT NULL AND c.expires_at>now(),false) AS ready,
-      m.restaurant_id IS NOT NULL AS linked
+      m.restaurant_id IS NOT NULL AS linked,
+      coalesce(c.verified_at IS NOT NULL AND c.expires_at>now(),false) AS "connectionReady"
       FROM (${access}) a
       LEFT JOIN center_mollie_credentials c ON c.restaurant_id=a.id
       LEFT JOIN pos_delivery_merchants m ON m.restaurant_id=a.id`,[rid,hash]);
@@ -31,7 +32,7 @@ export function createDeliveryMerchant(db,{access,withToken=withMerchantToken,fe
     if (!configured) return send(409,{error:'Für diesen Standort ist noch kein Mollie-Profil hinterlegt.'});
 
     try {
-      const saved = await withToken(db,rid,async (token,envelope) => {
+      const failure = await withToken(db,rid,async (token,envelope) => {
         async function get(path) {
           const response = await fetcher('https://api.mollie.com/v2'+path,{
             headers:{authorization:'Bearer '+token,accept:'application/json'},
@@ -43,19 +44,23 @@ export function createDeliveryMerchant(db,{access,withToken=withMerchantToken,fe
         const [organization,onboarding,profile] = await Promise.all([
           get('/organizations/me'),get('/onboarding/me'),get('/profiles/'+current.profile_id)
         ]);
-        const verified = organization.id===current.organization_id && profile.id===current.profile_id &&
-          profile.status==='verified' && onboarding.canReceivePayments===true && onboarding.canReceiveSettlements===true;
-        if (!verified) return false;
+        if (organization.id!==current.organization_id || profile.id!==current.profile_id) {
+          return 'Das verbundene Mollie-Konto passt nicht zum hinterlegten Standortprofil.';
+        }
+        if (profile.status!=='verified') return 'Mollie hat dieses Website-Profil noch nicht verifiziert.';
+        if (onboarding.canReceivePayments!==true || onboarding.canReceiveSettlements!==true) {
+          return 'Mollie hat Zahlungen und Auszahlungen für dieses Konto noch nicht vollständig freigegeben.';
+        }
         const result = await db.query(`INSERT INTO pos_delivery_merchants (restaurant_id,organization_id,profile_id)
           SELECT a.id,$4,$5 FROM (${access}) a JOIN center_mollie_credentials c ON c.restaurant_id=a.id
           WHERE c.token_envelope=$3 AND c.organization_id=$4 AND c.profile_id=$5
             AND c.verified_at IS NOT NULL AND c.expires_at>now()
           ON CONFLICT (restaurant_id) DO UPDATE SET organization_id=EXCLUDED.organization_id,
             profile_id=EXCLUDED.profile_id,verified_at=now() RETURNING restaurant_id`,[rid,hash,envelope,current.organization_id,current.profile_id]);
-        return Boolean(result.rows.length);
+        return result.rows.length ? null : 'Die Mollie-Verbindung hat sich während der Prüfung geändert. Bitte erneut prüfen.';
       });
-      if (!saved) return send(409,{error:'Mollie-Profil konnte für diesen Standort nicht bestätigt werden.'});
-      return send(200,{linked:true,ready:true,configured,profile_id:current.profile_id});
+      if (failure !== null) return send(409,{error:failure || 'Mollie-Profil konnte für diesen Standort nicht bestätigt werden.'});
+      return send(200,{linked:true,ready:true,configured,connectionReady:true,profile_id:current.profile_id});
     } catch {
       return send(503,{error:'Mollie-Prüfung derzeit nicht möglich. Bitte Verbindung prüfen.'});
     }
