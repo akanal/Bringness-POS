@@ -115,7 +115,10 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
           onlinePickup = !sandboxMenu && Boolean(verified.length);
           mollieTestCheckout = Boolean(sandboxMenu && verified.length);
         }
-        return send(200,{menu:rows,testOrders:sandbox ? mollieTestCheckout : testOrders,mollieTestCheckout,onlinePickup});
+        return send(200,{
+          menu:rows,testOrders:sandbox ? mollieTestCheckout : testOrders,mollieTestCheckout,onlinePickup,
+          ...(sandboxMenu && rows.length && !mollieTestCheckout ? {basketPreview:true} : {})
+        });
       }
       const {rows} = await db.query(`SELECT r.id,r.name,s.settings->>'minutes' AS minutes,
         CASE WHEN $2='delivery' THEN (s.settings->>'feeCents')::int END AS "feeCents",

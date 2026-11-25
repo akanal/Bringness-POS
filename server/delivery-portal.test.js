@@ -38,7 +38,11 @@ test('public menu advertises online payment only for eligible pickup at the rele
 test('sandbox exposes only Mollie test ordering at its own host and assigned restaurant',async()=>{
   const restaurantId = '00000000-0000-0000-0000-000000000001';
   const sandbox = {origin:'https://sandbox-bestellen.example.test',restaurantId};
-  const db = {async query(sql){return {rows:sql.includes('FROM pos_delivery_merchants') ? [{}] : [{id:restaurantId}]};}};
+  let verified = true;
+  let dishes = [{id:restaurantId}];
+  const db = {async query(sql){
+    return {rows:sql.includes('FROM pos_delivery_merchants') ? (verified ? [{}] : []) : dishes};
+  }};
   const handler = createDeliveryPortal(db,{testOrders:true,sandbox});
   async function request(path,host) {
     let result;
@@ -54,4 +58,17 @@ test('sandbox exposes only Mollie test ordering at its own host and assigned res
   assert.equal((await request('test-checkout','bringness.de')).code,404);
   assert.equal((await request('checkout',new URL(sandbox.origin).host)).code,404);
   assert.equal((await request('test-order',new URL(sandbox.origin).host)).code,404);
+  assert.equal(sandboxMenu.basketPreview,undefined);
+
+  verified = false;
+  const host = new URL(sandbox.origin).host;
+  const preview = (await request(menu,host)).body;
+  assert.equal(preview.basketPreview,true);
+  assert.equal(preview.testOrders,false);
+  assert.equal(preview.onlinePickup,false);
+  assert.equal(preview.mollieTestCheckout,false);
+  assert.equal((await request(menu,'bringness.de')).body.basketPreview,undefined);
+  assert.equal((await request(menu.replace(restaurantId,'00000000-0000-0000-0000-000000000002'),host)).body.basketPreview,undefined);
+  dishes = [];
+  assert.equal((await request(menu,host)).body.basketPreview,undefined);
 });

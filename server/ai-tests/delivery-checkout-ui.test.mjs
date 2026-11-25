@@ -157,3 +157,46 @@ test('a saved coverage link starts the requested search only for valid inputs', 
     }
   }
 });
+
+test('sandbox preview displays and changes a basket without submitting an order', async () => {
+  const paths = [];
+  const dom = page(async path => {
+    paths.push(path);
+    if (path.includes('/restaurants?')) {
+      return Response.json({restaurants:[{id:restaurantId,name:'Testrestaurant',minutes:30}]});
+    }
+    assert.match(path,/\/menu\?/);
+    return Response.json({menu:[{id:dishId,name:'Testartikel',cents:100}],basketPreview:true});
+  }, '?mode=pickup&postcode=10551');
+  try {
+    await wait();
+    const doc = dom.window.document;
+    const menu = doc.querySelector('#restaurants details');
+    const toggled = new Promise(resolve => menu.addEventListener('toggle',resolve,{once:true}));
+    menu.open = true;
+    await toggled;
+    await wait();
+
+    const add = menu.querySelector('button');
+    add.click();
+    add.click();
+    const basket = doc.getElementById('demoBasket');
+    const finish = doc.getElementById('finishDemo');
+    assert.equal(basket.hidden,false);
+    assert.match(basket.textContent,/2 × Testartikel/);
+    assert.match(doc.getElementById('basketTotal').textContent,/2,00/);
+    assert.equal(doc.getElementById('basketPreviewNotice').hidden,false);
+    assert.equal(finish.hidden,true);
+    assert.equal(finish.disabled,true);
+    finish.dispatchEvent(new dom.window.Event('click'));
+    await wait();
+    assert.equal(paths.length,2);
+
+    basket.querySelector('#basketItems button').click();
+    assert.match(doc.getElementById('basketTotal').textContent,/1,00/);
+    basket.querySelector('#basketItems button').click();
+    assert.equal(basket.hidden,true);
+  } finally {
+    dom.window.close();
+  }
+});

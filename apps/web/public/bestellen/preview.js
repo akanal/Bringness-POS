@@ -150,11 +150,13 @@ function renderBasket() {
     ? 'Zum Mindestbestellwert fehlen ' + money.format(missing / 100) + '.' : '';
   document.getElementById('basketHeading').textContent = selection.onlinePickup ? 'Warenkorb' : 'Testwarenkorb';
   finish.textContent = selection.onlinePickup ? 'Zahlungspflichtig bestellen' : selection.mollieTestCheckout ? 'Mit Mollie testen' : 'Testbestellung senden';
-  finish.disabled = sending || Boolean(missing);
+  finish.hidden = selection.basketPreview;
+  finish.disabled = selection.basketPreview || sending || Boolean(missing);
+  document.getElementById('basketPreviewNotice').hidden = !selection.basketPreview;
 }
 
 finish.addEventListener('click', async () => {
-  if (basket.hidden || finish.disabled || sending) return;
+  if (basket.hidden || finish.disabled || sending || selection.basketPreview) return;
   if (demo) {
     basketMessage.textContent = 'Testbestellung abgeschlossen. Es wird nichts bezahlt oder an das Restaurant gesendet.';
     finish.disabled = true;
@@ -216,14 +218,14 @@ finish.addEventListener('click', async () => {
   }
 });
 
-function addDish(restaurant, delivery, dish, postcode = '', mollieTestCheckout = false, onlinePickup = false) {
+function addDish(restaurant, delivery, dish, postcode = '', mollieTestCheckout = false, onlinePickup = false, basketPreview = false) {
   if (pendingOrder || sending) return;
   const sameRestaurant = demo ? selection?.restaurant === restaurant : selection?.restaurant.id === restaurant.id;
   if (!sameRestaurant || selection.delivery !== delivery || selection.postcode !== postcode || selection.onlinePickup !== onlinePickup ||
-      selection.mollieTestCheckout !== mollieTestCheckout) {
+      selection.mollieTestCheckout !== mollieTestCheckout || selection.basketPreview !== basketPreview) {
     if (quantities.size && !window.confirm('Den aktuellen Warenkorb ersetzen?')) return;
     quantities.clear();
-    selection = {restaurant, delivery, postcode, mollieTestCheckout, onlinePickup};
+    selection = {restaurant, delivery, postcode, mollieTestCheckout, onlinePickup, basketPreview};
   }
   const previousDish = demo ? dish : [...quantities.keys()].find(entry => entry.id === dish.id);
   const previousQuantity = quantities.get(previousDish) ?? 0;
@@ -321,7 +323,7 @@ async function search(showResults = false) {
           const query = new URLSearchParams({postcode,mode,restaurantId:restaurant.id});
           const response = await fetch('/api/v1/delivery-portal/menu?' + query);
           if (!response.ok) throw Error();
-          const {menu: dishes,testOrders,mollieTestCheckout,onlinePickup} = await response.json();
+          const {menu: dishes,testOrders,mollieTestCheckout,onlinePickup,basketPreview} = await response.json();
           if (currentMenu !== menuVersion || version !== searchVersion || !menu.open) return;
           if (!Array.isArray(dishes)) throw Error('Ungültige Speisekarte');
           if (!dishes.length) {
@@ -332,11 +334,11 @@ async function search(showResults = false) {
           for (const dish of dishes) {
             const item = document.createElement('li');
             item.textContent = dish.name + ' · ' + money.format(dish.cents / 100);
-            if (testOrders || onlinePickup) {
+            if (testOrders || onlinePickup || basketPreview) {
               const add = document.createElement('button');
               add.type = 'button';
               add.textContent = onlinePickup ? 'Zum Warenkorb' : 'Zum Testwarenkorb';
-              add.onclick = () => addDish(restaurant,delivery,dish,postcode,mollieTestCheckout,onlinePickup);
+              add.onclick = () => addDish(restaurant,delivery,dish,postcode,mollieTestCheckout,onlinePickup,Boolean(basketPreview));
               item.append(' ',add);
             }
             list.append(item);
