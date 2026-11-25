@@ -6,7 +6,11 @@
  let mode='login',busy=false,acceptSession=null;
  const fault=(text,kind)=>Object.assign(Error(text),{diagnosticKind:kind});
  const diagnose=(error,scope)=>window.bnPosDiagnostics?.decorate(error,scope)||error;
- const message=text=>{el('authMsg').textContent=text;};
+ function message(text, reveal=false){
+  const status=el('authMsg');
+  status.textContent=text;
+  if(reveal && text)status.scrollIntoView?.({block:'nearest'});
+ }
  function setBusy(value){
   busy=value;form.setAttribute('aria-busy',String(value));
   for(const id of ['authSubmit','loginTab','registerTab','forgotPassword'])el(id).disabled=value;
@@ -40,14 +44,14 @@
  el('togglePassword').onclick=()=>{const p=el('password'),show=p.type==='password';p.type=show?'text':'password';el('togglePassword').textContent=show?'🙈':'👁️';el('togglePassword').setAttribute('aria-label',show?'Passwort verbergen':'Passwort anzeigen');};
  el('forgotPassword').onclick=async()=>{
   if(busy)return;const email=el('email').value.trim();
-  if(!email||!el('email').checkValidity()){message('Bitte zuerst eine gültige E-Mail-Adresse eingeben.');return;}
-  setBusy(true);message('Reset-Link wird angefordert. Bitte kurz warten und nicht erneut klicken.');
-  try{const result=await request('forgot-password',{email});if(typeof result.message!=='string'||!result.message.trim())throw fault('Die Serverbestätigung fehlt. Bitte erneut versuchen.','RESPONSE');message(result.message);}
-  catch(error){message(diagnose(error,'RESET').message);}finally{setBusy(false);}
+  if(!email||!el('email').checkValidity()){message('Bitte zuerst eine gültige E-Mail-Adresse eingeben.',true);return;}
+  setBusy(true);message('Reset-Link wird angefordert. Bitte kurz warten und nicht erneut klicken.',true);
+  try{const result=await request('forgot-password',{email});if(typeof result.message!=='string'||!result.message.trim())throw fault('Die Serverbestätigung fehlt. Bitte erneut versuchen.','RESPONSE');message(result.message,true);}
+  catch(error){message(diagnose(error,'RESET').message,true);}finally{setBusy(false);}
  };
  form.onsubmit=async event=>{
   event.preventDefault();if(busy)return;
-  setBusy(true);message('Verbindung wird hergestellt…');
+  setBusy(true);message('Verbindung wird hergestellt…',true);
   try{
    const result=await request(mode,{name:el('name').value,email:el('email').value.trim(),password:el('password').value});
    if(typeof result.token!=='string'||!result.token.trim())throw fault('Die Anmeldebestätigung fehlt. Bitte erneut versuchen.','RESPONSE');
@@ -59,7 +63,7 @@
     if(!stored)throw fault('Das Kassenprogramm konnte nicht geladen werden und der Browser blockiert den Sitzungsspeicher. [POS-START]','STORAGE');
     message('Anmeldung erfolgreich. Die Kasse wird neu geladen…');location.reload();
    }
-  }catch(error){message(diagnose(error,mode==='register'?'REGISTER':'LOGIN').message||'Anmeldung fehlgeschlagen. Bitte erneut versuchen.');}finally{setBusy(false);}
+  }catch(error){message(diagnose(error,mode==='register'?'REGISTER':'LOGIN').message||'Anmeldung fehlgeschlagen. Bitte erneut versuchen.',true);}finally{setBusy(false);}
  };
  window.bnPosAuth={setMode,connect(handler){acceptSession=handler;},reportStartup(){if(!acceptSession&&!busy&&!el('authMsg').textContent){window.bnPosDiagnostics?.report('START','FAILED');message('Das Kassenprogramm konnte nicht vollständig geladen werden. Anmeldung und Passwort-Wiederherstellung bleiben verfügbar. Bitte Seite neu laden. [POS-START]');}}};
  setBusy(false);message('');
