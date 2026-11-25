@@ -120,3 +120,37 @@ test('oversized payment webhook refuses payload before database/provider access'
  const req=Readable.from(['id='+ 'x'.repeat(1024)]);Object.assign(req,{url:'/api/v1/centers/mollie/webhook',method:'POST',headers:{}});let status;
  await assert.rejects(createCenterHandler({query(){throw Error('Unexpected database');}})(req,{writeHead(s){status=s;},end(){}}),e=>e.status===413);assert.equal(status,undefined);
 });
+
+const refundOverviewPath = '/api/v1/centers/orders/' + id + '/refund-overview';
+
+test('Center refund overview requires an authenticated owner or admin', async () => {
+  const unauthenticated = await request(() => assert.fail('Unexpected query'), refundOverviewPath);
+  assert.equal(unauthenticated.status, 401);
+
+  const waiter = await request(sql => {
+    assert.match(sql, /FROM sessions/);
+    return rows({role: 'waiter', company_id: id});
+  }, refundOverviewPath, 'GET', undefined, true);
+  assert.equal(waiter.status, 403);
+});
+
+test('Center refund overview is read-only', async () => {
+  const response = await request(sql => {
+    assert.match(sql, /FROM sessions/);
+    return rows({role: 'owner', company_id: id});
+  }, refundOverviewPath, 'POST', undefined, true);
+  assert.equal(response.status, 405);
+});
+
+test('Center refund overview checks merchant ownership and released online payment', async () => {
+  const companyId = '22222222-2222-4222-8222-222222222222';
+  const response = await request((sql, params) => {
+    if (sql.includes('FROM sessions')) return rows({role: 'admin', company_id: companyId});
+    assert.match(sql, /r\.company_id=\$2/);
+    assert.match(sql, /cp\.payment_method='online'/);
+    assert.match(sql, /cp\.released_at IS NOT NULL AND cp\.paid_at IS NOT NULL/);
+    assert.deepEqual(params, [id, companyId]);
+    return rows();
+  }, refundOverviewPath, 'GET', undefined, true);
+  assert.equal(response.status, 404);
+});
