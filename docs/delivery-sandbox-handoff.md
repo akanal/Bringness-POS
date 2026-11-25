@@ -20,3 +20,5 @@ Push wurde im Netcup-Sandbox-Container aktiviert. Compose lädt `../.env.sandbox
 ## Abholton im geöffneten Gastfenster
 
 Commit 57fde0c3ada8447fe04593f75139e5f138db87f8 ist auf der Netcup-Sandbox installiert. Die HTML-Datei im gesunden Container stimmt per SHA-256 mit der geprüften GitHub-Datei überein. Die tatsächliche Gastseite lädt den neuen Schalter und blendet ihn bei einer bereits abholbereiten Bestellung aus. Vier lokale Audiologik-Szenarien bestanden. Ein hörbarer Testlauf auf einem Gerät steht aus. Vorherige Quelldatei und Container-Image wurden für einen Rückfall gesichert.
+
+Browser-Nachtest mit BN-2026-001003 und simulierter Mollie-Zahlung: Der Gastschalter meldete „Abholton eingeschaltet“. Die Center-Küche setzte die Bestellung in Zubereitung und anschließend auf „Abholbereit“. Die geöffnete Gastseite zeigte den Wechsel automatisch. Die tatsächliche Audioausgabe wurde im Cloud-Browser nicht abgehört.
