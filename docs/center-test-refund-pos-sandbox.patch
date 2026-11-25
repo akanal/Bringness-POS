@@ -1,0 +1,46 @@
+--- a/apps/web/public/pos/app.js
++++ b/apps/web/public/pos/app.js
+@@ -259,6 +259,7 @@
+  body.querySelectorAll('[data-center-refund]').forEach(button=>{
+   button.onclick=async()=>{
+    const result=button.closest('article').querySelector('[data-center-refund-status]');
++   result.parentElement.querySelector('[data-center-test-refund]')?.remove();
+    button.disabled=true;
+    result.textContent='Mollie-Zahlung wird geprüft …';
+    try{
+@@ -266,6 +267,35 @@
+     result.textContent=(overview.mode==='test'?'Mollie-Testzahlung · ':'Mollie · ')+
+      'Bezahlt: '+euro(overview.paidCents)+' · Erstattet: '+euro(overview.refundedCents)+
+      ' · Rückgebucht: '+euro(overview.chargedBackCents);
++    const amount = euro(overview.paidCents);
++    if (location.hostname !== 'sandbox-bestellen.bringness.de' || overview.mode !== 'test' ||
++        overview.paidCents <= 0 || overview.refundedCents || overview.chargedBackCents ||
++        !result.isConnected || $("restaurant").value !== restaurantId) return;
++
++    const refundButton = document.createElement('button');
++    refundButton.type = 'button';
++    refundButton.dataset.centerTestRefund = '';
++    refundButton.textContent = 'Testerstattung über ' + amount + ' auslösen';
++    result.after(refundButton);
++    refundButton.onclick = async () => {
++     if (!refundButton.isConnected || $("restaurant").value !== restaurantId ||
++         !confirm('Mollie-Testzahlung über ' + amount + ' vollständig erstatten?')) return;
++     refundButton.disabled = true;
++     button.disabled = true;
++     try {
++      const outcome = await api('/centers/orders/'+encodeURIComponent(button.dataset.centerRefund)+'/test-refund', {
++       method: 'POST', body: JSON.stringify({restaurantId, requestId: crypto.randomUUID(), confirmed: true})
++      });
++      result.textContent = outcome.state === 'confirmed'
++       ? 'Mollie-Testerstattung · Status: ' + outcome.providerStatus
++       : 'Erstattung unklar. Vor einem weiteren Versuch den Mollie-Status abgleichen.';
++     } catch (error) {
++      result.textContent = error.message || 'Erstattung konnte nicht bestätigt werden. Mollie-Status prüfen.';
++     } finally {
++      refundButton.remove();
++      button.disabled = false;
++     }
++    };
+    }catch(error){
+     result.textContent=error.message||'Mollie-Zahlung konnte nicht geprüft werden.';
+    }finally{button.disabled=false;}
