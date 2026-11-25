@@ -113,3 +113,20 @@ test('an older menu response cannot replace the reopened menu', async () => {
     dom.window.close();
   }
 });
+
+test('adding a dish from a refreshed menu uses the new price for all its portions', () => {
+  const dom = page(() => { throw Error('No network request expected'); });
+  try {
+    const {window} = dom;
+    const restaurant = {id:restaurantId,name:'Pilotrestaurant',feeCents:250,minimumCents:0};
+    window.addDish(restaurant,true,{id:dishId,name:'Pizza',cents:900},'10551',true);
+    window.addDish({...restaurant,feeCents:300},true,{id:dishId,name:'Pizza',cents:1000},'10551',true);
+    const doc = window.document;
+    assert.match(doc.getElementById('basketTotal').textContent,/23,00/);
+    assert.match(doc.getElementById('basketMessage').textContent,/aktualisiert/);
+    assert.match(doc.getElementById('basketItems').textContent,/2 × Pizza/);
+    assert.equal(doc.querySelectorAll('#basketItems li').length,1);
+  } finally {
+    dom.window.close();
+  }
+});
