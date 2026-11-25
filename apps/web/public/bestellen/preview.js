@@ -251,7 +251,7 @@ async function search(showResults = false) {
       const query = new URLSearchParams({postcode,mode});
       const response = await fetch('/api/v1/delivery-portal/restaurants?' + query);
       const data = await response.json();
-      if (!response.ok) throw Error(data.error);
+      if (!response.ok || !Array.isArray(data.restaurants)) throw Error(data.error);
       matches = data.restaurants;
     }
   } catch {
@@ -300,7 +300,9 @@ async function search(showResults = false) {
       summary.textContent = 'Speisekarte ansehen';
       menu.append(summary, list);
       card.append(menu);
+      let menuVersion = 0;
       menu.addEventListener('toggle', async () => {
+        const currentMenu = ++menuVersion;
         if (!menu.open) return;
         list.replaceChildren();
         const notice = document.createElement('li');
@@ -311,6 +313,8 @@ async function search(showResults = false) {
           const response = await fetch('/api/v1/delivery-portal/menu?' + query);
           if (!response.ok) throw Error();
           const {menu: dishes,testOrders,mollieTestCheckout,onlinePickup} = await response.json();
+          if (currentMenu !== menuVersion || version !== searchVersion || !menu.open) return;
+          if (!Array.isArray(dishes)) throw Error('Ungültige Speisekarte');
           if (!dishes.length) {
             notice.textContent = 'Derzeit sind hier keine Gerichte verfügbar.';
             return;
