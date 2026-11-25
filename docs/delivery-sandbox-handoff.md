@@ -26,3 +26,7 @@ Browser-Nachtest mit BN-2026-001003 und simulierter Mollie-Zahlung: Der Gastscha
 ## Vorbereitung Live-Checkout
 
 `center-checkout-rollout-guard.patch` ergänzt im lokalen Delivery-Quellstand eine Startprüfung für ausdrücklich aktivierten Center-Checkout. Außerhalb der isolierten Sandbox wird der explizite Mollie-Live-Modus verlangt. HTTPS-Basisadresse, passender OAuth-Callback, Client-Konfiguration und Token-Schlüssel werden strukturell geprüft. 58 fokussierte Tests bestanden. Der Patch ist als GitHub-Datei archiviert, weil dem Übergabebranch der vollständige Delivery-Quellstand fehlt. Noch nicht installiert. Vor Echtgeldbetrieb bleiben bestätigtes Mollie-Live-Händlerprofil, reale TSE-Abnahme und ein kontrollierter Zahlungs- und Belegtest offen. Optionale Push-Zustellung separat prüfen.
+
+## Sandbox-Test: fehlgeschlagener Kartenzahlungsversuch
+
+Am 25.11.2026 wurde für Testbestellung C-955B1299 in Mollie ausdrücklich „Failed“ simuliert. Mollie kehrte zur Auswahl der Zahlungsarten zurück. Nach Rückkehr zu Bringness stand die Bestellung noch auf „Zahlung wird geprüft“, ohne Zahlungsbestätigung oder digitalen Beleg. Die Bestellung erschien nicht in der Center-Küche. Das bestätigt den Schutz vor Freigabe bei diesem unbezahlten Versuch, aber noch keinen finalen Fehlerstatus für den gesamten Checkout. TSE-Arbeiten wurden auf Wunsch des Inhabers zurückgestellt.
