@@ -1,0 +1,111 @@
+--- a/server/center-core.js
++++ b/server/center-core.js
+@@ -9,3 +9,3 @@
+ import {guestCenterCheckout,guestCheckoutError} from './center-guest-checkout.js';
+-import {verifyAndReleaseMolliePayment} from './center-mollie-payment.js';
++import {readCenterRefundOverview,verifyAndReleaseMolliePayment} from './center-mollie-payment.js';
+ import {verifyMerchantProfile} from './center-mollie-merchant.js';
+@@ -150,2 +150,12 @@
+     if (!user) return send(res, 401, {error: 'Nicht angemeldet'});
++    const refundOverview=p.match(/^\/api\/v1\/centers\/orders\/([^/]+)\/refund-overview$/);
++    if(refundOverview){
++      if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
++      if(!['owner','admin'].includes(user.role))return send(res,403,{error:'Nur Betreiber können Erstattungsdaten abrufen'});
++      if(!uuid.test(refundOverview[1]))return send(res,404,{error:'Center-Zahlung nicht gefunden'});
++      try{
++        const overview=await readCenterRefundOverview(pool,user.company_id,refundOverview[1]);
++        return overview?send(res,200,{overview}):send(res,404,{error:'Center-Zahlung nicht gefunden'});
++      }catch{return send(res,502,{error:'Mollie-Zahlungsdaten konnten nicht bestätigt werden'});}
++    }
+     if (p === '/api/v1/centers/kitchen') {
+--- a/server/center-mollie-payment.js
++++ b/server/center-mollie-payment.js
+@@ -16,9 +16,36 @@
+  if(!binding)return {released:false,reason:'unknown_payment'};
+- return releaseCenterPayment(pool,paymentId,async()=>withMerchantToken(pool,binding.restaurant_id,async(accessToken,envelope)=>{
+- const credential=(await pool.query('SELECT profile_id,organization_id,verified_at FROM center_mollie_credentials WHERE restaurant_id=$1 AND token_envelope=$2',[binding.restaurant_id,envelope])).rows[0];
+- if(!credential)throw Error('MERCHANT_CONNECTION_CHANGED');
+- const mode=binding.request_payload?.testmode===true?'test':'live';
+- const response=await fetcher(molliePaymentReadUrl('/v2/payments/'+paymentId,mode).href,{headers:{authorization:'Bearer '+accessToken,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+- if(!response.ok)throw Error('PAYMENT_READ_FAILED');return normalizeMolliePayment(await response.json(),credential);
+- },env,fetcher));
++ return releaseCenterPayment(pool,paymentId,()=>readMerchantPayment(pool,binding,paymentId,env,fetcher));
+ }
++
++function readMerchantPayment(pool,binding,paymentId,env,fetcher){
++ return withMerchantToken(pool,binding.restaurant_id,async(accessToken,envelope)=>{
++  const credential=(await pool.query('SELECT profile_id,organization_id,verified_at FROM center_mollie_credentials WHERE restaurant_id=$1 AND token_envelope=$2',[binding.restaurant_id,envelope])).rows[0];
++  if(!credential)throw Error('MERCHANT_CONNECTION_CHANGED');
++  const mode=binding.request_payload?.testmode===true?'test':'live';
++  const response=await fetcher(molliePaymentReadUrl('/v2/payments/'+paymentId,mode).href,{
++   headers:{authorization:'Bearer '+accessToken,accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(15000)
++  });
++  if(!response.ok)throw Error('PAYMENT_READ_FAILED');
++  return normalizeMolliePayment(await response.json(),credential);
++ },env,fetcher);
++}
++
++export async function readCenterRefundOverview(pool,companyId,orderId,env=process.env,fetcher=fetch){
++ const binding=(await pool.query(`SELECT cp.payment_id,cp.restaurant_id,cp.merchant_reference,cp.amount_cents,a.request_payload
++  FROM center_order_payments cp JOIN orders o ON o.id=cp.order_id AND o.restaurant_id=cp.restaurant_id
++  JOIN restaurants r ON r.id=o.restaurant_id
++  JOIN center_checkout_attempts a ON a.order_id=o.id AND a.payment_id=cp.payment_id AND a.restaurant_id=r.id
++  WHERE o.id=$1 AND r.company_id=$2 AND o.source='center' AND cp.payment_method='online'
++  AND cp.released_at IS NOT NULL AND cp.paid_at IS NOT NULL`,[orderId,companyId])).rows[0];
++ if(!binding)return null;
++ if(!/^tr_[a-zA-Z0-9]+$/.test(binding.payment_id)||typeof binding.request_payload?.testmode!=='boolean'){
++  throw Error('PAYMENT_BINDING_INVALID');
++ }
++ const payment=await readMerchantPayment(pool,binding,binding.payment_id,env,fetcher);
++ if(payment.paymentId!==binding.payment_id||payment.orderId!==orderId||
++    payment.merchantReference!==binding.merchant_reference||payment.amountCents!==binding.amount_cents){
++  throw Error('PAYMENT_BINDING_MISMATCH');
++ }
++ return {orderId,mode:binding.request_payload.testmode?'test':'live',
++  paidCents:payment.amountCents,refundedCents:payment.refundedCents,chargedBackCents:payment.chargedBackCents,currency:payment.currency};
++}
+--- a/server/index.js
++++ b/server/index.js
+@@ -133,3 +133,3 @@
+ if(p==="/api/v1/orders/new-count"&&req.method==="GET"){const x=await auth(req,res);if(!x)return;const rid=u.searchParams.get("restaurantId");const q=await pool.query("SELECT r.id,(SELECT count(*)::int FROM orders o WHERE o.restaurant_id=r.id AND o.table_id IS NOT NULL AND o.status='open') new_count FROM restaurants r WHERE r.id=$1 AND r.company_id=$2",[rid,x.company_id]);return q.rowCount?json(res,200,{count:q.rows[0].new_count}):json(res,404,{error:"Betrieb nicht gefunden"})}
+-if(p==="/api/v1/orders/list"&&req.method==="GET"){const x=await auth(req,res);if(!x)return;const rid=u.searchParams.get("restaurantId");const q=await pool.query("SELECT o.id,o.table_id,to_jsonb(o)->>'pickup_number' pickup_number,o.status,o.source,o.total_cents,o.created_at,CASE WHEN $3 AND o.source='web_test_delivery' THEN to_jsonb(o)->'delivery_test_address' END AS delivery_test_address,to_jsonb(o)->>'delivery_test_paid_at' AS delivery_test_paid_at,o.qr_service_mode,o.qr_ready_at,o.pickup_collected_at,o.closed_at,o.qr_service_mode,o.qr_ready_at,t.name table_name,t.area table_area,(SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity,'note',oi.guest_note,'extras',oi.extras_snapshot)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items FROM orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN dining_tables t ON t.id=o.table_id WHERE o.restaurant_id=$1 AND r.company_id=$2 AND (o.source IS DISTINCT FROM 'center' OR o.status IS DISTINCT FROM 'payment_pending') ORDER BY o.created_at DESC LIMIT 100",[rid,x.company_id,["owner","admin","manager"].includes(x.role)]);return json(res,200,{orders:q.rows})}
++if(p==="/api/v1/orders/list"&&req.method==="GET"){const x=await auth(req,res);if(!x)return;const rid=u.searchParams.get("restaurantId");const q=await pool.query("SELECT o.id,o.table_id,to_jsonb(o)->>'pickup_number' pickup_number,o.status,o.source,o.total_cents,o.created_at,($4 AND o.source='center' AND EXISTS(SELECT 1 FROM center_order_payments cp WHERE cp.order_id=o.id AND cp.restaurant_id=o.restaurant_id AND cp.payment_method='online' AND cp.released_at IS NOT NULL AND cp.paid_at IS NOT NULL)) center_refund_overview,CASE WHEN $3 AND o.source='web_test_delivery' THEN to_jsonb(o)->'delivery_test_address' END AS delivery_test_address,to_jsonb(o)->>'delivery_test_paid_at' AS delivery_test_paid_at,o.qr_service_mode,o.qr_ready_at,o.pickup_collected_at,o.closed_at,o.qr_service_mode,o.qr_ready_at,t.name table_name,t.area table_area,(SELECT coalesce(json_agg(json_build_object('name',oi.product_name_snapshot,'quantity',oi.quantity,'note',oi.guest_note,'extras',oi.extras_snapshot)),'[]'::json) FROM order_items oi WHERE oi.order_id=o.id) items FROM orders o JOIN restaurants r ON r.id=o.restaurant_id LEFT JOIN dining_tables t ON t.id=o.table_id WHERE o.restaurant_id=$1 AND r.company_id=$2 AND (o.source IS DISTINCT FROM 'center' OR o.status IS DISTINCT FROM 'payment_pending') ORDER BY o.created_at DESC LIMIT 100",[rid,x.company_id,["owner","admin","manager"].includes(x.role),["owner","admin"].includes(x.role)]);return json(res,200,{orders:q.rows})}
+ if(p.startsWith("/api/v1/orders/")&&p.endsWith("/status")&&req.method==="PATCH"){const x=await auth(req,res);if(!x)return;const id=p.split("/")[4],b=await body(req);if(b.status!=="kitchen")return json(res,400,{error:"Nur die einmalige Bestätigung ist erlaubt"});const q=await pool.query("UPDATE orders o SET status='kitchen' FROM restaurants r WHERE o.restaurant_id=r.id AND o.id=$1 AND r.company_id=$2 AND o.status='open' RETURNING o.id,o.status",[id,x.company_id]);if(q.rowCount)return json(res,200,q.rows[0]);const existing=await pool.query("SELECT o.id,to_jsonb(o)->>'pickup_number' pickup_number,o.status FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=$1 AND r.company_id=$2",[id,x.company_id]);if(!existing.rowCount)return json(res,404,{error:"Bestellung nicht gefunden"});if(existing.rows[0].status==="kitchen")return json(res,200,existing.rows[0]);return json(res,409,{error:"Bestellung kann nicht mehr bestätigt werden"})}
+--- a/apps/web/public/pos/app.js
++++ b/apps/web/public/pos/app.js
+@@ -239,2 +239,5 @@
+  };
++ const refundOverview=o=>!isKitchen&&o.center_refund_overview===true
++  ?'<button type="button" data-center-refund="'+esc(o.id)+'">Mollie-Zahlung prüfen</button><p role="status" data-center-refund-status></p>'
++  :"";
+  const buttons=o=>{
+@@ -253,3 +256,3 @@
+  if(view==='kueche')window.bnTeamPos?.preserveKitchenFocus(restaurantId);
+- body.innerHTML='<div class="kitchenbar"><b>'+orders.length+' '+(view==="kueche"?"aktive Küchenbestellungen":"Bestellungen")+'</b><span class="kitchenautorefresh">● Live · automatisch alle 12 Sek.</span>'+(view==="kueche"?'<button id="kitchenSound" type="button" aria-pressed="'+kitchenSoundEnabled+'">'+(kitchenSoundEnabled?"🔔 Signal an":"🔕 Signal aus")+'</button>':"")+'</div><div class="kitchengrid">'+(orders.map((o,position)=>'<article data-team-order="'+esc(o.id)+'" class="kitchenticket '+esc(o.status)+'"><div class="kitchentickethead"><span class="kitchenstatus">'+(o.pickup_collected_at?"Abgeholt":o.qr_ready_at?"Abholbereit":view==="kueche"?String(position+1)+". Bestellung":esc(statusNames[o.status]||o.status))+'</span><strong>#'+esc((o.pickup_number?String(o.pickup_number).padStart(3,'0'):o.id.slice(0,8)))+'</strong></div><h3>'+esc(o.source==="center"?"Center-Abholung":o.table_name?(window.placeLabel||String)(o.table_name):"Theke")+'</h3><p class="muted">'+esc(o.table_area||"")+' · '+(o.source==="center"?"Center-QR-Bestellung":o.source==="qr"?"QR-Bestellung":o.source==="web_test_pickup"?"Web-Test · Abholung":o.source==="web_test_delivery"?"Web-Test · Lieferung":o.source==="web_pickup"?"Online bezahlt · Abholung":"Mitarbeiter / Kasse")+'</p><p class="kitchentime">'+new Date(o.created_at).toLocaleString("de-DE",{hourCycle:'h23'})+'</p><div class="kitchenitems">'+(o.items||[]).map(i=>'<div><b>'+esc(i.quantity)+' ×</b> '+esc(i.name)+(i.note?'<small> · '+esc(i.note)+'</small>':"")+(i.extras?.length?'<small> · '+i.extras.map(x=>esc(x.name)).join(", ")+'</small>':"")+'</div>').join("")+'</div><div class="kitchenfoot"><strong>'+euro(o.total_cents)+'</strong>'+buttons(o)+'</div>'+(!isKitchen&&o.delivery_test_paid_at?'<p class="status">Online bezahlt · Mollie-Test</p>':"")+deliveryAddress(o)+'</article>').join("")||'<p class="muted">Zurzeit keine Bestellungen.</p>')+'</div><p id="kitchenMessage" role="status"></p>';
++ body.innerHTML='<div class="kitchenbar"><b>'+orders.length+' '+(view==="kueche"?"aktive Küchenbestellungen":"Bestellungen")+'</b><span class="kitchenautorefresh">● Live · automatisch alle 12 Sek.</span>'+(view==="kueche"?'<button id="kitchenSound" type="button" aria-pressed="'+kitchenSoundEnabled+'">'+(kitchenSoundEnabled?"🔔 Signal an":"🔕 Signal aus")+'</button>':"")+'</div><div class="kitchengrid">'+(orders.map((o,position)=>'<article data-team-order="'+esc(o.id)+'" class="kitchenticket '+esc(o.status)+'"><div class="kitchentickethead"><span class="kitchenstatus">'+(o.pickup_collected_at?"Abgeholt":o.qr_ready_at?"Abholbereit":view==="kueche"?String(position+1)+". Bestellung":esc(statusNames[o.status]||o.status))+'</span><strong>#'+esc((o.pickup_number?String(o.pickup_number).padStart(3,'0'):o.id.slice(0,8)))+'</strong></div><h3>'+esc(o.source==="center"?"Center-Abholung":o.table_name?(window.placeLabel||String)(o.table_name):"Theke")+'</h3><p class="muted">'+esc(o.table_area||"")+' · '+(o.source==="center"?"Center-QR-Bestellung":o.source==="qr"?"QR-Bestellung":o.source==="web_test_pickup"?"Web-Test · Abholung":o.source==="web_test_delivery"?"Web-Test · Lieferung":o.source==="web_pickup"?"Online bezahlt · Abholung":"Mitarbeiter / Kasse")+'</p><p class="kitchentime">'+new Date(o.created_at).toLocaleString("de-DE",{hourCycle:'h23'})+'</p><div class="kitchenitems">'+(o.items||[]).map(i=>'<div><b>'+esc(i.quantity)+' ×</b> '+esc(i.name)+(i.note?'<small> · '+esc(i.note)+'</small>':"")+(i.extras?.length?'<small> · '+i.extras.map(x=>esc(x.name)).join(", ")+'</small>':"")+'</div>').join("")+'</div><div class="kitchenfoot"><strong>'+euro(o.total_cents)+'</strong>'+buttons(o)+'</div>'+(!isKitchen&&o.delivery_test_paid_at?'<p class="status">Online bezahlt · Mollie-Test</p>':"")+deliveryAddress(o)+refundOverview(o)+'</article>').join("")||'<p class="muted">Zurzeit keine Bestellungen.</p>')+'</div><p id="kitchenMessage" role="status"></p>';
+ 
+@@ -258,2 +261,17 @@
+  body.querySelectorAll('[data-stock-status]').forEach(btn=>btn.onclick=async()=>{const status=btn.dataset.stockStatus,reason=status==='cancelled'?prompt('Grund für das Storno:'):'';if(status==='cancelled'&&!reason?.trim())return;btn.disabled=true;try{await api('/orders/'+encodeURIComponent(btn.dataset.order)+'/status',{method:'PATCH',body:JSON.stringify({status,reason})});await renderOrderBoard(view,restaurantId)}catch(e){const message=$('kitchenMessage');if(message)message.textContent=e.message;btn.disabled=false}});
++ body.querySelectorAll('[data-center-refund]').forEach(button=>{
++  button.onclick=async()=>{
++   const result=button.closest('article').querySelector('[data-center-refund-status]');
++   button.disabled=true;
++   result.textContent='Mollie-Zahlung wird geprüft …';
++   try{
++    const {overview}=await api('/centers/orders/'+encodeURIComponent(button.dataset.centerRefund)+'/refund-overview');
++    result.textContent=(overview.mode==='test'?'Mollie-Testzahlung · ':'Mollie · ')+
++     'Bezahlt: '+euro(overview.paidCents)+' · Erstattet: '+euro(overview.refundedCents)+
++     ' · Rückgebucht: '+euro(overview.chargedBackCents);
++   }catch(error){
++    result.textContent=error.message||'Mollie-Zahlung konnte nicht geprüft werden.';
++   }finally{button.disabled=false;}
++  };
++ });
+  const changeKitchenStatus=(id,status)=>api("/orders/"+encodeURIComponent(id)+"/status",{method:"PATCH",body:JSON.stringify({status})});
+--- a/apps/web/public/pos/index.html
++++ b/apps/web/public/pos/index.html
+@@ -115,3 +115,3 @@
+ </div><div id="moduleView" class="modulepage"></div><div class="manage artikelmanage"><h3>Sortiment verwalten</h3><button id="aiPricesSettings" type="button" aria-haspopup="dialog" hidden><span class="pos-ai-mark" aria-hidden="true">AI</span><span><strong>Bringness AI</strong><small>Preisaktionen</small></span></button><form id="catForm"><input id="catName" placeholder="Kategorie, z. B. Getränke"><button>Kategorie hinzufügen</button></form><form id="productForm" style="margin-top:10px"><input id="productName" placeholder="Produktname"><input id="productDescription" placeholder="Beschreibung, z. B. hausgemachte Sauce"><input id="productIngredients" placeholder="Zutaten, z. B. Hartweizengrieß, Ei, Käse"><input id="productPrice" type="number" step=".01" min="0" placeholder="Preis €"><input id="productEmoji" placeholder="Bild/Emoji" value="🍽️"><select id="productCategory"></select><select id="tax"><option value="19">19 % MwSt.</option><option value="7">7 % MwSt.</option></select><button>Produkt hinzufügen</button></form></div><div class="manage"><h3>Mitarbeiter</h3><form id="employeeForm"><input id="employeeName" placeholder="Name"><input id="employeePin" inputmode="numeric" maxlength="6" placeholder="PIN"><select id="employeeRole"><option value="cashier">Kasse</option><option value="waiter">Service</option><option value="manager">Manager</option></select><button>Mitarbeiter hinzufügen</button></form><div id="employees" class="muted"></div></div>
+-</section></div><link rel="stylesheet" href="/pos/sale-tools.css?v=20261018"><link rel="stylesheet" href="/pos/diagnostics.css?v=20261115"><script src="/pos/diagnostic-delivery.js?v=admin-reports-20261116"></script><script src="/pos/diagnostics.js?v=admin-reports-20261116"></script><script src="/pos/auth.js?v=diagnostics-20261115"></script><script src="/pos/deposit-journal.js?v=20261118"></script><script src="/pos/deposit.js?v=return-simple-20261023"></script><script src="/pos/sale-tools.js?v=direct-extras-20261113"></script><script src="/pos/cash-closing.js?v=guided-review-20261107"></script><script src="/pos/address-check.js?v=20261020"></script><script src="/pos/customer-delivery.js?v=merchant-number-20261109"></script><script src="/pos/trade-cancellation.js?v=drafts-20261023"></script><script src="/pos/trade.js?v=stock-trade-20261116"></script><script src="/pos/displays.js?v=stock-trade-20261116"></script><link rel="stylesheet" href="/pos/service-team.css?v=quiet-team-20261112"><script src="/pos/service-team.js?v=quiet-team-20261112"></script><script src="/place-terminology-copy.js?v=20261115"></script><script src="/product-photo.js?v=20261118"></script><script src="/pos/product-photos.js?v=20261118"></script><script src="/pos/article-entry.js?v=20261118"></script><script src="/pos/ai-prices.js?v=rules-20261120"></script><script src="/pos/app.js?v=portal-test-status-center-guard"></script><script src="/shared-language-snapshot.js?v=2026100401"></script><script src="/shared-language.js?v=2026100401"></script><script src="/pos/language.js?v=2026100401"></script><script src="/pos/personnel.js?v=stock-trade-20261116"></script><link rel="stylesheet" href="/pos/trade.css?v=trade-inline-switch-20261112"><link rel="stylesheet" href="/pos/colors.css?v=brand-actions-20261124"><script src="/pos/numpad.js?v=count-due-20261020"></script><script src="/pos/payment-flow.js?v=receipt-20261114"></script><script src="/pos/cash-reversal.js?v=20261113"></script><script src="/pos/partial-payments.js?v=20261113"></script><script src="/pos/direct-extras.js?v=20261113"></script><script src="/pos/online-register.js?v=customer-display-20261114"></script><link rel="stylesheet" href="/pos/browser-support.css?v=maintenance-20261112"><script src="/pos/browser-support.js?v=maintenance-20261112"></script><script src="/pos/online-register-maintenance.js?v=maintenance-20261112"></script><script src="/pos/menu-import-link.js?v=csv-20261113"></script><script src="/pos/setup-link.js?v=20261119-entry"></script><link rel="stylesheet" href="/pos/customer-display.css?v=support-codes-20261114"><script src="/pos/settings-groups.js?v=20261114"></script><script src="/pos/customer-display.js?v=receipt60-20261114"></script><script src="/pos/accounting-export.js?v=20261118"></script><script src="/pos/tax-export.js?v=20261118"></script><script src="/pos/availability.js?v=stock-trade-20261116"></script><script src="/pos/restaurant-owner.js?v=stock-trade-20261116"></script></body></html>
++</section></div><link rel="stylesheet" href="/pos/sale-tools.css?v=20261018"><link rel="stylesheet" href="/pos/diagnostics.css?v=20261115"><script src="/pos/diagnostic-delivery.js?v=admin-reports-20261116"></script><script src="/pos/diagnostics.js?v=admin-reports-20261116"></script><script src="/pos/auth.js?v=diagnostics-20261115"></script><script src="/pos/deposit-journal.js?v=20261118"></script><script src="/pos/deposit.js?v=return-simple-20261023"></script><script src="/pos/sale-tools.js?v=direct-extras-20261113"></script><script src="/pos/cash-closing.js?v=guided-review-20261107"></script><script src="/pos/address-check.js?v=20261020"></script><script src="/pos/customer-delivery.js?v=merchant-number-20261109"></script><script src="/pos/trade-cancellation.js?v=drafts-20261023"></script><script src="/pos/trade.js?v=stock-trade-20261116"></script><script src="/pos/displays.js?v=stock-trade-20261116"></script><link rel="stylesheet" href="/pos/service-team.css?v=quiet-team-20261112"><script src="/pos/service-team.js?v=quiet-team-20261112"></script><script src="/place-terminology-copy.js?v=20261115"></script><script src="/product-photo.js?v=20261118"></script><script src="/pos/product-photos.js?v=20261118"></script><script src="/pos/article-entry.js?v=20261118"></script><script src="/pos/ai-prices.js?v=rules-20261120"></script><script src="/pos/app.js?v=portal-test-status-center-refund-overview"></script><script src="/shared-language-snapshot.js?v=2026100401"></script><script src="/shared-language.js?v=2026100401"></script><script src="/pos/language.js?v=2026100401"></script><script src="/pos/personnel.js?v=stock-trade-20261116"></script><link rel="stylesheet" href="/pos/trade.css?v=trade-inline-switch-20261112"><link rel="stylesheet" href="/pos/colors.css?v=brand-actions-20261124"><script src="/pos/numpad.js?v=count-due-20261020"></script><script src="/pos/payment-flow.js?v=receipt-20261114"></script><script src="/pos/cash-reversal.js?v=20261113"></script><script src="/pos/partial-payments.js?v=20261113"></script><script src="/pos/direct-extras.js?v=20261113"></script><script src="/pos/online-register.js?v=customer-display-20261114"></script><link rel="stylesheet" href="/pos/browser-support.css?v=maintenance-20261112"><script src="/pos/browser-support.js?v=maintenance-20261112"></script><script src="/pos/online-register-maintenance.js?v=maintenance-20261112"></script><script src="/pos/menu-import-link.js?v=csv-20261113"></script><script src="/pos/setup-link.js?v=20261119-entry"></script><link rel="stylesheet" href="/pos/customer-display.css?v=support-codes-20261114"><script src="/pos/settings-groups.js?v=20261114"></script><script src="/pos/customer-display.js?v=receipt60-20261114"></script><script src="/pos/accounting-export.js?v=20261118"></script><script src="/pos/tax-export.js?v=20261118"></script><script src="/pos/availability.js?v=stock-trade-20261116"></script><script src="/pos/restaurant-owner.js?v=stock-trade-20261116"></script></body></html>
+ 
