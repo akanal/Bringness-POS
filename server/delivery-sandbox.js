@@ -23,6 +23,9 @@ export function deliverySandboxConfig(env) {
   for (const key of ['PUBLIC_BASE_URL','PUBLIC_URL']) {
     if (env[key] && env[key].replace(/\/$/,'')!==origin.origin) invalid();
   }
+  const paymentOrigin = env.CENTER_PAYMENT_ORIGIN;
+  if ((paymentOrigin && paymentOrigin !== origin.origin && paymentOrigin !== origin.href) ||
+      (env.CENTER_CHECKOUT_ENABLED === 'true' && !paymentOrigin)) invalid();
   if (env.CENTER_MOLLIE_REDIRECT_URI &&
       env.CENTER_MOLLIE_REDIRECT_URI!==origin.origin+'/api/v1/centers/mollie/callback') invalid();
   return {origin:origin.origin,restaurantId};
