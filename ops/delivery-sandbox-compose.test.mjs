@@ -43,3 +43,14 @@ test('Mollie refund consent opt-in stays in the isolated test deployment', async
   assert.equal(deliverySandboxConfig(env).restaurantId, env.BRINGNESS_DELIVERY_SANDBOX_RESTAURANT_ID);
   assert.equal(compose.services.database.environment.BRINGNESS_DELIVERY_SANDBOX_REFUNDS, undefined);
 });
+
+test('Center checkout is explicit and uses the sandbox payment return origin', async () => {
+  const disabled = await renderSandboxCompose();
+  const enabled = await renderSandboxCompose({DELIVERY_SANDBOX_CENTER_CHECKOUT: 'true'});
+  assert.equal(disabled.services.app.environment.CENTER_CHECKOUT_ENABLED, 'false');
+  const env = enabled.services.app.environment;
+  assert.equal(env.CENTER_CHECKOUT_ENABLED, 'true');
+  assert.equal(env.CENTER_PAYMENT_ORIGIN, deliverySandboxConfig(env).origin);
+  assert.equal(env.CENTER_MOLLIE_MODE, 'test');
+  assert.equal(env.BRINGNESS_DELIVERY_LIVE_CHECKOUT, 'false');
+});
