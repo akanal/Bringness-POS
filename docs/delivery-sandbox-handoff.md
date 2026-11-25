@@ -46,3 +46,7 @@ Center-Bestellungen werden im Quellcode als „Center-Abholung“ und „Center-
 ## POS-Abnahme und Freigabestatus
 
 Patch 996b08bccd8a9316612ace28f766d6c830428a34 wurde nach Quellstandprüfung mit Rückfallkopien auf die Netcup-Sandbox angewendet. Sandbox-Container healthy. Im Browser waren vier bezahlte Center-Karten mit korrekter Kennzeichnung sichtbar. Die unbezahlten Vorgänge #005 und #006 erschienen nicht in der POS-Bestellliste. Die Center-Karten hatten keinen allgemeinen Storno-Button. 58 Center- und Mollie-Tests sowie der POS-/Display-Integrationstest bestanden. Ein Checkout mit Echtgeld erfordert bestätigte Live-Zahlungsbereitschaft des Händlerprofils und einen separat kontrollierten Echtzahlungs- und Belegtest. Für bereits online bezahlte Bestellungen ist der Erstattungsablauf vor einem Live-Pilot zu klären. TSE-Arbeiten sind auf Wunsch zurückgestellt. Die Sandbox-Installation ist keine Produktionsfreigabe.
+
+## Mollie-Erstattungsübersicht
+
+Der lesende Backend-Endpunkt wurde in Commit 157d1da5fcb0f5ae310be0bd8b08586dbe7e9473 gespeichert. Die lokale POS-Integration zeigt Betreiberinnen und Betreibern bei freigegebenen Online-Center-Bestellungen „Mollie-Zahlung prüfen“ und danach Zahlbetrag, Erstattungen und Rückbuchungen. Der POS-/Display-Integrationstest einschließlich des Klicks bestand. `center-refund-overview-ui.patch` archiviert die lokalen Änderungen relativ zum Delivery-Quellstand einschließlich vorheriger POS-Änderungen. Sandbox-Rollout und echte Provider-Abfrage über die UI sind offen. Es wird keine Erstattung ausgelöst.
