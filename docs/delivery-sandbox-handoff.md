@@ -30,3 +30,7 @@ Browser-Nachtest mit BN-2026-001003 und simulierter Mollie-Zahlung: Der Gastscha
 ## Sandbox-Test: fehlgeschlagener Kartenzahlungsversuch
 
 Am 25.11.2026 wurde für Testbestellung C-955B1299 in Mollie ausdrücklich „Failed“ simuliert. Mollie kehrte zur Auswahl der Zahlungsarten zurück. Nach Rückkehr zu Bringness stand die Bestellung noch auf „Zahlung wird geprüft“, ohne Zahlungsbestätigung oder digitalen Beleg. Die Bestellung erschien nicht in der Center-Küche. Das bestätigt den Schutz vor Freigabe bei diesem unbezahlten Versuch, aber noch keinen finalen Fehlerstatus für den gesamten Checkout. TSE-Arbeiten wurden auf Wunsch des Inhabers zurückgestellt.
+
+## Sandbox-Test: Ablauf eines Kartenzahlungsversuchs
+
+Bei C-D4DA4B27 wurde im Mollie-Testmodus „Expired“ gewählt. Mollie kehrte zur Zahlungsartenauswahl zurück. Nach manueller Rückkehr zur Gastseite wartete Bringness weiter auf die Zahlung, ohne Beleg. Der Versuch bestätigte keinen endgültigen Ablauf des gesamten Mollie-Checkouts. Lokal bestanden 34 Center-, Mollie- und Datenbanktests, einschließlich final gemeldeter Providerstatus failed/canceled/expired ohne Belegerzeugung. Der Test des endgültigen Status mit dem echten Sandbox-Provider bleibt offen.
