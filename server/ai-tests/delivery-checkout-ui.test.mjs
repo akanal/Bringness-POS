@@ -189,7 +189,7 @@ test('customer order history displays confirmed orders and clears them on logout
     session:{customer:{email:'test@example.com'}},
     addresses:{addresses:[]},
     favorites:{favorites:[]},
-    orders:{orders:[{restaurant:'Testbistro',totalCents:799,date:'2026-11-25T17:00:00Z',mode:'delivery',status:'ready'}]},
+    orders:{orders:[{restaurant:'Testbistro',totalCents:799,date:'2026-11-25T17:00:00Z',mode:'delivery',status:'ready',items:[{name:'Pizza',quantity:2}]}]},
     logout:{customer:null}
   };
   try {
@@ -208,6 +208,7 @@ test('customer order history displays confirmed orders and clears them on logout
     doc.getElementById('refreshCustomerOrders').click();
     await wait();
     assert.match(list.textContent, /Unterwegs/);
+    assert.equal(list.firstElementChild.querySelector('details ul li').textContent, '2 × Pizza');
     assert.equal(list.childElementCount, 1);
 
     doc.getElementById('customerLogout').click();

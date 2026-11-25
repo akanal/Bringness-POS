@@ -119,6 +119,7 @@ for (const [mode,paymentMode] of [['pickup','test'],['delivery','test'],['pickup
     const {data:{orders}} = await history(tokens[0]);
     assert.deepEqual(orders.map(({restaurant,totalCents,mode,status})=>({restaurant,totalCents,mode,status})),
       live ? [] : [{restaurant:'Restaurant',totalCents:total,mode,status:'open'}]);
+    if (!live) assert.deepEqual(orders[0].items,[{name:'Pizza',quantity:1}]);
     assert.deepEqual((await history(tokens[1])).data,{orders:[]});
     assert.equal((await history('')).code,401);
     assert.deepEqual(await check(),accepted);

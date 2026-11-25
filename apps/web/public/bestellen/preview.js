@@ -629,6 +629,19 @@ if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
         const mode = order.mode === 'delivery' ? 'Lieferung' : 'Abholung';
         const label = fulfillmentLabel(order.status, order.mode) ?? 'Status nicht verfügbar';
         row.textContent = [date, order.restaurant, mode, money.format(order.totalCents / 100), label].join(' · ');
+        if (order.items?.length) {
+          const details = document.createElement('details');
+          const summary = document.createElement('summary');
+          summary.textContent = 'Artikel anzeigen';
+          const items = document.createElement('ul');
+          for (const item of order.items) {
+            const line = document.createElement('li');
+            line.textContent = item.quantity + ' × ' + item.name;
+            items.append(line);
+          }
+          details.append(summary, items);
+          row.append(details);
+        }
         orderHistoryList.append(row);
       }
       orderHistoryMessage.textContent = orders.length ? '' : 'Noch keine bestätigten Testbestellungen.';
