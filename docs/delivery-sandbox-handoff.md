@@ -8,3 +8,7 @@
 - Zugangsdaten bleiben in der geschützten .env.sandbox auf Netcup. Keine API-Schlüssel, OAuth-Tokens, Passwörter, Sessiondaten oder Tischcodes in Git speichern.
 
 Der Konfigurations- und Code-Diff ist als `delivery-sandbox-checkout.patch` auf diesem Branch abgelegt. Er setzt den lokalen Sandbox-Quellstand `3f5d79c0` voraus. Der lokale Delivery-Branch konnte mangels Git-Push-Anmeldung nicht direkt übertragen werden.
+
+## Nachtest: Zubereitung und Abholung
+
+Der POS-Bestellstatus nutzt für den Start einer Center-Bestellung jetzt die bestehende Center-Küchenlogik. Der regressionsgeprüfte Patch ist auf der Netcup-Sandbox installiert. Mit der zweiten simulierten 1,00-€-Bestellung BN-2026-001001 erschien „Zubereitung gestartet“ nach dem Start über die reguläre POS-Bestellliste auf der Gastseite. „Abholbereit“ wurde in der Center-Küche gesetzt und im geöffneten Gastfenster automatisch angezeigt. Keine Echtgeldzahlung. Push und Signalton bleiben ungeprüft. Der ursprüngliche Testlauf bleibt als historischer Fehlernachweis dokumentiert.
