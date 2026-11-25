@@ -29,3 +29,29 @@ test('declined consent consumes state without storing credentials',async()=>{
  const r=await completeRestaurantMollieConnect({query:async()=>({rows:[{center_id:'center',restaurant_id:'restaurant'}]})},{state:'a'.repeat(64),error:'access_denied'},'b'.repeat(64),config,()=>{throw Error('no exchange')});assert.equal(r.status,400);
 });
 
+
+test('refund scopes are opt-in and limited to the assigned test restaurant', async () => {
+ const restaurantId = '11111111-1111-4111-8111-111111111111';
+ const origin = 'https://sandbox-bestellen.example.test';
+ const sandbox = {
+  ...config,
+  BRINGNESS_DELIVERY_SANDBOX: 'true',
+  BRINGNESS_DELIVERY_SANDBOX_ORIGIN: origin,
+  BRINGNESS_DELIVERY_SANDBOX_RESTAURANT_ID: restaurantId,
+  CENTER_MOLLIE_MODE: 'test',
+  CENTER_MOLLIE_REDIRECT_URI: origin + '/api/v1/centers/mollie/callback',
+  DATABASE_URL: 'postgresql://sandbox@database/bringness_delivery_sandbox'
+ };
+ const pool = {query: async () => ({rows: [{}]})};
+ async function scopes(env, target = restaurantId) {
+  const result = await beginRestaurantMollieConnect(pool, {}, 'center', target, env);
+  return new URL(result.authorizationUrl).searchParams.get('scope').split(' ');
+ }
+ const enabled = {...sandbox, BRINGNESS_DELIVERY_SANDBOX_REFUNDS: 'true'};
+ const defaults = await scopes(sandbox);
+ assert.deepEqual(await scopes(enabled), [...defaults, 'refunds.read', 'refunds.write']);
+ assert.deepEqual(await scopes(enabled, 'another-restaurant'), defaults);
+ assert.deepEqual(await scopes({...enabled, CENTER_MOLLIE_MODE: 'live'}), defaults);
+ assert.deepEqual(await scopes({...enabled, BRINGNESS_DELIVERY_SANDBOX: 'false'}), defaults);
+ await assert.rejects(scopes({...enabled, DATABASE_URL: 'postgresql://sandbox@database/bringness'}), /INVALID_DELIVERY_SANDBOX_CONFIGURATION/);
+});
