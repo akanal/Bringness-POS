@@ -12,3 +12,7 @@ Der Konfigurations- und Code-Diff ist als `delivery-sandbox-checkout.patch` auf 
 ## Nachtest: Zubereitung und Abholung
 
 Der POS-Bestellstatus nutzt für den Start einer Center-Bestellung jetzt die bestehende Center-Küchenlogik. Der regressionsgeprüfte Patch ist auf der Netcup-Sandbox installiert. Mit der zweiten simulierten 1,00-€-Bestellung BN-2026-001001 erschien „Zubereitung gestartet“ nach dem Start über die reguläre POS-Bestellliste auf der Gastseite. „Abholbereit“ wurde in der Center-Küche gesetzt und im geöffneten Gastfenster automatisch angezeigt. Keine Echtgeldzahlung. Push und Signalton bleiben ungeprüft. Der ursprüngliche Testlauf bleibt als historischer Fehlernachweis dokumentiert.
+
+## Abhol-Push in der Sandbox
+
+Push wurde im Netcup-Sandbox-Container aktiviert. Compose lädt `../.env.sandbox-push` über `services.app.env_file`. Die Datei ist auf dem Host mit Modus 600 geschützt und enthält den Aktivierungsschalter sowie ein separates VAPID-Schlüsselpaar. Der öffentliche Sandbox-Konfigurationsendpunkt bestätigte `available: true`; die Gastseite zeigte den Schalter zur Benachrichtigung. Neun Push-Unit-Tests bestanden. Bei BN-2026-001002 (simulierte Mollie-Zahlung) verweigerte der Cloudbrowser die Benachrichtigungsfreigabe. Die Bestellung wartet auf Zubereitung und eignet sich zum Gerätetest mit erlaubten Benachrichtigungen. Tatsächliche Push-Zustellung steht aus. Die Center-Gastseite enthält derzeit keinen eigenen Signalton; der vorhandene Ton im normalen Tisch-/Tresenablauf ist separat.
