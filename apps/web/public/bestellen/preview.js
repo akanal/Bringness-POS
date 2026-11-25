@@ -367,7 +367,17 @@ form.addEventListener('input', event => {
   status.textContent = 'Suche starten, um passende Restaurants anzuzeigen.';
 });
 
-if (demo) { form.elements.postcode.value = "10551"; void search(); }
+const initialSearch = new URLSearchParams(location.search);
+const initialPostcode = initialSearch.get('postcode');
+const initialMode = initialSearch.get('mode');
+if (demo) {
+  form.elements.postcode.value = '10551';
+  void search();
+} else if (/^\d{5}$/.test(initialPostcode ?? '') && ['pickup', 'delivery'].includes(initialMode)) {
+  form.elements.postcode.value = initialPostcode;
+  form.elements.mode.value = initialMode;
+  void search();
+}
 const scenes = [...document.querySelectorAll('.scene')];
 const selectors = [...document.querySelectorAll('[data-slide]')];
 const campaign = document.getElementById('campaign');
