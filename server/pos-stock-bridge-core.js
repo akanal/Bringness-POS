@@ -73,6 +73,7 @@ export async function requestPosStockAction(pool,actor,orderId,b){
  const c=await pool.connect();try{await c.query('BEGIN');
  const o=(await c.query('SELECT o.* FROM orders o JOIN restaurants r ON r.id=o.restaurant_id WHERE o.id=$1 AND r.company_id=$2 FOR UPDATE OF o',[orderId,actor.company_id])).rows[0];if(!o)fail('Bestellung nicht gefunden',404);
  if(actor.role==='waiter'&&!(await c.query("SELECT 1 FROM dining_tables t JOIN employees e ON (e.id=t.waiter_employee_id OR e.id=ANY(t.waiter_employee_ids)) WHERE t.id=$1 AND e.user_id=$2 AND e.active AND e.restaurant_id=$3",[o.table_id,actor.id,o.restaurant_id])).rowCount)fail('Tisch nicht zugeordnet',403);
+ if(o.source==='center'&&action==='cancel')fail('Center-Bestellungen können hier nicht storniert werden');
  const pending=(await c.query("SELECT * FROM pos_stock_commands WHERE order_id=$1 AND state='pending'",[o.id])).rows[0];if(pending){if(pending.action!==action||pending.reason!==reason)fail('Eine andere Lagerbuchung läuft bereits');await c.query('COMMIT');return {pending:true,commandId:pending.id}}
  if(o.status===b.status){await c.query('COMMIT');return {id:o.id,status:o.status}}
  if(action==='accept'&&o.status!=='open'||action==='start'&&o.status!=='kitchen'||action==='cancel'&&['paid','cancelled'].includes(o.status))fail('Bestellstatus erlaubt diese Aktion nicht');
