@@ -7,7 +7,7 @@ import {exportCenterTableQr} from './center-table-qr.js';
 import {visibleCenterProducts} from './center-availability.js';
 import crypto from 'node:crypto';
 import {guestCenterCheckout,guestCheckoutError} from './center-guest-checkout.js';
-import {verifyAndReleaseMolliePayment} from './center-mollie-payment.js';
+import {readCenterRefundOverview,verifyAndReleaseMolliePayment} from './center-mollie-payment.js';
 import {verifyMerchantProfile} from './center-mollie-merchant.js';
 import {completeRestaurantMollieConnect} from './center-mollie-connect.js';
 import {beginRestaurantPaymentConnect} from './center-payment-providers.js';
@@ -148,6 +148,16 @@ export function createCenterHandler(pool) {
       EXISTS(SELECT 1 FROM platform_admins pa WHERE pa.user_id=u.id AND pa.active=true) platform_admin FROM sessions s JOIN users u ON u.id=s.user_id
       WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' AND coalesce(u.must_change_password,false)=false`, [crypto.createHash('sha256').update(raw).digest('hex')])).rows[0];
     if (!user) return send(res, 401, {error: 'Nicht angemeldet'});
+    const refundOverview=p.match(/^\/api\/v1\/centers\/orders\/([^/]+)\/refund-overview$/);
+    if(refundOverview){
+      if(req.method!=='GET')return send(res,405,{error:'Methode nicht erlaubt'});
+      if(!['owner','admin'].includes(user.role))return send(res,403,{error:'Nur Betreiber können Erstattungsdaten abrufen'});
+      if(!uuid.test(refundOverview[1]))return send(res,404,{error:'Center-Zahlung nicht gefunden'});
+      try{
+        const overview=await readCenterRefundOverview(pool,user.company_id,refundOverview[1]);
+        return overview?send(res,200,{overview}):send(res,404,{error:'Center-Zahlung nicht gefunden'});
+      }catch{return send(res,502,{error:'Mollie-Zahlungsdaten konnten nicht bestätigt werden'});}
+    }
     if (p === '/api/v1/centers/kitchen') {
       if (!['GET','PUT'].includes(req.method)) return send(res,405,{error:'Methode nicht erlaubt'});
       const restaurantId=url.searchParams.get('restaurantId');
