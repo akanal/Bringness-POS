@@ -622,9 +622,12 @@ if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
     try {
       const {orders} = await account('orders');
       if (activeAccount !== accountFavorites || !orderHistory.open) return;
+      const expanded = new Set([...orderHistoryList.querySelectorAll('[data-order-id] > details[open]')]
+        .map(details => details.parentElement.dataset.orderId));
       orderHistoryList.replaceChildren();
       for (const order of orders) {
         const row = document.createElement('li');
+        if (order.id) row.dataset.orderId = order.id;
         const date = new Date(order.date).toLocaleDateString('de-DE',{timeZone:'Europe/Berlin'});
         const mode = order.mode === 'delivery' ? 'Lieferung' : 'Abholung';
         const label = fulfillmentLabel(order.status, order.mode) ?? 'Status nicht verfügbar';
@@ -636,6 +639,7 @@ if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
         }
         if (order.items?.length) {
           const details = document.createElement('details');
+          details.open = expanded.has(order.id);
           const summary = document.createElement('summary');
           summary.textContent = 'Artikel anzeigen';
           const items = document.createElement('ul');

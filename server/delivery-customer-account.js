@@ -61,7 +61,7 @@ export async function handleDeliveryCustomerAccount(db,req,res,send,action,origi
     const session = customerSessionHash(req);
     if (!session) return send(401,{error:'Bitte anmelden.'});
     const {rows:[result]} = await db.query(`SELECT ARRAY(
-      SELECT json_build_object('restaurant',r.name,'totalCents',o.total_cents,'status',o.status,
+      SELECT json_build_object('id',o.id,'restaurant',r.name,'totalCents',o.total_cents,'status',o.status,
         'estimatedArrival',CASE WHEN o.status IN ('open','kitchen','preparing','ready','dispatched') THEN t.estimated_arrival END,
         'items',(SELECT json_agg(json_build_object('name',item->>'name','quantity',item->'qty') ORDER BY ordinal)
           FROM jsonb_array_elements(c.items) WITH ORDINALITY AS line(item,ordinal) WHERE item ? 'productId'),

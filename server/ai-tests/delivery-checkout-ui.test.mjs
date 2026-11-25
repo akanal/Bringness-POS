@@ -189,7 +189,7 @@ test('customer order history displays confirmed orders and clears them on logout
     session:{customer:{email:'test@example.com'}},
     addresses:{addresses:[]},
     favorites:{favorites:[]},
-    orders:{orders:[{restaurant:'Testbistro',totalCents:799,date:'2026-11-25T17:00:00Z',mode:'delivery',status:'ready',items:[{name:'Pizza',quantity:2}]}]},
+    orders:{orders:[{id:'order-1',restaurant:'Testbistro',totalCents:799,date:'2026-11-25T17:00:00Z',mode:'delivery',status:'ready',items:[{name:'Pizza',quantity:2}]}]},
     logout:{customer:null}
   };
   try {
@@ -204,11 +204,13 @@ test('customer order history displays confirmed orders and clears them on logout
     history.dispatchEvent(new dom.window.Event('toggle'));
     await wait();
     assert.match(list.textContent, /25\.11\.2026 · Testbistro · Lieferung · 7,99\s€ · Fertig zur Übergabe/);
+    list.querySelector('details').open = true;
     responses.orders.orders[0].status = 'dispatched';
     responses.orders.orders[0].estimatedArrival = '2026-11-25T17:30:00Z';
     doc.getElementById('refreshCustomerOrders').click();
     await wait();
     assert.match(list.textContent, /Unterwegs/);
+    assert.equal(list.querySelector('details').open, true);
     assert.match(list.textContent, /Voraussichtliche Ankunft: 18:30 Uhr/);
     assert.equal(list.firstElementChild.querySelector('details ul li').textContent, '2 × Pizza');
     assert.equal(list.childElementCount, 1);
