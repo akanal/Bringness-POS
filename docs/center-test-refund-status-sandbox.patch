@@ -1,0 +1,36 @@
+--- a/server/center-mollie-payment.js
++++ b/server/center-mollie-payment.js
+@@ -46,6 +46,14 @@
+     payment.merchantReference!==binding.merchant_reference||payment.amountCents!==binding.amount_cents){
+   throw Error('PAYMENT_BINDING_MISMATCH');
+  }
++ let testRefundState;
++ if (env.BRINGNESS_DELIVERY_SANDBOX === 'true' && binding.request_payload.testmode) {
++  const {rows: [entry]} = await pool.query(
++   'SELECT provider_status FROM center_test_refund_requests WHERE payment_id=$1', [binding.payment_id]
++  );
++  if (entry) testRefundState = entry.provider_status ?? 'reconcile_required';
++ }
+  return {orderId,mode:binding.request_payload.testmode?'test':'live',
++  ...(testRefundState ? {testRefundState} : {}),
+   paidCents:payment.amountCents,refundedCents:payment.refundedCents,chargedBackCents:payment.chargedBackCents,currency:payment.currency};
+ }
+--- a/apps/web/public/pos/app.js
++++ b/apps/web/public/pos/app.js
+@@ -10,6 +10,16 @@
+     result.textContent=(overview.mode==='test'?'Mollie-Testzahlung · ':'Mollie · ')+
+      'Bezahlt: '+euro(overview.paidCents)+' · Erstattet: '+euro(overview.refundedCents)+
+      ' · Rückgebucht: '+euro(overview.chargedBackCents);
++    if (overview.testRefundState) {
++     const refundLabels = {
++      pending: 'in Bearbeitung', queued: 'in Warteschlange', processing: 'in Bearbeitung',
++      refunded: 'abgeschlossen', failed: 'fehlgeschlagen', canceled: 'abgebrochen',
++      reconcile_required: 'Abgleich erforderlich'
++     };
++     result.textContent += ' · Testerstattung (gespeichert): ' +
++      (refundLabels[overview.testRefundState] || 'Status prüfen');
++     return;
++    }
+     const amount = euro(overview.paidCents);
+     if (location.hostname !== 'sandbox-bestellen.bringness.de' || overview.mode !== 'test' ||
+         overview.paidCents <= 0 || overview.refundedCents || overview.chargedBackCents ||
