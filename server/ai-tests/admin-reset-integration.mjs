@@ -34,5 +34,25 @@ assert.equal((await login(' OWNER@example.org ','Ab1!xy')).status,200);for(let n
 await query("UPDATE password_reset_tokens SET delivered_at=now()-interval '3 minutes',created_at=now()-interval '3 minutes' WHERE user_id=$1",[owner]);await call('/api/v1/auth/forgot-password',{email:'OWNER@example.org'});const freshToken=messages.at(-1).text.match(/#token=([a-f0-9]{64})/)[1];assert.equal((await call('/api/v1/auth/reset-password',{token:freshToken,password:'Ab2!xy'})).status,200);assert.equal((await login('owner@example.org','Ab2!xy')).status,200);assert.equal((await login('owner@example.org','Ab1!xy')).status,401);
 const {JSDOM}=await import('jsdom');const browser=new JSDOM(fs.readFileSync(root+'/apps/web/public/pos/reset.html','utf8'),{url:'https://pos.example.org/pos/reset.html#token='+'a'.repeat(64),runScripts:'outside-only'}).window;let resetPost;browser.fetch=async(url,options)=>{resetPost={url,body:JSON.parse(options.body)};return {ok:true,json:async()=>({message:'Passwort geändert.'})}};browser.eval(browser.document.querySelector('script').textContent);assert.equal(browser.document.querySelector('a[href="/pos/"]').textContent,'Zur Kassen-Anmeldung');assert.equal(browser.location.hash,'');const eye=browser.document.querySelector('#newPassword + button');assert.equal(eye.textContent,'👁️');eye.click();assert.equal(browser.document.getElementById('newPassword').type,'text');assert.equal(eye.getAttribute('aria-pressed'),'true');eye.click();assert.equal(browser.document.getElementById('newPassword').type,'password');assert.equal(browser.document.querySelector('#repeatPassword + button').textContent,'👁️');browser.document.getElementById('newPassword').value='Ab1!xy';browser.document.getElementById('repeatPassword').value='Ab1!xy';browser.document.getElementById('resetForm').dispatchEvent(new browser.Event('submit',{bubbles:true,cancelable:true}));await new Promise(resolve=>setTimeout(resolve,0));assert.equal(resetPost.url,'/api/v1/auth/reset-password');assert.equal(resetPost.body.password,'Ab1!xy');browser.close();
 console.log('POS recovery passed: genuine SMTP delivery path, old placeholder bypass, legacy uppercase email login, correct login accepted after repeated errors, reset unlock, new password login and owner-facing reset UI.');
-await db.close();console.log('Admin reset passed: failed mail token cleanup, email normalization, button and AI return URL, cooldown, role isolation, password validation, single use, expiry and session revocation.');
+console.log('Admin reset passed: failed mail token cleanup, email normalization, button and AI return URL, cooldown, role isolation, password validation, single use, expiry and session revocation.');
 
+
+const sandboxOwner=crypto.randomUUID();
+await query("INSERT INTO users VALUES($1,$1,'sandbox@example.org','owner','active','old',false,'Sandbox Owner')",[sandboxOwner]);
+process.env.BRINGNESS_DELIVERY_SANDBOX='true';
+process.env.PUBLIC_BASE_URL='https://sandbox.example.org';
+const priorMailCount=messages.length;
+const requestSandboxReset=()=>call('/api/v1/auth/forgot-password',{email:'sandbox@example.org'});
+assert.equal((await requestSandboxReset()).status,503);
+assert.equal(messages.length,priorMailCount);
+Object.assign(process.env,{
+  DELIVERY_SANDBOX_SMTP_HOST:'sandbox-smtp.example.org',
+  DELIVERY_SANDBOX_SMTP_USER:'sandbox-mail',
+  DELIVERY_SANDBOX_SMTP_PASSWORD:'test-fixture',
+  DELIVERY_SANDBOX_SMTP_FROM:'sandbox-mail@example.org'
+});
+assert.equal((await requestSandboxReset()).status,200);
+assert.equal(messages.length,priorMailCount+1);
+assert.equal(messages.at(-1).from,'sandbox-mail@example.org');
+assert.match(messages.at(-1).text,/https:\/\/sandbox\.example\.org\/pos\/reset\.html#token=/);
+await db.close();

@@ -22,19 +22,24 @@ function send(res,status,value){
   res.end(JSON.stringify(value));
 }
 const body=req=>readJsonObject(req,{maxBytes:8192});
-function mailConfigured(){
-  return Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASSWORD&&process.env.SMTP_FROM);
+const smtpKeys=['SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_PASSWORD','SMTP_FROM'];
+function recoveryMailEnv(posRecovery){
+  if(!posRecovery||process.env.BRINGNESS_DELIVERY_SANDBOX!=='true')return process.env;
+  return Object.fromEntries(smtpKeys.map(key=>[key,process.env['DELIVERY_SANDBOX_'+key]]));
 }
-async function sendResetMail(email,token,returnTo){
+function mailConfigured(env){
+  return Boolean(env.SMTP_HOST&&env.SMTP_USER&&env.SMTP_PASSWORD&&env.SMTP_FROM);
+}
+async function sendResetMail(email,token,returnTo,env){
   const origin=(returnTo==='ai'?(process.env.AI_PUBLIC_BASE_URL||process.env.PUBLIC_BASE_URL):(process.env.PUBLIC_BASE_URL||'https://bringness.de')).replace(/\/$/,"");
   if(new URL(origin).protocol!=="https:")throw Error("Öffentliche Adresse muss HTTPS verwenden");
   const link=origin+(returnTo==='pos-login'?"/pos/reset.html":"/admin/reset.html")+(returnTo==='ai'?"?returnTo=ai":"")+"#token="+token;
   const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   await sendSmtpMail({
-    from:process.env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
+    from:env.SMTP_FROM,to:email,subject:returnTo==='pos-login'?"Bringness – Passwort zurücksetzen":"Bringness Admin – Passwort zurücksetzen",
     html:`<h1>Passwort zurücksetzen</h1><p><a href="${escape(link)}" style="display:inline-block;background:#183d35;color:#fff;padding:16px 24px;border-radius:24px;text-decoration:none">Neues Passwort festlegen</a></p><p>Der Button ist 30 Minuten gültig. Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie bitte diese E-Mail.</p>`,
     text:"Öffnen Sie diesen Link, um Ihr Passwort innerhalb von 30 Minuten neu zu setzen:\n\n"+link+"\n\nWenn Sie die Rücksetzung nicht angefordert haben, ignorieren Sie bitte diese Nachricht."
-  });
+  },{env});
 }
 
 export async function handleAdminPasswordReset(req,res){
@@ -79,7 +84,8 @@ export async function handleAdminPasswordReset(req,res){
   const eligibleRoles=posRecovery?"u.role<>'waiter'":"u.role IN ('owner','admin')";
   if((path==="/api/v1/admin/password/forgot"||path==="/api/v1/auth/forgot-password")&&req.method==="POST"){
     await ensureRecoverySchema();
-    if(!mailConfigured()){send(res,503,{error:"E-Mail-Versand ist noch nicht eingerichtet. Bitte SMTP im Bringness-Server konfigurieren."});return true}
+    const mailEnv=recoveryMailEnv(posRecovery);
+    if(!mailConfigured(mailEnv)){send(res,503,{error:"E-Mail-Versand ist noch nicht eingerichtet. Bitte SMTP im Bringness-Server konfigurieren."});return true}
     let input;try{input=await body(req)}catch{send(res,400,{error:"Ungültige Anfrage"});return true}
     const email=String(input.email||"").trim().toLowerCase();
     if(email.length>254||!emailPattern.test(email)){send(res,400,{error:"Gültige E-Mail-Adresse erforderlich"});return true}
@@ -91,7 +97,7 @@ export async function handleAdminPasswordReset(req,res){
     if(recent.rowCount){send(res,200,generic);return true}
     const token=crypto.randomBytes(32).toString("hex"),tokenHash=hash(token);
     await pool.query("INSERT INTO password_reset_tokens(token_hash,user_id,expires_at,purpose) VALUES($1,$2,now()+interval '30 minutes',$3)",[tokenHash,user.id,posRecovery?'pos':'admin']);
-    try{await sendResetMail(user.email,token,posRecovery?'pos-login':input.returnTo==='ai'?'ai':'pos');await pool.query('UPDATE password_reset_tokens SET delivered_at=now() WHERE token_hash=$1',[tokenHash])}
+    try{await sendResetMail(user.email,token,posRecovery?'pos-login':input.returnTo==='ai'?'ai':'pos',mailEnv);await pool.query('UPDATE password_reset_tokens SET delivered_at=now() WHERE token_hash=$1',[tokenHash])}
     catch(error){
       await pool.query("DELETE FROM password_reset_tokens WHERE token_hash=$1",[tokenHash]);
       console.error("Admin password reset mail delivery failed:",error.code||error.name);

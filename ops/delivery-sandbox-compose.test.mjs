@@ -12,7 +12,7 @@ async function renderSandboxCompose(overrides = {}) {
   };
   return JSON.parse(source
     .replace(/\$\{([A-Z_]+):\?required\}/g, (_match, key) => values[key] ?? 'test-placeholder')
-    .replace(/\$\{([A-Z_]+):-([^}]+)\}/g, (_match, key, fallback) => values[key] || fallback));
+    .replace(/\$\{([A-Z_]+):-([^}]*)\}/g, (_match, key, fallback) => values[key] || fallback));
 }
 
 test('sandbox compose renders separate staging settings accepted by runtime policy',async()=>{
@@ -53,4 +53,13 @@ test('Center checkout is explicit and uses the sandbox payment return origin', a
   assert.equal(env.CENTER_PAYMENT_ORIGIN, deliverySandboxConfig(env).origin);
   assert.equal(env.CENTER_MOLLIE_MODE, 'test');
   assert.equal(env.BRINGNESS_DELIVERY_LIVE_CHECKOUT, 'false');
+});
+
+test('sandbox password recovery has opt-in SMTP settings separate from other mail', async () => {
+  const disabled = await renderSandboxCompose();
+  assert.equal(disabled.services.app.environment.DELIVERY_SANDBOX_SMTP_HOST,'');
+  const enabled = await renderSandboxCompose({DELIVERY_SANDBOX_SMTP_HOST:'smtp.example.test'});
+  assert.equal(enabled.services.app.environment.DELIVERY_SANDBOX_SMTP_HOST,'smtp.example.test');
+  assert.equal(enabled.services.app.environment.SMTP_HOST,undefined);
+  assert.equal(enabled.services.database.environment.DELIVERY_SANDBOX_SMTP_HOST,undefined);
 });
