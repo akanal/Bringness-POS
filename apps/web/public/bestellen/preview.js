@@ -219,14 +219,23 @@ finish.addEventListener('click', async () => {
 function addDish(restaurant, delivery, dish, postcode = '', mollieTestCheckout = false, onlinePickup = false) {
   if (pendingOrder || sending) return;
   const sameRestaurant = demo ? selection?.restaurant === restaurant : selection?.restaurant.id === restaurant.id;
-  if (!sameRestaurant || selection.delivery !== delivery || selection.postcode !== postcode || selection.onlinePickup !== onlinePickup) {
+  if (!sameRestaurant || selection.delivery !== delivery || selection.postcode !== postcode || selection.onlinePickup !== onlinePickup ||
+      selection.mollieTestCheckout !== mollieTestCheckout) {
     if (quantities.size && !window.confirm('Den aktuellen Warenkorb ersetzen?')) return;
     quantities.clear();
     selection = {restaurant, delivery, postcode, mollieTestCheckout, onlinePickup};
   }
-  if (!demo) dish = [...quantities.keys()].find(entry=>entry.id===dish.id) ?? dish;
-  quantities.set(dish, (quantities.get(dish) ?? 0) + 1);
-  basketMessage.textContent = '';
+  const previousDish = demo ? dish : [...quantities.keys()].find(entry => entry.id === dish.id);
+  const previousQuantity = quantities.get(previousDish) ?? 0;
+  const changedPrice = previousQuantity > 0 && previousDish.cents !== dish.cents;
+  const changedDelivery = delivery && quantities.size > 0 &&
+    (selection.restaurant.feeCents !== restaurant.feeCents || selection.restaurant.minimumCents !== restaurant.minimumCents);
+  if (previousDish && previousDish !== dish) quantities.delete(previousDish);
+  selection.restaurant = restaurant;
+  quantities.set(dish, previousQuantity + 1);
+  basketMessage.textContent = changedPrice || changedDelivery
+    ? 'Preis oder Lieferkonditionen wurden aktualisiert. Bitte prüfe den neuen Gesamtbetrag.'
+    : '';
   renderBasket();
   basket.scrollIntoView?.({block:'nearest'});
 }
