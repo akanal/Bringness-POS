@@ -34,3 +34,7 @@ Am 25.11.2026 wurde für Testbestellung C-955B1299 in Mollie ausdrücklich „Fa
 ## Sandbox-Test: Ablauf eines Kartenzahlungsversuchs
 
 Bei C-D4DA4B27 wurde im Mollie-Testmodus „Expired“ gewählt. Mollie kehrte zur Zahlungsartenauswahl zurück. Nach manueller Rückkehr zur Gastseite wartete Bringness weiter auf die Zahlung, ohne Beleg. Der Versuch bestätigte keinen endgültigen Ablauf des gesamten Mollie-Checkouts. Lokal bestanden 34 Center-, Mollie- und Datenbanktests, einschließlich final gemeldeter Providerstatus failed/canceled/expired ohne Belegerzeugung. Der Test des endgültigen Status mit dem echten Sandbox-Provider bleibt offen.
+
+## Offenen Checkout fortsetzen
+
+Die Gaststatusseite bietet für eine noch offene, gebundene Mollie-Zahlung „Zahlung fortsetzen“ an. Sie verwendet die gespeicherte Checkout-Adresse und erzeugt keine neue Bestellung oder Zahlung. Bei deaktiviertem Checkout, inaktivem Tisch/Center sowie nach Zahlung oder endgültigem Anbieterfehler wird der Link nicht freigegeben. 40 lokale Center-, Datenbank- und Checkout-Tests bestanden. Commit 5d7e179cc256a097e48b7074db2f528c007d2bb6 wurde für die beiden Laufzeitdateien auf Netcup abgeglichen und in der Sandbox installiert. Der Sandbox-Container wurde anschließend als healthy bestätigt. Der Cloud-Browser blockierte den anschließenden Prüfschritt wegen des URL-Protokolls. Der manuelle End-to-End-Klick steht aus.
