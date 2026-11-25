@@ -612,14 +612,17 @@ if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
   const orderHistoryList = document.getElementById('customerOrderHistoryList');
   const orderHistoryMessage = document.getElementById('customerOrderHistoryMessage');
 
-  orderHistory.addEventListener('toggle', async () => {
+  const refreshOrders = document.getElementById('refreshCustomerOrders');
+
+  async function loadOrderHistory() {
     const activeAccount = accountFavorites;
-    if (!orderHistory.open || !activeAccount) return;
+    if (!orderHistory.open || !activeAccount || refreshOrders.disabled) return;
+    refreshOrders.disabled = true;
     orderHistoryMessage.textContent = 'Bestellungen werden geladen …';
-    orderHistoryList.replaceChildren();
     try {
       const {orders} = await account('orders');
       if (activeAccount !== accountFavorites || !orderHistory.open) return;
+      orderHistoryList.replaceChildren();
       for (const order of orders) {
         const row = document.createElement('li');
         const date = new Date(order.date).toLocaleDateString('de-DE',{timeZone:'Europe/Berlin'});
@@ -631,9 +634,12 @@ if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
       orderHistoryMessage.textContent = orders.length ? '' : 'Noch keine bestätigten Testbestellungen.';
     } catch (error) {
       if (activeAccount === accountFavorites && orderHistory.open) orderHistoryMessage.textContent = error.message;
+    } finally {
+      if (activeAccount === accountFavorites) refreshOrders.disabled = false;
     }
-  });
-
+  }
+  orderHistory.addEventListener('toggle', loadOrderHistory);
+  refreshOrders.addEventListener('click', loadOrderHistory);
 
   async function account(action,body) {
     const options = body === undefined ? {} : {
@@ -647,6 +653,7 @@ if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
   async function showAccount(customer) {
     const update = customer ? body=>account('favorites',body) : null;
     accountFavorites = update;
+    refreshOrders.disabled = false;
     orderHistory.open = false;
     orderHistory.hidden = !customer;
     orderHistoryList.replaceChildren();

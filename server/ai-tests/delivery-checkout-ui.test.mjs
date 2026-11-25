@@ -204,6 +204,12 @@ test('customer order history displays confirmed orders and clears them on logout
     history.dispatchEvent(new dom.window.Event('toggle'));
     await wait();
     assert.match(list.textContent, /25\.11\.2026 · Testbistro · Lieferung · 7,99\s€ · Fertig zur Übergabe/);
+    responses.orders.orders[0].status = 'dispatched';
+    doc.getElementById('refreshCustomerOrders').click();
+    await wait();
+    assert.match(list.textContent, /Unterwegs/);
+    assert.equal(list.childElementCount, 1);
+
     doc.getElementById('customerLogout').click();
     await wait();
     assert.equal(history.hidden, true);
