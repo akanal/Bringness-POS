@@ -26,3 +26,17 @@ test('Mollie sandbox requires its own HTTPS host, database and restaurant',()=>{
     {DATABASE_URL:'postgres://example.invalid/bringness'}
   ]) assert.throws(()=>deliverySandboxConfig({...env,...invalid}),/INVALID_DELIVERY_SANDBOX_CONFIGURATION/);
 });
+
+test('active Center sandbox checkout must return to the isolated sandbox', () => {
+  const checkout = {...env, CENTER_CHECKOUT_ENABLED: 'true', CENTER_MOLLIE_MODE: 'test'};
+  assert.throws(() => deliverySandboxConfig(checkout), /INVALID_DELIVERY_SANDBOX_CONFIGURATION/);
+  for (const wrongOrigin of ['https://bringness.de', origin + '/bestellen', origin + '?test=1']) {
+    assert.throws(
+      () => deliverySandboxConfig({...checkout, CENTER_PAYMENT_ORIGIN: wrongOrigin}),
+      /INVALID_DELIVERY_SANDBOX_CONFIGURATION/
+    );
+  }
+  for (const validOrigin of [origin, origin + '/']) {
+    assert.deepEqual(deliverySandboxConfig({...checkout, CENTER_PAYMENT_ORIGIN: validOrigin}), {origin, restaurantId});
+  }
+});
