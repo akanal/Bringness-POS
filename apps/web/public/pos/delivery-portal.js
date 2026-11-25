@@ -23,6 +23,25 @@
     return data;
   }
 
+  const searchLinks = document.createElement('p');
+  status.after(searchLinks);
+
+  function showSavedSearches(settings) {
+    searchLinks.replaceChildren();
+    const searches = [
+      ...(settings.pickup ? [['pickup', settings.postcode, 'Abholung']] : []),
+      ...(settings.delivery ? settings.zones.map(zone => ['delivery', zone, 'Lieferung']) : [])
+    ];
+    for (const [mode, postcode, label] of searches) {
+      if (!/^\d{5}$/.test(postcode)) continue;
+      const link = document.createElement('a');
+      link.href = '/bestellen/?' + new URLSearchParams({mode, postcode});
+      link.textContent = label + ' für ' + postcode + ' ansehen';
+      searchLinks.append(link, document.createElement('br'));
+    }
+    if (!searchLinks.childElementCount) searchLinks.textContent = 'Für diesen Standort ist keine Abhol- oder Liefersuche aktiviert.';
+  }
+
   request().then(({settings,products}) => {
     const list = document.getElementById('deliveryPortalProducts');
     const selected = new Set(settings.productIds);
@@ -46,6 +65,7 @@
     fields.minimum.value = settings.minimumCents / 100;
     inputs.disabled = false;
     form.hidden = false;
+    showSavedSearches(settings);
   }).catch(error => {
     if (!current() || [401,403].includes(error.status)) return;
     status.textContent = error.message;
@@ -105,7 +125,8 @@
     };
     inputs.disabled = true;
     try {
-      await request(settings);
+      const saved = await request(settings);
+      showSavedSearches(saved.settings);
       status.textContent = 'Standorteinstellungen gespeichert.';
     } catch (error) { status.textContent = error.message; }
     finally { inputs.disabled = !current(); }
