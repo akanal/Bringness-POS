@@ -171,6 +171,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>verifiedGuestPayment)).released,true);
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>{throw Error('no duplicate release')})).alreadyReleased,true);
  const posActor={id:owner,company_id:company,role:'owner'};
+ await assert.rejects(requestPosStockAction(pool,posActor,guestResult.orderId,{status:'cancelled',reason:'Test'}),/Center-Bestellungen/);
  const started=await requestPosStockAction(pool,posActor,guestResult.orderId,{status:'preparing'});
  assert.equal(started.status,'preparing');
  const prepTime=async()=>(await db.query('SELECT preparation_started_at FROM center_order_payments WHERE order_id=$1',[guestResult.orderId])).rows[0].preparation_started_at;
