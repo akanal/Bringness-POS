@@ -1,3 +1,4 @@
+import {requestPosStockAction} from './pos-stock-bridge-core.js';
 import {tseTriggerSql} from './tse-trigger-sql.js';
 import {createPaymentReceiptHandler} from './payment-receipt-core.js';
 import {createPublicReceiptHandler} from './public-receipt-core.js';
@@ -153,7 +154,13 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal((await readGuestStatus(pendingToken)).next_order_url,null);
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>verifiedGuestPayment)).released,true);
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>{throw Error('no duplicate release')})).alreadyReleased,true);
- assert.equal((await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'preparing')).ok,true);
+ const posActor={id:owner,company_id:company,role:'owner'};
+ const started=await requestPosStockAction(pool,posActor,guestResult.orderId,{status:'preparing'});
+ assert.equal(started.status,'preparing');
+ const prepTime=async()=>(await db.query('SELECT preparation_started_at FROM center_order_payments WHERE order_id=$1',[guestResult.orderId])).rows[0].preparation_started_at;
+ const firstStart=await prepTime();assert.ok(firstStart);
+ await requestPosStockAction(pool,posActor,guestResult.orderId,{status:'preparing'});
+ assert.deepEqual(await prepTime(),firstStart);
  assert.equal((await advanceCenterKitchen(pool,restaurant,guestResult.orderId,'ready')).ok,true);
  const paidRetry=await guestCenterCheckout(pool,guestRequest,guestEnv,()=>{throw Error('paid retry must not call provider');});
  assert.match(paidRetry.statusUrl,/^\/center\/status.html#token=[a-f0-9]{64}$/);
