@@ -24,7 +24,9 @@
   }
 
   const searchLinks = document.createElement('p');
-  status.after(searchLinks);
+  const menuNotice = document.createElement('p');
+  status.after(searchLinks, menuNotice);
+  let productsById = new Map();
 
   function showSavedSearches(settings) {
     searchLinks.replaceChildren();
@@ -40,9 +42,13 @@
       searchLinks.append(link, document.createElement('br'));
     }
     if (!searchLinks.childElementCount) searchLinks.textContent = 'Für diesen Standort ist keine Abhol- oder Liefersuche aktiviert.';
+    menuNotice.textContent = searches.length && !settings.productIds.some(id => productsById.get(id)?.active)
+      ? 'Für die Speisekarte ist kein aktiver Artikel ausgewählt.'
+      : '';
   }
 
   request().then(({settings,products}) => {
+    productsById = new Map(products.map(product => [product.id, product]));
     const list = document.getElementById('deliveryPortalProducts');
     const selected = new Set(settings.productIds);
     for (const product of products) {
