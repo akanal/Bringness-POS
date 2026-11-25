@@ -38,3 +38,7 @@ Bei C-D4DA4B27 wurde im Mollie-Testmodus „Expired“ gewählt. Mollie kehrte z
 ## Offenen Checkout fortsetzen
 
 Die Gaststatusseite bietet für eine noch offene, gebundene Mollie-Zahlung „Zahlung fortsetzen“ an. Sie verwendet die gespeicherte Checkout-Adresse und erzeugt keine neue Bestellung oder Zahlung. Bei deaktiviertem Checkout, inaktivem Tisch/Center sowie nach Zahlung oder endgültigem Anbieterfehler wird der Link nicht freigegeben. 40 lokale Center-, Datenbank- und Checkout-Tests bestanden. Commit 5d7e179cc256a097e48b7074db2f528c007d2bb6 wurde für die beiden Laufzeitdateien auf Netcup abgeglichen und in der Sandbox installiert. Der Sandbox-Container wurde anschließend als healthy bestätigt. Der Cloud-Browser blockierte den anschließenden Prüfschritt wegen des URL-Protokolls. Der manuelle End-to-End-Klick steht aus.
+
+## Kennzeichnung in der POS-Bestellliste
+
+Center-Bestellungen werden im Quellcode als „Center-Abholung“ und „Center-QR-Bestellung“ bezeichnet. Syntaxprüfung und lokaler POS-/Display-Integrationstest einschließlich der Center-Karte bestanden. Commit ce38505a8c25180ad1cfe8327031348146f6c289 enthält die gezielte Änderung für den Übergabebranch. Der Sandbox-Quellstand enthält weitere Delivery-Änderungen und hat die entsprechende lokale Änderung separat. Noch nicht auf Netcup installiert.
