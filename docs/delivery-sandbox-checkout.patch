@@ -1,0 +1,56 @@
+From 763473afb251c1bbac1871164d1e2d0c08c5dfbe Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Wed, 25 Nov 2026 10:41:00 +0100
+Subject: [PATCH] Document and preserve Mollie sandbox checkout setup
+
+---
+ ops/delivery-sandbox.compose.json |  2 ++
+ server/center-mollie-merchant.js  | 15 +++++++++++++--
+ 2 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/ops/delivery-sandbox.compose.json b/ops/delivery-sandbox.compose.json
+index 12123f4b..46585486 100644
+--- a/ops/delivery-sandbox.compose.json
++++ b/ops/delivery-sandbox.compose.json
+@@ -33,6 +33,8 @@
+         "BRINGNESS_DELIVERY_SANDBOX_RESTAURANT_ID": "${DELIVERY_SANDBOX_RESTAURANT_ID:?required}",
+         "BRINGNESS_DELIVERY_LIVE_CHECKOUT": "false",
+         "CENTER_MOLLIE_MODE": "test",
++        "CENTER_CHECKOUT_ENABLED": "true",
++        "CENTER_PAYMENT_ORIGIN": "${DELIVERY_SANDBOX_ORIGIN:?required}",
+         "CENTER_MOLLIE_CLIENT_ID": "${DELIVERY_SANDBOX_MOLLIE_CLIENT_ID:?required}",
+         "CENTER_MOLLIE_CLIENT_SECRET": "${DELIVERY_SANDBOX_MOLLIE_CLIENT_SECRET:?required}",
+         "CENTER_MOLLIE_TOKEN_KEY": "${DELIVERY_SANDBOX_MOLLIE_TOKEN_KEY:?required}",
+diff --git a/server/center-mollie-merchant.js b/server/center-mollie-merchant.js
+index d8c0243f..119e442a 100644
+--- a/server/center-mollie-merchant.js
++++ b/server/center-mollie-merchant.js
+@@ -1,3 +1,4 @@
++import {deliverySandboxConfig} from './delivery-sandbox.js';
+ import {decryptMerchantTokens,encryptMerchantTokens,mollieConnectConfiguration} from './center-mollie-connect.js';
+ export async function withMerchantToken(pool,restaurantId,operation,env=process.env,fetcher=fetch){
+  const client=await pool.connect();let inTransaction=false;
+@@ -24,8 +25,18 @@ export async function verifyMerchantProfile(pool,restaurantId,profileId,env=proc
+  if(!/^pfl_[a-zA-Z0-9]+$/.test(profileId||''))throw Error('INVALID_PROFILE');
+  return withMerchantToken(pool,restaurantId,async (accessToken,envelope)=>{
+  async function get(path){const r=await fetcher('https://api.mollie.com/v2'+path,{headers:{authorization:'Bearer '+accessToken,accept:'application/json'},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('MERCHANT_CHECK_FAILED');return r.json();}
+- const [organization,onboarding,profile]=await Promise.all([get('/organizations/me'),get('/onboarding/me'),get('/profiles/'+profileId)]);
+- const ready=onboarding.canReceivePayments===true&&onboarding.canReceiveSettlements===true&&profile.status==='verified'&&profile.id===profileId&&/^org_[a-zA-Z0-9]+$/.test(organization.id||'');
++ const sandbox=deliverySandboxConfig(env);
++ const sandboxMerchant=sandbox?.restaurantId===restaurantId;
++ const readinessPath=sandboxMerchant
++   ? '/methods?'+new URLSearchParams({profileId,testmode:'true'})
++   : '/onboarding/me';
++ const [organization,readiness,profile]=await Promise.all([
++   get('/organizations/me'),get(readinessPath),get('/profiles/'+profileId)
++ ]);
++ const validIdentity=profile.id===profileId&&/^org_[a-zA-Z0-9]+$/.test(organization.id||'');
++ const ready=validIdentity&&(sandboxMerchant
++   ? Array.isArray(readiness._embedded?.methods)&&readiness._embedded.methods.some(method=>typeof method?.id==='string'&&method.id.length>0)
++   : readiness.canReceivePayments===true&&readiness.canReceiveSettlements===true&&profile.status==='verified');
+  const q=await pool.query(`WITH checked AS (UPDATE center_mollie_credentials SET profile_id=$2,organization_id=$3,
+  verified_at=CASE WHEN $4 THEN now() ELSE NULL END WHERE restaurant_id=$1 AND token_envelope=$5 RETURNING restaurant_id)
+  UPDATE center_restaurants cr SET merchant_reference=CASE WHEN $4 THEN $3 ELSE NULL END,
+-- 
+2.56.1
+
