@@ -152,6 +152,22 @@ test('database migration and delegated setup lifecycle',async()=>{
  const pendingToken=(await db.query('SELECT guest_status_token FROM center_order_payments WHERE order_id=$1',[guestResult.orderId])).rows[0].guest_status_token;
  async function readGuestStatus(token){const req=Readable.from([]);Object.assign(req,{url:'/api/v1/guest/center/status?token='+token,method:'GET',headers:{}});const res={writeHead(status){this.status=status;},end(raw){this.data=JSON.parse(raw);}};await handler(req,res);return res.data.order;}
  assert.equal((await readGuestStatus(pendingToken)).next_order_url,null);
+ const previousCheckoutFlag=process.env.CENTER_CHECKOUT_ENABLED;
+ try{
+  await db.query('UPDATE center_order_payments SET guest_checked_at=now() WHERE order_id=$1',[guestResult.orderId]);
+  process.env.CENTER_CHECKOUT_ENABLED='true';
+  assert.equal((await readGuestStatus(pendingToken)).resume_checkout_url,guestResult.checkoutUrl);
+  await db.query("UPDATE center_order_payments SET provider_status='expired' WHERE order_id=$1",[guestResult.orderId]);
+  const expired=await readGuestStatus(pendingToken);
+  assert.equal(expired.status,'payment_expired');assert.equal(expired.resume_checkout_url,null);
+  await db.query('UPDATE center_order_payments SET provider_status=NULL WHERE order_id=$1',[guestResult.orderId]);
+  process.env.CENTER_CHECKOUT_ENABLED='false';
+  assert.equal((await readGuestStatus(pendingToken)).resume_checkout_url,null);
+ }finally{
+  if(previousCheckoutFlag===undefined)delete process.env.CENTER_CHECKOUT_ENABLED;
+  else process.env.CENTER_CHECKOUT_ENABLED=previousCheckoutFlag;
+ }
+
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>verifiedGuestPayment)).released,true);
  assert.equal((await releaseCenterPayment(pool,'tr_guest',async()=>{throw Error('no duplicate release')})).alreadyReleased,true);
  const posActor={id:owner,company_id:company,role:'owner'};
@@ -172,6 +188,7 @@ test('database migration and delegated setup lifecycle',async()=>{
  assert.equal(statusRes.status,200);assert.equal(statusRes.data.order.status,'ready');assert.equal(statusRes.data.order.restaurant_name,'Restaurant');
  const guestReceipt=(await db.query('SELECT * FROM receipts WHERE order_id=$1',[guestResult.orderId])).rows[0];
  assert.equal(statusRes.data.order.receipt_url,'/beleg/'+guestReceipt.public_token);
+ assert.equal(statusRes.data.order.resume_checkout_url,null);
  assert.equal(statusRes.data.order.next_order_url,'/center/index.html?code='+table.qr_token);
  assert.equal(statusRes.data.order.checkout_request_id,guestRequest.requestId);
  await db.query('UPDATE center_tables SET active=false WHERE qr_token=$1',[table.qr_token]);
