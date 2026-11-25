@@ -64,7 +64,7 @@ export function createCenterHandler(pool) {
         LEFT JOIN center_checkout_attempts a ON a.order_id=o.id
         LEFT JOIN center_order_payments cp ON cp.order_id=o.id
         WHERE (a.guest_status_token=$1 OR cp.guest_status_token=$1)
-        AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
+        AND o.created_at>now()-interval '24 hours'`,[statusToken,process.env.CENTER_CHECKOUT_ENABLED==='true'])).rows[0];
        if(!order)return send(res,404,{error:'Bestellung nicht gefunden'});
        res.writeHead(200,{'content-type':'application/manifest+json','cache-control':'no-store','referrer-policy':'no-referrer'});
        res.end(JSON.stringify({id:'/center/status.html',name:'Bringness Abholung',short_name:'Abholung',
@@ -77,12 +77,16 @@ export function createCenterHandler(pool) {
         const statusToken=url.searchParams.get('token')||'';
         if(!/^[a-f0-9]{64}$/.test(statusToken))return send(res,404,{error:'Bestellung nicht gefunden'});
         await recoverGuestPayment(pool,statusToken,paymentId=>verifyAndReleaseMolliePayment(pool,paymentId));
-        const order=(await pool.query(`SELECT CASE WHEN o.status='payment_pending' AND cp.provider_status IN ('failed','canceled','expired') THEN 'payment_'||cp.provider_status ELSE o.status END status,r.name restaurant_name,coalesce((SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id),'C-'||upper(left(replace(o.id::text,'-',''),8))) collection_number,CASE WHEN cp.released_at IS NOT NULL THEN (SELECT '/beleg/'||rc.public_token::text FROM receipts rc WHERE rc.order_id=o.id ORDER BY rc.receipt_number LIMIT 1) END receipt_url,CASE WHEN a.request_id IS NOT NULL AND t.active=true AND c.active=true AND (o.status='ready' OR (cp.released_at IS NULL AND cp.provider_status IN ('failed','canceled','expired'))) THEN '/center/index.html?code='||t.qr_token END next_order_url,a.request_id checkout_request_id,cp.paid_at,cp.payment_method,CASE WHEN cp.payment_method='onsite' THEN EXISTS(SELECT 1 FROM payments pay WHERE pay.order_id=o.id GROUP BY pay.order_id HAVING sum(pay.amount_cents)>=o.total_cents) ELSE cp.paid_at IS NOT NULL END payment_confirmed,cp.released_at,cp.preparation_started_at,cp.ready_at
+        const order=(await pool.query(`SELECT CASE WHEN o.status='payment_pending' AND cp.provider_status IN ('failed','canceled','expired') THEN 'payment_'||cp.provider_status ELSE o.status END status,r.name restaurant_name,coalesce((SELECT min(rc.receipt_number) FROM receipts rc WHERE rc.order_id=o.id),'C-'||upper(left(replace(o.id::text,'-',''),8))) collection_number,CASE WHEN cp.released_at IS NOT NULL THEN (SELECT '/beleg/'||rc.public_token::text FROM receipts rc WHERE rc.order_id=o.id ORDER BY rc.receipt_number LIMIT 1) END receipt_url,CASE WHEN a.request_id IS NOT NULL AND t.active=true AND c.active=true AND (o.status='ready' OR (cp.released_at IS NULL AND cp.provider_status IN ('failed','canceled','expired'))) THEN '/center/index.html?code='||t.qr_token END next_order_url,a.request_id checkout_request_id,
+          CASE WHEN $2::boolean AND o.status='payment_pending' AND cp.released_at IS NULL
+            AND coalesce(cp.provider_status,'') NOT IN ('failed','canceled','expired')
+            AND cp.payment_id=a.payment_id AND t.active=true AND c.active=true
+            THEN a.checkout_url END resume_checkout_url,cp.paid_at,cp.payment_method,CASE WHEN cp.payment_method='onsite' THEN EXISTS(SELECT 1 FROM payments pay WHERE pay.order_id=o.id GROUP BY pay.order_id HAVING sum(pay.amount_cents)>=o.total_cents) ELSE cp.paid_at IS NOT NULL END payment_confirmed,cp.released_at,cp.preparation_started_at,cp.ready_at
           FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
           LEFT JOIN center_order_payments cp ON cp.order_id=o.id AND cp.restaurant_id=o.restaurant_id
           LEFT JOIN center_checkout_attempts a ON a.order_id=o.id AND a.restaurant_id=o.restaurant_id
           LEFT JOIN center_tables t ON t.id=a.table_id LEFT JOIN centers c ON c.id=t.center_id
-          WHERE (cp.guest_status_token=$1 OR a.guest_status_token=$1) AND o.created_at>now()-interval '24 hours'`,[statusToken])).rows[0];
+          WHERE (cp.guest_status_token=$1 OR a.guest_status_token=$1) AND o.created_at>now()-interval '24 hours'`,[statusToken,process.env.CENTER_CHECKOUT_ENABLED==='true'])).rows[0];
         return order?send(res,200,{order}):send(res,404,{error:'Bestellung nicht gefunden'});
       }
       if (p === '/api/v1/guest/center/order') {
