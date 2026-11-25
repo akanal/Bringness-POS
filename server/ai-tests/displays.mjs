@@ -165,11 +165,31 @@ w=await browser();const panel=[...w.document.querySelectorAll('section')].find(e
 assert(![...panel.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));assert.match(panel.textContent,/30 Minuten/);w.close();
 assert.deepEqual((await query('SELECT * FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[expired,recent,pending,legacyReady]])).rows,beforeExpiry,'display expiry never marks collected, paid or deletes orders');
 // Real POS order-board rendering offers one readiness action, without a collected command.
-w=new JSDOM('<div id="moduleBody"></div>',{runScripts:'outside-only'}).window;
-const board=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8').split('async function renderOrderBoard(')[1].split('function updateHeaderClock')[0];
-w.eval("const $=id=>document.getElementById(id),esc=s=>String(s??''),euro=n=>String(n);let kitchenBoardSignature='';async function renderOrderBoard("+board);
+w=new JSDOM('<body data-pos-view="bestellungen"><input id="restaurant"><div id="moduleBody"></div></body>',{runScripts:'outside-only'}).window;
+w.document.getElementById('restaurant').value=rid;
+const boardSource=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8');
+const board=boardSource.slice(boardSource.indexOf('function isCurrentOrderBoard('),boardSource.indexOf('function updateHeaderClock'));
+w.eval("const $=id=>document.getElementById(id),esc=s=>String(s??''),euro=n=>String(n);let kitchenBoardSignature='';const kitchenActionsInFlight=new Set();"+board);
 await w.renderOrderBoard('bestellungen',rid,{orders:[{id:recent,source:'qr',qr_service_mode:'pickup',status:'paid',qr_ready_at:new Date().toISOString(),created_at:new Date().toISOString(),items:[]},{id:pending,source:'qr',qr_service_mode:'pickup',status:'preparing',qr_ready_at:null,created_at:new Date().toISOString(),items:[]}]});
-assert.equal(w.document.querySelectorAll('[data-collection-ready]').length,1);assert.equal(w.document.querySelector('[data-collection-ready]').dataset.collectionReady,pending);assert(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));w.close();
+assert.equal(w.document.querySelectorAll('[data-collection-ready]').length,1);
+const readyButton=w.document.querySelector('[data-collection-ready]');
+assert.equal(readyButton.dataset.collectionReady,pending);
+assert(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));
+let finishReadiness;
+const readiness=new Promise(resolve=>{finishReadiness=resolve;});
+const readinessRequests=[];
+w.api=(path)=>{readinessRequests.push(path);return readiness;};
+const markingReady=readyButton.onclick();
+await readyButton.onclick();
+assert.equal(readyButton.disabled,true);
+assert.deepEqual(readinessRequests,['/orders/'+pending+'/collection-ready']);
+w.document.body.dataset.posView='kasse';
+w.document.getElementById('moduleBody').textContent='Kasse';
+finishReadiness();
+await markingReady;
+assert.equal(w.document.getElementById('moduleBody').textContent,'Kasse');
+assert.equal(readinessRequests.length,1);
+w.close();
 console.log('Pickup display expiry passed: 30-minute boundary, pending retained, shared screens, queue, no order mutations and no collected buttons.');
 
 const cleanupRid=id(),cleanupOther=id(),stale='e2569e58-0000-4000-8000-000000000001',foreign='e2569e58-0000-4000-8000-000000000002',readyCleanup='1132b4a1-0000-4000-8000-000000000001';
