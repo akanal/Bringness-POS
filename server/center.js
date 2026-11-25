@@ -1,3 +1,4 @@
+import {migrateCenterTestRefundJournal} from './center-test-refund-journal.js';
 import {isolatedPreview} from './preview-policy.js';
 import {centerPushConfiguration,dispatchCenterGuestPush} from './center-guest-push.js';
 import pg from 'pg';
@@ -104,6 +105,7 @@ export async function migrateCenter() {
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS ready_at timestamptz;
     ALTER TABLE center_order_payments ADD COLUMN IF NOT EXISTS guest_status_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');
   `);
+  await migrateCenterTestRefundJournal(pool);
 }
 
 let pushBusy=false;
