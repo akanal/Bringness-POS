@@ -84,6 +84,8 @@ import { handleStaffInvitations, migrateStaffInvitations } from "./staff-invitat
 import { handleAdminAuditExport } from "./admin-audit-export.js";
 import { handleBillingTerms, migrateBillingTerms } from "./billing-terms.js";
 
+const deliverySandbox=deliverySandboxConfig(process.env);
+
 // Protect the current 399 EUR download-license decision from obsolete legacy SQL.
 const originalPoolQuery = pg.Pool.prototype.query;
 pg.Pool.prototype.query = function patchedPoolQuery(text, ...args) {
@@ -121,7 +123,6 @@ const handleProductPhotos=createProductPhotos(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
 const handleOnlineRegisters=createOnlineRegisters(platformGatewayPool);
 const handlePosDiagnosticReports=createPosDiagnosticReports(platformGatewayPool,{publicOrigin:process.env.PUBLIC_BASE_URL||'https://bringness.de'});
-const deliverySandbox=deliverySandboxConfig(process.env);
 const deliveryTestOrders=Boolean(deliverySandbox) || (isolatedPreview() && process.env.BRINGNESS_DELIVERY_TEST_ORDERS==="true");
 const deliveryLiveOrigin=!isolatedPreview() && process.env.BRINGNESS_DELIVERY_LIVE_CHECKOUT==="true"
   ? process.env.BRINGNESS_DELIVERY_LIVE_CHECKOUT_ORIGIN : null;
