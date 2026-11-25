@@ -1,0 +1,51 @@
+--- a/server/center-mollie-payment.js
++++ b/server/center-mollie-payment.js
+@@ -49,11 +49,46 @@
+  let testRefundState;
+  if (env.BRINGNESS_DELIVERY_SANDBOX === 'true' && binding.request_payload.testmode) {
+   const {rows: [entry]} = await pool.query(
+-   'SELECT provider_status FROM center_test_refund_requests WHERE payment_id=$1', [binding.payment_id]
++   'SELECT provider_status, refund_id, request_id, amount_cents FROM center_test_refund_requests WHERE payment_id=$1', [binding.payment_id]
+   );
+-  if (entry) testRefundState = entry.provider_status ?? 'reconcile_required';
++  if (entry) {
++   testRefundState = entry.provider_status ?? 'reconcile_required';
++   if (/^re_[a-zA-Z0-9]+$/.test(entry.refund_id) && ['queued', 'pending', 'processing'].includes(testRefundState)) {
++    try {
++     const latest = await readSandboxRefund(pool, binding, entry, env, fetcher);
++     if (['refunded', 'failed', 'canceled'].includes(latest)) {
++      await pool.query(`UPDATE center_test_refund_requests SET provider_status=$3
++       WHERE payment_id=$1 AND refund_id=$2 AND provider_status IN ('queued','pending','processing')`,
++      [binding.payment_id, entry.refund_id, latest]);
++      testRefundState = latest;
++     }
++    } catch {
++     // Keep the journal state visible when Mollie cannot confirm a newer state.
++    }
++   }
++  }
+  }
+  return {orderId,mode:binding.request_payload.testmode?'test':'live',
+   ...(testRefundState ? {testRefundState} : {}),
+   paidCents:payment.amountCents,refundedCents:payment.refundedCents,chargedBackCents:payment.chargedBackCents,currency:payment.currency};
+ }
++
++async function readSandboxRefund(pool, binding, entry, env, fetcher) {
++ return withMerchantToken(pool, binding.restaurant_id, async (token, envelope) => {
++  const {rows: [credential]} = await pool.query(`SELECT organization_id, verified_at
++   FROM center_mollie_credentials WHERE restaurant_id=$1 AND token_envelope=$2`,
++  [binding.restaurant_id, envelope]);
++  if (!credential?.verified_at || credential.organization_id !== binding.merchant_reference) return null;
++  const url = 'https://api.mollie.com/v2/payments/' + binding.payment_id + '/refunds/' + entry.refund_id + '?testmode=true';
++  const response = await fetcher(url, {
++   headers: {authorization: 'Bearer ' + token, accept: 'application/json'},
++   redirect: 'error', signal: AbortSignal.timeout(15000)
++  });
++  if (!response.ok) return null;
++  const refund = await response.json();
++  if (refund.id !== entry.refund_id || refund.paymentId !== binding.payment_id ||
++      refund.mode !== 'test' || eurCents(refund.amount) !== entry.amount_cents ||
++      refund.metadata?.bringnessRefundRequestId !== entry.request_id) return null;
++  return refund.status;
++ }, env, fetcher);
++}
