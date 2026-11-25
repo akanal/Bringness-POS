@@ -1,0 +1,33 @@
+--- a/server/center-core.js
++++ b/server/center-core.js
+@@ -1,3 +1,4 @@
++import {refundCenterTestOrder} from './center-test-refund-service.js';
+ import {orderingModuleAccess} from './module-catalog.js';
+ import {readJsonObject,readRequestBytes} from './http-body.js';
+ import {inviteCenterRestaurant,acceptCenterInvitation} from './center-invitations.js';
+@@ -154,6 +155,25 @@
+         return overview?send(res,200,{overview}):send(res,404,{error:'Center-Zahlung nicht gefunden'});
+       }catch{return send(res,502,{error:'Mollie-Zahlungsdaten konnten nicht bestätigt werden'});}
+     }
++    const testRefund = p.match(/^\/api\/v1\/centers\/orders\/([^/]+)\/test-refund$/);
++    if (testRefund) {
++      if (req.method !== 'POST') return send(res,405,{error:'Methode nicht erlaubt'});
++      if (!['owner','admin'].includes(user.role)) return send(res,403,{error:'Nur Betreiber können Testerstattungen auslösen'});
++      if (!uuid.test(testRefund[1])) return send(res,400,{error:'Bestellung erforderlich'});
++      const input = await body(req);
++      if (!uuid.test(input.restaurantId || '')) return send(res,400,{error:'Betrieb erforderlich'});
++      try {
++        const result = await refundCenterTestOrder(pool, {
++          user, orderId: testRefund[1], restaurantId: input.restaurantId,
++          requestId: input.requestId, confirmed: input.confirmed
++        });
++        const status = {disabled:404,unavailable:422,forbidden:403,invalid_request:400,
++          already_claimed:409,reconcile_required:202,confirmed:201}[result.state];
++        return send(res,status,result);
++      } catch {
++        return send(res,502,{error:'Mollie-Testerstattung konnte nicht geprüft werden'});
++      }
++    }
+     if (p === '/api/v1/centers/kitchen') {
+       if (!['GET','PUT'].includes(req.method)) return send(res,405,{error:'Methode nicht erlaubt'});
+       const restaurantId=url.searchParams.get('restaurantId');
