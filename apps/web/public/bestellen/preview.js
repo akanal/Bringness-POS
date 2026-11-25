@@ -8,6 +8,70 @@ const results = document.getElementById('restaurants');
 const status = document.getElementById('status');
 
 const demo = new URLSearchParams(location.search).get('demo') === '1';
+const customerMenu = document.getElementById('customerMenu');
+const favoritesList = document.getElementById('customerFavorites');
+const favoritesMessage = document.getElementById('customerFavoritesMessage');
+const favoritesKey = 'bringness.ordering.favorites';
+let favorites = [];
+let accountFavorites = null;
+if (!demo) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(favoritesKey));
+    if (Array.isArray(saved)) favorites = saved.filter(item =>
+      item && typeof item.id === 'string' && typeof item.name === 'string');
+  } catch {}
+}
+
+function renderFavorites() {
+  favoritesList.replaceChildren();
+  favoritesMessage.textContent = favorites.length ? '' : 'Noch keine Restaurants gespeichert.';
+  for (const restaurant of favorites) {
+    const item = document.createElement('li');
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'Entfernen';
+    remove.setAttribute('aria-label',restaurant.name+' aus Favoriten entfernen');
+    remove.onclick = () => toggleFavorite(restaurant);
+    item.append(restaurant.name, remove);
+    favoritesList.append(item);
+  }
+  for (const button of document.querySelectorAll('[data-favorite-id]')) {
+    const saved = favorites.some(item => item.id === button.dataset.favoriteId);
+    button.setAttribute('aria-pressed',String(saved));
+    button.textContent = saved ? 'Gespeichert' : 'Als Favorit merken';
+  }
+}
+
+async function toggleFavorite({id,name}) {
+  const update = accountFavorites;
+  if (update) {
+    try {
+      const {favorites:stored} = await update({restaurantId:id,saved:!favorites.some(item=>item.id===id)});
+      if (accountFavorites === update) {
+        favorites = stored;
+        renderFavorites();
+      }
+    } catch (error) { if (accountFavorites === update) favoritesMessage.textContent = error.message; }
+    return;
+  }
+  const next = favorites.some(item => item.id === id)
+    ? favorites.filter(item => item.id !== id)
+    : [...favorites,{id,name}];
+  try {
+    localStorage.setItem(favoritesKey,JSON.stringify(next));
+  } catch {
+    favoritesMessage.textContent = 'Favoriten konnten auf diesem Gerät nicht gespeichert werden.';
+    customerMenu.open = true;
+    return;
+  }
+  favorites = next;
+  renderFavorites();
+}
+if (!demo) {
+  customerMenu.hidden = false;
+  renderFavorites();
+}
+
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
 let searchVersion = 0;
 const basket = document.getElementById('demoBasket');
@@ -26,11 +90,18 @@ let pendingOrder = null;
 let sending = false;
 const tracking = document.getElementById('testTracking');
 const trackingText = document.getElementById('testTrackingStatus');
+const arrival = document.getElementById('estimatedArrival');
+const arrivalFormat = new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',hour:'2-digit',minute:'2-digit'});
 const trackingKey = 'bringness.portal.testTracking';
 const statusLabels = {
   open:'Eingegangen',kitchen:'Angenommen',preparing:'In Zubereitung',ready:'Abholbereit',
   dispatched:'Unterwegs',collected:'Abgeholt',delivered:'Zugestellt',cancelled:'Storniert'
 };
+function fulfillmentLabel(status, mode) {
+  if (status === 'ready' && mode === 'delivery') return 'Fertig zur Übergabe';
+  return Object.hasOwn(statusLabels, status) ? statusLabels[status] : undefined;
+}
+
 let tracked;
 let trackingTimer;
 if (!demo) {
@@ -40,7 +111,9 @@ if (!demo) {
 function followTestOrder(order) {
   clearTimeout(trackingTimer);
   tracked = order;
+  arrival.textContent = '';
   tracking.hidden = false;
+  document.getElementById('customerCurrentOrder').hidden = false;
   trackingText.textContent = '#' + order.orderId.slice(0,8) + ' · Eingegangen';
   try { sessionStorage.setItem(trackingKey,JSON.stringify(order)); } catch {}
 
@@ -54,22 +127,29 @@ function followTestOrder(order) {
         terminal = response.status === 404;
         throw Error();
       }
-      const {status,mode} = await response.json();
+      const {status,mode,estimatedArrival} = await response.json();
       if (tracked !== order) return;
-      const label = status === 'ready' && mode === 'delivery' ? 'Fertig zur Übergabe' : statusLabels[status];
+      const label = fulfillmentLabel(status, mode);
       if (!label) throw Error();
       trackingText.textContent = '#' + order.orderId.slice(0,8) + ' · ' + label;
       terminal = ['collected','delivered','cancelled'].includes(status);
+      const estimate = Date.parse(estimatedArrival);
+      arrival.textContent = mode === 'delivery' && !terminal && Number.isFinite(estimate)
+        ? estimate > Date.now()
+          ? 'Voraussichtliche Ankunft gegen ' + arrivalFormat.format(estimate) + ' Uhr'
+          : 'Die geschätzte Lieferzeit ist verstrichen.'
+        : '';
     } catch {
       if (tracked !== order) return;
+      arrival.textContent = '';
       trackingText.textContent = terminal ? 'Testbestellung nicht mehr verfügbar.' : 'Status wird erneut abgefragt …';
     }
     if (!terminal && tracked === order) trackingTimer = setTimeout(refresh,4000);
   }
   void refresh();
 }
-if (tracked?.orderId && tracked.requestId) followTestOrder(tracked);
 const paymentReturn = !demo && /^#(onlinezahlung|zahlung)=([a-f0-9-]{36})$/i.exec(location.hash);
+if (!paymentReturn && tracked?.orderId && tracked.requestId) followTestOrder(tracked);
 if (paymentReturn) {
   const [,kind,paymentRequest] = paymentReturn;
   const live = kind==='onlinezahlung';
@@ -78,6 +158,7 @@ if (paymentReturn) {
   clearTimeout(trackingTimer);
   tracked = null;
   tracking.hidden = false;
+  document.getElementById('customerCurrentOrder').hidden = false;
   trackingText.textContent = paymentLabel+' wird geprüft …';
   const refreshPayment = async () => {
     try {
@@ -93,11 +174,10 @@ if (paymentReturn) {
       const payment = await response.json();
       if (payment.status==='paid') {
         if (!live) {
-          history.replaceState(null,'',location.pathname+location.search);
           followTestOrder({orderId:payment.orderId,requestId:paymentRequest});
           return;
         }
-        const status = statusLabels[payment.fulfillmentStatus] ?? 'Online bezahlt';
+        const status = fulfillmentLabel(payment.fulfillmentStatus, 'pickup') ?? 'Online bezahlt';
         trackingText.textContent = '#'+payment.orderId.slice(0,8)+' · '+status;
         if (['collected','cancelled'].includes(payment.fulfillmentStatus)) return;
         setTimeout(refreshPayment,5000);
@@ -273,6 +353,13 @@ async function search(showResults = false) {
         ' Lieferung · Mindestbestellwert ' + (demo ? restaurant.minimum : money.format(restaurant.minimumCents / 100))
       : 'Abholung in ' + restaurant.minutes + ' Min.';
     card.append(title, terms);
+    if (!demo && restaurant.id) {
+      const favorite = document.createElement('button');
+      favorite.type = 'button';
+      favorite.dataset.favoriteId = restaurant.id;
+      favorite.onclick = () => toggleFavorite(restaurant);
+      card.append(favorite);
+    }
     if (restaurant.menu) {
       const menu = document.createElement('details');
       const summary = document.createElement('summary');
@@ -335,15 +422,35 @@ async function search(showResults = false) {
     }
     results.append(card);
   }
+  if (!demo) renderFavorites();
   if (showResults) document.getElementById('results-heading').scrollIntoView?.({block:'start'});
+}
+
+const postcodeCookie = 'bringness_order_postcode';
+const postcodeInput = form.elements.postcode;
+const rememberPostcode = form.elements.rememberPostcode;
+if (!demo) {
+  const stored = document.cookie.match(/(?:^|;\s*)bringness_order_postcode=(\d{5})(?:;|$)/)?.[1];
+  if (stored) {
+    postcodeInput.value = stored;
+    rememberPostcode.checked = true;
+  }
+}
+function savePostcode(value, maxAge) {
+  document.cookie = postcodeCookie + '=' + value + '; Max-Age=' + maxAge +
+    '; Path=/bestellen; SameSite=Lax; Secure';
 }
 
 form.addEventListener('submit', event => {
   event.preventDefault();
+  if (!demo && rememberPostcode.checked && /^\d{5}$/.test(postcodeInput.value)) {
+    savePostcode(postcodeInput.value, 30 * 24 * 60 * 60);
+  }
   void search(true);
 });
 
 form.addEventListener('change', event => {
+  if (!demo && event.target === rememberPostcode && !rememberPostcode.checked) savePostcode('',0);
   if (event.target.name === 'mode' && form.reportValidity()) void search();
 });
 
@@ -355,6 +462,237 @@ form.addEventListener('input', event => {
 });
 
 if (demo) { form.elements.postcode.value = "10551"; void search(); }
+let connectAddressBook;
+const addressBook = document.getElementById('testAddressBook');
+if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
+  addressBook.hidden = false;
+  const addressForm = document.getElementById('saveTestAddress');
+  const addressSelect = document.getElementById('savedDeliveryAddress');
+  const removeAddress = document.getElementById('removeTestAddress');
+  const addressKey = 'bringness.ordering.testAddresses';
+  let entries = [];
+  let addressAccount = null;
+  let addressRequestPending = false;
+  const saveAddress = addressForm.querySelector('button');
+  let appliedAddressId = '';
+  const addressFeedback = document.getElementById('testAddressFeedback');
+  function testAddresses() {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(addressKey));
+      return Array.isArray(stored) ? stored : [];
+    } catch { return []; }
+  }
+  entries = testAddresses();
+  connectAddressBook = async update => {
+    addressAccount = update;
+    entries = update ? [] : testAddresses();
+    addressForm.reset();
+    addressFeedback.textContent = '';
+    if (appliedAddressId) {
+      for (const field of Object.values(addressInputs)) field.value = '';
+    }
+    appliedAddressId = '';
+    renderAddresses();
+    document.getElementById('testAddressStorage').textContent = update
+      ? 'Bitte nur Beispieldaten eingeben. Adressen werden im Testkonto gespeichert.'
+      : 'Bitte nur Beispieldaten eingeben. Adressen bleiben in diesem Tab.';
+    setAddressRequestPending(Boolean(update));
+    if (update) {
+      try {
+        const {addresses} = await update();
+        if (addressAccount === update) { entries = addresses; renderAddresses(); }
+      } finally {
+        if (addressAccount === update) setAddressRequestPending(false);
+      }
+    }
+  };
+
+  function setAddressRequestPending(pending) {
+    addressRequestPending = pending;
+    saveAddress.disabled = pending;
+    removeAddress.disabled = pending;
+    addressSelect.disabled = pending;
+  }
+  function renderAddresses(value = '') {
+    addressSelect.replaceChildren(new Option('Adresse auswählen',''));
+    for (const address of entries) {
+      addressSelect.add(new Option(address.label+' · '+address.postcode,address.id));
+    }
+    addressSelect.value = value;
+    removeAddress.hidden = !addressSelect.value;
+  }
+  function storeAddresses() {
+    try { sessionStorage.setItem(addressKey,JSON.stringify(entries)); } catch {}
+  }
+  function applyAddress() {
+    const address = entries.find(entry => entry.id === addressSelect.value);
+    removeAddress.hidden = !address;
+    if (!address) return;
+    if (pendingOrder || sending) {
+      addressSelect.value = appliedAddressId;
+      removeAddress.hidden = !addressSelect.value;
+      addressFeedback.textContent = 'Bitte zuerst die laufende Bestellung abschließen.';
+      return;
+    }
+    addressFeedback.textContent = '';
+    appliedAddressId = address.id;
+    for (const [key,field] of Object.entries(addressInputs)) field.value = address[key];
+    const changed = selection && (!selection.delivery || selection.postcode !== address.postcode);
+    postcodeInput.value = address.postcode;
+    form.querySelector('[name=mode][value=delivery]').checked = true;
+    if (changed && selection) {
+      selection = null;
+      renderBasket();
+      document.getElementById('basketMessage').textContent = '';
+    }
+    void search();
+  }
+  addressForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const address = Object.fromEntries([...new FormData(addressForm)].map(([key,value])=>[key,value.trim()]));
+    if (Object.values(address).some(value=>!value) || !/^\d{5}$/.test(address.postcode)) return;
+    const update = addressAccount;
+    if (update) {
+      if (addressRequestPending) return;
+      setAddressRequestPending(true);
+      try {
+        const {addresses} = await update(address);
+        if (addressAccount !== update) return;
+        entries = addresses;
+        renderAddresses(appliedAddressId);
+        addressForm.reset();
+        addressFeedback.textContent = 'Adresse im Konto gespeichert.';
+      } catch (error) {
+        if (addressAccount === update) addressFeedback.textContent = error.message;
+      } finally {
+        if (addressAccount === update) setAddressRequestPending(false);
+      }
+      return;
+    }
+    address.id = crypto.randomUUID();
+    entries.push(address);
+    storeAddresses();
+    renderAddresses(address.id);
+    applyAddress();
+    addressForm.reset();
+  });
+  addressSelect.addEventListener('change',applyAddress);
+  removeAddress.addEventListener('click',async () => {
+    const update = addressAccount;
+    if (update) {
+      if (addressRequestPending || !addressSelect.value) return;
+      setAddressRequestPending(true);
+      try {
+        const {addresses} = await update({id:addressSelect.value,remove:true});
+        if (addressAccount !== update) return;
+        entries = addresses;
+        renderAddresses();
+        addressFeedback.textContent = 'Adresse aus dem Konto entfernt.';
+      } catch (error) {
+        if (addressAccount === update) addressFeedback.textContent = error.message;
+      } finally {
+        if (addressAccount === update) setAddressRequestPending(false);
+      }
+      return;
+    }
+    entries = entries.filter(address=>address.id!==addressSelect.value);
+    storeAddresses();
+    renderAddresses();
+  });
+  renderAddresses();
+}
+if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
+  const login = document.getElementById('customerLogin');
+  const loginForm = document.getElementById('customerLoginForm');
+  const email = document.getElementById('customerEmail');
+  const logout = document.getElementById('customerLogout');
+  const feedback = document.getElementById('customerLoginMessage');
+  login.hidden = false;
+  const orderHistory = document.getElementById('customerOrderHistory');
+  const orderHistoryList = document.getElementById('customerOrderHistoryList');
+  const orderHistoryMessage = document.getElementById('customerOrderHistoryMessage');
+
+  orderHistory.addEventListener('toggle', async () => {
+    const activeAccount = accountFavorites;
+    if (!orderHistory.open || !activeAccount) return;
+    orderHistoryMessage.textContent = 'Bestellungen werden geladen …';
+    orderHistoryList.replaceChildren();
+    try {
+      const {orders} = await account('orders');
+      if (activeAccount !== accountFavorites || !orderHistory.open) return;
+      for (const order of orders) {
+        const row = document.createElement('li');
+        const date = new Date(order.date).toLocaleDateString('de-DE',{timeZone:'Europe/Berlin'});
+        const mode = order.mode === 'delivery' ? 'Lieferung' : 'Abholung';
+        const label = fulfillmentLabel(order.status, order.mode) ?? 'Status nicht verfügbar';
+        row.textContent = [date, order.restaurant, mode, money.format(order.totalCents / 100), label].join(' · ');
+        orderHistoryList.append(row);
+      }
+      orderHistoryMessage.textContent = orders.length ? '' : 'Noch keine bestätigten Testbestellungen.';
+    } catch (error) {
+      if (activeAccount === accountFavorites && orderHistory.open) orderHistoryMessage.textContent = error.message;
+    }
+  });
+
+
+  async function account(action,body) {
+    const options = body === undefined ? {} : {
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)
+    };
+    const response = await fetch('/api/v1/delivery-portal/customer/'+action,options);
+    const result = await response.json();
+    if (!response.ok) throw Error(result.error || 'Kundenkonto gerade nicht erreichbar.');
+    return result;
+  }
+  async function showAccount(customer) {
+    const update = customer ? body=>account('favorites',body) : null;
+    accountFavorites = update;
+    orderHistory.open = false;
+    orderHistory.hidden = !customer;
+    orderHistoryList.replaceChildren();
+    orderHistoryMessage.textContent = '';
+    if (update) favorites = [];
+    else {
+      try { favorites = JSON.parse(localStorage.getItem(favoritesKey)) ?? []; }
+      catch { favorites = []; }
+    }
+    document.getElementById('customerFavoritesHeading').textContent = customer ? 'Meine Favoriten' : 'Favoriten auf diesem Gerät';
+    renderFavorites();
+    loginForm.hidden = Boolean(customer);
+    email.hidden = logout.hidden = !customer;
+    email.textContent = customer?.email ?? '';
+    await connectAddressBook?.(customer ? body=>account('addresses',body) : null);
+    if (update) {
+      const {favorites:stored} = await update();
+      if (accountFavorites === update) {
+        favorites = stored;
+        renderFavorites();
+      }
+    }
+  }
+  loginForm.addEventListener('submit',async event => {
+    event.preventDefault();
+    try {
+      await account('request',{email:loginForm.elements.email.value});
+      feedback.textContent = 'Wenn der Link versendet werden konnte, findest du ihn in deinem Postfach.';
+    } catch (error) { feedback.textContent = error.message; }
+  });
+  logout.addEventListener('click',async () => {
+    try {
+      const {customer} = await account('logout',{});
+      await showAccount(customer);
+      feedback.textContent = 'Abgemeldet.';
+    } catch (error) { feedback.textContent = error.message; }
+  });
+  const token = /^#kundenlogin=([a-f0-9]{64})$/.exec(location.hash)?.[1];
+  if (token) {
+    customerMenu.open = true;
+    history.replaceState(null,'',location.pathname+location.search);
+  }
+  (token ? account('confirm',{token}) : account('session')).then(({customer}) => showAccount(customer))
+    .catch(error => { feedback.textContent = error.message; });
+}
+
 const scenes = [...document.querySelectorAll('.scene')];
 const selectors = [...document.querySelectorAll('[data-slide]')];
 const campaign = document.getElementById('campaign');

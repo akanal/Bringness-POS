@@ -239,10 +239,12 @@ async function renderOrderBoard(view,restaurantId,prefetched){
  };
  const buttons=o=>{
   if(isDeliveryTestOrder(o)||o.source==="web_pickup"){
-   if(["open","kitchen"].includes(o.status))return acceptButton(o);
    const delivery=o.source==="web_test_delivery";
+   const estimate=delivery&&["open","kitchen","preparing","ready","dispatched"].includes(o.status)
+    ? '<button type="button" data-web-test-order="'+esc(o.id)+'" data-web-test-status="estimate">Lieferzeit angeben</button>' : "";
+   if(["open","kitchen"].includes(o.status))return acceptButton(o)+estimate;
    const step={preparing:["ready",delivery?"Fertig zur Übergabe":"Abholbereit"],ready:delivery?["dispatched","An Fahrer übergeben"]:["collected","Abholung bestätigt"],dispatched:["delivered","Zugestellt"]}[o.status];
-   return step?'<button type="button" data-web-test-order="'+esc(o.id)+'" data-web-test-status="'+step[0]+'" data-online-pickup="'+(o.source==='web_pickup')+'">'+step[1]+'</button>':"";
+   return estimate+(step?'<button type="button" data-web-test-order="'+esc(o.id)+'" data-web-test-status="'+step[0]+'" data-online-pickup="'+(o.source==='web_pickup')+'">'+step[1]+'</button>':"");
   }
   if(isKitchen){
    if(o.status==="open"||o.status==="kitchen"&&!isPickup(o))return acceptButton(o);
@@ -271,12 +273,26 @@ async function renderOrderBoard(view,restaurantId,prefetched){
  });
  body.querySelectorAll("[data-web-test-order]").forEach(btn=>btn.onclick=async()=>{
   const orderId=btn.dataset.webTestOrder;
+  const status=btn.dataset.webTestStatus;
+  let minutes;
+  if(status==="estimate"){
+   const value=prompt("In wie vielen Minuten kommt die Lieferung voraussichtlich an?");
+   if(value===null)return;
+   minutes=Number(value);
+   if(!Number.isInteger(minutes)||minutes<1||minutes>240){
+    $("kitchenMessage").textContent="Bitte 1 bis 240 Minuten eingeben.";
+    return;
+   }
+  }
   if(kitchenActionsInFlight.has(orderId))return;
   kitchenActionsInFlight.add(orderId);
   btn.disabled=true;
   try{
-   await api("/pos/delivery-portal/"+(btn.dataset.onlinePickup==="true"?"pickup-status":"test-status"),{method:"POST",body:JSON.stringify({orderId,status:btn.dataset.webTestStatus})});
-   if(document.querySelector('#mainnav button[data-view].active')?.dataset.view===view&&$("restaurant").value===restaurantId)await renderOrderBoard(view,restaurantId);
+   await api("/pos/delivery-portal/"+(btn.dataset.onlinePickup==="true"?"pickup-status":"test-status"),{method:"POST",body:JSON.stringify({orderId,status,minutes})});
+   if(status==="estimate"){
+    if($("restaurant").value===restaurantId&&$("kitchenMessage"))$("kitchenMessage").textContent="Lieferzeit aktualisiert.";
+    btn.disabled=false;
+   }else if(document.querySelector('#mainnav button[data-view].active')?.dataset.view===view&&$("restaurant").value===restaurantId)await renderOrderBoard(view,restaurantId);
   }catch(e){const message=$("kitchenMessage");if(message)message.textContent=e.message;btn.disabled=false}
   finally{kitchenActionsInFlight.delete(orderId)}
  });

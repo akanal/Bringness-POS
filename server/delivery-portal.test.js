@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {Readable} from 'node:stream';
 import {test} from 'node:test';
 import {createDeliveryPortal} from './delivery-portal.js';
 
@@ -54,4 +55,34 @@ test('sandbox exposes only Mollie test ordering at its own host and assigned res
   assert.equal((await request('test-checkout','bringness.de')).code,404);
   assert.equal((await request('checkout',new URL(sandbox.origin).host)).code,404);
   assert.equal((await request('test-order',new URL(sandbox.origin).host)).code,404);
+});
+
+test('driver installation mail queues only for the sandbox account owner',async()=>{
+  const restaurantId = '00000000-0000-0000-0000-000000000001';
+  const host = 'sandbox-bestellen.example.test';
+  const recipient = 'owner@example.test';
+  const queued = [];
+  const db = {async query(sql,params) {
+    if (sql.includes('INSERT INTO transactional_mail')) {
+      queued.push(params);
+      return {rows:[]};
+    }
+    assert.match(sql,/a.role='owner'/);
+    return {rows:params[2]===recipient ? [{user_id:restaurantId}] : []};
+  }};
+  const handler = createDeliveryPortal(db,{testOrders:true,sandbox:{origin:'https://'+host,restaurantId}});
+  async function request(email,requestHost=host) {
+    const req = Readable.from([Buffer.from(JSON.stringify({email}))]);
+    Object.assign(req,{method:'POST',url:'/api/v1/pos/delivery-portal/driver-install?restaurantId='+restaurantId,
+      headers:{host:requestHost,authorization:'Bearer session'}});
+    let code;
+    await handler(req,{writeHead(status){code=status;},end(){}});
+    return code;
+  }
+  assert.equal(await request(recipient,'bringness.de'),404);
+  assert.equal(await request('invalid'),400);
+  assert.equal(await request('outsider@example.test'),403);
+  assert.equal(await request(recipient),202);
+  assert.equal(queued.length,1);
+  assert.equal(queued[0][1],recipient);
 });

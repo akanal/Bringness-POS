@@ -2,12 +2,13 @@ import {parseDeliveryCart,priceDeliveryCart} from './delivery-cart.js';
 import {createHash} from 'node:crypto';
 import {readJsonObject} from './http-body.js';
 
-export function migrateDeliveryTestOrders(db) {
-  return db.query(`CREATE TABLE IF NOT EXISTS pos_delivery_test_requests (
+export async function migrateDeliveryTestOrders(db) {
+  await db.query(`CREATE TABLE IF NOT EXISTS pos_delivery_test_requests (
     request_id uuid PRIMARY KEY,
     fingerprint text NOT NULL,
     order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE
   )`);
+  await db.query('ALTER TABLE pos_delivery_test_requests ADD COLUMN IF NOT EXISTS estimated_arrival timestamptz');
 }
 
 export async function submitDeliveryTestOrder(db,req,send,idPattern,postcodePattern) {
@@ -54,7 +55,7 @@ export async function submitDeliveryTestOrder(db,req,send,idPattern,postcodePatt
     if (fee) await client.query(`INSERT INTO order_items
       (order_id,product_name_snapshot,unit_price_cents,tax_rate_snapshot,quantity)
       VALUES ($1,'Liefergebühr (Test)',$2,0,1)`,[orderId,fee]);
-    await client.query('INSERT INTO pos_delivery_test_requests VALUES ($1,$2,$3)',[requestId,fingerprint,orderId]);
+    await client.query('INSERT INTO pos_delivery_test_requests (request_id,fingerprint,order_id) VALUES ($1,$2,$3)',[requestId,fingerprint,orderId]);
     await client.query('COMMIT');
     return send(201,{orderId,totalCents});
   } catch (error) {
@@ -69,10 +70,10 @@ export async function deliveryTestStatus(db,req,send,idPattern) {
   if (req.method !== 'GET') return send(405,{error:'Methode nicht erlaubt.'});
   const requestId = /^Bearer (\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
   if (!idPattern.test(requestId ?? '')) return send(404,{error:'Testbestellung nicht gefunden.'});
-  const {rows} = await db.query(`SELECT o.status,o.source FROM pos_delivery_test_requests t
+  const {rows} = await db.query(`SELECT o.status,o.source,t.estimated_arrival FROM pos_delivery_test_requests t
     JOIN orders o ON o.id=t.order_id WHERE t.request_id=$1`,[requestId]);
   if (!rows.length) return send(404,{error:'Testbestellung nicht gefunden.'});
-  return send(200,{status:rows[0].status,mode:rows[0].source==='web_test_delivery'?'delivery':'pickup'});
+  return send(200,{status:rows[0].status,mode:rows[0].source==='web_test_delivery'?'delivery':'pickup',estimatedArrival:rows[0].estimated_arrival});
 }
 
 const fulfillment = {
@@ -92,7 +93,30 @@ export async function advanceDeliveryOrder(db,req,send,idPattern,{live=false}={}
     if (!error.status) throw error;
     return send(error.status,{error:error.message});
   }
-  const {orderId,status} = input;
+  const {orderId,status,minutes} = input;
+  if (!live && status === 'estimate') {
+    if (typeof orderId !== 'string' || !idPattern.test(orderId) || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
+      return send(400,{error:'Bitte eine Lieferzeit von 1 bis 240 Minuten eingeben.'});
+    }
+    const hash = createHash('sha256').update(token).digest('hex');
+    const {rows} = await db.query(`WITH eligible AS (
+      SELECT o.id FROM orders o JOIN restaurants r ON r.id=o.restaurant_id
+      WHERE o.id=$1 AND o.source='web_test_delivery'
+        AND o.status IN ('open','kitchen','preparing','ready','dispatched')
+        AND EXISTS (
+          SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id
+          WHERE s.token_hash=$3 AND s.expires_at>clock_timestamp() AND u.company_id=r.company_id
+            AND u.status='active' AND u.role IN ('owner','admin','manager','kitchen')
+            AND NOT coalesce(u.must_change_password,false)
+        )
+      FOR UPDATE OF o
+    )
+    UPDATE pos_delivery_test_requests t
+    SET estimated_arrival=clock_timestamp()+make_interval(mins=>$2::int)
+    FROM eligible WHERE t.order_id=eligible.id
+    RETURNING t.estimated_arrival AS "estimatedArrival"`,[orderId,minutes,hash]);
+    return rows.length ? send(200,rows[0]) : send(409,{error:'Lieferzeit für diese Bestellung nicht verfügbar.'});
+  }
   if (typeof orderId !== 'string' || !idPattern.test(orderId) || !Object.hasOwn(fulfillment,status) || (live && !['ready','collected'].includes(status))) {
     return send(400,{error:'Ungültiger Bestellstatus.'});
   }

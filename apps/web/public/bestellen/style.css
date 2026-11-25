@@ -79,3 +79,20 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   width: 100%;
   box-sizing: border-box;
 }
+
+#customerMenu { position: relative; z-index: 3; }
+#customerMenu > summary { cursor: pointer; padding: 10px 0; }
+.customer-panel {
+  position: absolute; right: 0; width: min(20rem, calc(100vw - 32px));
+  box-sizing: border-box; padding: 16px; border-radius: 14px;
+  background: white; color: #13283e; box-shadow: 0 8px 26px #0004;
+}
+.customer-panel h2 { font-size: 1rem; margin: 8px 0; }
+.customer-panel li + li { margin-top: 8px; }
+.customer-panel button { margin-left: 8px; padding: 5px 8px; }
+
+.portal-footer { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 20px clamp(16px, 5vw, 72px); }
+.portal-footer a { color: inherit; }
+.portal-legal { max-width: 48rem; margin: auto; padding: 24px 16px 48px; }
+.portal-legal h1 { max-width: none; font-size: clamp(1.75rem, 5vw, 2.5rem); }
+.portal-legal a { color: inherit; }

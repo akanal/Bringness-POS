@@ -1,0 +1,14 @@
+{
+  "id": "/fahrer/",
+  "name": "Bringness Fahrer",
+  "short_name": "Fahrer",
+  "start_url": "/fahrer/",
+  "scope": "/fahrer/",
+  "display": "standalone",
+  "theme_color": "#142537",
+  "background_color": "#f7f5f2",
+  "icons": [
+    {"src": "../service/bringness-icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "../service/bringness-icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}

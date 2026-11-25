@@ -11,10 +11,44 @@
 <body>
   <header>
     <a class="brand" href="./">Bringness</a>
-    <nav aria-label="Kasse">
-      <a href="https://bringness-pos.de/">Kassenfunktionen</a>
-      <a href="https://bringness.de/pos/">Zur Kasse</a>
-    </nav>
+    <details id="customerMenu" hidden>
+      <summary>Mein Bereich</summary>
+      <div class="customer-panel">
+        <section id="customerLogin" hidden aria-label="Kundenkonto">
+          <form id="customerLoginForm">
+            <label>E-Mail <input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+            <button>Anmeldelink anfordern</button>
+          </form>
+          <p id="customerEmail" hidden></p>
+          <button id="customerLogout" type="button" hidden>Abmelden</button>
+          <p id="customerLoginMessage" role="status"></p>
+        </section>
+        <a id="customerCurrentOrder" href="#testTracking" hidden>Aktuelle Bestellung</a>
+        <details id="customerOrderHistory" hidden>
+          <summary>Meine Testbestellungen</summary>
+          <p id="customerOrderHistoryMessage" role="status"></p>
+          <ul id="customerOrderHistoryList"></ul>
+        </details>
+        <h2 id="customerFavoritesHeading">Favoriten auf diesem Gerät</h2>
+        <ul id="customerFavorites"></ul>
+        <p id="customerFavoritesMessage" role="status"></p>
+        <details id="testAddressBook" hidden>
+          <summary>Lieferadressen testen</summary>
+          <p id="testAddressStorage">Bitte nur Beispieldaten eingeben. Adressen bleiben in diesem Tab.</p>
+          <label>Lieferort <select id="savedDeliveryAddress"><option value="">Adresse auswählen</option></select></label>
+          <form id="saveTestAddress">
+            <label>Bezeichnung <input name="label" placeholder="Zuhause oder Arbeit" maxlength="40" required></label>
+            <label>Name <input name="recipient" maxlength="100" required></label>
+            <label>Straße und Hausnummer <input name="street" maxlength="140" required></label>
+            <label>PLZ <input name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" required></label>
+            <label>Ort <input name="city" maxlength="100" required></label>
+            <button>Adresse speichern</button>
+          </form>
+          <p id="testAddressFeedback" role="status"></p>
+          <button id="removeTestAddress" type="button" hidden>Ausgewählte Adresse löschen</button>
+        </details>
+      </div>
+    </details>
   </header>
   <main>
     <section class="intro" aria-label="Essen bestellen">
@@ -36,7 +70,8 @@
           <label>Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="z. B. 10551" required></label>
           <button>Restaurants finden</button>
         </div>
-      </form></div>
+      <label class="remember-postcode"><input type="checkbox" name="rememberPostcode"> Postleitzahl auf diesem Gerät merken</label>
+        </form></div>
 <aside class="campaign" id="campaign" hidden>
   <span>Anzeige · Beispiel</span><strong>Smashburger &amp; knusprige Pommes</strong>
 </aside>
@@ -53,6 +88,7 @@
       <section id="testTracking" hidden>
         <h2 id="orderTrackingHeading">Status der letzten Testbestellung</h2>
         <p id="testTrackingStatus" role="status"></p>
+        <p id="estimatedArrival" aria-live="polite"></p>
       </section>
       <aside id="demoBasket" hidden aria-labelledby="basketHeading">
         <h2 id="basketHeading">Testwarenkorb</h2>
@@ -72,5 +108,9 @@
       </aside>
     </section>
   </main>
-<script src="./preview.js?v=online-pickup" defer></script></body>
+  <footer class="portal-footer" aria-label="Rechtliche Informationen">
+    <a href="./datenschutz.html">Datenschutz im Bestellportal</a>
+    <a href="./impressum.html">Impressum</a>
+  </footer>
+<script src="./preview.js?v=account-addresses" defer></script></body>
 </html>

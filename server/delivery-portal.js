@@ -1,3 +1,5 @@
+import {migrateDeliveryCustomerAccounts,handleDeliveryCustomerAccount} from './delivery-customer-account.js';
+import {cleanMailAddress,enqueueMail} from './transactional-mail.js';
 import {createDeliveryCheckout,migrateDeliveryCheckout} from './delivery-checkout.js';
 import {createDeliveryQuote} from './delivery-quote.js';
 import {createDeliveryMerchant,migrateDeliveryMerchant} from './delivery-merchant.js';
@@ -18,12 +20,13 @@ export async function migrateDeliveryPortal(db,{testOrders=false,liveCheckout=fa
   await migrateDeliveryMerchant(db);
   if (testOrders) {
     await migrateDeliveryTestOrders(db);
+    await migrateDeliveryCustomerAccounts(db);
   }
   if (testOrders || liveCheckout) await migrateDeliveryCheckout(db);
 }
 
 export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOrigin,liveRestaurantId}={}) {
-  const access = `SELECT r.id FROM restaurants r JOIN users u ON u.company_id=r.company_id
+  const access = `SELECT r.id,u.id AS user_id,u.role,u.email FROM restaurants r JOIN users u ON u.company_id=r.company_id
       JOIN sessions s ON s.user_id=u.id WHERE r.id=$1 AND s.token_hash=$2
       AND s.expires_at>clock_timestamp() AND u.status='active' AND u.role IN ('owner','admin')
       AND NOT coalesce(u.must_change_password,false)`;
@@ -43,6 +46,7 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
   });
   return async (req,res) => {
     const url = new URL(req.url,'http://localhost');
+    const customerAction = /^\/api\/v1\/delivery-portal\/customer\/(request|confirm|session|logout|favorites|addresses|orders)$/.exec(url.pathname)?.[1];
     const owner = url.pathname === '/api/v1/pos/delivery-portal';
     const onlineAction = {
       '/api/v1/delivery-portal/checkout':'start',
@@ -58,14 +62,17 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
     const status = url.pathname === '/api/v1/delivery-portal/test-status';
     const advancePickup = url.pathname === '/api/v1/pos/delivery-portal/pickup-status';
     const advance = url.pathname === '/api/v1/pos/delivery-portal/test-status';
+    const installMail = url.pathname === '/api/v1/pos/delivery-portal/driver-install';
+    const installAvailable = Boolean(origin && req.headers.host?.toLowerCase() === origin.host);
     const merchantRoute = url.pathname === '/api/v1/pos/delivery-portal/merchant';
-    if (!owner && !onlineAction && !merchantRoute && !checkoutQuote && !checkoutStart && !checkoutStatus && !checkoutWebhook && !menu && !order && !status && !advance && !advancePickup && url.pathname !== '/api/v1/delivery-portal/restaurants') return false;
+    if (!customerAction && !owner && !installMail && !onlineAction && !merchantRoute && !checkoutQuote && !checkoutStart && !checkoutStatus && !checkoutWebhook && !menu && !order && !status && !advance && !advancePickup && url.pathname !== '/api/v1/delivery-portal/restaurants') return false;
     const send = (status,data) => {
       res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
       res.end(JSON.stringify(data));
       return true;
     };
 
+    if (customerAction) return handleDeliveryCustomerAccount(db,req,res,send,customerAction,testOrders ? origin : null);
     if (onlineAction) return liveCheckout
       ? liveCheckout(req,send,onlineAction)
       : send(404,{error:'Onlinezahlung ist hier nicht verfügbar.'});
@@ -86,7 +93,7 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       if (advance) return advanceDeliveryOrder(db,req,send,idPattern);
       return submitDeliveryTestOrder(db,req,send,idPattern,postcodePattern);
     }
-    if (!owner && !merchantRoute) {
+    if (!owner && !merchantRoute && !installMail) {
       if (req.method !== 'GET') return send(405,{error:'Methode nicht erlaubt.'});
       const postcode = url.searchParams.get('postcode');
       const mode = url.searchParams.get('mode');
@@ -126,20 +133,42 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       return send(200,{restaurants:rows});
     }
 
-    if (!merchantRoute && !['GET','PUT'].includes(req.method)) return send(405,{error:'Methode nicht erlaubt.'});
+    if (installMail && !installAvailable) return send(404,{error:'Fahrer-App-Versand ist hier nicht verfügbar.'});
+    if (installMail && req.method !== 'POST') return send(405,{error:'Methode nicht erlaubt.'});
+    if (!merchantRoute && !installMail && !['GET','PUT'].includes(req.method)) return send(405,{error:'Methode nicht erlaubt.'});
     const rid = url.searchParams.get('restaurantId');
     if (!idPattern.test(rid ?? '')) return send(400,{error:'Bitte einen Betrieb auswählen.'});
     const token = /^Bearer ([^\s]{1,512})$/i.exec(req.headers.authorization ?? '')?.[1];
     if (!token) return send(401,{error:'Bitte anmelden.'});
     const hash = createHash('sha256').update(token).digest('hex');
+    if (installMail) {
+      let email;
+      try {
+        const input = await readJsonObject(req,{maxBytes:1024});
+        email = cleanMailAddress(input.email);
+      } catch (error) {
+        if (!error.status) throw error;
+        return send(error.status,{error:error.message});
+      }
+      const {rows:[ownerAccount]} = await db.query(`SELECT user_id FROM (${access}) a
+        WHERE a.role='owner' AND lower(btrim(a.email))=$3`,[rid,hash,email]);
+      if (!ownerAccount) return send(403,{error:'Bitte die E-Mail-Adresse deines Inhaberkontos angeben.'});
+      const link = new URL('/fahrer/#installieren',origin);
+      const slot = Math.floor(Date.now() / 300000);
+      await enqueueMail(db,`driver-install:${ownerAccount.user_id}:${rid}:${email}:${slot}`,email,{
+        subject:'Bringness Fahrer-App installieren',
+        text:`Öffne diesen Link auf deinem Handy und folge der Installationsanleitung:\n\n${link.href}\n\nDein Bringness-Team`
+      });
+      return send(202,{queued:true});
+    }
     if (merchantRoute) return merchant(req,send,rid,hash);
     if (req.method === 'GET') {
-      const {rows} = await db.query(`SELECT p.settings FROM (${access}) a
+      const {rows} = await db.query(`SELECT p.settings,a.role FROM (${access}) a
         LEFT JOIN pos_delivery_locations p ON p.restaurant_id=a.id`,[rid,hash]);
       if (!rows.length) return send(403,{error:'Kein Zugriff auf diesen Standort.'});
       const products = await db.query(`SELECT p.id,p.name,p.active FROM (${access}) a
         JOIN products p ON p.restaurant_id=a.id ORDER BY p.active DESC,p.name,p.id`,[rid,hash]);
-      return send(200,{settings:{...defaults,...rows[0].settings},products:products.rows});
+      return send(200,{settings:{...defaults,...rows[0].settings},products:products.rows,driverInstallMail:installAvailable && rows[0].role==='owner'});
     }
 
     let input;

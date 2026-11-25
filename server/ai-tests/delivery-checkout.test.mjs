@@ -3,8 +3,9 @@ import {test} from 'node:test';
 import {Readable} from 'node:stream';
 import {createHash,randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
+import {handleDeliveryCustomerAccount} from '../delivery-customer-account.js';
 import {createDeliveryCheckout} from '../delivery-checkout.js';
-import {advanceDeliveryOrder} from '../delivery-portal-test-orders.js';
+import {advanceDeliveryOrder,deliveryTestStatus} from '../delivery-portal-test-orders.js';
 import {migrateDeliveryPortal} from '../delivery-portal.js';
 import {recordPosOnlineSettlement} from '../pos-online-settlement.js';
 
@@ -55,7 +56,7 @@ for (const [mode,paymentMode] of [['pickup','test'],['delivery','test'],['pickup
       return Response.json(payment);
     };
     const checkout = createDeliveryCheckout(db,{
-      origin:'https://preview.example/',mode:paymentMode,liveRestaurantId:restaurantId,idPattern:/^[a-f0-9-]{36}$/,postcodePattern:/^\d{5}$/,
+      origin:'https://preview.example/',mode:paymentMode,liveRestaurantId:restaurantId,sandboxRestaurantId:live ? undefined : restaurantId,idPattern:/^[a-f0-9-]{36}$/,postcodePattern:/^\d{5}$/,
       withToken:async (_db,_id,operation)=>operation('token','encrypted'),fetcher
     });
     const delivery = mode==='delivery';
@@ -63,9 +64,19 @@ for (const [mode,paymentMode] of [['pickup','test'],['delivery','test'],['pickup
     const total = delivery ? 999 : 799;
     const input = {restaurantId,requestId,mode,postcode:'10551',items:[{id:productId,qty:1}],expectedTotalCents:total,address};
     const send = (code,data)=>({code,data});
+    const origin = new URL('https://sandbox.example');
+    const tokens = ['a'.repeat(64),'b'.repeat(64)];
+    for (const [index,token] of tokens.entries()) {
+      const {rows:[customer]} = await query('INSERT INTO delivery_customer_accounts(email) VALUES ($1) RETURNING id',[`customer${index}@example.com`]);
+      await query("INSERT INTO delivery_customer_sessions VALUES ($1,$2,now()+interval '1 hour')",
+        [createHash('sha256').update(token).digest('hex'),customer.id]);
+    }
+    const history = token => handleDeliveryCustomerAccount(db,{
+      method:'GET',headers:{host:origin.host,cookie:'__Host-bringness-customer='+token}
+    },{},send,'orders',origin);
     const start = ()=>{
       const req = Readable.from([Buffer.from(JSON.stringify(input))]);
-      Object.assign(req,{method:'POST',headers:{'content-type':'application/json'}});
+      Object.assign(req,{method:'POST',headers:{'content-type':'application/json',cookie:'__Host-bringness-customer='+tokens[0]}});
       return checkout(req,send,'start');
     };
     const check = ()=>checkout({method:'GET',headers:{authorization:'Bearer '+requestId}},send,'status');
@@ -88,6 +99,7 @@ for (const [mode,paymentMode] of [['pickup','test'],['delivery','test'],['pickup
     assert.equal((await start()).code,200);
     assert.equal(creations,1);
     assert.deepEqual((await check()).data,{status:'pending'});
+    assert.deepEqual((await history(tokens[0])).data,{orders:[]});
     payment.status='paid';
     const paidAt = new Date().toISOString();
     payment.paidAt=paidAt;
@@ -104,6 +116,11 @@ for (const [mode,paymentMode] of [['pickup','test'],['delivery','test'],['pickup
     assert.deepEqual(await checkout(webhook,send,'webhook'),{code:200,data:{received:true}});
     const accepted = await check();
     assert.equal(accepted.data.status,'paid');
+    const {data:{orders}} = await history(tokens[0]);
+    assert.deepEqual(orders.map(({restaurant,totalCents,mode,status})=>({restaurant,totalCents,mode,status})),
+      live ? [] : [{restaurant:'Restaurant',totalCents:total,mode,status:'open'}]);
+    assert.deepEqual((await history(tokens[1])).data,{orders:[]});
+    assert.equal((await history('')).code,401);
     assert.deepEqual(await check(),accepted);
     const {rows:[booking]} = await query('SELECT delivery_test_paid_at FROM orders');
     assert.equal(booking.delivery_test_paid_at?.toISOString() ?? null,live ? null : paidAt);
@@ -117,6 +134,34 @@ for (const [mode,paymentMode] of [['pickup','test'],['delivery','test'],['pickup
     assert.deepEqual((await query('SELECT source,total_cents,delivery_test_address FROM orders')).rows,[
       {source:(live ? 'web_' : 'web_test_')+mode,total_cents:total,delivery_test_address:delivery ? {...address,postcode:'10551'} : null}
     ]);
+    if (delivery) {
+      const user = randomUUID();
+      await query("INSERT INTO users VALUES ($1,$2,'manager','active',false)",[user,company]);
+      await query("INSERT INTO sessions VALUES ($1,$2,now()+interval '1 hour')",
+        [user,createHash('sha256').update('manager').digest('hex')]);
+      const orderId = accepted.data.orderId;
+      const idPattern = /^[a-f0-9-]{36}$/;
+      function estimate(minutes,token='manager') {
+        const req = Readable.from([Buffer.from(JSON.stringify({orderId,status:'estimate',minutes}))]);
+        Object.assign(req,{method:'POST',headers:{authorization:'Bearer '+token}});
+        return advanceDeliveryOrder(db,req,send,idPattern);
+      }
+      const customerStatus = () => deliveryTestStatus(db,{
+        method:'GET',headers:{authorization:'Bearer '+requestId}
+      },send,idPattern);
+      assert.equal((await customerStatus()).data.estimatedArrival ?? null,null);
+      assert.equal((await estimate(0)).code,400);
+      assert.equal((await estimate(30,'unrelated')).code,409);
+      const first = await estimate(30);
+      assert.equal(first.code,200);
+      const revised = await estimate(45);
+      assert.equal(revised.code,200);
+      assert.ok(Date.parse(revised.data.estimatedArrival)>Date.parse(first.data.estimatedArrival));
+      assert.equal(Date.parse((await customerStatus()).data.estimatedArrival),Date.parse(revised.data.estimatedArrival));
+      await query("UPDATE orders SET status='delivered' WHERE id=$1",[orderId]);
+      assert.equal((await estimate(60)).code,409);
+      assert.equal((await history(tokens[0])).data.orders[0].status,'delivered');
+    }
     if (live) {
       const operator = randomUUID(), foreignOperator = randomUUID();
       await query("INSERT INTO users VALUES ($1,$2,'kitchen','active',false),($3,$4,'owner','active',false)",
@@ -184,6 +229,47 @@ test('POS books a verified portal settlement only once and excludes test orders'
     const {rows:[receipt]} = await db.query('SELECT * FROM receipts');
     assert.equal(receipt.fiscal_status,'pending');
     assert.equal(receipt.merchant_snapshot.restaurantName,'Restaurant');
+  } finally {
+    await db.close();
+  }
+});
+
+test('favorites and delivery addresses persist and remain isolated by customer session',async()=>{
+  const {migrateDeliveryCustomerAccounts,handleDeliveryCustomerAccount} = await import('../delivery-customer-account.js');
+  const db = new PGlite();
+  try {
+    await db.exec('CREATE TABLE restaurants(id uuid PRIMARY KEY,name text); CREATE TABLE pos_delivery_locations(restaurant_id uuid PRIMARY KEY);');
+    await migrateDeliveryCustomerAccounts(db);
+    const restaurant = randomUUID();
+    await db.query("INSERT INTO restaurants VALUES ($1,'Testrestaurant')",[restaurant]);
+    await db.query('INSERT INTO pos_delivery_locations VALUES ($1)',[restaurant]);
+    const tokens = ['a'.repeat(64),'b'.repeat(64)];
+    for (const [index,token] of tokens.entries()) {
+      const {rows:[customer]} = await db.query('INSERT INTO delivery_customer_accounts(email) VALUES ($1) RETURNING id',[index+'@example.test']);
+      await db.query("INSERT INTO delivery_customer_sessions VALUES ($1,$2,now()+interval '1 hour')",
+        [createHash('sha256').update(token).digest('hex'),customer.id]);
+    }
+    const origin = new URL('https://sandbox.example.test');
+    function customerData(token,body,action='favorites') {
+      const req = Readable.from(body ? [Buffer.from(JSON.stringify(body))] : []);
+      Object.assign(req,{method:body?'POST':'GET',headers:{host:origin.host,origin:origin.origin,cookie:'__Host-bringness-customer='+token}});
+      return handleDeliveryCustomerAccount(db,req,{},(code,data)=>({code,data}),action,origin);
+    }
+    assert.equal((await customerData('c'.repeat(64))).code,401);
+    const expected = [{id:restaurant,name:'Testrestaurant'}];
+    assert.deepEqual((await customerData(tokens[0],{restaurantId:restaurant,saved:true})).data.favorites,expected);
+    assert.deepEqual((await customerData(tokens[0])).data.favorites,expected);
+    assert.deepEqual((await customerData(tokens[1])).data.favorites,[]);
+    assert.deepEqual((await customerData(tokens[0],{restaurantId:restaurant,saved:false})).data.favorites,[]);
+    const input = {label:'Arbeit',recipient:'Testkunde',street:'Testweg 2',postcode:'10997',city:'Berlin'};
+    const addresses = (token,body)=>customerData(token,body,'addresses');
+    assert.equal((await addresses(tokens[0],{...input,postcode:'123'})).code,400);
+    const {data:{addresses:[saved]}} = await addresses(tokens[0],input);
+    assert.equal(saved.street,input.street);
+    assert.deepEqual((await addresses(tokens[0])).data.addresses,[saved]);
+    assert.deepEqual((await addresses(tokens[1],{id:saved.id,remove:true})).data.addresses,[]);
+    assert.deepEqual((await addresses(tokens[0])).data.addresses,[saved]);
+    assert.deepEqual((await addresses(tokens[0],{id:saved.id,remove:true})).data.addresses,[]);
   } finally {
     await db.close();
   }

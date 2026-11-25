@@ -34,7 +34,14 @@ test('pickup page submits the current total and retries with the same request ID
     menu.open=true;
     await new Promise(resolve=>menu.addEventListener('toggle',resolve,{once:true}));
     await wait();
-    const add = doc.querySelector('#restaurants button');
+    const favorite = doc.querySelector('[data-favorite-id]');
+    favorite.click();
+    assert.equal(favorite.getAttribute('aria-pressed'),'true');
+    assert.equal(JSON.parse(dom.window.localStorage.getItem('bringness.ordering.favorites'))[0].id,restaurantId);
+    assert.match(doc.getElementById('customerFavorites').textContent,/Pilotrestaurant/);
+    doc.querySelector('#customerFavorites button').click();
+    assert.equal(favorite.getAttribute('aria-pressed'),'false');
+    const add = menu.querySelector('button');
     assert.equal(add.textContent,'Zum Warenkorb');
     add.click();
     const finish = doc.getElementById('finishDemo');
@@ -75,6 +82,132 @@ test('return from online payment shows the POS pickup status through collection'
     }
     assert.equal(scheduled.length,0);
     assert.equal(statuses.length,0);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('sandbox address book switches the delivery form and searches the new postcode',async()=>{
+  const searches = [];
+  const dom = new JSDOM(html,{url:'https://sandbox-bestellen.bringness.de/bestellen/',runScripts:'outside-only'});
+  try {
+    dom.window.fetch = async path=>{
+      if (path.endsWith("/customer/session")) return Response.json({customer:null});
+      searches.push(new URL(path,dom.window.location.href).searchParams.get('postcode'));
+      return Response.json({restaurants:[]});
+    };
+    dom.window.eval(script);
+    const doc = dom.window.document;
+    const addressForm = doc.getElementById('saveTestAddress');
+    for (const [label,postcode,street] of [['Zuhause','10551','Testweg 1'],['Arbeit','10997','Testweg 2']]) {
+      for (const [field,value] of Object.entries({label,postcode,street,recipient:'Testkunde',city:'Berlin'})) {
+        addressForm.elements[field].value = value;
+      }
+      addressForm.dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
+      await wait();
+    }
+    const select = doc.getElementById('savedDeliveryAddress');
+    assert.equal(select.options.length,3);
+    assert.equal(doc.getElementById('deliveryStreet').value,'Testweg 2');
+    select.selectedIndex = 1;
+    select.dispatchEvent(new dom.window.Event('change'));
+    await wait();
+    assert.equal(doc.getElementById('deliveryStreet').value,'Testweg 1');
+    assert.deepEqual(searches,['10551','10997','10551']);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('account address controls wait for the current request', async () => {
+  const dom = new JSDOM(html, {url:'https://sandbox-bestellen.bringness.de/bestellen/', runScripts:'outside-only'});
+  let finishLoad;
+  const loading = new Promise(resolve => { finishLoad = resolve; });
+  try {
+    dom.window.fetch = async path => {
+      if (path.endsWith('/customer/session')) return Response.json({customer:{email:'test@example.com'}});
+      if (path.endsWith('/customer/addresses')) return loading;
+      assert.ok(path.endsWith('/customer/favorites'));
+      return Response.json({favorites:[]});
+    };
+    dom.window.eval(script);
+    await wait();
+    const doc = dom.window.document;
+    const save = doc.querySelector('#saveTestAddress button');
+    const remove = doc.getElementById('removeTestAddress');
+    const select = doc.getElementById('savedDeliveryAddress');
+    assert.ok(save.disabled && remove.disabled && select.disabled);
+
+    finishLoad(Response.json({addresses:[{id:'saved', label:'Zuhause', postcode:'10551'}]}));
+    await wait();
+    assert.ok(!save.disabled && !remove.disabled && !select.disabled);
+    assert.equal(select.options[1].value, 'saved');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('signing out removes an applied account address from the checkout form', async () => {
+  const dom = new JSDOM(html, {
+    url:'https://sandbox-bestellen.bringness.de/bestellen/',
+    runScripts:'outside-only'
+  });
+  const address = {id:'saved', label:'Zuhause', postcode:'10551', street:'Testweg 1', city:'Berlin', recipient:'Testkunde'};
+  try {
+    dom.window.fetch = async path => {
+      if (path.endsWith('/customer/session')) return Response.json({customer:{email:'test@example.com'}});
+      if (path.endsWith('/customer/addresses')) return Response.json({addresses:[address]});
+      if (path.endsWith('/customer/favorites')) return Response.json({favorites:[]});
+      if (path.endsWith('/customer/logout')) return Response.json({customer:null});
+      assert.ok(path.includes('/restaurants?'));
+      return Response.json({restaurants:[]});
+    };
+    dom.window.eval(script);
+    await wait();
+    const doc = dom.window.document;
+    const select = doc.getElementById('savedDeliveryAddress');
+    select.value = address.id;
+    select.dispatchEvent(new dom.window.Event('change'));
+    assert.equal(doc.getElementById('deliveryStreet').value, address.street);
+
+    doc.getElementById('customerLogout').click();
+    await wait();
+    assert.equal(select.options.length, 1);
+    assert.equal(doc.getElementById('deliveryStreet').value, '');
+    assert.equal(doc.getElementById('testAddressFeedback').textContent, '');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('customer order history displays confirmed orders and clears them on logout', async () => {
+  const dom = new JSDOM(html, {
+    url:'https://sandbox-bestellen.bringness.de/bestellen/',
+    runScripts:'outside-only'
+  });
+  const responses = {
+    session:{customer:{email:'test@example.com'}},
+    addresses:{addresses:[]},
+    favorites:{favorites:[]},
+    orders:{orders:[{restaurant:'Testbistro',totalCents:799,date:'2026-11-25T17:00:00Z',mode:'delivery',status:'ready'}]},
+    logout:{customer:null}
+  };
+  try {
+    dom.window.fetch = async path => Response.json(responses[path.split('/').at(-1)]);
+    dom.window.eval(script);
+    await wait();
+    const doc = dom.window.document;
+    const history = doc.getElementById('customerOrderHistory');
+    const list = doc.getElementById('customerOrderHistoryList');
+    assert.equal(history.hidden, false);
+    history.open = true;
+    history.dispatchEvent(new dom.window.Event('toggle'));
+    await wait();
+    assert.match(list.textContent, /25\.11\.2026 · Testbistro · Lieferung · 7,99\s€ · Fertig zur Übergabe/);
+    doc.getElementById('customerLogout').click();
+    await wait();
+    assert.equal(history.hidden, true);
+    assert.equal(list.childElementCount, 0);
   } finally {
     dom.window.close();
   }

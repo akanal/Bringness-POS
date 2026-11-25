@@ -23,7 +23,32 @@
     return data;
   }
 
-  request().then(({settings,products}) => {
+  const installForm = document.getElementById('driverInstallMail');
+  installForm.addEventListener('submit',async event => {
+    event.preventDefault();
+    if (!current()) return;
+    const button = installForm.querySelector('button');
+    const feedback = installForm.querySelector('[role=status]');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/v1/pos/delivery-portal/driver-install?restaurantId='+encodeURIComponent(rid),{
+        method:'POST',
+        headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+        body:JSON.stringify({email:installForm.elements.email.value})
+      });
+      const data = await response.json();
+      if (!current()) return;
+      if (!response.ok) throw Error(data.error || 'Installationslink derzeit nicht verfügbar.');
+      feedback.textContent = 'Installationsmail zum Versand eingereiht.';
+    } catch (error) {
+      if (current()) feedback.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  request().then(({settings,products,driverInstallMail}) => {
+    installForm.hidden = !driverInstallMail;
     const list = document.getElementById('deliveryPortalProducts');
     const selected = new Set(settings.productIds);
     for (const product of products) {
@@ -90,6 +115,7 @@
     if (!current()) {
       form.hidden = true;
       merchant.hidden = true;
+      installForm.hidden = true;
     }
   });
   form.addEventListener('submit', async event => {

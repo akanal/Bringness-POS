@@ -1,3 +1,4 @@
+import {customerSessionHash} from './delivery-customer-account.js';
 import {recordPosOnlineSettlement} from './pos-online-settlement.js';
 import {createHash} from 'node:crypto';
 import {withMerchantToken} from './center-mollie-merchant.js';
@@ -23,6 +24,9 @@ export async function migrateDeliveryCheckout(db) {
     order_id uuid REFERENCES orders(id)
   )`);
   await db.query('ALTER TABLE pos_delivery_checkout_tests ADD COLUMN IF NOT EXISTS delivery_address jsonb');
+  await db.query('ALTER TABLE pos_delivery_checkout_tests ADD COLUMN IF NOT EXISTS customer_id uuid');
+  await db.query(`CREATE INDEX IF NOT EXISTS delivery_checkout_customer_idx
+    ON pos_delivery_checkout_tests(customer_id) WHERE customer_id IS NOT NULL`);
   await db.query("ALTER TABLE pos_delivery_checkout_tests ADD COLUMN IF NOT EXISTS payment_mode text NOT NULL DEFAULT 'test' CHECK (payment_mode IN ('test','live'))");
   await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_test_address jsonb');
   await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_test_paid_at timestamptz');
@@ -114,7 +118,7 @@ export function createDeliveryCheckout(db,{idPattern,postcodePattern,origin,live
       if (live) {
         await recordPosOnlineSettlement(client,{orderId:order.id,restaurantId:attempt.restaurant_id,amountCents:attempt.total_cents});
       } else {
-        await client.query('INSERT INTO pos_delivery_test_requests VALUES ($1,$2,$3)',[attempt.id,attempt.fingerprint,order.id]);
+        await client.query('INSERT INTO pos_delivery_test_requests (request_id,fingerprint,order_id) VALUES ($1,$2,$3)',[attempt.id,attempt.fingerprint,order.id]);
       }
       await client.query('UPDATE pos_delivery_checkout_tests SET order_id=$2 WHERE id=$1',[attempt.id,order.id]);
       return {status:'paid',orderId:order.id,...(live ? {fulfillmentStatus:'open'} : {})};
@@ -181,6 +185,7 @@ export function createDeliveryCheckout(db,{idPattern,postcodePattern,origin,live
     const address = cart.mode==='delivery' ? readDeliveryAddress(input.address,cart.postcode) : null;
     if (cart.mode==='delivery' && !address) return send(400,{error:'Bitte Name, Straße mit Hausnummer und Ort eingeben.'});
     const fingerprint = createHash('sha256').update(JSON.stringify(address ? {...cart,address} : cart)).digest('hex');
+    const customerSession = !live && sandboxRestaurantId ? customerSessionHash(req) : null;
     const reservation = await transaction(db,async client=>{
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,1))',[id]);
       const {rows:[existing]} = await client.query('SELECT * FROM pos_delivery_checkout_tests WHERE id=$1',[id]);
@@ -200,10 +205,13 @@ export function createDeliveryCheckout(db,{idPattern,postcodePattern,origin,live
         return {productId:id,name:product.name,cents:product.price_cents,taxRate:product.tax_rate,qty};
       });
       if (price.fee) items.push({name:'Liefergebühr (Test)',cents:price.fee,taxRate:0,qty:1});
+      const customer = customerSession ? (await client.query(
+        'SELECT customer_id FROM delivery_customer_sessions WHERE token_hash=$1 AND expires_at>now()',[customerSession]
+      )).rows[0] : null;
       const {rows:[attempt]} = await client.query(`INSERT INTO pos_delivery_checkout_tests
-        (id,restaurant_id,fingerprint,organization_id,profile_id,total_cents,items,delivery_address,payment_mode)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [id,cart.restaurantId,fingerprint,merchant.organization_id,merchant.profile_id,price.totalCents,JSON.stringify(items),address,mode]);
+        (id,restaurant_id,fingerprint,organization_id,profile_id,total_cents,items,delivery_address,payment_mode,customer_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [id,cart.restaurantId,fingerprint,merchant.organization_id,merchant.profile_id,price.totalCents,JSON.stringify(items),address,mode,customer?.customer_id ?? null]);
       return {attempt};
     });
     if (reservation.error) return send(409,{error:reservation.error});
