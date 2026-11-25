@@ -62,11 +62,13 @@ export async function handleDeliveryCustomerAccount(db,req,res,send,action,origi
     if (!session) return send(401,{error:'Bitte anmelden.'});
     const {rows:[result]} = await db.query(`SELECT ARRAY(
       SELECT json_build_object('restaurant',r.name,'totalCents',o.total_cents,'status',o.status,
+        'estimatedArrival',CASE WHEN o.status IN ('open','kitchen','preparing','ready','dispatched') THEN t.estimated_arrival END,
         'items',(SELECT json_agg(json_build_object('name',item->>'name','quantity',item->'qty') ORDER BY ordinal)
           FROM jsonb_array_elements(c.items) WITH ORDINALITY AS line(item,ordinal) WHERE item ? 'productId'),
         'date',o.delivery_test_paid_at,'mode',CASE WHEN c.delivery_address IS NULL THEN 'pickup' ELSE 'delivery' END)
       FROM pos_delivery_checkout_tests c JOIN orders o ON o.id=c.order_id
       JOIN restaurants r ON r.id=c.restaurant_id
+      LEFT JOIN pos_delivery_test_requests t ON t.request_id=c.id AND t.order_id=o.id
       WHERE c.customer_id=s.customer_id AND c.payment_mode='test'
       ORDER BY o.delivery_test_paid_at DESC NULLS LAST,o.id DESC LIMIT 25
     ) AS orders FROM delivery_customer_sessions s WHERE s.token_hash=$1 AND s.expires_at>now()`,[session]);

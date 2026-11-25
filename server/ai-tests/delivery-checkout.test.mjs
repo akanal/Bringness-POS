@@ -159,9 +159,12 @@ for (const [mode,paymentMode] of [['pickup','test'],['delivery','test'],['pickup
       assert.equal(revised.code,200);
       assert.ok(Date.parse(revised.data.estimatedArrival)>Date.parse(first.data.estimatedArrival));
       assert.equal(Date.parse((await customerStatus()).data.estimatedArrival),Date.parse(revised.data.estimatedArrival));
+      assert.equal(Math.floor(Date.parse((await history(tokens[0])).data.orders[0].estimatedArrival)/1000),Date.parse(revised.data.estimatedArrival)/1000);
       await query("UPDATE orders SET status='delivered' WHERE id=$1",[orderId]);
       assert.equal((await estimate(60)).code,409);
-      assert.equal((await history(tokens[0])).data.orders[0].status,'delivered');
+      const [completed] = (await history(tokens[0])).data.orders;
+      assert.equal(completed.status,'delivered');
+      assert.equal(completed.estimatedArrival,null);
     }
     if (live) {
       const operator = randomUUID(), foreignOperator = randomUUID();

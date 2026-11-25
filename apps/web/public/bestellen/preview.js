@@ -629,6 +629,11 @@ if (!demo && location.hostname === 'sandbox-bestellen.bringness.de') {
         const mode = order.mode === 'delivery' ? 'Lieferung' : 'Abholung';
         const label = fulfillmentLabel(order.status, order.mode) ?? 'Status nicht verfügbar';
         row.textContent = [date, order.restaurant, mode, money.format(order.totalCents / 100), label].join(' · ');
+        if (order.mode === 'delivery' && order.estimatedArrival) {
+          const estimate = document.createElement('p');
+          estimate.textContent = 'Voraussichtliche Ankunft: ' + arrivalFormat.format(new Date(order.estimatedArrival)) + ' Uhr';
+          row.append(estimate);
+        }
         if (order.items?.length) {
           const details = document.createElement('details');
           const summary = document.createElement('summary');

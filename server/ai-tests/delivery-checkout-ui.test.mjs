@@ -205,9 +205,11 @@ test('customer order history displays confirmed orders and clears them on logout
     await wait();
     assert.match(list.textContent, /25\.11\.2026 · Testbistro · Lieferung · 7,99\s€ · Fertig zur Übergabe/);
     responses.orders.orders[0].status = 'dispatched';
+    responses.orders.orders[0].estimatedArrival = '2026-11-25T17:30:00Z';
     doc.getElementById('refreshCustomerOrders').click();
     await wait();
     assert.match(list.textContent, /Unterwegs/);
+    assert.match(list.textContent, /Voraussichtliche Ankunft: 18:30 Uhr/);
     assert.equal(list.firstElementChild.querySelector('details ul li').textContent, '2 × Pizza');
     assert.equal(list.childElementCount, 1);
 
