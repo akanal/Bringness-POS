@@ -130,3 +130,30 @@ test('adding a dish from a refreshed menu uses the new price for all its portion
     dom.window.close();
   }
 });
+
+test('a saved coverage link starts the requested search only for valid inputs', async () => {
+  for (const [query, valid] of [
+    ['?mode=pickup&postcode=10551', true],
+    ['?mode=delivery&postcode=10997', true],
+    ['?mode=pickup&postcode=1055', false],
+    ['?mode=other&postcode=10551', false]
+  ]) {
+    const calls = [];
+    const dom = page(async path => {
+      calls.push(path);
+      return Response.json({restaurants:[]});
+    }, query);
+    try {
+      await wait();
+      const expected = new URLSearchParams(query);
+      assert.equal(calls.length, valid ? 1 : 0);
+      if (valid) {
+        const actual = new URL(calls[0], 'https://portal.example').searchParams;
+        assert.equal(actual.get('mode'), expected.get('mode'));
+        assert.equal(actual.get('postcode'), expected.get('postcode'));
+      }
+    } finally {
+      dom.window.close();
+    }
+  }
+});
