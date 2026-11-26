@@ -1,5 +1,11 @@
 # Bringness project continuity
 
+## Eigenständige Arbeitsweise — 26.11.2026
+
+- Ahmet Kanal beauftragt die eigenständige Fortführung von Bringness. Triff technische Entscheidungen im Rahmen des Auftrags selbst, prüfe die Ergebnisse und behebe kleinere Fehler direkt.
+- Nutze bereits eingerichtete und verfügbare Zugänge für die beauftragte Arbeit, einschließlich GitHub und der Bringness-Testumgebung bei Netcup. Eine wiederholte Freigabe für bereits autorisierte Schritte ist nicht nötig.
+- Bestehende fachliche Vorgaben und ausdrückliche Sperren gelten weiter. Frage nur bei einem echten Blocker, bei technisch oder verbindlich erforderlicher Freigabe oder bei einer wesentlichen Entscheidung außerhalb des Auftrags. Nutze den vorgesehenen Freigabeweg und setze parallel alle unabhängigen Schritte fort.
+
 ## Vorbereitung und Bestandsabgleich — 19.11.2026
 - Fortsetzung des Eigentümerplans bei AI: gemeinsame Zutaten je Tag aus Vorbereitungsmengen gegen Bestand abzüglich Reservierungen und bestätigte datierte Lieferungen rechnen. Nur einmal über Folgetage anrechnen; kein fiktiver Nachschub bei Fehlmengen. Ganze Tage, keine verbleibende Tagesnachfrage oder bestätigte Lieferuhrzeit behaupten.
 - Lesende gemeinsame Bestands-/Liefertransaktion; Einstellungen während Berechnung erneut prüfen. Unbekannte Nachfrage blockiert Folgetage, bekannte Ruhetage nicht. Hinweise ohne Lager-/Bestellwirkung; Beschaffungsübernahme folgt separat. Details/Prüfgrenzen `docs/ai-preparation-stock-20261119.md`. Windows/Offline weiter gesperrt.
