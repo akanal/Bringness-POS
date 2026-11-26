@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=search-results">
 
 </head>
 <body>
@@ -24,16 +24,19 @@
 </div>
 <div class="intro-content">
 
-      <h1>Heute gibt’s <em>was Gutes.</em></h1>
-      <p>Frisch aus Berlins Küchen. Lass es dir liefern oder hol’s selbst ab.</p>
-      <form id="search">
+      <a id="newSearch" href="./" hidden>← Zur Startseite</a>
+      <h1 id="landingHeading">Heute gibt’s <em>was Gutes.</em></h1>
+      <p id="landingCopy">Lass dir dein Essen liefern oder hol’s selbst ab.</p>
+      <h1 id="searchHeading" hidden>Restaurants finden</h1>
+      <form id="search" method="get">
+        <input type="hidden" name="demo" value="1" disabled>
         <fieldset>
           <legend>Bestellart</legend>
           <label><input type="radio" name="mode" value="delivery" checked> Lieferung</label>
           <label><input type="radio" name="mode" value="pickup"> Abholung</label>
         </fieldset>
         <div class="search-row">
-          <label>Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="z. B. 10551" required></label>
+          <label>Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="5 Ziffern" required></label>
           <button>Restaurants finden</button>
         </div>
       </form></div>
@@ -73,5 +76,5 @@
       </aside>
     </section>
   </main>
-<script src="./preview.js?v=portal-payment-tracking" defer></script></body>
+<script src="./preview.js?v=search-results" defer></script></body>
 </html>

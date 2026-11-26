@@ -23,12 +23,9 @@ test('pickup page submits the current total and retries with the same request ID
     assert.equal(path,'/api/v1/delivery-portal/checkout');
     orders.push(JSON.parse(options.body));
     return Response.json({status:'unconfirmed'},{status:202});
-  });
+  }, '?mode=pickup&postcode=10551');
   try {
     const doc = dom.window.document;
-    doc.querySelector('[name=postcode]').value='10551';
-    doc.querySelector('[name=mode][value=pickup]').checked=true;
-    doc.getElementById('search').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
     await wait();
     const menu = doc.querySelector('#restaurants details');
     menu.open=true;
@@ -87,11 +84,9 @@ test('an older menu response cannot replace the reopened menu', async () => {
       return Promise.resolve(Response.json({restaurants:[{id:restaurantId,name:'Pilotrestaurant',minutes:20}]}));
     }
     return new Promise(resolve => requests.push(resolve));
-  });
+  }, '?mode=delivery&postcode=10551');
   try {
     const doc = dom.window.document;
-    doc.querySelector('[name=postcode]').value = '10551';
-    doc.getElementById('search').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
     await wait();
     const menu = doc.querySelector('#restaurants details');
     async function setOpen(open) {
@@ -134,7 +129,8 @@ test('adding a dish from a refreshed menu uses the new price for all its portion
 test('a saved coverage link starts the requested search only for valid inputs', async () => {
   for (const [query, valid] of [
     ['?mode=pickup&postcode=10551', true],
-    ['?mode=delivery&postcode=10997', true],
+    ['?mode=delivery&postcode=20095', true],
+    ['?mode=pickup&postcode=01067', true],
     ['?mode=pickup&postcode=1055', false],
     ['?mode=other&postcode=10551', false]
   ]) {
@@ -147,7 +143,12 @@ test('a saved coverage link starts the requested search only for valid inputs', 
       await wait();
       const expected = new URLSearchParams(query);
       assert.equal(calls.length, valid ? 1 : 0);
+      const doc = dom.window.document;
+      assert.equal(doc.body.classList.contains('search-page'), valid);
+      assert.equal(doc.getElementById('landingHeading').hidden, valid);
+      assert.equal(doc.getElementById('searchHeading').hidden, !valid);
       if (valid) {
+        assert.match(doc.getElementById('searchLabel').textContent, new RegExp(expected.get('postcode')));
         const actual = new URL(calls[0], 'https://portal.example').searchParams;
         assert.equal(actual.get('mode'), expected.get('mode'));
         assert.equal(actual.get('postcode'), expected.get('postcode'));

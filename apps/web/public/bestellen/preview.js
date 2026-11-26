@@ -7,9 +7,9 @@ const form = document.getElementById('search');
 const results = document.getElementById('restaurants');
 const status = document.getElementById('status');
 
-const demo = new URLSearchParams(location.search).get('demo') === '1';
+const initialSearch = new URLSearchParams(location.search);
+const demo = initialSearch.get('demo') === '1';
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
-let searchVersion = 0;
 const basket = document.getElementById('demoBasket');
 const basketItems = document.getElementById('basketItems');
 const basketTotal = document.getElementById('basketTotal');
@@ -252,10 +252,9 @@ if (demo) {
   status.textContent = 'Für die Vorschau kannst du 10551 oder 10997 eingeben.';
 }
 
-async function search(showResults = false) {
+async function search() {
   const { mode, postcode } = Object.fromEntries(new FormData(form));
   const delivery = mode === 'delivery';
-  const version = ++searchVersion;
   results.replaceChildren();
   status.textContent = 'Restaurants werden gesucht …';
   let matches;
@@ -272,10 +271,9 @@ async function search(showResults = false) {
       matches = data.restaurants;
     }
   } catch {
-    if (version === searchVersion) status.textContent = 'Suche derzeit nicht verfügbar. Bitte erneut versuchen.';
+    status.textContent = 'Suche derzeit nicht verfügbar. Bitte erneut versuchen.';
     return;
   }
-  if (version !== searchVersion) return;
   status.textContent = matches.length
     ? delivery ? 'Die Restaurants liefern mit eigenen Fahrern.' : 'Abholung direkt im Restaurant.'
     : 'Für diese Postleitzahl und Bestellart wurden keine Restaurants gefunden.';
@@ -330,7 +328,7 @@ async function search(showResults = false) {
           const response = await fetch('/api/v1/delivery-portal/menu?' + query);
           if (!response.ok) throw Error();
           const {menu: dishes,testOrders,mollieTestCheckout,onlinePickup,basketPreview} = await response.json();
-          if (currentMenu !== menuVersion || version !== searchVersion || !menu.open) return;
+          if (currentMenu !== menuVersion || !menu.open) return;
           if (!Array.isArray(dishes)) throw Error('Ungültige Speisekarte');
           if (!dishes.length) {
             notice.textContent = 'Derzeit sind hier keine Gerichte verfügbar.';
@@ -356,36 +354,34 @@ async function search(showResults = false) {
     }
     results.append(card);
   }
-  if (showResults) document.getElementById('results-heading').scrollIntoView?.({block:'start'});
 }
 
-form.addEventListener('submit', event => {
-  event.preventDefault();
-  void search(true);
-});
-
-form.addEventListener('change', event => {
-  if (event.target.name === 'mode' && form.reportValidity()) void search();
-});
-
-form.addEventListener('input', event => {
-  if (event.target.name !== 'postcode') return;
-  searchVersion++;
-  results.replaceChildren();
-  status.textContent = 'Suche starten, um passende Restaurants anzuzeigen.';
-});
-
-const initialSearch = new URLSearchParams(location.search);
 const initialPostcode = initialSearch.get('postcode');
 const initialMode = initialSearch.get('mode');
+const hasSearch = /^\d{5}$/.test(initialPostcode ?? '') && ['pickup', 'delivery'].includes(initialMode);
 if (demo) {
-  form.elements.postcode.value = '10551';
-  void search();
-} else if (/^\d{5}$/.test(initialPostcode ?? '') && ['pickup', 'delivery'].includes(initialMode)) {
+  form.elements.demo.disabled = false;
+  document.getElementById('newSearch').href = '?demo=1';
+}
+
+if (hasSearch) {
+  document.body.classList.add('search-page');
+  document.title = 'Restaurants · Bringness';
+  document.getElementById('landingHeading').hidden = true;
+  document.getElementById('landingCopy').hidden = true;
+  document.getElementById('searchHeading').hidden = false;
+  document.getElementById('newSearch').hidden = false;
+  const label = document.getElementById('searchLabel');
+  const fulfillment = initialMode === 'pickup' ? 'Abholung' : 'Lieferung';
+  label.textContent = `· ${fulfillment} · ${initialPostcode}${demo ? ' · Vorschau mit Testrestaurants' : ''}`;
   form.elements.postcode.value = initialPostcode;
   form.elements.mode.value = initialMode;
   void search();
+} else if (demo) {
+  form.elements.postcode.value = '10551';
+  void search();
 }
+
 const scenes = [...document.querySelectorAll('.scene')];
 const selectors = [...document.querySelectorAll('[data-slide]')];
 const campaign = document.getElementById('campaign');
@@ -410,4 +406,4 @@ selectors.forEach((button, index) => button.addEventListener('click', () => {
   showSlide(index);
 }));
 autoplay.addEventListener('click', () => play(!timer));
-play(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+if (!hasSearch) play(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
