@@ -77,6 +77,7 @@ test('sandbox exposes only Mollie test ordering at its own host and assigned res
 test('merchant diagnostics distinguish pending Mollie checks and only save a verified matching profile', async () => {
   let organization = 'org_1';
   let profileStatus = 'unverified';
+  let canReceivePayments = false;
   let canReceiveSettlements = false;
   let saved = false;
   let writes = 0;
@@ -92,7 +93,7 @@ test('merchant diagnostics distinguish pending Mollie checks and only save a ver
     access:'SELECT id FROM restaurants',
     withToken:async (db,id,operation) => operation('test-token','envelope'),
     fetcher:async url => Response.json(url.endsWith('/organizations/me') ? {id:organization}
-      : url.endsWith('/onboarding/me') ? {canReceivePayments:true,canReceiveSettlements}
+      : url.endsWith('/onboarding/me') ? {canReceivePayments,canReceiveSettlements}
       : {id:'pfl_1',status:profileStatus})
   });
   const request = method => handler({method},(status,body)=>({status,...body}),'test-restaurant','hash');
@@ -103,7 +104,12 @@ test('merchant diagnostics distinguish pending Mollie checks and only save a ver
   organization = 'org_1';
   assert.match((await request('PUT')).error,/noch nicht verifiziert/);
   profileStatus = 'verified';
-  assert.match((await request('PUT')).error,/Auszahlungen/);
+  assert.match((await request('PUT')).error,/für: Zahlungen und Auszahlungen\./);
+  canReceiveSettlements = true;
+  assert.match((await request('PUT')).error,/für: Zahlungen\./);
+  canReceiveSettlements = false;
+  canReceivePayments = true;
+  assert.match((await request('PUT')).error,/für: Auszahlungen\./);
   assert.equal(writes,0);
   canReceiveSettlements = true;
   assert.match((await request('PUT')).error,/während der Prüfung geändert/);
