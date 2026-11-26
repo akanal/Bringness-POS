@@ -274,9 +274,19 @@ async function search() {
     status.textContent = 'Suche derzeit nicht verfügbar. Bitte erneut versuchen.';
     return;
   }
-  status.textContent = matches.length
-    ? delivery ? 'Die Restaurants liefern mit eigenen Fahrern.' : 'Abholung direkt im Restaurant.'
-    : 'Für diese Postleitzahl und Bestellart wurden keine Restaurants gefunden.';
+  if (!matches.length) {
+    status.textContent = delivery
+      ? 'Für diese Postleitzahl wurden keine liefernden Restaurants gefunden.'
+      : 'Für diese Postleitzahl wurden keine Restaurants zur Abholung gefunden.';
+    const alternate = document.createElement('a');
+    const nextSearch = new URLSearchParams({postcode, mode: delivery ? 'pickup' : 'delivery'});
+    if (demo) nextSearch.set('demo', '1');
+    alternate.href = '/bestellen/?' + nextSearch;
+    alternate.textContent = delivery ? 'Mit derselben PLZ nach Abholung suchen' : 'Mit derselben PLZ nach Lieferung suchen';
+    results.append(alternate);
+    return;
+  }
+  status.textContent = delivery ? 'Die Restaurants liefern mit eigenen Fahrern.' : 'Abholung direkt im Restaurant.';
 
   for (const restaurant of matches) {
     const card = document.createElement('article');
