@@ -23,6 +23,35 @@ customerMenu.addEventListener('keydown', event => {
 
 const initialSearch = new URLSearchParams(location.search);
 const demo = initialSearch.get('demo') === '1';
+const favoritesKey = 'bringness.ordering.favorites.' + (demo ? 'demo' : 'restaurants');
+const favoritesList = document.getElementById('accountFavorites');
+let favorites = new Map();
+try {
+  favorites = new Map(JSON.parse(localStorage.getItem(favoritesKey) || '[]'));
+} catch {}
+
+function renderFavorites() {
+  favoritesList.replaceChildren();
+  if (!favorites.size) {
+    const empty = document.createElement('li');
+    empty.textContent = 'Noch keine Restaurants gemerkt.';
+    favoritesList.append(empty);
+    return;
+  }
+  for (const entry of favorites.values()) {
+    if (typeof entry?.name !== "string" || !/^\d{5}$/.test(entry.postcode) || !["delivery","pickup"].includes(entry.mode)) continue;
+    const row = document.createElement('li');
+    const link = document.createElement('a');
+    const query = new URLSearchParams({postcode:entry.postcode,mode:entry.mode,restaurant:entry.name});
+    if (demo) query.set('demo','1');
+    link.href = '/bestellen/?' + query;
+    link.textContent = entry.name;
+    row.append(link);
+    favoritesList.append(row);
+  }
+}
+renderFavorites();
+
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
 const basket = document.getElementById('demoBasket');
 const basketItems = document.getElementById('basketItems');
@@ -318,7 +347,27 @@ async function search() {
         ' Lieferung · Mindestbestellwert ' + (demo ? restaurant.minimum : money.format(restaurant.minimumCents / 100))
       : 'Abholung in ' + restaurant.minutes + ' Min.';
     terms.className = 'restaurant-terms';
-    card.append(title, terms);
+    const nameRow = document.createElement('div');
+    nameRow.className = 'restaurant-name-row';
+    const favorite = document.createElement('button');
+    favorite.type = 'button';
+    favorite.className = 'favorite-toggle';
+    favorite.setAttribute('aria-label', restaurant.name + ' merken');
+    const key = restaurant.id || restaurant.name;
+    function updateFavorite() {
+      favorite.textContent = favorites.has(key) ? '♥' : '♡';
+      favorite.setAttribute('aria-pressed', String(favorites.has(key)));
+    }
+    updateFavorite();
+    favorite.onclick = () => {
+      if (favorites.has(key)) favorites.delete(key);
+      else favorites.set(key,{name:restaurant.name,postcode,mode});
+      try { localStorage.setItem(favoritesKey,JSON.stringify([...favorites])); } catch {}
+      updateFavorite();
+      renderFavorites();
+    };
+    nameRow.append(title,favorite);
+    card.append(nameRow,terms);
     if (restaurant.menu) {
       const menu = document.createElement('details');
       const summary = document.createElement('summary');
@@ -416,6 +465,7 @@ async function search() {
     count.textContent = displayed.length === 0 ? 'Keine Restaurants mit diesen Filtern.' :
       displayed.length + (displayed.length === 1 ? ' Restaurant' : ' Restaurants');
   }
+  filter.value = initialSearch.get('restaurant') || '';
   filter.oninput = showResults;
   free.onchange = showResults;
   sort.onchange = showResults;
