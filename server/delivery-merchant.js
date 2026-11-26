@@ -10,7 +10,7 @@ export function migrateDeliveryMerchant(db) {
 }
 
 export function createDeliveryMerchant(db,{access,withToken=withMerchantToken,fetcher=fetch}={}) {
-  return async function merchant(req,send,rid,hash) {
+  return async function merchant(req,send,rid,hash,{testMode=false}={}) {
     if (!['GET','PUT','DELETE'].includes(req.method)) return send(405,{error:'Methode nicht erlaubt.'});
     const {rows} = await db.query(`SELECT c.organization_id,c.profile_id,
       coalesce(m.verified_at>now()-interval '24 hours' AND c.organization_id=m.organization_id
@@ -42,17 +42,25 @@ export function createDeliveryMerchant(db,{access,withToken=withMerchantToken,fe
           return response.json();
         }
         const [organization,onboarding,profile] = await Promise.all([
-          get('/organizations/me'),get('/onboarding/me'),get('/profiles/'+current.profile_id)
+          get('/organizations/me'),testMode ? null : get('/onboarding/me'),get('/profiles/'+current.profile_id)
         ]);
         if (organization.id!==current.organization_id || profile.id!==current.profile_id) {
           return 'Das verbundene Mollie-Konto passt nicht zum hinterlegten Standortprofil.';
         }
         if (profile.status!=='verified') return 'Mollie hat dieses Website-Profil noch nicht verifiziert.';
-        const missingApprovals = [];
-        if (onboarding.canReceivePayments!==true) missingApprovals.push('Zahlungen');
-        if (onboarding.canReceiveSettlements!==true) missingApprovals.push('Auszahlungen');
-        if (missingApprovals.length) {
-          return 'Bei Mollie fehlt die Freigabe für: '+missingApprovals.join(' und ')+'. Prüfe den Aktivierungsstatus im Mollie-Konto.';
+        if (testMode) {
+          const params = new URLSearchParams({profileId:current.profile_id,testmode:'true'});
+          const methods = await get('/methods?'+params);
+          if (!methods._embedded?.methods?.some?.(method => typeof method?.id === 'string' && method.id)) {
+            return 'Mollie meldet keine verfügbare Test-Zahlungsart für dieses Profil.';
+          }
+        } else {
+          const missingApprovals = [];
+          if (onboarding.canReceivePayments!==true) missingApprovals.push('Zahlungen');
+          if (onboarding.canReceiveSettlements!==true) missingApprovals.push('Auszahlungen');
+          if (missingApprovals.length) {
+            return 'Bei Mollie fehlt die Freigabe für: '+missingApprovals.join(' und ')+'. Prüfe den Aktivierungsstatus im Mollie-Konto.';
+          }
         }
         const result = await db.query(`INSERT INTO pos_delivery_merchants (restaurant_id,organization_id,profile_id)
           SELECT a.id,$4,$5 FROM (${access}) a JOIN center_mollie_credentials c ON c.restaurant_id=a.id
