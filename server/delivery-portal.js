@@ -135,7 +135,12 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
     const token = /^Bearer ([^\s]{1,512})$/i.exec(req.headers.authorization ?? '')?.[1];
     if (!token) return send(401,{error:'Bitte anmelden.'});
     const hash = createHash('sha256').update(token).digest('hex');
-    if (merchantRoute) return merchant(req,send,rid,hash);
+    if (merchantRoute) {
+      const sandboxRequest = origin && req.headers.host?.toLowerCase() === origin.host &&
+        rid.toLowerCase() === sandbox.restaurantId.toLowerCase();
+      if (origin && !sandboxRequest) return send(404,{error:'Mollie-Testprofil ist hier nicht verfügbar.'});
+      return merchant(req,send,rid,hash,{testMode:Boolean(sandboxRequest)});
+    }
     if (req.method === 'GET') {
       const {rows} = await db.query(`SELECT p.settings FROM (${access}) a
         LEFT JOIN pos_delivery_locations p ON p.restaurant_id=a.id`,[rid,hash]);
