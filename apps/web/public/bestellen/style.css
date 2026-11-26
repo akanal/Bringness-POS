@@ -93,7 +93,6 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   font-size: clamp(2rem, 5vw, 3.25rem);
 }
 
-.search-page header nav { display: none; }
 .search-page .intro { background: #122a40; }
 .search-page #searchHeading { margin-block: 12px 18px; }
 .search-page main > section:nth-child(2) { max-width: 80rem; margin-inline: auto; }
@@ -142,3 +141,37 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   font-size: .92rem;
 }
 .search-page .results summary { cursor: pointer; font-weight: 700; }
+
+.customer-menu { position: relative; margin-inline-start: auto; z-index: 5; }
+.customer-menu summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #8196a6;
+  font-weight: 700;
+}
+.customer-menu summary::-webkit-details-marker { display: none; }
+.customer-menu summary::after { content: '⌄'; margin-inline-start: .65em; }
+.customer-menu[open] summary { color: #13283e; background: #fff1e1; }
+.customer-menu nav {
+  display: grid;
+  gap: 3px;
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 8px);
+  width: min(19rem, calc(100vw - 32px));
+  max-height: min(28rem, 70vh);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 8px;
+  color: #13283e;
+  background: #fff;
+  border: 1px solid #d9e2ea;
+  border-radius: 14px;
+  box-shadow: 0 10px 32px #0a192a33;
+}
+.customer-menu nav a { padding: 8px 10px; border-radius: 8px; text-decoration: none; }
+.customer-menu nav a:hover, .customer-menu nav a:focus-visible { background: #eaf1f5; }
+.customer-menu nav .account-primary { background: #fff1e1; font-weight: 750; }
+.account-links { display: flex; flex-wrap: wrap; border-top: 1px solid #d9e2ea; font-size: .875rem; }
