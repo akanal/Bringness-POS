@@ -7,6 +7,20 @@ const form = document.getElementById('search');
 const results = document.getElementById('restaurants');
 const status = document.getElementById('status');
 
+const customerMenu = document.getElementById('customerMenu');
+const accountTrackOrder = document.getElementById('accountTrackOrder');
+document.addEventListener('click', event => {
+  if (!customerMenu.contains(event.target) || event.target.closest('a') === accountTrackOrder) {
+    customerMenu.open = false;
+  }
+});
+customerMenu.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !customerMenu.open) return;
+  customerMenu.open = false;
+  customerMenu.querySelector('summary').focus();
+});
+
+
 const initialSearch = new URLSearchParams(location.search);
 const demo = initialSearch.get('demo') === '1';
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
@@ -41,6 +55,7 @@ function followTestOrder(order) {
   clearTimeout(trackingTimer);
   tracked = order;
   tracking.hidden = false;
+  accountTrackOrder.hidden = false;
   trackingText.textContent = '#' + order.orderId.slice(0,8) + ' · Eingegangen';
   try { sessionStorage.setItem(trackingKey,JSON.stringify(order)); } catch {}
 
@@ -79,6 +94,7 @@ if (paymentReturn) {
   const paymentTracking = {};
   tracked = paymentTracking;
   tracking.hidden = false;
+  accountTrackOrder.hidden = false;
   trackingText.textContent = paymentLabel+' wird geprüft …';
   const refreshPayment = async () => {
     try {
