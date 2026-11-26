@@ -68,15 +68,16 @@ function followTestOrder(order) {
   }
   void refresh();
 }
-if (tracked?.orderId && tracked.requestId) followTestOrder(tracked);
 const paymentReturn = !demo && /^#(onlinezahlung|zahlung)=([a-f0-9-]{36})$/i.exec(location.hash);
+if (!paymentReturn && tracked?.orderId && tracked.requestId) followTestOrder(tracked);
 if (paymentReturn) {
   const [,kind,paymentRequest] = paymentReturn;
   const live = kind==='onlinezahlung';
   const paymentLabel = live ? 'Onlinezahlung' : 'Mollie-Testzahlung';
   if (live) document.getElementById('orderTrackingHeading').textContent = 'Status deiner Abholbestellung';
   clearTimeout(trackingTimer);
-  tracked = null;
+  const paymentTracking = {};
+  tracked = paymentTracking;
   tracking.hidden = false;
   trackingText.textContent = paymentLabel+' wird geprüft …';
   const refreshPayment = async () => {
@@ -85,13 +86,16 @@ if (paymentReturn) {
       const response = await fetch('/api/v1/delivery-portal/'+endpoint,{
         headers:{authorization:'Bearer '+paymentRequest}
       });
+      if (tracked !== paymentTracking) return;
       if (response.status===404) {
         trackingText.textContent = 'Zahlung derzeit nicht abrufbar.';
         return;
       }
       if (!response.ok) throw Error();
       const payment = await response.json();
+      if (tracked !== paymentTracking) return;
       if (payment.status==='paid') {
+        if (typeof payment.orderId !== 'string' || !payment.orderId) throw Error();
         if (!live) {
           history.replaceState(null,'',location.pathname+location.search);
           followTestOrder({orderId:payment.orderId,requestId:paymentRequest});
@@ -100,7 +104,7 @@ if (paymentReturn) {
         const status = statusLabels[payment.fulfillmentStatus] ?? 'Online bezahlt';
         trackingText.textContent = '#'+payment.orderId.slice(0,8)+' · '+status;
         if (['collected','cancelled'].includes(payment.fulfillmentStatus)) return;
-        setTimeout(refreshPayment,5000);
+        trackingTimer = setTimeout(refreshPayment,5000);
         return;
       }
       if (['canceled','expired','failed','review'].includes(payment.status)) {
@@ -108,8 +112,9 @@ if (paymentReturn) {
         return;
       }
     } catch {}
+    if (tracked !== paymentTracking) return;
     trackingText.textContent = 'Bestätigung steht aus. Status wird erneut abgefragt …';
-    setTimeout(refreshPayment,5000);
+    trackingTimer = setTimeout(refreshPayment,5000);
   };
   void refreshPayment();
 }
@@ -202,6 +207,7 @@ finish.addEventListener('click', async () => {
       return;
     }
     basketMessage.textContent = 'In der Testkasse eingegangen · #' + result.orderId.slice(0,8);
+    if (paymentReturn && location.hash === paymentReturn[0]) history.replaceState(null,'',location.pathname+location.search);
     followTestOrder({orderId:result.orderId,requestId:pendingOrder.requestId});
     pendingOrder = null;
     selection = null;

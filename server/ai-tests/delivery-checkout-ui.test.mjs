@@ -200,3 +200,60 @@ test('sandbox preview displays and changes a basket without submitting an order'
     dom.window.close();
   }
 });
+
+test('a new test order replaces pending payment tracking and ignores its late response', async () => {
+  let resolvePayment;
+  const paths = [];
+  const dom = page(async path => {
+    paths.push(path);
+    if (path.endsWith('/test-payment-status')) return new Promise(resolve => {resolvePayment=resolve;});
+    if (path.endsWith('/test-status')) return Response.json({status:'collected',mode:'pickup'});
+    if (path.endsWith('/test-order')) return Response.json({orderId:dishId});
+    throw Error('Unexpected request');
+  }, '#zahlung='+restaurantId);
+  try {
+    const {window} = dom;
+    window.addDish({id:restaurantId,name:'Testrestaurant'},false,{id:dishId,name:'Pizza',cents:100},'10551');
+    window.document.getElementById('finishDemo').click();
+    await wait();
+    const tracking = window.document.getElementById('testTrackingStatus');
+    assert.match(tracking.textContent,/Abgeholt/);
+    resolvePayment(Response.json({status:'expired'}));
+    await wait();
+    assert.match(tracking.textContent,/Abgeholt/);
+    assert.equal(paths.length,3);
+    assert.equal(window.location.hash,'');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('return from test payment ignores previously saved tracking and resumes at the kitchen', async () => {
+  const dom = new JSDOM(html,{url:'https://portal.example/bestellen/#zahlung='+restaurantId,runScripts:'outside-only'});
+  try {
+    const {window} = dom;
+    const paths = [];
+    const timers = [];
+    window.setTimeout = callback => {timers.push(callback);};
+    window.sessionStorage.setItem('bringness.portal.testTracking',JSON.stringify({orderId:dishId,requestId:dishId}));
+    window.fetch = async (path,options) => {
+      paths.push(path);
+      assert.equal(options.headers.authorization,'Bearer '+restaurantId);
+      if (path.endsWith('/test-status')) return Response.json({status:'collected',mode:'pickup'});
+      return Response.json(paths.length===1 ? {status:'paid'} : {status:'paid',orderId:restaurantId});
+    };
+    window.eval(script);
+    await wait();
+    assert.match(window.document.getElementById('testTrackingStatus').textContent,/Bestätigung steht aus/);
+    assert.equal(window.location.hash,'#zahlung='+restaurantId);
+    assert.equal(timers.length,1);
+    timers.shift()();
+    await wait();
+    assert.deepEqual(paths.map(path=>path.split('/').at(-1)),['test-payment-status','test-payment-status','test-status']);
+    assert.equal(window.location.hash,'');
+    assert.match(window.document.getElementById('testTrackingStatus').textContent,/Abgeholt/);
+    assert.equal(timers.length,0);
+  } finally {
+    dom.window.close();
+  }
+});
