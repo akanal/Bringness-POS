@@ -31,7 +31,7 @@ test('pickup page submits the current total and retries with the same request ID
     menu.open=true;
     await new Promise(resolve=>menu.addEventListener('toggle',resolve,{once:true}));
     await wait();
-    const add = doc.querySelector('#restaurants button');
+    const add = doc.querySelector('#restaurants details button');
     assert.equal(add.textContent,'Zum Warenkorb');
     add.click();
     const finish = doc.getElementById('finishDemo');
@@ -341,6 +341,30 @@ test('restaurant discovery filters and sorts the returned delivery options', asy
     assert.match(document.getElementById('discoveryCount').textContent,/Keine Restaurants/);
     document.getElementById('freeDelivery').click();
     assert.deepEqual(names(),['Bistro Berlin']);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('restaurant favorites are saved and reopened with the matching postcode and order mode', async () => {
+  const fetcher = async () => Response.json({restaurants:[
+    {id:restaurantId,name:'Moabit Küche',minutes:'35',feeCents:0,minimumCents:1000}
+  ]});
+  const dom = page(fetcher, '?mode=delivery&postcode=10551');
+  try {
+    await wait();
+    const {document, localStorage} = dom.window;
+    const toggle = document.querySelector('.favorite-toggle');
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-pressed'),'true');
+    const link = document.querySelector('#accountFavorites a');
+    assert.equal(link.textContent,'Moabit Küche');
+    assert.equal(new URL(link.href).searchParams.get('postcode'),'10551');
+    assert.equal(new URL(link.href).searchParams.get('mode'),'delivery');
+    assert.match(localStorage.getItem('bringness.ordering.favorites.restaurants'),/Moabit Küche/);
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-pressed'),'false');
+    assert.equal(document.querySelector('#accountFavorites a'),null);
   } finally {
     dom.window.close();
   }
