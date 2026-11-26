@@ -48,8 +48,11 @@ export function createDeliveryMerchant(db,{access,withToken=withMerchantToken,fe
           return 'Das verbundene Mollie-Konto passt nicht zum hinterlegten Standortprofil.';
         }
         if (profile.status!=='verified') return 'Mollie hat dieses Website-Profil noch nicht verifiziert.';
-        if (onboarding.canReceivePayments!==true || onboarding.canReceiveSettlements!==true) {
-          return 'Mollie hat Zahlungen und Auszahlungen für dieses Konto noch nicht vollständig freigegeben.';
+        const missingApprovals = [];
+        if (onboarding.canReceivePayments!==true) missingApprovals.push('Zahlungen');
+        if (onboarding.canReceiveSettlements!==true) missingApprovals.push('Auszahlungen');
+        if (missingApprovals.length) {
+          return 'Bei Mollie fehlt die Freigabe für: '+missingApprovals.join(' und ')+'. Prüfe den Aktivierungsstatus im Mollie-Konto.';
         }
         const result = await db.query(`INSERT INTO pos_delivery_merchants (restaurant_id,organization_id,profile_id)
           SELECT a.id,$4,$5 FROM (${access}) a JOIN center_mollie_credentials c ON c.restaurant_id=a.id
