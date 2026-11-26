@@ -81,6 +81,7 @@ test('merchant diagnostics distinguish pending Mollie checks and only save a ver
   let canReceiveSettlements = false;
   let saved = false;
   let writes = 0;
+  let testMethods = [];
   const db = {async query(sql, args) {
     if (sql.includes('INSERT INTO')) {
       writes++;
@@ -92,11 +93,13 @@ test('merchant diagnostics distinguish pending Mollie checks and only save a ver
   const handler = createDeliveryMerchant(db,{
     access:'SELECT id FROM restaurants',
     withToken:async (db,id,operation) => operation('test-token','envelope'),
-    fetcher:async url => Response.json(url.endsWith('/organizations/me') ? {id:organization}
+    fetcher:async url => Response.json(url.includes('/methods?')
+      ? (assert.equal(new URL(url).search,'?profileId=pfl_1&testmode=true'),{_embedded:{methods:testMethods}})
+      : url.endsWith('/organizations/me') ? {id:organization}
       : url.endsWith('/onboarding/me') ? {canReceivePayments,canReceiveSettlements}
       : {id:'pfl_1',status:profileStatus})
   });
-  const request = method => handler({method},(status,body)=>({status,...body}),'test-restaurant','hash');
+  const request = (method, options) => handler({method},(status,body)=>({status,...body}),'test-restaurant','hash',options);
 
   assert.equal((await request('GET')).connectionReady,true);
   organization = 'org_other';
@@ -116,4 +119,12 @@ test('merchant diagnostics distinguish pending Mollie checks and only save a ver
   saved = true;
   assert.equal((await request('PUT')).ready,true);
   assert.equal(writes,2);
+  canReceivePayments = false;
+  canReceiveSettlements = false;
+  assert.match((await request('PUT',{testMode:true})).error,/keine verfügbare Test-Zahlungsart/);
+  assert.equal(writes,2);
+  testMethods = [{id:'creditcard'}];
+  assert.equal((await request('PUT',{testMode:true})).ready,true);
+  assert.match((await request('PUT')).error,/Zahlungen und Auszahlungen/);
+  assert.equal(writes,3);
 });
