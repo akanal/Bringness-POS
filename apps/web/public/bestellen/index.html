@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=customer-menu">
+  <link rel="stylesheet" href="/bestellen/style.css?v=restaurant-favorites">
 
 </head>
 <body>
@@ -16,6 +16,10 @@
       <nav aria-label="Kundenkonto">
         <a class="account-primary" href="/shop/account.html">Anmelden</a>
         <a href="/shop/register.html">Konto erstellen</a>
+        <details class="favorites-list">
+          <summary>Gemerkte Restaurants</summary>
+          <ul id="accountFavorites"></ul>
+        </details>
         <a href="/shop/customer.html">Profil und Lieferadressen</a>
         <a id="accountTrackOrder" href="#testTracking" hidden>Aktuelle Bestellung verfolgen</a>
         <a href="/shop/order-history.html">Shop-Bestellungen</a>
@@ -98,5 +102,5 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=customer-menu" defer></script></body>
+<script src="/bestellen/preview.js?v=restaurant-favorites" defer></script></body>
 </html>
