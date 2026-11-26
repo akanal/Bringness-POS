@@ -166,8 +166,9 @@ assert(![...panel.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'
 assert.deepEqual((await query('SELECT * FROM orders WHERE id=ANY($1::uuid[]) ORDER BY id',[[expired,recent,pending,legacyReady]])).rows,beforeExpiry,'display expiry never marks collected, paid or deletes orders');
 // Real POS order-board rendering offers one readiness action, without a collected command.
 w=new JSDOM('<div id="moduleBody"></div>',{runScripts:'outside-only'}).window;
-const board=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8').split('async function renderOrderBoard(')[1].split('function updateHeaderClock')[0];
-w.eval("const $=id=>document.getElementById(id),esc=s=>String(s??''),euro=n=>String(n);let kitchenBoardSignature='';async function renderOrderBoard("+board);
+const orderBoardSource=fs.readFileSync(new URL('../../apps/web/public/pos/app.js',import.meta.url),'utf8');
+const board=orderBoardSource.slice(orderBoardSource.indexOf('const isDeliveryTestOrder='),orderBoardSource.indexOf('function updateHeaderClock('));
+w.eval("const $=id=>document.getElementById(id),esc=s=>String(s??''),euro=n=>String(n);let kitchenBoardSignature='';"+board);
 await w.renderOrderBoard('bestellungen',rid,{orders:[{id:recent,source:'qr',qr_service_mode:'pickup',status:'paid',qr_ready_at:new Date().toISOString(),created_at:new Date().toISOString(),items:[]},{id:pending,source:'qr',qr_service_mode:'pickup',status:'preparing',qr_ready_at:null,created_at:new Date().toISOString(),items:[]}]});
 assert.equal(w.document.querySelectorAll('[data-collection-ready]').length,1);assert.equal(w.document.querySelector('[data-collection-ready]').dataset.collectionReady,pending);assert(![...w.document.querySelectorAll('button')].some(b=>b.textContent==='Abgeholt'));w.close();
 console.log('Pickup display expiry passed: 30-minute boundary, pending retained, shared screens, queue, no order mutations and no collected buttons.');

@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="/bestellen/style.css?v=search-results">
 
 </head>
 <body>
   <header>
-    <a class="brand" href="./">Bringness</a>
+    <a class="brand" href="/bestellen/">Bringness</a>
     <nav aria-label="Kasse">
       <a href="https://bringness-pos.de/">Kassenfunktionen</a>
       <a href="https://bringness.de/pos/">Zur Kasse</a>
@@ -19,21 +19,24 @@
   <main>
     <section class="intro" aria-label="Essen bestellen">
 <div class="scenes" aria-hidden="true">
-<div class="scene active" style="background-image:url(./pizza.webp)"></div>
-<div class="scene" style="background-image:url(./burger.webp)"></div>
+<div class="scene active" style="background-image:url(/bestellen/pizza.webp)"></div>
+<div class="scene" style="background-image:url(/bestellen/burger.webp)"></div>
 </div>
 <div class="intro-content">
 
-      <h1>Heute gibt’s <em>was Gutes.</em></h1>
-      <p>Frisch aus Berlins Küchen. Lass es dir liefern oder hol’s selbst ab.</p>
-      <form id="search">
+      <a id="newSearch" href="/bestellen/" hidden>← Zur Startseite</a>
+      <h1 id="landingHeading">Heute gibt’s <em>was Gutes.</em></h1>
+      <p id="landingCopy">Lass dir dein Essen liefern oder hol’s selbst ab.</p>
+      <h1 id="searchHeading" hidden>Restaurants finden</h1>
+      <form id="search" action="/bestellen/" method="get">
+        <input type="hidden" name="demo" value="1" disabled>
         <fieldset>
           <legend>Bestellart</legend>
           <label><input type="radio" name="mode" value="delivery" checked> Lieferung</label>
           <label><input type="radio" name="mode" value="pickup"> Abholung</label>
         </fieldset>
         <div class="search-row">
-          <label>Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="z. B. 10551" required></label>
+          <label>Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="5 Ziffern" required></label>
           <button>Restaurants finden</button>
         </div>
       </form></div>
@@ -73,5 +76,5 @@
       </aside>
     </section>
   </main>
-<script src="./preview.js?v=portal-payment-tracking" defer></script></body>
+<script src="/bestellen/preview.js?v=search-results" defer></script></body>
 </html>

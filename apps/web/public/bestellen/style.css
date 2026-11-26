@@ -79,3 +79,16 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   width: 100%;
   box-sizing: border-box;
 }
+
+.search-page .intro {
+  min-height: auto;
+  padding: 28px clamp(16px, 6vw, 96px);
+  background: #0a192a;
+}
+.search-page .scenes, .search-page .slide-controls { display: none; }
+#newSearch { color: inherit; }
+#searchHeading {
+  margin-top: 12px;
+  max-width: none;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+}
