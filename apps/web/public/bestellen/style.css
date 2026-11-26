@@ -55,9 +55,30 @@ h2 small {font-size:.875rem;font-weight:500}
   border: 1px solid #d9e2ea;
   border-radius: 16px;
 }
-#basketTotal { font-weight: 750; }
-.results li, #basketItems li { margin-block: 8px; }
-.results li button, #basketItems button { padding: 5px 10px; }
+#basketHeading { margin: 0; }
+#basketRestaurant { margin: .35rem 0 1rem; color: #46556a; }
+#basketItems { list-style: none; margin: 0; padding: 0; }
+#basketItems li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem 0;
+  border-block-start: 1px solid #d9e2ea;
+  overflow-wrap: anywhere;
+}
+#basketItems button { min-height: 44px; padding: 5px 10px; }
+#basketTotal {
+  margin: 0;
+  padding: .9rem 0;
+  border-block-start: 1px solid #d9e2ea;
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+#basketMinimum:empty, #basketMessage:empty { margin: 0; }
+#finishDemo { width: 100%; min-height: 48px; margin-top: .65rem; }
+.results li { margin-block: 8px; }
+.results li button { padding: 5px 10px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 
 #deliveryAddress:not([hidden]) {

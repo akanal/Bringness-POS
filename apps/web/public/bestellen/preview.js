@@ -178,7 +178,8 @@ function renderBasket() {
   for (const [dish, quantity] of quantities) {
     const row = document.createElement('li');
     const remove = document.createElement('button');
-    row.textContent = quantity + ' × ' + dish.name + ' · ' + money.format(dish.cents * quantity / 100) + ' ';
+    const description = document.createElement('span');
+    description.textContent = quantity + ' × ' + dish.name + ' · ' + money.format(dish.cents * quantity / 100);
     remove.type = 'button';
     remove.textContent = '1 entfernen';
     remove.setAttribute('aria-label','Eine Portion ' + dish.name + ' entfernen');
@@ -189,7 +190,7 @@ function renderBasket() {
       basketMessage.textContent = '';
       renderBasket();
     };
-    row.append(remove);
+    row.append(description, remove);
     basketItems.append(row);
     subtotal += dish.cents * quantity;
   }
