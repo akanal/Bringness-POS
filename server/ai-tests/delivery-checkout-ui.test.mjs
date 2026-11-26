@@ -155,6 +155,10 @@ test('a saved coverage link starts the requested search only for valid inputs', 
         const actual = new URL(calls[0], 'https://portal.example').searchParams;
         assert.equal(actual.get('mode'), expected.get('mode'));
         assert.equal(actual.get('postcode'), expected.get('postcode'));
+        const alternative = new URL(doc.querySelector('#restaurants a').href);
+        assert.equal(alternative.pathname, '/bestellen/');
+        assert.equal(alternative.searchParams.get('postcode'), expected.get('postcode'));
+        assert.equal(alternative.searchParams.get('mode'), expected.get('mode') === 'pickup' ? 'delivery' : 'pickup');
       }
     } finally {
       dom.window.close();
