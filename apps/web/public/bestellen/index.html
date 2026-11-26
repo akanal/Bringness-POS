@@ -5,16 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=discover">
+  <link rel="stylesheet" href="/bestellen/style.css?v=customer-menu">
 
 </head>
 <body>
   <header>
     <a class="brand" href="/bestellen/">Bringness</a>
-    <nav aria-label="Kasse">
-      <a href="https://bringness-pos.de/">Kassenfunktionen</a>
-      <a href="https://bringness.de/pos/">Zur Kasse</a>
-    </nav>
+    <details class="customer-menu" id="customerMenu">
+      <summary>Mein Konto</summary>
+      <nav aria-label="Kundenkonto">
+        <a class="account-primary" href="/shop/account.html">Anmelden</a>
+        <a href="/shop/register.html">Konto erstellen</a>
+        <a href="/shop/customer.html">Profil und Lieferadressen</a>
+        <a id="accountTrackOrder" href="#testTracking" hidden>Aktuelle Bestellung verfolgen</a>
+        <a href="/shop/order-history.html">Shop-Bestellungen</a>
+        <div class="account-links">
+          <a href="/shop/help.html">Hilfe</a>
+          <a href="/datenschutz/">Datenschutz</a>
+          <a href="/impressum/">Impressum</a>
+        </div>
+      </nav>
+    </details>
   </header>
   <main>
     <section class="intro" aria-label="Essen bestellen">
@@ -87,5 +98,5 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=discover" defer></script></body>
+<script src="/bestellen/preview.js?v=customer-menu" defer></script></body>
 </html>
