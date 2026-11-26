@@ -291,6 +291,7 @@ async function search() {
   }
   status.textContent = delivery ? 'Die Restaurants liefern mit eigenen Fahrern.' : 'Abholung direkt im Restaurant.';
 
+  const cards = [];
   for (const restaurant of matches) {
     const card = document.createElement('article');
     const title = document.createElement('h3');
@@ -300,6 +301,7 @@ async function search() {
       ? restaurant.minutes + ' Min. · ' + (demo ? restaurant.fee : money.format(restaurant.feeCents / 100)) +
         ' Lieferung · Mindestbestellwert ' + (demo ? restaurant.minimum : money.format(restaurant.minimumCents / 100))
       : 'Abholung in ' + restaurant.minutes + ' Min.';
+    terms.className = 'restaurant-terms';
     card.append(title, terms);
     if (restaurant.menu) {
       const menu = document.createElement('details');
@@ -365,8 +367,43 @@ async function search() {
         }
       });
     }
-    results.append(card);
+    cards.push({restaurant, card});
   }
+
+  const discovery = document.getElementById('discovery');
+  const filter = document.getElementById('restaurantFilter');
+  const sort = document.getElementById('restaurantSort');
+  const free = document.getElementById('freeDelivery');
+  const count = document.getElementById('discoveryCount');
+  discovery.hidden = false;
+  count.hidden = false;
+  document.getElementById('freeDeliveryFilter').hidden = !delivery;
+  for (const option of sort.options) {
+    if (['fee','minimum'].includes(option.value)) option.disabled = !delivery;
+  }
+  const sortFields = {time:'minutes',fee:'feeCents',minimum:'minimumCents'};
+  function showResults() {
+    const query = filter.value.trim().toLocaleLowerCase('de-DE');
+    const field = sortFields[sort.value];
+    const displayed = cards.filter(({restaurant}) =>
+      restaurant.name.toLocaleLowerCase('de-DE').includes(query) &&
+      (!delivery || !free.checked || restaurant.feeCents === 0));
+    if (field) displayed.sort((a,b) => parseInt(a.restaurant[field],10) - parseInt(b.restaurant[field],10));
+    for (const {card} of cards) card.hidden = true;
+    for (const {card} of displayed) {
+      card.hidden = false;
+      results.append(card);
+    }
+    for (const {card} of cards) {
+      if (!card.isConnected) results.append(card);
+    }
+    count.textContent = displayed.length === 0 ? 'Keine Restaurants mit diesen Filtern.' :
+      displayed.length + (displayed.length === 1 ? ' Restaurant' : ' Restaurants');
+  }
+  filter.oninput = showResults;
+  free.onchange = showResults;
+  sort.onchange = showResults;
+  showResults();
 }
 
 const initialPostcode = initialSearch.get('postcode');
