@@ -92,3 +92,53 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   max-width: none;
   font-size: clamp(2rem, 5vw, 3.25rem);
 }
+
+.search-page header nav { display: none; }
+.search-page .intro { background: #122a40; }
+.search-page #searchHeading { margin-block: 12px 18px; }
+.search-page main > section:nth-child(2) { max-width: 80rem; margin-inline: auto; }
+.discovery:not([hidden]) {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+  background: #eaf1f5;
+  border-radius: 16px;
+}
+.discovery label:not([hidden]) { display: grid; gap: 4px; font-weight: 650; }
+.discovery label:first-child { flex: 1 1 16rem; }
+.discovery input[type=search], .discovery select {
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  color: #13283e;
+  border: 1px solid #8196a6;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+}
+.discovery .discovery-check:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+}
+#discoveryCount { font-weight: 700; }
+.search-page .results {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  align-items: start;
+}
+.search-page .results article {
+  background: #fff;
+  border: 1px solid #d9e2ea;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px #13283e0a;
+  padding: 18px;
+}
+.restaurant-terms {
+  margin-block: 6px 14px;
+  color: #385568;
+  font-size: .92rem;
+}
+.search-page .results summary { cursor: pointer; font-weight: 700; }
