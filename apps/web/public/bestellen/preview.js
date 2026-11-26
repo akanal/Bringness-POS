@@ -361,7 +361,7 @@ const initialMode = initialSearch.get('mode');
 const hasSearch = /^\d{5}$/.test(initialPostcode ?? '') && ['pickup', 'delivery'].includes(initialMode);
 if (demo) {
   form.elements.demo.disabled = false;
-  document.getElementById('newSearch').href = '?demo=1';
+  document.getElementById('newSearch').href = '/bestellen/?demo=1';
 }
 
 if (hasSearch) {

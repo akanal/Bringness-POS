@@ -64,6 +64,9 @@ test('return from online payment shows the POS pickup status through collection'
       return Response.json({status:'paid',orderId:restaurantId,fulfillmentStatus:statuses.shift()});
     };
     dom.window.eval(script);
+    const form = dom.window.document.getElementById('search');
+    assert.equal(form.action, 'https://portal.example/bestellen/');
+    assert.equal(form.method, 'get');
     const tracking = dom.window.document.getElementById('testTrackingStatus');
     for (const label of ['Eingegangen','Abholbereit','Abgeholt']) {
       await wait();
