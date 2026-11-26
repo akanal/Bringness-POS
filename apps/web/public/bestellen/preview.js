@@ -127,6 +127,7 @@ function renderBasket() {
   const {restaurant, delivery} = selection;
   addressFields.hidden = !delivery || !selection.mollieTestCheckout;
   addressFields.disabled = addressFields.hidden || Boolean(pendingOrder);
+  document.getElementById('deliveryPostcode').textContent = addressFields.hidden ? '' : selection.postcode;
   document.getElementById('basketRestaurant').textContent = restaurant.name + (delivery ? ' · Lieferung' : ' · Abholung');
   let subtotal = 0;
   for (const [dish, quantity] of quantities) {
@@ -190,7 +191,8 @@ finish.addEventListener('click', async () => {
   };
   sending = true;
   renderBasket();
-  basketMessage.textContent = onlinePickup ? 'Weiterleitung zu Mollie wird vorbereitet …' : 'Testbestellung wird übertragen …';
+  basketMessage.textContent = onlinePickup || selection.mollieTestCheckout
+    ? 'Weiterleitung zu Mollie wird vorbereitet …' : 'Testbestellung wird übertragen …';
   try {
     const endpoint = onlinePickup ? 'checkout' : selection.mollieTestCheckout ? 'test-checkout' : 'test-order';
     const response = await fetch('/api/v1/delivery-portal/'+endpoint,{
@@ -231,6 +233,7 @@ function addDish(restaurant, delivery, dish, postcode = '', mollieTestCheckout =
       selection.mollieTestCheckout !== mollieTestCheckout || selection.basketPreview !== basketPreview) {
     if (quantities.size && !window.confirm('Den aktuellen Warenkorb ersetzen?')) return;
     quantities.clear();
+    for (const field of Object.values(addressInputs)) field.value = '';
     selection = {restaurant, delivery, postcode, mollieTestCheckout, onlinePickup, basketPreview};
   }
   const previousDish = demo ? dish : [...quantities.keys()].find(entry => entry.id === dish.id);
