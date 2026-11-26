@@ -23,12 +23,11 @@ test('pickup page submits the current total and retries with the same request ID
     assert.equal(path,'/api/v1/delivery-portal/checkout');
     orders.push(JSON.parse(options.body));
     return Response.json({status:'unconfirmed'},{status:202});
-  });
+  }, '?mode=pickup&postcode=10551');
   try {
     const doc = dom.window.document;
     doc.querySelector('[name=postcode]').value='10551';
     doc.querySelector('[name=mode][value=pickup]').checked=true;
-    doc.getElementById('search').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
     await wait();
     const menu = doc.querySelector('#restaurants details');
     menu.open=true;
@@ -87,11 +86,10 @@ test('an older menu response cannot replace the reopened menu', async () => {
       return Promise.resolve(Response.json({restaurants:[{id:restaurantId,name:'Pilotrestaurant',minutes:20}]}));
     }
     return new Promise(resolve => requests.push(resolve));
-  });
+  }, '?mode=pickup&postcode=10551');
   try {
     const doc = dom.window.document;
     doc.querySelector('[name=postcode]').value = '10551';
-    doc.getElementById('search').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
     await wait();
     const menu = doc.querySelector('#restaurants details');
     async function setOpen(open) {
@@ -147,6 +145,9 @@ test('a saved coverage link starts the requested search only for valid inputs', 
       await wait();
       const expected = new URLSearchParams(query);
       assert.equal(calls.length, valid ? 1 : 0);
+      assert.equal(dom.window.document.body.classList.contains('search-results-page'),valid);
+      const form = dom.window.document.getElementById('search');
+      assert.equal(form.parentElement.id === 'resultSearch',valid);
       if (valid) {
         const actual = new URL(calls[0], 'https://portal.example').searchParams;
         assert.equal(actual.get('mode'), expected.get('mode'));
@@ -253,6 +254,24 @@ test('return from test payment ignores previously saved tracking and resumes at 
     assert.equal(window.location.hash,'');
     assert.match(window.document.getElementById('testTrackingStatus').textContent,/Abgeholt/);
     assert.equal(timers.length,0);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('the start page submits valid postcode and mode through a full GET navigation', () => {
+  const dom = page(() => { throw Error('No search expected on the start page'); });
+  try {
+    const {window} = dom;
+    const form = window.document.getElementById('search');
+    assert.equal(form.method,'get');
+    assert.equal(form.action,'https://portal.example/bestellen/');
+    assert.equal(form.checkValidity(),false);
+    form.elements.postcode.value = '20095';
+    form.elements.mode.value = 'pickup';
+    assert.equal(form.checkValidity(),true);
+    assert.deepEqual(Object.fromEntries(new window.FormData(form)),{mode:'pickup',postcode:'20095'});
+    assert.equal(form.dispatchEvent(new window.Event('submit',{cancelable:true})),true);
   } finally {
     dom.window.close();
   }

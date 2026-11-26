@@ -79,3 +79,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   width: 100%;
   box-sizing: border-box;
 }
+
+.search-results-page .intro { display: none; }
+.search-results-page main > section:nth-child(2) { min-height: 75vh; }
+.search-results-page #search { margin: 0 0 20px; border: 1px solid #d9e2ea; }
+.search-home main > section:nth-child(2):not(:has(#testTracking:not([hidden]), #demoBasket:not([hidden]))) { display: none; }
+.search-home:has(#searchLabel:not(:empty)) main > section:nth-child(2) { display: block; }

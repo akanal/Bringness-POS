@@ -359,31 +359,40 @@ async function search(showResults = false) {
   if (showResults) document.getElementById('results-heading').scrollIntoView?.({block:'start'});
 }
 
-form.addEventListener('submit', event => {
-  event.preventDefault();
-  void search(true);
-});
-
-form.addEventListener('change', event => {
-  if (event.target.name === 'mode' && form.reportValidity()) void search();
-});
-
-form.addEventListener('input', event => {
-  if (event.target.name !== 'postcode') return;
-  searchVersion++;
-  results.replaceChildren();
-  status.textContent = 'Suche starten, um passende Restaurants anzuzeigen.';
-});
-
 const initialSearch = new URLSearchParams(location.search);
 const initialPostcode = initialSearch.get('postcode');
 const initialMode = initialSearch.get('mode');
+const validSearch = /^\d{5}$/.test(initialPostcode ?? '') && ['pickup', 'delivery'].includes(initialMode);
+const resultsPage = !demo && !paymentReturn && validSearch;
+
+if (resultsPage) {
+  document.body.classList.add('search-results-page');
+  document.getElementById('newSearch').hidden = false;
+  document.getElementById('resultSearch').append(form);
+  document.title = 'Restaurants finden · Bringness';
+} else {
+  document.body.classList.add('search-home');
+}
+
+if (resultsPage || demo) {
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!demo) {
+      const query = new URLSearchParams(new FormData(form));
+      history.replaceState(null, '', location.pathname + '?' + query);
+    }
+    void search(true);
+  });
+}
+
 if (demo) {
   form.elements.postcode.value = '10551';
   void search();
-} else if (/^\d{5}$/.test(initialPostcode ?? '') && ['pickup', 'delivery'].includes(initialMode)) {
+} else if (validSearch) {
   form.elements.postcode.value = initialPostcode;
   form.elements.mode.value = initialMode;
+  form.elements.postcode.placeholder = 'z. B. ' + initialPostcode.slice(0,2) + '…';
   void search();
 }
 const scenes = [...document.querySelectorAll('.scene')];
@@ -410,4 +419,4 @@ selectors.forEach((button, index) => button.addEventListener('click', () => {
   showSlide(index);
 }));
 autoplay.addEventListener('click', () => play(!timer));
-play(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+if (!resultsPage) play(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
