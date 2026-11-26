@@ -265,3 +265,56 @@ test('return from test payment ignores previously saved tracking and resumes at 
     dom.window.close();
   }
 });
+
+test('delivery checkout shows its postcode, enforces the minimum and retries the same address and total', async () => {
+  const orders = [];
+  const dom = page(async (path, options) => {
+    if (path.includes('/restaurants?')) return Response.json({restaurants:[
+      {id:restaurantId,name:'Testrestaurant',minutes:30,feeCents:250,minimumCents:1200}
+    ]});
+    if (path.includes('/menu?')) return Response.json({
+      menu:[{id:dishId,name:'Pizza',cents:900}],testOrders:true,mollieTestCheckout:true
+    });
+    orders.push({path,body:JSON.parse(options.body)});
+    return Response.json({status:'unconfirmed'},{status:202});
+  }, '?mode=delivery&postcode=10551');
+  try {
+    await wait();
+    const doc = dom.window.document;
+    const menu = doc.querySelector('#restaurants details');
+    const toggled = new Promise(resolve => menu.addEventListener('toggle',resolve,{once:true}));
+    menu.open = true;
+    await toggled;
+    await wait();
+
+    const add = menu.querySelector('button');
+    const finish = doc.getElementById('finishDemo');
+    add.click();
+    assert.equal(doc.getElementById('deliveryPostcode').textContent,'10551');
+    assert.equal(finish.disabled,true);
+    assert.match(doc.getElementById('basketMinimum').textContent,/3,00/);
+    add.click();
+    assert.equal(finish.disabled,false);
+    assert.match(doc.getElementById('basketTotal').textContent,/20,50/);
+    finish.click();
+    assert.equal(orders.length,0);
+    assert.equal(doc.activeElement.id,'deliveryRecipient');
+
+    doc.getElementById('deliveryRecipient').value = 'Testkunde';
+    doc.getElementById('deliveryStreet').value = 'Beispielstraße 1';
+    doc.getElementById('deliveryCity').value = 'Berlin';
+    finish.click();
+    await wait();
+    assert.equal(doc.getElementById('deliveryAddress').disabled,true);
+    finish.click();
+    await wait();
+    assert.equal(orders.length,2);
+    assert.deepEqual(orders[0],orders[1]);
+    assert.equal(orders[0].path,'/api/v1/delivery-portal/test-checkout');
+    assert.equal(orders[0].body.expectedTotalCents,2050);
+    assert.equal(orders[0].body.postcode,'10551');
+    assert.deepEqual(orders[0].body.address,{recipient:'Testkunde',street:'Beispielstraße 1',city:'Berlin'});
+  } finally {
+    dom.window.close();
+  }
+});
