@@ -318,3 +318,30 @@ test('delivery checkout shows its postcode, enforces the minimum and retries the
     dom.window.close();
   }
 });
+
+test('restaurant discovery filters and sorts the returned delivery options', async () => {
+  const dom = page(async () => Response.json({restaurants:[
+    {id:restaurantId,name:'Moabit Küche',minutes:'35',feeCents:0,minimumCents:1000},
+    {id:dishId,name:'Bistro Berlin',minutes:'15',feeCents:250,minimumCents:800}
+  ]}), '?mode=delivery&postcode=10551');
+  try {
+    await wait();
+    const {document, Event} = dom.window;
+    const names = () => [...document.querySelectorAll('#restaurants article:not([hidden]) h3')].map(node => node.textContent);
+    const sort = document.getElementById('restaurantSort');
+    sort.value = 'time';
+    sort.dispatchEvent(new Event('change'));
+    assert.deepEqual(names(),['Bistro Berlin','Moabit Küche']);
+    document.getElementById('freeDelivery').click();
+    assert.deepEqual(names(),['Moabit Küche']);
+    const filter = document.getElementById('restaurantFilter');
+    filter.value = 'bistro';
+    filter.dispatchEvent(new Event('input'));
+    assert.deepEqual(names(),[]);
+    assert.match(document.getElementById('discoveryCount').textContent,/Keine Restaurants/);
+    document.getElementById('freeDelivery').click();
+    assert.deepEqual(names(),['Bistro Berlin']);
+  } finally {
+    dom.window.close();
+  }
+});
