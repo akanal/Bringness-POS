@@ -35,7 +35,7 @@
           <label><input type="radio" name="mode" value="pickup"> Abholung</label>
         </fieldset>
         <div class="search-row">
-          <label id="postcodeField">Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="5 Ziffern" required></label>
+          <label id="postcodeField">Postleitzahl <input id="postcode" name="postcode" autocomplete="off" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="5 Ziffern" required></label>
           <div id="addressField" hidden>
             <label for="addressSearch">Adresse oder Postleitzahl</label>
             <input id="addressSearch" type="search" maxlength="120" autocomplete="off"
@@ -96,7 +96,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=restaurant-results" defer></script>
+<script src="/bestellen/preview.js?v=empty-postcode" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>
