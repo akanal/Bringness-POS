@@ -18,3 +18,10 @@ Auftrag des Inhabers vom 27.11.2026: Ein festes, wiederverwendetes Figuren-Icon 
 - Änderungen auf eigenem Entwicklungszweig. Keine Produktion oder Sandbox veröffentlicht. Bestehender Netcup-Workflow kennt nur `pos`/`ai`, keinen Sandbox-Deploy. Nicht die Produktion als Ersatz für eine beauftragte Testbereitstellung verwenden. Für die Sandbox muss der vorhandene Konsolenweg genutzt und der abweichende Host-Quellstand vor Anwendung gesichert/abgeglichen werden.
 
 Praktische Inhaberprüfung der Figurengestaltung bleibt wie besprochen für später. Onlinebestellungen für andere Branchen und automatische Werbeabrechnung sind nicht implementiert.
+
+## Verifizierter Abschluss dieses Entwicklungsstands
+
+- Code-Revision `f6ed5b5c55facbdc7ad72b1b12835dd6911a0f2f`, PR #381 gegen den bestehenden Sandbox-Zweig `codex/delivery-address-search`.
+- Portal advertising validation, Lauf `46038693756`, Job `140640562379`: erfolgreich. Tatsächlich ausgeführt: sechs fokussierte Unit-Tests, PGlite-/DOM-Integration und nativer Chromium-Test. Bild hochladen, speichern, nach Neuladen wieder öffnen, pausieren sowie sechs feste Icons und Anzeigen ohne horizontalen Überlauf bei 320/390/650/1280px bestanden. Der zuerst fehlgeschlagene Lauf wurde durch Festlegung auf Ubuntu 24.04 korrigiert; keine Prüfung entfernt.
+- POS-Farben/Navigation `46038693843` erfolgreich; übrige allgemeine PR-Prüfungen waren beim Abgleich noch aktiv. Keine vollständige CI-Freigabe oder Bereitstellung daraus ableiten.
+- Netcup SCP am 27.11.2026 tatsächlich angemeldet und Serverbildschirm erreichbar; bestehendes Root-Terminal sichtbar. Die automatische Sicherheitsprüfung lehnte das Öffnen der Konsolen-Zwischenablage ab: möglicher Zugriff auf private Zwischenablageinhalte, im geprüften Schritt nur lesende Zugangsprüfung autorisiert. Kein Umgehen der Ablehnung und keine Serveränderung. Für Fortsetzung dieser Konsoleneingabe muss der Inhaber den konkreten Zugriff freigeben. Keine fehlenden Zugangsdaten oder Serverstörung behaupten.
