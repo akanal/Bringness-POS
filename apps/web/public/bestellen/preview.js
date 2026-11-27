@@ -44,7 +44,7 @@ function renderFavorites() {
     const link = document.createElement('a');
     const query = new URLSearchParams({postcode:entry.postcode,mode:entry.mode,restaurant:entry.name});
     if (demo) query.set('demo','1');
-    link.href = '/bestellen/?' + query;
+    link.href = '/bestellen/ergebnisse?' + query;
     link.textContent = entry.name;
     row.append(link);
     favoritesList.append(row);
@@ -329,7 +329,7 @@ async function search() {
     const alternate = document.createElement('a');
     const nextSearch = new URLSearchParams({postcode, mode: delivery ? 'pickup' : 'delivery'});
     if (demo) nextSearch.set('demo', '1');
-    alternate.href = '/bestellen/?' + nextSearch;
+    alternate.href = '/bestellen/ergebnisse?' + nextSearch;
     alternate.textContent = delivery ? 'Mit derselben PLZ nach Abholung suchen' : 'Mit derselben PLZ nach Lieferung suchen';
     results.append(alternate);
     return;
@@ -365,6 +365,10 @@ async function search() {
       try { localStorage.setItem(favoritesKey,JSON.stringify([...favorites])); } catch {}
       updateFavorite();
       renderFavorites();
+      if (onlyFavorites.checked) {
+        showResults();
+        if (card.hidden) filterSummary.focus();
+      }
     };
     nameRow.append(title,favorite);
     card.append(nameRow,terms);
@@ -439,6 +443,12 @@ async function search() {
   const filter = document.getElementById('restaurantFilter');
   const sort = document.getElementById('restaurantSort');
   const free = document.getElementById('freeDelivery');
+  const onlyFavorites = document.getElementById('onlyFavorites');
+  const activeFilters = document.getElementById('activeFilters');
+  const filterPanel = document.getElementById('resultFilters');
+  const filterSummary = filterPanel.querySelector('summary');
+  filterPanel.hidden = false;
+  filterPanel.open = !window.matchMedia?.('(max-width: 720px)').matches;
   const count = document.getElementById('discoveryCount');
   discovery.hidden = false;
   count.hidden = false;
@@ -452,7 +462,8 @@ async function search() {
     const field = sortFields[sort.value];
     const displayed = cards.filter(({restaurant}) =>
       restaurant.name.toLocaleLowerCase('de-DE').includes(query) &&
-      (!delivery || !free.checked || restaurant.feeCents === 0));
+      (!delivery || !free.checked || restaurant.feeCents === 0) &&
+      (!onlyFavorites.checked || favorites.has(restaurant.id || restaurant.name)));
     if (field) displayed.sort((a,b) => parseInt(a.restaurant[field],10) - parseInt(b.restaurant[field],10));
     for (const {card} of cards) card.hidden = true;
     for (const {card} of displayed) {
@@ -462,12 +473,31 @@ async function search() {
     for (const {card} of cards) {
       if (!card.isConnected) results.append(card);
     }
+    activeFilters.replaceChildren();
+    for (const [input, label] of [
+      [free, 'Kostenlose Lieferung'],
+      [onlyFavorites, 'Gemerkte Restaurants']
+    ]) {
+      if (!input.checked || input.closest('label').hidden) continue;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = label + ' ×';
+      remove.setAttribute('aria-label', 'Filter entfernen: ' + label);
+      remove.onclick = () => {
+        input.checked = false;
+        showResults();
+        filterSummary.focus();
+      };
+      activeFilters.append(remove);
+    }
+    activeFilters.hidden = !activeFilters.childElementCount;
     count.textContent = displayed.length === 0 ? 'Keine Restaurants mit diesen Filtern.' :
       displayed.length + (displayed.length === 1 ? ' Restaurant' : ' Restaurants');
   }
   filter.value = initialSearch.get('restaurant') || '';
   filter.oninput = showResults;
   free.onchange = showResults;
+  onlyFavorites.onchange = showResults;
   sort.onchange = showResults;
   showResults();
 }
@@ -495,7 +525,6 @@ if (hasSearch) {
   void search();
 } else if (demo) {
   form.elements.postcode.value = '10551';
-  void search();
 }
 
 const scenes = [...document.querySelectorAll('.scene')];
