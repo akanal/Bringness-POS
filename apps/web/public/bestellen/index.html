@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=restaurant-results">
+  <link rel="stylesheet" href="/bestellen/style.css?v=discovery">
 
 </head>
 <body>
@@ -62,7 +62,23 @@
     <section aria-labelledby="results-heading">
       <h2 id="results-heading">Restaurants <small id="searchLabel"></small></h2>
       <p id="status" role="status">Gib eine Postleitzahl ein, um Restaurants zu finden.</p>
-      <div id="restaurantControls" hidden>
+      <div id="restaurantDiscovery" hidden>
+        <section class="discovery-banner" aria-labelledby="discoveryHeading">
+          <div>
+            <p id="discoveryLocation"></p>
+            <h2 id="discoveryHeading">Was gibt’s in deiner Nähe?</h2>
+            <a href="#restaurants">Restaurants entdecken ↓</a>
+          </div>
+        </section>
+        <div class="discovery-shortcuts" aria-label="Schnellauswahl">
+          <button type="button" id="showAllRestaurants" aria-pressed="true">Alle Restaurants</button>
+          <button type="button" id="showFastRestaurants" aria-pressed="false">Kürzeste Wartezeit</button>
+          <button type="button" id="showFavorites" aria-pressed="false">Meine Favoriten</button>
+        </div>
+      </div>
+      <div class="result-layout">
+      <aside id="restaurantControls" hidden aria-label="Restaurants filtern">
+        <h3>Suche und Filter</h3>
         <label>Restaurant suchen <input id="restaurantQuery" type="search" placeholder="Restaurantname"></label>
         <label>Sortieren <select id="restaurantSort">
           <option value="default">Empfohlen</option>
@@ -70,9 +86,12 @@
           <option value="name">Name A–Z</option>
         </select></label>
         <label id="freeDeliveryField" hidden><input id="freeDelivery" type="checkbox"> Kostenlose Lieferung</label>
-      </div>
+        <button type="button" id="clearRestaurantFilters">Filter zurücksetzen</button>
+      </aside>
+      <div class="restaurant-list">
       <p id="restaurantCount" role="status" hidden></p>
       <div id="restaurants" class="results"></div>
+      </div></div>
       <section id="testTracking" hidden>
         <h2 id="orderTrackingHeading">Status der letzten Testbestellung</h2>
         <p id="testTrackingStatus" role="status"></p>
@@ -96,7 +115,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=empty-postcode" defer></script>
+<script src="/bestellen/preview.js?v=discovery" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>

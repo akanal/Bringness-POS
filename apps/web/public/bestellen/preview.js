@@ -282,6 +282,7 @@ async function search() {
     const card = document.createElement('article');
     card.className = 'restaurant-card';
     card.dataset.name = restaurant.name;
+    card.dataset.restaurantKey = restaurant.id ?? restaurant.name;
     card.dataset.minutes = Number.parseInt(restaurant.minutes, 10);
     card.dataset.freeDelivery = String(restaurant.feeCents === 0);
     const title = document.createElement('h3');
@@ -375,11 +376,46 @@ function setUpRestaurantControls(delivery) {
   const free = document.getElementById('freeDelivery');
   const count = document.getElementById('restaurantCount');
   const cards = [...results.children];
+  const all = document.getElementById('showAllRestaurants');
+  const fast = document.getElementById('showFastRestaurants');
+  const favoritesOnly = document.getElementById('showFavorites');
+  const storageKey = 'bringness-ordering-favorites';
+  let favorites = new Set();
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+    if (Array.isArray(saved)) favorites = new Set(saved);
+  } catch {}
+  let onlyFavorites = false;
+  document.getElementById('restaurantDiscovery').hidden = false;
+
+  for (const card of cards) {
+    const key = card.dataset.restaurantKey;
+    const favorite = document.createElement('button');
+    favorite.type = 'button';
+    favorite.className = 'restaurant-favorite';
+    favorite.setAttribute('aria-label', card.dataset.name + ' als Favorit speichern');
+    const render = () => {
+      favorite.textContent = favorites.has(key) ? '♥' : '♡';
+      favorite.setAttribute('aria-pressed', String(favorites.has(key)));
+    };
+    favorite.onclick = () => {
+      if (favorites.has(key)) favorites.delete(key);
+      else favorites.add(key);
+      try { localStorage.setItem(storageKey, JSON.stringify([...favorites])); } catch {}
+      render();
+      update();
+    };
+    render();
+    card.append(favorite);
+  }
   controls.hidden = false;
   count.hidden = false;
   document.getElementById('freeDeliveryField').hidden = !delivery;
 
   function update() {
+    all.setAttribute('aria-pressed', String(!onlyFavorites && sort.value === 'default' && !free.checked && !query.value.trim()));
+    fast.setAttribute('aria-pressed', String(sort.value === 'time'));
+    favoritesOnly.setAttribute('aria-pressed', String(onlyFavorites));
     const ordered = [...cards];
     if (sort.value === 'time') ordered.sort((a, b) => Number(a.dataset.minutes) - Number(b.dataset.minutes));
     if (sort.value === 'name') ordered.sort((a, b) => a.dataset.name.localeCompare(b.dataset.name, 'de'));
@@ -387,7 +423,8 @@ function setUpRestaurantControls(delivery) {
     let shown = 0;
     for (const card of ordered) {
       card.hidden = !card.dataset.name.toLocaleLowerCase('de').includes(term) ||
-        (delivery && free.checked && card.dataset.freeDelivery !== 'true');
+        (delivery && free.checked && card.dataset.freeDelivery !== 'true') ||
+        (onlyFavorites && !favorites.has(card.dataset.restaurantKey));
       if (!card.hidden) shown += 1;
       results.append(card);
     }
@@ -397,6 +434,17 @@ function setUpRestaurantControls(delivery) {
   query.oninput = update;
   sort.onchange = update;
   free.onchange = update;
+  function clearFilters() {
+    query.value = '';
+    sort.value = 'default';
+    free.checked = false;
+    onlyFavorites = false;
+    update();
+  }
+  all.onclick = clearFilters;
+  document.getElementById('clearRestaurantFilters').onclick = clearFilters;
+  fast.onclick = () => { sort.value = sort.value === 'time' ? 'default' : 'time'; update(); };
+  favoritesOnly.onclick = () => { onlyFavorites = !onlyFavorites; update(); };
   update();
 }
 
@@ -417,6 +465,7 @@ if (hasSearch) {
   const label = document.getElementById('searchLabel');
   const fulfillment = initialMode === 'pickup' ? 'Abholung' : 'Lieferung';
   label.textContent = `· ${fulfillment} · ${initialPostcode}${demo ? ' · Vorschau mit Testrestaurants' : ''}`;
+  document.getElementById('discoveryLocation').textContent = fulfillment + ' · ' + initialPostcode;
   form.elements.postcode.value = initialPostcode;
   form.elements.mode.value = initialMode;
   void search();

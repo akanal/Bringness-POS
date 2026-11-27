@@ -132,3 +132,44 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .restaurant-card { overflow: hidden; box-shadow: 0 3px 12px #0a192a10; }
 .restaurant-photo { display: block; width: calc(100% + 40px); height: 140px; margin: -20px -20px 14px; object-fit: cover; }
 .restaurant-card summary { cursor: pointer; color: #8b380b; font-weight: 700; }
+
+.search-page { background: #f5f4ef; }
+.search-page .intro { background: #edf1ee; border-bottom: 1px solid #dfe5e0; }
+.search-page .intro-content { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.search-page #search { flex: 1 1 30rem; margin: 0; background: #fff; }
+.search-page main > section:nth-child(2) { background: transparent; }
+.search-page #results-heading { margin-bottom: 4px; }
+.search-page #status { margin-top: 0; color: #45566a; }
+#restaurantDiscovery:not([hidden]) { display: grid; gap: 14px; margin-block: 20px; }
+.discovery-banner {
+  display: grid; align-items: center; min-height: 180px; padding: clamp(18px, 5vw, 42px);
+  border-radius: 20px; overflow: hidden; color: white;
+  background: linear-gradient(90deg,#10271f 10%,#10271feb 37%,#10271f45 75%), url('/bestellen/burger.webp') right 55% / cover;
+}
+.discovery-banner p { margin: 0; color: #d4eed8; font-weight: 700; }
+.discovery-banner h2 { margin: 4px 0 12px; max-width: 13ch; font-size: clamp(1.65rem, 4vw, 2.8rem); line-height: 1.12; }
+.discovery-banner a { color: white; font-weight: 700; }
+.discovery-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
+.discovery-shortcuts button { padding: 8px 14px; background: white; color: #172e25; border-color: #c9d6cc; }
+.discovery-shortcuts [aria-pressed=true] { background: #173b2c; color: white; border-color: #173b2c; }
+.search-page .result-layout { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 20px; align-items: start; }
+.search-page .result-layout:has(#restaurantControls[hidden]) { grid-template-columns: 1fr; }
+.search-page #restaurantControls:not([hidden]) {
+  display: grid; align-items: start; padding: 16px; border: 1px solid #d9e2da;
+  border-radius: 16px; background: #fff;
+}
+#restaurantControls h3 { margin: 0; }
+#clearRestaurantFilters { padding: 7px 0; background: transparent; color: #24563e; text-align: start; text-decoration: underline; }
+.search-page #restaurantCount { margin: 0 0 10px; font-weight: 700; }
+.restaurant-card { position: relative; }
+.restaurant-favorite {
+  position: absolute; inset: 10px 10px auto auto; width: 44px; height: 44px; padding: 0;
+  border-radius: 50%; background: white; color: #173b2c; border-color: #c9d6cc; font-size: 1.3rem;
+}
+.restaurant-card:not(:has(.restaurant-photo)) h3 { padding-inline-end: 40px; }
+.restaurant-favorite[aria-pressed=true] { color: #a43629; }
+@media (max-width: 650px) {
+  .search-page .result-layout { grid-template-columns: 1fr; gap: 12px; }
+  .search-page .intro-content { gap: 8px; }
+  .discovery-banner { min-height: 140px; }
+}

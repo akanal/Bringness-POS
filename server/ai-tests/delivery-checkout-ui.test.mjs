@@ -310,3 +310,27 @@ test('address and device location suggestions use the selected postcode without 
     window.close();
   }
 });
+
+test('restaurant discovery can save, filter, and reset favorites', async () => {
+  const dom = page(async () => Response.json({restaurants:[
+    {id:restaurantId,name:'Testrestaurant',minutes:30,feeCents:0,minimumCents:0}
+  ]}), '?mode=delivery&postcode=10551');
+  try {
+    await wait();
+    const doc = dom.window.document;
+    const card = doc.querySelector('.restaurant-card');
+    const favorites = doc.getElementById('showFavorites');
+    assert.equal(doc.getElementById('restaurantDiscovery').hidden, false);
+    favorites.click();
+    assert.equal(card.hidden, true);
+    doc.getElementById('showAllRestaurants').click();
+    card.querySelector('.restaurant-favorite').click();
+    favorites.click();
+    assert.equal(card.hidden, false);
+    assert.deepEqual(JSON.parse(dom.window.localStorage.getItem('bringness-ordering-favorites')), [restaurantId]);
+    doc.getElementById('clearRestaurantFilters').click();
+    assert.equal(favorites.getAttribute('aria-pressed'), 'false');
+  } finally {
+    dom.window.close();
+  }
+});
