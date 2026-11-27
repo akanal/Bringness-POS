@@ -6,6 +6,9 @@
 - Nutze bereits eingerichtete und verfügbare Zugänge für die beauftragte Arbeit, einschließlich GitHub und der Bringness-Testumgebung bei Netcup. Eine wiederholte Freigabe für bereits autorisierte Schritte ist nicht nötig.
 - Bestehende fachliche Vorgaben und ausdrückliche Sperren gelten weiter. Frage nur bei einem echten Blocker, bei technisch oder verbindlich erforderlicher Freigabe oder bei einer wesentlichen Entscheidung außerhalb des Auftrags. Nutze den vorgesehenen Freigabeweg und setze parallel alle unabhängigen Schritte fort.
 
+- Wenn der direkte Konsolenzugriff scheitert, öffne die Bringness-Serverkonsole über das Netcup Server Control Panel unter „Bildschirm“.
+- Wenn ein schwerwiegender Fehler einen Punkt im Arbeitsblock blockiert, halte den betroffenen Punkt und seine Abhängigkeiten fest und bearbeite sofort den nächsten unabhängigen Punkt. Fahre mit dem gesamten Block fort, greife offene Punkte erneut auf, sobald ihr Hindernis behoben ist, und dokumentiere im Abschlussbericht die Ergebnisse, Prüfungen und verbleibenden Blocker.
+
 ## Vorbereitung und Bestandsabgleich — 19.11.2026
 - Fortsetzung des Eigentümerplans bei AI: gemeinsame Zutaten je Tag aus Vorbereitungsmengen gegen Bestand abzüglich Reservierungen und bestätigte datierte Lieferungen rechnen. Nur einmal über Folgetage anrechnen; kein fiktiver Nachschub bei Fehlmengen. Ganze Tage, keine verbleibende Tagesnachfrage oder bestätigte Lieferuhrzeit behaupten.
 - Lesende gemeinsame Bestands-/Liefertransaktion; Einstellungen während Berechnung erneut prüfen. Unbekannte Nachfrage blockiert Folgetage, bekannte Ruhetage nicht. Hinweise ohne Lager-/Bestellwirkung; Beschaffungsübernahme folgt separat. Details/Prüfgrenzen `docs/ai-preparation-stock-20261119.md`. Windows/Offline weiter gesperrt.
