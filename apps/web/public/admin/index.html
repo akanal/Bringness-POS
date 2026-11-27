@@ -124,7 +124,7 @@ async function deviceCommand(id,command){try{await api('/admin/devices/'+id+'/co
 async function deviceStatus(id,status){try{await api('/admin/devices/'+id+'/status',{method:'POST',body:JSON.stringify({status})});loadDevices()}catch(e){alert(e.message)}}
 $('out').onclick=async()=>{try{await api('/auth/logout',{method:'POST',body:'{}'});localStorage.removeItem('bringness-pos-token');location.reload()}catch{$('out').textContent='Abmeldung erneut versuchen'}};show();
 </script>
-<script src="/admin/online-register-link.js?v=20261113"></script><script src="/admin/navigation.js?v=20261117"></script></body>
+<script src="/admin/online-register-link.js?v=20261113"></script><script src="/admin/navigation.js?v=advertising-20261127"></script></body>
 </html>
 
 

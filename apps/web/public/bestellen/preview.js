@@ -291,6 +291,7 @@ async function search() {
     const title = document.createElement('h3');
     const terms = document.createElement('p');
     title.textContent = restaurant.name;
+    if(restaurant.sector){const icon=document.createElement('span');icon.textContent=restaurant.sector.icon+' ';icon.setAttribute('aria-label',restaurant.sector.label);title.prepend(icon);}
     terms.textContent = delivery
       ? restaurant.minutes + ' Min. · ' + (demo ? restaurant.fee : money.format(restaurant.feeCents / 100)) +
         ' Lieferung · Mindestbestellwert ' + (demo ? restaurant.minimum : money.format(restaurant.minimumCents / 100))

@@ -2,6 +2,7 @@
 <h2>Bestellportal</h2>
 <p>Lege fest, wie dieser Standort in der Restaurantsuche erscheint. Für Lieferungen setzt der Betrieb eigene Fahrer ein.</p>
 <fieldset disabled>
+<label>Geschäftsart <select name="sector"><option value="">Bitte auswählen</option></select></label><p id="sectorIcon">Das Branchen-Icon wird automatisch fest zugewiesen.</p><p>Die Portalteilnahme ist kostenlos. Abholung und Lieferung sind freiwillig und bleiben bis zur Aktivierung ausgeschaltet.</p>
 <label><input type="checkbox" name="pickup"> Abholung veröffentlichen</label>
 <label><input type="checkbox" name="delivery"> Lieferung veröffentlichen</label>
 <label>Postleitzahl des Abholstandorts <input name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5"></label>
@@ -20,4 +21,4 @@
 <p id="deliveryMerchantStatus" role="status"></p>
 <button type="button" id="verifyDeliveryMerchant" disabled>Profil prüfen und zuordnen</button>
 <button type="button" id="unlinkDeliveryMerchant" disabled>Zuordnung lösen</button>
-</section></main><script defer src="/pos/delivery-portal.js?v=portal-merchant-diagnostics"></script></body></html>
+</section></main><script defer src="/pos/delivery-portal.js?v=fixed-sectors-20261127"></script></body></html>

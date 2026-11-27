@@ -1,0 +1,24 @@
+name: Portal advertising validation
+on:
+  pull_request:
+    paths: ['server/portal-advertising*', 'server/delivery-portal.js', 'server/ai-tests/portal-advertising*', 'apps/web/public/admin/advertising*', 'apps/web/public/bestellen/**', 'apps/web/public/business-sectors.js', '.github/workflows/portal-advertising-validation.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm install --prefix server/ai-tests --ignore-scripts --no-audit --no-fund
+      - run: npm install --prefix /tmp/bringness-browser --ignore-scripts --no-audit --no-fund playwright@1.56.1
+      - run: node /tmp/bringness-browser/node_modules/playwright/cli.js install --with-deps chromium
+      - run: node --test server/portal-advertising.test.js server/delivery-portal.test.js
+      - run: node server/ai-tests/portal-advertising.mjs
+      - run: node server/ai-tests/portal-advertising-browser.mjs
+        env:
+          CENTER_TEST_PLAYWRIGHT: /tmp/bringness-browser/node_modules/playwright/index.mjs
