@@ -224,3 +224,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   .search-page #search .search-row { flex-basis: 100%; }
   .search-page #addressField { flex-basis: 11rem; }
 }
+
+.search-page #restaurantControls label { min-width: 0; }
+.search-page #restaurantQuery, .search-page #restaurantSort { width: 100%; min-width: 0; }
+.search-page #addressField { flex-basis: 10rem; }
