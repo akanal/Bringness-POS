@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=compact-results-fit">
+  <link rel="stylesheet" href="/bestellen/style.css?v=compact-cards">
 
 </head>
 <body>
@@ -16,7 +16,7 @@
       <a href="https://bringness.de/pos/">Zur Kasse</a>
     </nav>
     <details id="orderingMenu" hidden>
-      <summary>Mein Bringness</summary>
+      <summary aria-label="Mein Bringness"><span aria-hidden="true">☰</span></summary>
       <div class="ordering-menu-panel">
         <button type="button" id="menuFavorites">Meine Favoriten</button>
         <button type="button" id="menuBasket">Warenkorb</button>
@@ -87,7 +87,10 @@
           <option value="time">Kürzeste Wartezeit</option>
           <option value="name">Name A–Z</option>
         </select></label>
-        <label id="freeDeliveryField" hidden><input id="freeDelivery" type="checkbox"> Kostenlose Lieferung</label>
+        <label class="restaurant-switch" id="freeDeliveryField" hidden>Kostenlose Lieferung <input id="freeDelivery" type="checkbox" role="switch"></label>
+        <label class="restaurant-switch" id="lowFeeField" hidden>Lieferung unter 1 € <input id="lowFee" type="checkbox" role="switch"></label>
+        <label class="restaurant-switch">Meine Favoriten <input id="favoriteSwitch" type="checkbox" role="switch"></label>
+        <label class="restaurant-switch">Bis 30 Minuten <input id="quickSwitch" type="checkbox" role="switch"></label>
         <button type="button" id="clearRestaurantFilters">Filter zurücksetzen</button>
       </aside>
       <div class="restaurant-list">
@@ -117,7 +120,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=compact-results" defer></script>
+<script src="/bestellen/preview.js?v=compact-cards" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>

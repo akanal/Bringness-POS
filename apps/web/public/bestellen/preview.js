@@ -282,8 +282,10 @@ async function search() {
     const card = document.createElement('article');
     card.className = 'restaurant-card';
     card.dataset.name = restaurant.name;
+    card.dataset.lowFee = String(Number.isFinite(restaurant.feeCents) && restaurant.feeCents < 100);
     card.dataset.restaurantKey = restaurant.id ?? restaurant.name;
     card.dataset.minutes = Number.parseInt(restaurant.minutes, 10);
+    card.dataset.maxMinutes = String(String(restaurant.minutes).match(/\d+$/)?.[0] ?? 'Infinity');
     card.dataset.freeDelivery = String(restaurant.feeCents === 0);
     const title = document.createElement('h3');
     const terms = document.createElement('p');
@@ -374,6 +376,9 @@ function setUpRestaurantControls(delivery) {
   const query = document.getElementById('restaurantQuery');
   const sort = document.getElementById('restaurantSort');
   const free = document.getElementById('freeDelivery');
+  const lowFee = document.getElementById('lowFee');
+  const quick = document.getElementById('quickSwitch');
+  const favoriteSwitch = document.getElementById('favoriteSwitch');
   const count = document.getElementById('restaurantCount');
   const cards = [...results.children];
   const all = document.getElementById('showAllRestaurants');
@@ -411,11 +416,13 @@ function setUpRestaurantControls(delivery) {
   controls.hidden = false;
   count.hidden = false;
   document.getElementById('freeDeliveryField').hidden = !delivery;
+  document.getElementById('lowFeeField').hidden = !delivery;
 
   function update() {
-    all.setAttribute('aria-pressed', String(!onlyFavorites && sort.value === 'default' && !free.checked && !query.value.trim()));
+    all.setAttribute('aria-pressed', String(!onlyFavorites && sort.value === 'default' && !free.checked && !lowFee.checked && !quick.checked && !query.value.trim()));
     fast.setAttribute('aria-pressed', String(sort.value === 'time'));
     favoritesOnly.setAttribute('aria-pressed', String(onlyFavorites));
+    favoriteSwitch.checked = onlyFavorites;
     const ordered = [...cards];
     if (sort.value === 'time') ordered.sort((a, b) => Number(a.dataset.minutes) - Number(b.dataset.minutes));
     if (sort.value === 'name') ordered.sort((a, b) => a.dataset.name.localeCompare(b.dataset.name, 'de'));
@@ -424,6 +431,8 @@ function setUpRestaurantControls(delivery) {
     for (const card of ordered) {
       card.hidden = !card.dataset.name.toLocaleLowerCase('de').includes(term) ||
         (delivery && free.checked && card.dataset.freeDelivery !== 'true') ||
+        (delivery && lowFee.checked && card.dataset.lowFee !== 'true') ||
+        (quick.checked && !(Number(card.dataset.maxMinutes) <= 30)) ||
         (onlyFavorites && !favorites.has(card.dataset.restaurantKey));
       if (!card.hidden) shown += 1;
       results.append(card);
@@ -434,10 +443,15 @@ function setUpRestaurantControls(delivery) {
   query.oninput = update;
   sort.onchange = update;
   free.onchange = update;
+  lowFee.onchange = update;
+  quick.onchange = update;
+  favoriteSwitch.onchange = () => { onlyFavorites = favoriteSwitch.checked; update(); };
   function clearFilters() {
     query.value = '';
     sort.value = 'default';
     free.checked = false;
+    lowFee.checked = false;
+    quick.checked = false;
     onlyFavorites = false;
     update();
   }
