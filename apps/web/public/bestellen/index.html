@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=three-cards">
+  <link rel="stylesheet" href="/bestellen/style.css?v=results-header">
 
 </head>
 <body>
@@ -16,6 +16,13 @@
       <a href="https://bringness.de/pos/">Zur Kasse</a>
     </nav>
     <div class="results-header-actions">
+    <div id="orderingLocation" hidden>
+      <details id="locationEditor"><summary aria-label="Bestellort ändern" id="locationSummary"></summary></details>
+      <div class="ordering-modes" role="group" aria-label="Bestellart">
+        <a id="headerDelivery">Lieferung</a>
+        <a id="headerPickup">Abholung</a>
+      </div>
+    </div>
     <span id="orderingLanguage" hidden lang="de" aria-label="Seitensprache Deutsch" title="Seitensprache Deutsch">🇩🇪 <span>Deutsch</span></span>
     <details id="orderingMenu" hidden>
       <summary aria-label="Mein Bringness"><span aria-hidden="true">☰</span></summary>
@@ -84,12 +91,6 @@
       <div class="result-layout">
       <aside id="restaurantControls" hidden aria-label="Restaurants filtern">
         <h3>Suche und Filter</h3>
-        <label>Restaurant suchen <input id="restaurantQuery" type="search" placeholder="Restaurantname"></label>
-        <label>Sortieren <select id="restaurantSort">
-          <option value="default">Empfohlen</option>
-          <option value="time">Kürzeste Wartezeit</option>
-          <option value="name">Name A–Z</option>
-        </select></label>
         <label class="restaurant-switch" id="freeDeliveryField" hidden>Kostenlose Lieferung <input id="freeDelivery" type="checkbox" role="switch"></label>
         <label class="restaurant-switch" id="lowFeeField" hidden>Lieferung unter 1 € <input id="lowFee" type="checkbox" role="switch"></label>
         <label class="restaurant-switch">Meine Favoriten <input id="favoriteSwitch" type="checkbox" role="switch"></label>
@@ -97,6 +98,24 @@
         <button type="button" id="clearRestaurantFilters">Filter zurücksetzen</button>
       </aside>
       <div class="restaurant-list">
+      <div id="restaurantToolbar" hidden>        <label>Restaurant suchen <input id="restaurantQuery" type="search" placeholder="Restaurantname"></label>
+        <label>Sortieren <select id="restaurantSort">
+          <option value="default">Empfohlen</option>
+          <option value="time">Kürzeste Wartezeit</option>
+          <option value="name">Name A–Z</option>
+        </select></label>
+      </div>
+      <section id="restaurantHighlights" hidden aria-label="Restaurants entdecken">
+        <button type="button" class="highlight-main" id="highlightAll">
+          <strong>Heute Lust auf etwas Gutes?</strong><span>Alle Restaurants entdecken →</span>
+        </button>
+        <button type="button" class="highlight-fast" id="highlightFast">
+          <strong>In bis zu 30 Minuten</strong><span>Schnelle Restaurants anzeigen →</span>
+        </button>
+        <button type="button" class="highlight-favorites" id="highlightFavorites">
+          <strong>Meine Favoriten</strong><span>Gespeicherte Restaurants anzeigen →</span>
+        </button>
+      </section>
       <section id="lowFeeRail" hidden aria-labelledby="lowFeeHeading">
         <div class="fee-rail-heading">
           <h3 id="lowFeeHeading">Lieferung unter 1 €</h3>
@@ -139,7 +158,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=three-cards" defer></script>
+<script src="/bestellen/preview.js?v=results-header" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>

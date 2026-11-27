@@ -469,6 +469,8 @@ function setUpRestaurantControls(delivery) {
     card.append(favorite);
   }
   controls.hidden = false;
+  document.getElementById('restaurantToolbar').hidden = false;
+  document.getElementById('restaurantHighlights').hidden = false;
   count.hidden = false;
   document.getElementById('freeDeliveryField').hidden = !delivery;
   document.getElementById('lowFeeField').hidden = !delivery;
@@ -515,6 +517,21 @@ function setUpRestaurantControls(delivery) {
     onlyFavorites = false;
     update();
   }
+  function showHighlightedResults() {
+    (results.querySelector('article:not([hidden])') ?? count).scrollIntoView?.({block:'nearest'});
+  }
+  document.getElementById('highlightAll').onclick = () => { clearFilters(); showHighlightedResults(); };
+  document.getElementById('highlightFast').onclick = () => {
+    quick.checked = true;
+    sort.value = 'time';
+    update();
+    showHighlightedResults();
+  };
+  document.getElementById('highlightFavorites').onclick = () => {
+    onlyFavorites = true;
+    update();
+    showHighlightedResults();
+  };
   all.onclick = clearFilters;
   document.getElementById('clearRestaurantFilters').onclick = clearFilters;
   fast.onclick = () => { sort.value = sort.value === 'time' ? 'default' : 'time'; update(); };
@@ -568,6 +585,16 @@ if (hasSearch) {
   };
   form.elements.postcode.value = initialPostcode;
   form.elements.mode.value = initialMode;
+  document.getElementById('orderingLocation').hidden = false;
+  document.getElementById('locationSummary').textContent = initialPostcode;
+  document.getElementById('locationEditor').append(form);
+  for (const [mode, id] of [['delivery','headerDelivery'], ['pickup','headerPickup']]) {
+    const link = document.getElementById(id);
+    const params = new URLSearchParams({mode, postcode:initialPostcode});
+    if (demo) params.set('demo','1');
+    link.href = '/bestellen/?' + params;
+    if (mode === initialMode) link.setAttribute('aria-current','page');
+  }
   void search();
 }
 

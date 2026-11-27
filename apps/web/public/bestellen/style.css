@@ -300,3 +300,43 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 600px) {
   .search-page #restaurants, #feeRailCards { grid-auto-columns: 100%; }
 }
+
+.search-page .intro { display: none; }
+#orderingLocation:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#locationEditor { position: relative; z-index: 5; }
+#locationSummary { list-style: none; cursor: pointer; padding: 6px 11px; border-radius: 20px; background: #fff0de; font-weight: 700; }
+#locationSummary::before { content: '⌖ '; color: #9c421d; }
+#locationSummary::-webkit-details-marker { display: none; }
+.search-page #locationEditor #search {
+  position: absolute; inset-inline-end: 0; top: calc(100% + 8px); display: grid;
+  width: 22rem; max-width: calc(100vw - 32px); padding: 12px; background: white;
+  border: 1px solid #eddcca; border-radius: 12px; box-shadow: 0 10px 26px #52321b26;
+}
+#locationEditor:not([open]) #search { display: none; }
+.ordering-modes { display: flex; gap: 2px; padding: 3px; border-radius: 20px; background: #f4e8db; }
+.ordering-modes a { padding: 4px 10px; border-radius: 20px; text-decoration: none; font-weight: 650; font-size: .9rem; }
+.ordering-modes a[aria-current=page] { background: white; color: #8c3c20; box-shadow: 0 1px 4px #52321b26; }
+#restaurantToolbar:not([hidden]) { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 14px; }
+#restaurantToolbar label { display: grid; gap: 3px; font-size: .85rem; font-weight: 650; }
+#restaurantToolbar label:first-child { flex: 1 1 14rem; }
+#restaurantHighlights:not([hidden]) {
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-bottom: 20px;
+}
+#restaurantHighlights button {
+  display: grid; align-content: center; gap: 5px; min-height: 70px; padding: 12px 16px;
+  text-align: start; color: #3a271d; border: 0; border-radius: 14px;
+}
+#restaurantHighlights strong { font-size: 1.08rem; }
+#restaurantHighlights span { font-size: .85rem; font-weight: 600; }
+#restaurantHighlights .highlight-main {
+  grid-column: 1 / -1; min-height: 112px; color: #fff;
+  background: linear-gradient(90deg,#562d1c 15%,#562d1cdd 48%,#562d1c25), url('/bestellen/burger.webp') 66% 53% / cover;
+}
+#restaurantHighlights .highlight-main strong { font-size: clamp(1.2rem,3vw,1.65rem); }
+.highlight-fast { background: #f8dba9; }
+.highlight-favorites { background: #f4ded4; }
+@media(max-width:600px) {
+  .results-header-actions { flex-wrap: wrap; gap: 6px; }
+  .search-page #locationEditor #search { inset-inline-start: 0; inset-inline-end: auto; }
+  #restaurantHighlights:not([hidden]) { grid-template-columns: 1fr; }
+}
