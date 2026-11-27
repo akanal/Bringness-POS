@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=single-card-style">
+  <link rel="stylesheet" href="/bestellen/style.css?v=campaign-layout-20261127">
 
 </head>
 <body>
@@ -107,8 +107,9 @@
       </div>
       <section id="restaurantHighlights" hidden aria-label="Restaurants entdecken">
         <button type="button" class="highlight-main" id="highlightAll">
-          <strong>Heute Lust auf etwas Gutes?</strong><span>Alle Restaurants entdecken →</span>
+          <strong>Heute Lust auf etwas Gutes?</strong><span class="picture-arrow" data-campaign-text="arrow">Alle Restaurants entdecken</span>
         </button>
+        <label class="campaign-editor hero-caption" hidden>Pfeiltext<input data-campaign-edit="arrow" maxlength="60" value="Alle Restaurants entdecken"></label>
         <button type="button" class="highlight-fast" id="highlightFast">
           <strong>In bis zu 30 Minuten</strong><span>Schnelle Restaurants anzeigen →</span>
         </button>
@@ -124,7 +125,26 @@
         </div>
       </div>
       <div id="restaurants" class="results"></div>
-      </div></div>
+      </div>
+      <aside class="campaign-rail" aria-label="Werbung" hidden>
+        <article class="campaign-tile">
+          <div class="campaign-picture"><img src="/bestellen/pizza.webp" alt="Pizza mit Tomaten und Basilikum"><small>Anzeige · Beispiel</small></div>
+          <p class="campaign-caption" data-campaign-text="pizza">Platz für deine Pizza-Aktion</p>
+          <label class="campaign-editor" hidden>Werbetext<input data-campaign-edit="pizza" maxlength="80" value="Platz für deine Pizza-Aktion"></label>
+        </article>
+        <article class="campaign-tile">
+          <div class="campaign-picture"><img src="/bestellen/burger.webp" alt="Burger und Pommes"><small>Anzeige · Beispiel</small></div>
+          <p class="campaign-caption" data-campaign-text="burger">Platz für deine Burger-Aktion</p>
+          <label class="campaign-editor" hidden>Werbetext<input data-campaign-edit="burger" maxlength="80" value="Platz für deine Burger-Aktion"></label>
+        </article>
+        <article class="campaign-tile campaign-tile-brand">
+          <div class="campaign-picture"><span>Dein Restaurant.<br>Dein Lieblingsplatz.</span><small>Anzeige · Beispiel</small></div>
+          <p class="campaign-caption" data-campaign-text="restaurant">Hier ist Platz für deine Werbung</p>
+          <label class="campaign-editor" hidden>Werbetext<input data-campaign-edit="restaurant" maxlength="80" value="Hier ist Platz für deine Werbung"></label>
+        </article>
+        <p class="campaign-editor campaign-editor-note" hidden>Textvorschau: Änderungen bleiben nur in diesem Browser. Sie veröffentlichen keine Anzeigen.</p>
+      </aside>
+      </div>
       <section id="testTracking" hidden>
         <h2 id="orderTrackingHeading">Status der letzten Testbestellung</h2>
         <p id="testTrackingStatus" role="status"></p>
@@ -148,7 +168,9 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=single-card-style" defer></script>
+<script src="/bestellen/preview.js?v=campaign-layout-20261127" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
+<script src="/bestellen/campaign-layout.js?v=20261127" defer></script>
 </body>
 </html>
+
