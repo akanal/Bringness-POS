@@ -18,6 +18,7 @@
   {id:'service',group:'team',label:'Service-App öffnen',href:'/service/'},
   {id:'requests',group:'support',label:'Supportanfragen',tab:'supportCenter'},
   {id:'remote',group:'support',label:'Fernhilfe',tab:'remoteHelp'},
+  {id:'advertising',group:'support',label:'Werbung · Inhaber',href:'/admin/advertising.html',requires:'[data-tab="platformHub"]'},
   {id:'mail',group:'support',label:'E-Mail senden',href:'/admin/mail.html',requires:'[data-tab="platformHub"]'},
   {id:'diagnostics',group:'system',label:'Diagnose & Abgleich',tab:'platformHub'},
   {id:'system',group:'system',label:'System & Betriebsprotokoll',tab:'systemPanel'},

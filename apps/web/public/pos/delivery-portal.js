@@ -47,7 +47,11 @@
       : '';
   }
 
-  request().then(({settings,products}) => {
+  request().then(({settings,products,sectors=[]}) => {
+    for(const sector of sectors)fields.sector.add(new Option(sector.label,sector.id));
+    fields.sector.value=settings.sector||'';
+    const showSector=()=>{const sector=sectors.find(item=>item.id===fields.sector.value);document.getElementById('sectorIcon').textContent=sector?sector.icon+' · Festes Branchen-Icon für '+sector.label:'Bitte Geschäftsart angeben. Das Icon wird automatisch zugeordnet.';};
+    fields.sector.onchange=showSector;showSector();
     productsById = new Map(products.map(product => [product.id, product]));
     const list = document.getElementById('deliveryPortalProducts');
     const selected = new Set(settings.productIds);
@@ -124,6 +128,7 @@
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const settings = {
+      sector:fields.sector.value||null,
       productIds:new FormData(form).getAll('productIds'),
       pickup:fields.pickup.checked, delivery:fields.delivery.checked,
       postcode:fields.postcode.value.trim(),

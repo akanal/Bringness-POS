@@ -1,3 +1,4 @@
+import {createPortalAdvertising,migratePortalAdvertising} from './portal-advertising.js';
 import {deliverySandboxConfig} from './delivery-sandbox.js';
 import {createCashReversal,migrateCashReversal} from './cash-reversal.js';
 import {createPartialSettlement} from './partial-settlement.js';
@@ -118,6 +119,7 @@ let imageStore=null;
 if(appMode!=='ai'&&!isolatedPreview())try{imageStore=await configuredIdriveDocumentStore(process.env,{objectKey:marketplaceImageKey});}catch{console.error('Product image storage unavailable.');}
 const imageRuntime=createMarketplaceImagesRuntime(platformGatewayPool,{enabled:marketplaceEnabled(process.env,appMode)&&!isolatedPreview(),store:imageStore});
 const handlePlatformAiGateway=createPlatformAiGateway(platformGatewayPool);
+const handlePortalAdvertising=createPortalAdvertising(platformGatewayPool);
 const handlePosAdminOverview=createPosAdminOverview(platformGatewayPool);
 const handleProductPhotos=createProductPhotos(platformGatewayPool);
 const handleRemoteSupport=createRemoteSupport(platformGatewayPool);
@@ -217,6 +219,7 @@ http.createServer = function patchedCreateServer(listener) {
       if (await handleAdminAuditExport(req,res)) return;
       if (await handleBillingTerms(req,res)) return;
       if (await handlePlatformAiGateway(req,res)) return;
+      if (appMode!=='ai' && await handlePortalAdvertising(req,res)) return;
       if (appMode!=='ai' && await handleDeliveryPortal(req,res)) return;
       if (await handlePosSetup(req,res)) return;
       if (await handlePlaceTerminology(req,res)) return;
@@ -335,6 +338,7 @@ async function migrateWithRetry(){
       await migratePosSetup(platformGatewayPool);
       await migrateDeliveryPortal(platformGatewayPool,{testOrders:deliveryTestOrders,liveCheckout:Boolean(deliveryLiveOrigin)});
       await migrateDeliveryCommission(platformGatewayPool);
+      await migratePortalAdvertising(platformGatewayPool);
       await migratePlaceTerminology(platformGatewayPool);
       await migratePosDiagnosticReports(platformGatewayPool);
       await cleanupPosDiagnosticReports(platformGatewayPool);

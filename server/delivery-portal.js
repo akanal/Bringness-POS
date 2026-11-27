@@ -1,3 +1,4 @@
+import {businessSectors,sectorFor} from '../apps/web/public/business-sectors.js';
 import {createDeliveryCheckout,migrateDeliveryCheckout} from './delivery-checkout.js';
 import {createDeliveryQuote} from './delivery-quote.js';
 import {createDeliveryMerchant,migrateDeliveryMerchant} from './delivery-merchant.js';
@@ -7,7 +8,7 @@ import {readJsonObject} from './http-body.js';
 
 const postcodePattern = /^\d{5}$/;
 const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-const defaults = {pickup:false, delivery:false, postcode:'', zones:[], minutes:30, feeCents:0, minimumCents:0, productIds:[]};
+const defaults = {sector:null, pickup:false, delivery:false, postcode:'', zones:[], minutes:30, feeCents:0, minimumCents:0, productIds:[]};
 const integerBetween = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
 
 export async function migrateDeliveryPortal(db,{testOrders=false,liveCheckout=false}={}) {
@@ -120,13 +121,13 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
           ...(sandboxMenu && rows.length && !mollieTestCheckout ? {basketPreview:true} : {})
         });
       }
-      const {rows} = await db.query(`SELECT r.id,r.name,s.settings->>'minutes' AS minutes,
+      const {rows} = await db.query(`SELECT r.id,r.name,s.settings->>'sector' AS sector,s.settings->>'minutes' AS minutes,
         CASE WHEN $2='delivery' THEN (s.settings->>'feeCents')::int END AS "feeCents",
         CASE WHEN $2='delivery' THEN (s.settings->>'minimumCents')::int END AS "minimumCents"
         FROM pos_delivery_locations s JOIN restaurants r ON r.id=s.restaurant_id
         WHERE ${eligible}
         ORDER BY r.name,r.id LIMIT 100`,[postcode,mode]);
-      return send(200,{restaurants:rows});
+      return send(200,{restaurants:rows.map(row=>({...row,sector:sectorFor(row.sector)}))});
     }
 
     if (!merchantRoute && !['GET','PUT'].includes(req.method)) return send(405,{error:'Methode nicht erlaubt.'});
@@ -142,7 +143,7 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       if (!rows.length) return send(403,{error:'Kein Zugriff auf diesen Standort.'});
       const products = await db.query(`SELECT p.id,p.name,p.active FROM (${access}) a
         JOIN products p ON p.restaurant_id=a.id ORDER BY p.active DESC,p.name,p.id`,[rid,hash]);
-      return send(200,{settings:{...defaults,...rows[0].settings},products:products.rows});
+      return send(200,{settings:{...defaults,...rows[0].settings},products:products.rows,sectors:businessSectors});
     }
 
     let input;
@@ -151,7 +152,10 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       if (!error.status) throw error;
       return send(error.status,{error:error.message});
     }
-    const {pickup,delivery,postcode,zones,minutes,feeCents,minimumCents,productIds=[]} = input;
+    const {sector,...portalInput}=input;
+    if(sector!==undefined&&sector!==null&&!sectorFor(sector))return send(400,{error:'Bitte eine gültige Geschäftsart auswählen.'});
+    if(Object.hasOwn(input,'icon'))return send(400,{error:'Das Branchen-Icon wird fest zugewiesen.'});
+    const {pickup,delivery,postcode,zones,minutes,feeCents,minimumCents,productIds=[]} = portalInput;
     if (typeof pickup !== 'boolean' || typeof delivery !== 'boolean' ||
       typeof postcode !== 'string' || ((pickup || postcode) && !postcodePattern.test(postcode)) ||
       !Array.isArray(zones) || zones.length > 100 || (delivery && !zones.length) ||
@@ -160,14 +164,14 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       !integerBetween(minutes,1,240) || !integerBetween(feeCents,0,10000) || !integerBetween(minimumCents,0,100000)) {
       return send(400,{error:'Bitte Postleitzahlen, Zeit und Beträge prüfen.'});
     }
-    const settings = {pickup,delivery,postcode,zones:[...new Set(zones)],minutes,feeCents,minimumCents,productIds:[...new Set(productIds.map(id=>id.toLowerCase()))]};
+    const settings = {...(sector!==undefined?{sector}:{}),pickup,delivery,postcode,zones:[...new Set(zones)],minutes,feeCents,minimumCents,productIds:[...new Set(productIds.map(id=>id.toLowerCase()))]};
     const {rows} = await db.query(`INSERT INTO pos_delivery_locations (restaurant_id,settings)
       SELECT a.id,$3::jsonb FROM (${access}) a
       WHERE NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements_text($3::jsonb->'productIds') AS selected(id)
         WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.restaurant_id=a.id AND p.id=selected.id::uuid)
       )
-      ON CONFLICT (restaurant_id) DO UPDATE SET settings=EXCLUDED.settings RETURNING settings`,[rid,hash,JSON.stringify(settings)]);
+      ON CONFLICT (restaurant_id) DO UPDATE SET settings=pos_delivery_locations.settings || EXCLUDED.settings RETURNING settings`,[rid,hash,JSON.stringify(settings)]);
     return rows.length ? send(200,{settings:rows[0].settings}) : send(403,{error:'Kein Zugriff auf diesen Standort.'});
   };
 }
