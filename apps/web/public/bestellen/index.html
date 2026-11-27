@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=compact-cards">
+  <link rel="stylesheet" href="/bestellen/style.css?v=restaurant-rows">
 
 </head>
 <body>
@@ -15,6 +15,8 @@
       <a href="https://bringness-pos.de/">Kassenfunktionen</a>
       <a href="https://bringness.de/pos/">Zur Kasse</a>
     </nav>
+    <div class="results-header-actions">
+    <span id="orderingLanguage" hidden lang="de" aria-label="Seitensprache Deutsch" title="Seitensprache Deutsch">🇩🇪 <span>Deutsch</span></span>
     <details id="orderingMenu" hidden>
       <summary aria-label="Mein Bringness"><span aria-hidden="true">☰</span></summary>
       <div class="ordering-menu-panel">
@@ -24,6 +26,7 @@
         <p id="orderingMenuStatus" role="status"></p>
       </div>
     </details>
+    </div>
   </header>
   <main>
     <section class="intro" aria-label="Essen bestellen">
@@ -94,6 +97,16 @@
         <button type="button" id="clearRestaurantFilters">Filter zurücksetzen</button>
       </aside>
       <div class="restaurant-list">
+      <section id="lowFeeRail" hidden aria-labelledby="lowFeeHeading">
+        <div class="fee-rail-heading">
+          <h3 id="lowFeeHeading">Lieferung unter 1 €</h3>
+          <div id="feeRailArrows" hidden>
+            <button type="button" id="feeRailPrevious" aria-label="Vorherige Restaurants">‹</button>
+            <button type="button" id="feeRailNext" aria-label="Weitere Restaurants">›</button>
+          </div>
+        </div>
+        <div id="feeRailCards"></div>
+      </section>
       <p id="restaurantCount" role="status" hidden></p>
       <div id="restaurants" class="results"></div>
       </div></div>
@@ -120,7 +133,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=compact-cards" defer></script>
+<script src="/bestellen/preview.js?v=restaurant-rows" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>

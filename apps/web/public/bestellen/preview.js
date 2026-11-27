@@ -282,6 +282,7 @@ async function search() {
     const card = document.createElement('article');
     card.className = 'restaurant-card';
     card.dataset.name = restaurant.name;
+    card.id = 'restaurant-result-' + results.childElementCount;
     card.dataset.lowFee = String(Number.isFinite(restaurant.feeCents) && restaurant.feeCents < 100);
     card.dataset.restaurantKey = restaurant.id ?? restaurant.name;
     card.dataset.minutes = Number.parseInt(restaurant.minutes, 10);
@@ -299,9 +300,13 @@ async function search() {
       photo.src = '/bestellen/pizza.webp';
       photo.alt = '';
       photo.className = 'restaurant-photo';
-      card.append(photo);
+      const cover = document.createElement('div');
+      cover.className = 'restaurant-cover';
+      cover.append(photo, title);
+      card.append(cover);
     }
-    card.append(title, terms);
+    if (!title.parentNode) card.append(title);
+    card.append(terms);
     if (restaurant.menu) {
       const menu = document.createElement('details');
       const summary = document.createElement('summary');
@@ -371,6 +376,51 @@ async function search() {
   if (hasSearch && matches.length) setUpRestaurantControls(delivery);
 }
 
+function setUpLowFeeRail(cards) {
+  const rail = document.getElementById('lowFeeRail');
+  const track = document.getElementById('feeRailCards');
+  const arrows = document.getElementById('feeRailArrows');
+  const previous = document.getElementById('feeRailPrevious');
+  const next = document.getElementById('feeRailNext');
+  const entries = new Map();
+  for (const card of cards.filter(card => card.dataset.lowFee === 'true')) {
+    const link = document.createElement('a');
+    link.href = '#' + card.id;
+    const title = document.createElement('strong');
+    title.textContent = card.dataset.name;
+    const details = document.createElement('small');
+    details.textContent = card.querySelector('p').textContent;
+    const photo = card.querySelector('.restaurant-photo');
+    if (photo) link.append(photo.cloneNode());
+    link.append(title, details);
+    link.onclick = event => {
+      event.preventDefault();
+      const menu = card.querySelector('details');
+      if (menu) menu.open = true;
+      card.scrollIntoView?.({block:'start'});
+      card.setAttribute('tabindex', '-1');
+      card.focus({preventScroll:true});
+    };
+    entries.set(card, link);
+    track.append(link);
+  }
+  function updateArrows() {
+    const remaining = track.scrollWidth - track.clientWidth - track.scrollLeft;
+    arrows.hidden = track.scrollWidth <= track.clientWidth + 1;
+    previous.disabled = track.scrollLeft <= 1;
+    next.disabled = remaining <= 1;
+  }
+  previous.onclick = () => track.scrollBy({left:-track.clientWidth});
+  next.onclick = () => track.scrollBy({left:track.clientWidth});
+  track.onscroll = updateArrows;
+  if (typeof ResizeObserver === 'function') new ResizeObserver(updateArrows).observe(track);
+  return () => {
+    for (const [card, link] of entries) link.hidden = card.hidden;
+    rail.hidden = ![...entries.values()].some(link => !link.hidden);
+    updateArrows();
+  };
+}
+
 function setUpRestaurantControls(delivery) {
   const controls = document.getElementById('restaurantControls');
   const query = document.getElementById('restaurantQuery');
@@ -418,6 +468,8 @@ function setUpRestaurantControls(delivery) {
   document.getElementById('freeDeliveryField').hidden = !delivery;
   document.getElementById('lowFeeField').hidden = !delivery;
 
+  const updateFeeRail = delivery ? setUpLowFeeRail(cards) : () => {};
+
   function update() {
     all.setAttribute('aria-pressed', String(!onlyFavorites && sort.value === 'default' && !free.checked && !lowFee.checked && !quick.checked && !query.value.trim()));
     fast.setAttribute('aria-pressed', String(sort.value === 'time'));
@@ -437,6 +489,7 @@ function setUpRestaurantControls(delivery) {
       if (!card.hidden) shown += 1;
       results.append(card);
     }
+    updateFeeRail();
     count.textContent = shown === 0 ? 'Keine Restaurants für diesen Filter.' :
       shown === 1 ? '1 Restaurant' : shown + ' Restaurants';
   }
@@ -482,6 +535,7 @@ if (hasSearch) {
   const orderingMenu = document.getElementById('orderingMenu');
   const menuStatus = document.getElementById('orderingMenuStatus');
   orderingMenu.hidden = false;
+  document.getElementById('orderingLanguage').hidden = false;
   orderingMenu.addEventListener('toggle', () => {
     if (!orderingMenu.open) menuStatus.textContent = '';
   });
