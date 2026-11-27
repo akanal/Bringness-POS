@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=restaurant-favorites">
+  <link rel="stylesheet" href="/bestellen/style.css?v=portal-filters">
 
 </head>
 <body>
@@ -43,7 +43,7 @@
       <h1 id="landingHeading">Heute gibt’s <em>was Gutes.</em></h1>
       <p id="landingCopy">Lass dir dein Essen liefern oder hol’s selbst ab.</p>
       <h1 id="searchHeading" hidden>Restaurants finden</h1>
-      <form id="search" action="/bestellen/" method="get">
+      <form id="search" action="/bestellen/ergebnisse" method="get">
         <input type="hidden" name="demo" value="1" disabled>
         <fieldset>
           <legend>Bestellart</legend>
@@ -67,18 +67,29 @@
     <section aria-labelledby="results-heading">
       <h2 id="results-heading">Restaurants <small id="searchLabel"></small></h2>
       <p id="status" role="status">Gib eine Postleitzahl ein, um Restaurants zu finden.</p>
-      <div id="discovery" class="discovery" hidden>
-        <label>Restaurant suchen <input id="restaurantFilter" type="search" placeholder="Name eingeben" autocomplete="off"></label>
-        <label>Sortieren <select id="restaurantSort">
-          <option value="default">Standard</option>
-          <option value="time">Schnellste zuerst</option>
-          <option value="fee">Niedrigste Liefergebühr</option>
-          <option value="minimum">Niedrigster Mindestbestellwert</option>
-        </select></label>
-        <label id="freeDeliveryFilter" class="discovery-check"><input id="freeDelivery" type="checkbox"> Kostenlose Lieferung</label>
+      <div class="result-layout">
+        <details id="resultFilters" class="result-filters" hidden>
+          <summary>Filter</summary>
+          <div class="filter-options">
+            <label id="freeDeliveryFilter"><input id="freeDelivery" type="checkbox"> Kostenlose Lieferung</label>
+            <label><input id="onlyFavorites" type="checkbox"> Gemerkte Restaurants</label>
+          </div>
+        </details>
+        <div class="result-content">
+          <div id="discovery" class="discovery" hidden>
+            <label>Restaurant suchen <input id="restaurantFilter" type="search" placeholder="Name eingeben" autocomplete="off"></label>
+            <label>Sortieren <select id="restaurantSort">
+              <option value="default">Standard</option>
+              <option value="time">Schnellste zuerst</option>
+              <option value="fee">Niedrigste Liefergebühr</option>
+              <option value="minimum">Niedrigster Mindestbestellwert</option>
+            </select></label>
+          </div>
+          <p id="discoveryCount" role="status" hidden></p>
+          <div id="activeFilters" class="active-filters" aria-label="Aktive Filter" hidden></div>
+          <div id="restaurants" class="results"></div>
+        </div>
       </div>
-      <p id="discoveryCount" role="status" hidden></p>
-      <div id="restaurants" class="results"></div>
       <section id="testTracking" hidden>
         <h2 id="orderTrackingHeading">Status der letzten Testbestellung</h2>
         <p id="testTrackingStatus" role="status"></p>
@@ -102,5 +113,5 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=restaurant-favorites" defer></script></body>
+<script src="/bestellen/preview.js?v=portal-filters" defer></script></body>
 </html>
