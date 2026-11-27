@@ -485,7 +485,7 @@ async function search() {
       remove.setAttribute('aria-label', 'Filter entfernen: ' + label);
       remove.onclick = () => {
         input.checked = false;
-        showResults();
+        updateFilters();
         filterSummary.focus();
       };
       activeFilters.append(remove);
@@ -494,11 +494,27 @@ async function search() {
     count.textContent = displayed.length === 0 ? 'Keine Restaurants mit diesen Filtern.' :
       displayed.length + (displayed.length === 1 ? ' Restaurant' : ' Restaurants');
   }
-  filter.value = initialSearch.get('restaurant') || '';
-  filter.oninput = showResults;
-  free.onchange = showResults;
-  onlyFavorites.onchange = showResults;
-  sort.onchange = showResults;
+  const filterKey = 'bringness.ordering.filters.' + (demo ? 'demo.' : '') + mode + '.' + postcode;
+  let saved = {};
+  try { saved = JSON.parse(sessionStorage.getItem(filterKey)) || {}; } catch {}
+  filter.value = initialSearch.get('restaurant') ?? (typeof saved.name === 'string' ? saved.name : '');
+  free.checked = delivery && saved.free === true;
+  onlyFavorites.checked = saved.favorites === true;
+  if ([...sort.options].some(option => option.value === saved.sort && !option.disabled)) {
+    sort.value = saved.sort;
+  }
+  function updateFilters() {
+    try {
+      sessionStorage.setItem(filterKey, JSON.stringify({
+        name:filter.value, free:free.checked, favorites:onlyFavorites.checked, sort:sort.value
+      }));
+    } catch {}
+    showResults();
+  }
+  filter.oninput = updateFilters;
+  free.onchange = updateFilters;
+  onlyFavorites.onchange = updateFilters;
+  sort.onchange = updateFilters;
   showResults();
 }
 
