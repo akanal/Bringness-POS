@@ -1,5 +1,13 @@
 # Bringness project continuity
 
+## Schnellzugriff Netcup — zuerst lesen
+- Repository: `akanal/Bringness-POS`. Vorhandene Zugänge nutzen; nicht aus einem fehlenden Browserzugriff auf einen fehlenden Serverzugang schließen.
+- Serversteuerung: GitHub Actions **Netcup operations**. Vor Nutzung `.github/workflows/netcup-operations.yml` und `ops/select-operation.js` lesen. Für eine reine Verbindungsprüfung `status / all` verwenden; Erfolg erst anhand des tatsächlich ausgeführten authentifizierten Schritts bestätigen.
+- Bestehende geschützte Repository-Secrets: `NETCUP_SSH_KEY`, `NETCUP_KNOWN_HOSTS`. Keine Geheimwerte verschieben, ausgeben oder erneut im Chat verlangen.
+- Browserkonsole als weiterer Weg: https://www.servercontrolpanel.de/scp-ui/servers/953802/screen — Netcup SCP → Bringness → Bildschirm. Verfügbare Browsersteuerung und aktuelle Anmeldung tatsächlich prüfen.
+- Übergabe: [docs/PROJECT-HANDOFF.md](docs/PROJECT-HANDOFF.md). Fehlende Werkzeuge, abgelaufene Anmeldung und fehlgeschlagene Serververbindung getrennt benennen.
+
+
 ## Eigenständige Arbeitsweise — 26.11.2026
 
 - Ahmet Kanal beauftragt die eigenständige Fortführung von Bringness. Triff technische Entscheidungen im Rahmen des Auftrags selbst, prüfe die Ergebnisse und behebe kleinere Fehler direkt.
