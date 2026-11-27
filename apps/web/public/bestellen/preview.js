@@ -465,7 +465,32 @@ if (hasSearch) {
   const label = document.getElementById('searchLabel');
   const fulfillment = initialMode === 'pickup' ? 'Abholung' : 'Lieferung';
   label.textContent = `· ${fulfillment} · ${initialPostcode}${demo ? ' · Vorschau mit Testrestaurants' : ''}`;
-  document.getElementById('discoveryLocation').textContent = fulfillment + ' · ' + initialPostcode;
+  const orderingMenu = document.getElementById('orderingMenu');
+  const menuStatus = document.getElementById('orderingMenuStatus');
+  orderingMenu.hidden = false;
+  orderingMenu.addEventListener('toggle', () => {
+    if (!orderingMenu.open) menuStatus.textContent = '';
+  });
+  function openMenuSection(section, emptyMessage) {
+    if (section.hidden) {
+      menuStatus.textContent = emptyMessage;
+      return;
+    }
+    orderingMenu.open = false;
+    section.scrollIntoView?.({block:'start'});
+    section.setAttribute('tabindex', '-1');
+    section.focus({preventScroll:true});
+  }
+  document.getElementById('menuBasket').onclick = () => openMenuSection(basket, 'Dein Warenkorb ist leer.');
+  document.getElementById('menuTracking').onclick = () => openMenuSection(tracking, 'Es gibt noch keine Bestellung in dieser Sitzung.');
+  document.getElementById('menuFavorites').onclick = () => {
+    const discovery = document.getElementById('restaurantDiscovery');
+    if (!discovery.hidden) {
+      const favoriteFilter = document.getElementById('showFavorites');
+      if (favoriteFilter.getAttribute('aria-pressed') !== 'true') favoriteFilter.click();
+    }
+    openMenuSection(discovery, 'Für diese Suche sind keine Restaurants verfügbar.');
+  };
   form.elements.postcode.value = initialPostcode;
   form.elements.mode.value = initialMode;
   void search();

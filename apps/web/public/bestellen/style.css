@@ -141,14 +141,6 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .search-page #results-heading { margin-bottom: 4px; }
 .search-page #status { margin-top: 0; color: #45566a; }
 #restaurantDiscovery:not([hidden]) { display: grid; gap: 14px; margin-block: 20px; }
-.discovery-banner {
-  display: grid; align-items: center; min-height: 180px; padding: clamp(18px, 5vw, 42px);
-  border-radius: 20px; overflow: hidden; color: white;
-  background: linear-gradient(90deg,#10271f 10%,#10271feb 37%,#10271f45 75%), url('/bestellen/burger.webp') right 55% / cover;
-}
-.discovery-banner p { margin: 0; color: #d4eed8; font-weight: 700; }
-.discovery-banner h2 { margin: 4px 0 12px; max-width: 13ch; font-size: clamp(1.65rem, 4vw, 2.8rem); line-height: 1.12; }
-.discovery-banner a { color: white; font-weight: 700; }
 .discovery-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
 .discovery-shortcuts button { padding: 8px 14px; background: white; color: #172e25; border-color: #c9d6cc; }
 .discovery-shortcuts [aria-pressed=true] { background: #173b2c; color: white; border-color: #173b2c; }
@@ -171,5 +163,64 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 650px) {
   .search-page .result-layout { grid-template-columns: 1fr; gap: 12px; }
   .search-page .intro-content { gap: 8px; }
-  .discovery-banner { min-height: 140px; }
+}
+
+.search-page { background: #fff7eb; color: #30241c; }
+.search-page header { padding-block: 10px; border-color: #efdfcf; background: #fffdf8; }
+.search-page .intro {
+  padding: 8px clamp(16px, 5vw, 72px); background: #fff0de; border-color: #efdfcf;
+}
+.search-page .intro-content { max-width: 84rem; display: block; }
+.search-page #searchHeading {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.search-page #search {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  padding: 2px 0; border-radius: 0; background: transparent;
+}
+.search-page #search fieldset { margin: 0; }
+.search-page #search legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.search-page #search fieldset label { margin-right: 8px; white-space: nowrap; }
+.search-page #search .search-row { flex: 1 1 25rem; gap: 8px; }
+.search-page #addressField > label, .search-page #postcodeField {
+  font-size: .78rem; font-weight: 650;
+}
+.search-page .search-row input, .search-page .search-row > button { padding: 8px 11px; }
+.search-page #addressTools { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 12px; }
+.search-page #addressTools[hidden] { display: none; }
+.search-page #addressSource { font-size: .7rem; }
+.search-page #addressMessage:empty { display: none; }
+.search-page main > section:nth-child(2) { max-width: 84rem; padding: 17px clamp(16px, 5vw, 72px) 48px; }
+.search-page #status { color: #6f5240; }
+.search-page #restaurantDiscovery:not([hidden]) { margin-block: 13px; }
+.search-page .result-layout { grid-template-columns: minmax(0, 14rem) minmax(0, 1fr); gap: 18px; }
+.search-page #restaurantControls:not([hidden]), .search-page .restaurant-card {
+  background: #fffdfa; border-color: #eddcca;
+}
+.search-page .results { grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
+.search-page .restaurant-photo { height: clamp(135px, 18vw, 210px); }
+.search-page .restaurant-card { box-shadow: 0 4px 18px #75452212; }
+.search-page .restaurant-card h3 { font-size: 1.2rem; }
+.search-page .discovery-shortcuts button { color: #6f341b; border-color: #e9c4a4; background: #fffaf4; }
+.search-page .discovery-shortcuts [aria-pressed=true] { background: #8c3c20; color: white; border-color: #8c3c20; }
+#orderingMenu { position: relative; z-index: 4; }
+#orderingMenu summary {
+  cursor: pointer; font-weight: 750; color: #693118; background: #fff0df;
+  border: 1px solid #efc9a6; border-radius: 10px; padding: 8px 12px;
+}
+.ordering-menu-panel {
+  position: absolute; right: 0; top: calc(100% + 6px); min-width: 14rem; max-width: 80vw;
+  background: #fffdf7; color: #30241c; border: 1px solid #e8cdb5; border-radius: 12px;
+  padding: 6px; box-shadow: 0 10px 26px #52321b26;
+}
+.ordering-menu-panel button { display: block; width: 100%; text-align: start; background: transparent; padding: 8px 10px; }
+.ordering-menu-panel button:hover { background: #fff0df; }
+#orderingMenuStatus { margin: 4px 10px; font-size: .85rem; }
+#orderingMenuStatus:empty { display: none; }
+@media (max-width: 650px) {
+  .search-page .result-layout { grid-template-columns: 1fr; }
+  .search-page #search { gap: 6px; }
+  .search-page #search .search-row { flex-basis: 100%; }
+  .search-page #addressField { flex-basis: 11rem; }
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=discovery">
+  <link rel="stylesheet" href="/bestellen/style.css?v=compact-results">
 
 </head>
 <body>
@@ -15,6 +15,15 @@
       <a href="https://bringness-pos.de/">Kassenfunktionen</a>
       <a href="https://bringness.de/pos/">Zur Kasse</a>
     </nav>
+    <details id="orderingMenu" hidden>
+      <summary>Mein Bringness</summary>
+      <div class="ordering-menu-panel">
+        <button type="button" id="menuFavorites">Meine Favoriten</button>
+        <button type="button" id="menuBasket">Warenkorb</button>
+        <button type="button" id="menuTracking">Bestellstatus</button>
+        <p id="orderingMenuStatus" role="status"></p>
+      </div>
+    </details>
   </header>
   <main>
     <section class="intro" aria-label="Essen bestellen">
@@ -63,13 +72,6 @@
       <h2 id="results-heading">Restaurants <small id="searchLabel"></small></h2>
       <p id="status" role="status">Gib eine Postleitzahl ein, um Restaurants zu finden.</p>
       <div id="restaurantDiscovery" hidden>
-        <section class="discovery-banner" aria-labelledby="discoveryHeading">
-          <div>
-            <p id="discoveryLocation"></p>
-            <h2 id="discoveryHeading">Was gibt’s in deiner Nähe?</h2>
-            <a href="#restaurants">Restaurants entdecken ↓</a>
-          </div>
-        </section>
         <div class="discovery-shortcuts" aria-label="Schnellauswahl">
           <button type="button" id="showAllRestaurants" aria-pressed="true">Alle Restaurants</button>
           <button type="button" id="showFastRestaurants" aria-pressed="false">Kürzeste Wartezeit</button>
@@ -115,7 +117,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=discovery" defer></script>
+<script src="/bestellen/preview.js?v=compact-results" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>
