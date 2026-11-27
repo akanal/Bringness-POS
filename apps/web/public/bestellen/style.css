@@ -191,7 +191,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .search-page #addressTools[hidden] { display: none; }
 .search-page #addressSource { font-size: .7rem; }
 .search-page #addressMessage:empty { display: none; }
-.search-page main > section:nth-child(2) { max-width: 84rem; padding: 17px clamp(16px, 5vw, 72px) 48px; }
+.search-page main > section:nth-child(2) { max-width: 94rem; padding: 17px clamp(16px, 5vw, 72px) 48px; }
 .search-page #status { color: #6f5240; }
 .search-page #restaurantDiscovery:not([hidden]) { margin-block: 13px; }
 .search-page .result-layout { grid-template-columns: minmax(0, 14rem) minmax(0, 1fr); gap: 18px; }
@@ -264,22 +264,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   padding: 34px 16px 10px; color: white;
   background: linear-gradient(transparent,#281a11f0);
 }
-#lowFeeRail { margin-bottom: 20px; }
 .fee-rail-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fee-rail-heading h3 { margin: 0 0 8px; }
 .rail-arrows button { padding: 2px 9px; background: white; color: #693118; border-color: #e9c4a4; }
-#feeRailCards {
-  display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
-  padding-block: 2px 6px;
-}
-#feeRailCards a:not([hidden]) {
-  display: grid; align-content: start; flex: 0 0 clamp(12rem,30%,18rem); gap: 4px;
-  padding: 10px; border: 1px solid #eddcca; border-radius: 12px;
-  color: inherit; background: #fffdfa; text-decoration: none; scroll-snap-align: start;
-}
-#feeRailCards a:hover strong { text-decoration: underline; }
-#feeRailCards .restaurant-photo { width: 100%; height: 86px; margin: 0; border-radius: 6px; }
-#feeRailCards small { color: #6f5240; }
 @media (min-width: 1100px) {
   .search-page main > section:nth-child(2) { margin-inline: 0 auto; }
 }
@@ -287,7 +274,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   .search-page #search .search-row { flex: 1 1 100%; }
 }
 
-.search-page #restaurants, #feeRailCards {
+.search-page #restaurants {
+  max-width: 69rem;
   display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 24px) / 3);
   grid-template-columns: none; gap: 12px; align-items: start;
   overflow-x: auto; scroll-snap-type: x mandatory; padding-block: 3px 8px;
@@ -295,16 +283,16 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .search-page #restaurants > article { scroll-snap-align: start; min-width: 0; }
 .restaurant-terms { font-size: .875rem; color: #6f5240; }
 @media (max-width: 1000px) {
-  .search-page #restaurants, #feeRailCards { grid-auto-columns: calc((100% - 12px) / 2); }
+  .search-page #restaurants { grid-auto-columns: calc((100% - 12px) / 2); }
 }
 @media (max-width: 600px) {
-  .search-page #restaurants, #feeRailCards { grid-auto-columns: 100%; }
+  .search-page #restaurants { grid-auto-columns: 100%; }
 }
 
 .search-page .intro { display: none; }
 #orderingLocation:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 #locationEditor { position: relative; z-index: 5; }
-#locationSummary { list-style: none; cursor: pointer; padding: 6px 11px; border-radius: 20px; background: #fff0de; font-weight: 700; }
+#locationSummary { color: #693118; list-style: none; cursor: pointer; padding: 6px 11px; border-radius: 20px; background: #fff0de; font-weight: 700; }
 #locationSummary::before { content: '⌖ '; color: #9c421d; }
 #locationSummary::-webkit-details-marker { display: none; }
 .search-page #locationEditor #search {
@@ -314,7 +302,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 }
 #locationEditor:not([open]) #search { display: none; }
 .ordering-modes { display: flex; gap: 2px; padding: 3px; border-radius: 20px; background: #f4e8db; }
-.ordering-modes a { padding: 4px 10px; border-radius: 20px; text-decoration: none; font-weight: 650; font-size: .9rem; }
+.ordering-modes a { color: #693118; padding: 4px 10px; border-radius: 20px; text-decoration: none; font-weight: 650; font-size: .9rem; }
 .ordering-modes a[aria-current=page] { background: white; color: #8c3c20; box-shadow: 0 1px 4px #52321b26; }
 #restaurantToolbar:not([hidden]) { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 14px; }
 #restaurantToolbar label { display: grid; gap: 3px; font-size: .85rem; font-weight: 650; }
