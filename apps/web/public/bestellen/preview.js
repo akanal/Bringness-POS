@@ -376,39 +376,6 @@ async function search() {
   if (hasSearch && matches.length) setUpRestaurantControls(delivery);
 }
 
-function setUpLowFeeRail(cards) {
-  const rail = document.getElementById('lowFeeRail');
-  const track = document.getElementById('feeRailCards');
-  const updateArrows = setUpRailNavigation(track, 'feeRail');
-  const entries = new Map();
-  for (const card of cards.filter(card => card.dataset.lowFee === 'true')) {
-    const link = document.createElement('a');
-    link.href = '#' + card.id;
-    const title = document.createElement('strong');
-    title.textContent = card.dataset.name;
-    const details = document.createElement('small');
-    details.textContent = card.querySelector('p').textContent;
-    const photo = card.querySelector('.restaurant-photo');
-    if (photo) link.append(photo.cloneNode());
-    link.append(title, details);
-    link.onclick = event => {
-      event.preventDefault();
-      const menu = card.querySelector('details');
-      if (menu) menu.open = true;
-      card.scrollIntoView?.({block:'start'});
-      card.setAttribute('tabindex', '-1');
-      card.focus({preventScroll:true});
-    };
-    entries.set(card, link);
-    track.append(link);
-  }
-  return () => {
-    for (const [card, link] of entries) link.hidden = card.hidden;
-    rail.hidden = ![...entries.values()].some(link => !link.hidden);
-    updateArrows();
-  };
-}
-
 function setUpRailNavigation(track, prefix) {
   const arrows = document.getElementById(prefix + 'Arrows');
   const previous = document.getElementById(prefix + 'Previous');
@@ -476,7 +443,6 @@ function setUpRestaurantControls(delivery) {
   document.getElementById('lowFeeField').hidden = !delivery;
 
   const updateRestaurantArrows = setUpRailNavigation(results, 'restaurant');
-  const updateFeeRail = delivery ? setUpLowFeeRail(cards) : () => {};
 
   function update() {
     all.setAttribute('aria-pressed', String(!onlyFavorites && sort.value === 'default' && !free.checked && !lowFee.checked && !quick.checked && !query.value.trim()));
@@ -497,7 +463,6 @@ function setUpRestaurantControls(delivery) {
       if (!card.hidden) shown += 1;
       results.append(card);
     }
-    updateFeeRail();
     updateRestaurantArrows();
     count.textContent = shown === 0 ? 'Keine Restaurants für diesen Filter.' :
       shown === 1 ? '1 Restaurant' : shown + ' Restaurants';
