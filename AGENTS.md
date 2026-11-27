@@ -1,6 +1,7 @@
 # Bringness project continuity
 
 ## Schnellzugriff Netcup — zuerst lesen
+- Verbindliche Eigentümervorgabe (27.11.2026): Vor jedem Zugriff zuerst diesen Schnellzugriff und die verlinkten aktuellen Projekt-/Zugangshinweise lesen, die für den Auftrag erforderlichen Konfigurationsreferenzen und den aktuellen Stand ermitteln und vorhandene autorisierte Zugänge verwenden. Erst danach weiterarbeiten. Nicht erneut nach bereits hinterlegten Angaben fragen. Geheimwerte bleiben in ihren geschützten Speicherorten; keine pauschale Übernahme oder Ausgabe von Secrets.
 - Repository: `akanal/Bringness-POS`. Vorhandene Zugänge nutzen; nicht aus einem fehlenden Browserzugriff auf einen fehlenden Serverzugang schließen.
 - Serversteuerung: GitHub Actions **Netcup operations**. Vor Nutzung `.github/workflows/netcup-operations.yml` und `ops/select-operation.js` lesen. Für eine reine Verbindungsprüfung `status / all` verwenden; Erfolg erst anhand des tatsächlich ausgeführten authentifizierten Schritts bestätigen.
 - Bestehende geschützte Repository-Secrets: `NETCUP_SSH_KEY`, `NETCUP_KNOWN_HOSTS`. Keine Geheimwerte verschieben, ausgeben oder erneut im Chat verlangen.
