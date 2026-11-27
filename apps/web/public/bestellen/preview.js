@@ -280,6 +280,10 @@ async function search() {
 
   for (const restaurant of matches) {
     const card = document.createElement('article');
+    card.className = 'restaurant-card';
+    card.dataset.name = restaurant.name;
+    card.dataset.minutes = Number.parseInt(restaurant.minutes, 10);
+    card.dataset.freeDelivery = String(restaurant.feeCents === 0);
     const title = document.createElement('h3');
     const terms = document.createElement('p');
     title.textContent = restaurant.name;
@@ -287,6 +291,13 @@ async function search() {
       ? restaurant.minutes + ' Min. · ' + (demo ? restaurant.fee : money.format(restaurant.feeCents / 100)) +
         ' Lieferung · Mindestbestellwert ' + (demo ? restaurant.minimum : money.format(restaurant.minimumCents / 100))
       : 'Abholung in ' + restaurant.minutes + ' Min.';
+    if (demo || (location.hostname === 'sandbox-bestellen.bringness.de' && restaurant.name === 'Bringness Sandbox Restaurant')) {
+      const photo = document.createElement('img');
+      photo.src = '/bestellen/pizza.webp';
+      photo.alt = '';
+      photo.className = 'restaurant-photo';
+      card.append(photo);
+    }
     card.append(title, terms);
     if (restaurant.menu) {
       const menu = document.createElement('details');
@@ -354,6 +365,39 @@ async function search() {
     }
     results.append(card);
   }
+  if (hasSearch && matches.length) setUpRestaurantControls(delivery);
+}
+
+function setUpRestaurantControls(delivery) {
+  const controls = document.getElementById('restaurantControls');
+  const query = document.getElementById('restaurantQuery');
+  const sort = document.getElementById('restaurantSort');
+  const free = document.getElementById('freeDelivery');
+  const count = document.getElementById('restaurantCount');
+  const cards = [...results.children];
+  controls.hidden = false;
+  count.hidden = false;
+  document.getElementById('freeDeliveryField').hidden = !delivery;
+
+  function update() {
+    const ordered = [...cards];
+    if (sort.value === 'time') ordered.sort((a, b) => Number(a.dataset.minutes) - Number(b.dataset.minutes));
+    if (sort.value === 'name') ordered.sort((a, b) => a.dataset.name.localeCompare(b.dataset.name, 'de'));
+    const term = query.value.trim().toLocaleLowerCase('de');
+    let shown = 0;
+    for (const card of ordered) {
+      card.hidden = !card.dataset.name.toLocaleLowerCase('de').includes(term) ||
+        (delivery && free.checked && card.dataset.freeDelivery !== 'true');
+      if (!card.hidden) shown += 1;
+      results.append(card);
+    }
+    count.textContent = shown === 0 ? 'Keine Restaurants für diesen Filter.' :
+      shown === 1 ? '1 Restaurant' : shown + ' Restaurants';
+  }
+  query.oninput = update;
+  sort.onchange = update;
+  free.onchange = update;
+  update();
 }
 
 const initialPostcode = initialSearch.get('postcode');
@@ -361,7 +405,7 @@ const initialMode = initialSearch.get('mode');
 const hasSearch = /^\d{5}$/.test(initialPostcode ?? '') && ['pickup', 'delivery'].includes(initialMode);
 if (demo) {
   form.elements.demo.disabled = false;
-  document.getElementById('newSearch').href = '/bestellen/?demo=1';
+  document.querySelector('.brand').href = '/bestellen/?demo=1';
 }
 
 if (hasSearch) {
@@ -370,7 +414,6 @@ if (hasSearch) {
   document.getElementById('landingHeading').hidden = true;
   document.getElementById('landingCopy').hidden = true;
   document.getElementById('searchHeading').hidden = false;
-  document.getElementById('newSearch').hidden = false;
   const label = document.getElementById('searchLabel');
   const fulfillment = initialMode === 'pickup' ? 'Abholung' : 'Lieferung';
   label.textContent = `· ${fulfillment} · ${initialPostcode}${demo ? ' · Vorschau mit Testrestaurants' : ''}`;

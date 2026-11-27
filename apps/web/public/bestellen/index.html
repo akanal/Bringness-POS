@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=address-search">
+  <link rel="stylesheet" href="/bestellen/style.css?v=restaurant-results">
 
 </head>
 <body>
@@ -24,7 +24,6 @@
 </div>
 <div class="intro-content">
 
-      <a id="newSearch" href="/bestellen/" hidden>← Zur Startseite</a>
       <h1 id="landingHeading">Heute gibt’s <em>was Gutes.</em></h1>
       <p id="landingCopy">Lass dir dein Essen liefern oder hol’s selbst ab.</p>
       <h1 id="searchHeading" hidden>Restaurants finden</h1>
@@ -63,6 +62,16 @@
     <section aria-labelledby="results-heading">
       <h2 id="results-heading">Restaurants <small id="searchLabel"></small></h2>
       <p id="status" role="status">Gib eine Postleitzahl ein, um Restaurants zu finden.</p>
+      <div id="restaurantControls" hidden>
+        <label>Restaurant suchen <input id="restaurantQuery" type="search" placeholder="Restaurantname"></label>
+        <label>Sortieren <select id="restaurantSort">
+          <option value="default">Empfohlen</option>
+          <option value="time">Kürzeste Wartezeit</option>
+          <option value="name">Name A–Z</option>
+        </select></label>
+        <label id="freeDeliveryField" hidden><input id="freeDelivery" type="checkbox"> Kostenlose Lieferung</label>
+      </div>
+      <p id="restaurantCount" role="status" hidden></p>
       <div id="restaurants" class="results"></div>
       <section id="testTracking" hidden>
         <h2 id="orderTrackingHeading">Status der letzten Testbestellung</h2>
@@ -87,7 +96,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=search-results" defer></script>
+<script src="/bestellen/preview.js?v=restaurant-results" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>

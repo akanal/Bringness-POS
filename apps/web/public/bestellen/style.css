@@ -110,3 +110,25 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 #addressSource { color: #45566a; }
 #addressSource a { color: inherit; }
 #postcodeField[hidden] { display: none; }
+
+.search-page { background: #fbf8f3; color: #13283e; min-height: 100vh; }
+.search-page header { background: white; border-bottom: 1px solid #e6ded4; }
+.search-page header nav, .search-page .campaign { display: none; }
+.search-page .intro { background: #ffefe0; padding-block: 18px; overflow: visible; z-index: 1; }
+.search-page .intro-content { max-width: 68rem; width: 100%; margin-inline: auto; }
+.search-page #searchHeading { font-size: clamp(1.65rem, 4vw, 2.3rem); margin: 0; }
+.search-page #search { margin-top: 12px; width: 100%; padding: 12px 16px; }
+.search-page #search fieldset { margin-bottom: 8px; }
+.search-page main > section:nth-child(2) { max-width: 68rem; margin-inline: auto; }
+#restaurantControls:not([hidden]) { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+#restaurantControls label:not([hidden]) { display: grid; gap: 4px; }
+#restaurantControls #freeDeliveryField:not([hidden]) { display: flex; align-items: center; padding-block: 10px; }
+#restaurantQuery, #restaurantSort {
+  box-sizing: border-box; max-width: 100%; padding: 9px 12px; border: 1px solid #8a96a3;
+  border-radius: 9px; background: white; color: inherit; font: inherit;
+}
+#restaurantCount { color: #45566a; }
+.search-page .results { grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); }
+.restaurant-card { overflow: hidden; box-shadow: 0 3px 12px #0a192a10; }
+.restaurant-photo { display: block; width: calc(100% + 40px); height: 140px; margin: -20px -20px 14px; object-fit: cover; }
+.restaurant-card summary { cursor: pointer; color: #8b380b; font-weight: 700; }
