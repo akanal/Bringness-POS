@@ -65,7 +65,7 @@ test('return from online payment shows the POS pickup status through collection'
     };
     dom.window.eval(script);
     const form = dom.window.document.getElementById('search');
-    assert.equal(form.action, 'https://portal.example/bestellen/');
+    assert.equal(form.action, 'https://portal.example/bestellen/ergebnisse');
     assert.equal(form.method, 'get');
     const tracking = dom.window.document.getElementById('testTrackingStatus');
     for (const label of ['Eingegangen','Abholbereit','Abgeholt']) {
@@ -156,7 +156,7 @@ test('a saved coverage link starts the requested search only for valid inputs', 
         assert.equal(actual.get('mode'), expected.get('mode'));
         assert.equal(actual.get('postcode'), expected.get('postcode'));
         const alternative = new URL(doc.querySelector('#restaurants a').href);
-        assert.equal(alternative.pathname, '/bestellen/');
+        assert.equal(alternative.pathname, '/bestellen/ergebnisse');
         assert.equal(alternative.searchParams.get('postcode'), expected.get('postcode'));
         assert.equal(alternative.searchParams.get('mode'), expected.get('mode') === 'pickup' ? 'delivery' : 'pickup');
       }
