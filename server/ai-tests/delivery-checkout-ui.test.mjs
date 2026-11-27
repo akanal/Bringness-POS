@@ -261,3 +261,52 @@ test('return from test payment ignores previously saved tracking and resumes at 
     dom.window.close();
   }
 });
+
+test('address and device location suggestions use the selected postcode without putting the address in the URL', async () => {
+  const addressScript = await readFile(new URL('address-search.js', root), 'utf8');
+  const dom = new JSDOM(html, {
+    url:'https://sandbox-bestellen.bringness.de/bestellen/', runScripts:'outside-only'
+  });
+  const {window} = dom;
+  const doc = window.document;
+  const requests = [];
+  const submissions = [];
+  window.fetch = async url => {
+    requests.push(url);
+    return {ok:true, json:async () => ({features:[{properties:{
+      street:'Stromstraße', housenumber:'11', postcode:'10551', city:'Berlin', countrycode:'DE'
+    }}]})};
+  };
+  Object.defineProperty(window.navigator, 'geolocation', {
+    value:{getCurrentPosition: success => success({coords:{latitude:52.53, longitude:13.34}})}
+  });
+  const form = doc.getElementById('search');
+  const input = doc.getElementById('addressSearch');
+  window.eval(addressScript);
+  form.addEventListener('submit', event => {
+    if (!event.defaultPrevented) submissions.push(Object.fromEntries(new window.FormData(form)));
+    event.preventDefault();
+  });
+  try {
+    input.value = 'stromst';
+    input.dispatchEvent(new window.Event('input'));
+    form.requestSubmit();
+    await wait();
+    const suggestion = () => doc.querySelector('#addressSuggestions button');
+    assert.match(suggestion().textContent, /Stromstraße 11, 10551 Berlin/);
+    suggestion().click();
+    assert.deepEqual(submissions[0], {mode:'delivery', postcode:'10551'});
+    doc.getElementById('useLocation').click();
+    await wait();
+    assert.equal(requests[1].pathname, '/reverse');
+    assert.equal(requests[1].searchParams.get('lat'), '52.53');
+    suggestion().click();
+    input.value = '01067';
+    input.dispatchEvent(new window.Event('input'));
+    form.requestSubmit();
+    assert.equal(submissions[2].postcode, '01067');
+    assert.equal(requests.length, 2);
+  } finally {
+    window.close();
+  }
+});

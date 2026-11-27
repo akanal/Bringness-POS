@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=search-results">
+  <link rel="stylesheet" href="/bestellen/style.css?v=address-search">
 
 </head>
 <body>
@@ -36,8 +36,19 @@
           <label><input type="radio" name="mode" value="pickup"> Abholung</label>
         </fieldset>
         <div class="search-row">
-          <label>Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="5 Ziffern" required></label>
+          <label id="postcodeField">Postleitzahl <input id="postcode" name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="5 Ziffern" required></label>
+          <div id="addressField" hidden>
+            <label for="addressSearch">Adresse oder Postleitzahl</label>
+            <input id="addressSearch" type="search" maxlength="120" autocomplete="off"
+              placeholder="Straße, Hausnummer, Ort oder PLZ" aria-describedby="addressSource">
+            <ul id="addressSuggestions" aria-label="Adressvorschläge" hidden></ul>
+          </div>
           <button>Restaurants finden</button>
+        </div>
+        <div id="addressTools" hidden>
+          <button type="button" id="useLocation">Meinen Standort verwenden</button>
+          <p id="addressMessage" role="status"></p>
+          <small id="addressSource">Adresssuche über Photon · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap-Mitwirkende</a></small>
         </div>
       </form></div>
 <aside class="campaign" id="campaign" hidden>
@@ -76,5 +87,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=search-results" defer></script></body>
+<script src="/bestellen/preview.js?v=search-results" defer></script>
+<script src="/bestellen/address-search.js?v=1" defer></script>
+</body>
 </html>

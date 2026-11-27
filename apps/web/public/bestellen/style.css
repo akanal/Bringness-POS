@@ -92,3 +92,21 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   max-width: none;
   font-size: clamp(2rem, 5vw, 3.25rem);
 }
+
+#addressField { flex: 1 1 18rem; min-width: 0; position: relative; }
+#addressField label { margin-bottom: 4px; }
+#addressSearch { box-sizing: border-box; width: 100%; }
+#addressSuggestions {
+  position: absolute; z-index: 3; top: 100%; inset-inline: 0;
+  margin: 4px 0 0; padding: 4px; list-style: none;
+  background: white; border: 1px solid #748395; border-radius: 10px;
+  box-shadow: 0 8px 20px #0a192a33; max-height: 15rem; overflow: auto;
+}
+#addressSuggestions button { width: 100%; text-align: start; background: white; font-weight: 500; }
+#addressSuggestions button:hover, #addressSuggestions button:focus { background: #fff1e1; }
+#addressTools { margin-top: 8px; }
+#useLocation { background: transparent; color: inherit; padding: 6px 0; text-decoration: underline; }
+#addressMessage { margin: 0; }
+#addressSource { color: #45566a; }
+#addressSource a { color: inherit; }
+#postcodeField[hidden] { display: none; }
