@@ -306,7 +306,7 @@ async function search() {
       card.append(cover);
     }
     if (!title.parentNode) card.append(title);
-    card.append(terms);
+    terms.className = 'restaurant-terms';
     if (restaurant.menu) {
       const menu = document.createElement('details');
       const summary = document.createElement('summary');
@@ -324,7 +324,7 @@ async function search() {
         dishes.append(item);
       }
       menu.open = true;
-      menu.append(summary, dishes);
+      menu.append(summary, terms, dishes);
       card.append(menu);
     }
     if (!demo) {
@@ -332,7 +332,7 @@ async function search() {
       const summary = document.createElement('summary');
       const list = document.createElement('ul');
       summary.textContent = 'Speisekarte ansehen';
-      menu.append(summary, list);
+      menu.append(summary, terms, list);
       card.append(menu);
       let menuVersion = 0;
       menu.addEventListener('toggle', async () => {
@@ -379,9 +379,7 @@ async function search() {
 function setUpLowFeeRail(cards) {
   const rail = document.getElementById('lowFeeRail');
   const track = document.getElementById('feeRailCards');
-  const arrows = document.getElementById('feeRailArrows');
-  const previous = document.getElementById('feeRailPrevious');
-  const next = document.getElementById('feeRailNext');
+  const updateArrows = setUpRailNavigation(track, 'feeRail');
   const entries = new Map();
   for (const card of cards.filter(card => card.dataset.lowFee === 'true')) {
     const link = document.createElement('a');
@@ -404,6 +402,17 @@ function setUpLowFeeRail(cards) {
     entries.set(card, link);
     track.append(link);
   }
+  return () => {
+    for (const [card, link] of entries) link.hidden = card.hidden;
+    rail.hidden = ![...entries.values()].some(link => !link.hidden);
+    updateArrows();
+  };
+}
+
+function setUpRailNavigation(track, prefix) {
+  const arrows = document.getElementById(prefix + 'Arrows');
+  const previous = document.getElementById(prefix + 'Previous');
+  const next = document.getElementById(prefix + 'Next');
   function updateArrows() {
     const remaining = track.scrollWidth - track.clientWidth - track.scrollLeft;
     arrows.hidden = track.scrollWidth <= track.clientWidth + 1;
@@ -414,11 +423,7 @@ function setUpLowFeeRail(cards) {
   next.onclick = () => track.scrollBy({left:track.clientWidth});
   track.onscroll = updateArrows;
   if (typeof ResizeObserver === 'function') new ResizeObserver(updateArrows).observe(track);
-  return () => {
-    for (const [card, link] of entries) link.hidden = card.hidden;
-    rail.hidden = ![...entries.values()].some(link => !link.hidden);
-    updateArrows();
-  };
+  return updateArrows;
 }
 
 function setUpRestaurantControls(delivery) {
@@ -468,6 +473,7 @@ function setUpRestaurantControls(delivery) {
   document.getElementById('freeDeliveryField').hidden = !delivery;
   document.getElementById('lowFeeField').hidden = !delivery;
 
+  const updateRestaurantArrows = setUpRailNavigation(results, 'restaurant');
   const updateFeeRail = delivery ? setUpLowFeeRail(cards) : () => {};
 
   function update() {
@@ -490,6 +496,7 @@ function setUpRestaurantControls(delivery) {
       results.append(card);
     }
     updateFeeRail();
+    updateRestaurantArrows();
     count.textContent = shown === 0 ? 'Keine Restaurants für diesen Filter.' :
       shown === 1 ? '1 Restaurant' : shown + ' Restaurants';
   }
