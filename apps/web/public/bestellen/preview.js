@@ -420,9 +420,6 @@ if (hasSearch) {
   form.elements.postcode.value = initialPostcode;
   form.elements.mode.value = initialMode;
   void search();
-} else if (demo) {
-  form.elements.postcode.value = '10551';
-  void search();
 }
 
 const scenes = [...document.querySelectorAll('.scene')];
