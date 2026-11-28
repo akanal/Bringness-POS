@@ -23,15 +23,11 @@ test('pickup page submits the current total and retries with the same request ID
     assert.equal(path,'/api/v1/delivery-portal/checkout');
     orders.push(JSON.parse(options.body));
     return Response.json({status:'unconfirmed'},{status:202});
-  }, '?mode=pickup&postcode=10551');
+  }, '?mode=pickup&postcode=10551&restaurant='+restaurantId);
   try {
     const doc = dom.window.document;
     await wait();
-    const menu = doc.querySelector('#restaurants details');
-    menu.open=true;
-    await new Promise(resolve=>menu.addEventListener('toggle',resolve,{once:true}));
-    await wait();
-    const add = doc.querySelector('#restaurants button');
+    const add = doc.querySelector('#storefrontMenu button');
     assert.equal(add.textContent,'Zum Warenkorb');
     add.click();
     const finish = doc.getElementById('finishDemo');
@@ -80,36 +76,30 @@ test('return from online payment shows the POS pickup status through collection'
   }
 });
 
-test('an older menu response cannot replace the reopened menu', async () => {
+test('an older storefront response cannot replace a newer menu or operator profile', async () => {
   const requests = [];
-  const dom = page(path => {
-    if (path.includes('/restaurants?')) {
-      return Promise.resolve(Response.json({restaurants:[{id:restaurantId,name:'Pilotrestaurant',minutes:20}]}));
-    }
-    return new Promise(resolve => requests.push(resolve));
-  }, '?mode=delivery&postcode=10551');
+  const dom = page(() => new Promise(resolve => requests.push(resolve)));
   try {
-    const doc = dom.window.document;
-    await wait();
-    const menu = doc.querySelector('#restaurants details');
-    async function setOpen(open) {
-      const toggled = new Promise(resolve => menu.addEventListener('toggle',resolve,{once:true}));
-      menu.open = open;
-      await toggled;
-    }
-    await setOpen(true);
-    await setOpen(false);
-    await setOpen(true);
+    const restaurant = {id:restaurantId,name:'Pilotrestaurant',minutes:20};
+    const first = dom.window.renderStorefront(restaurant,'pickup','10551');
+    const second = dom.window.renderStorefront(restaurant,'pickup','10551');
     assert.equal(requests.length,2);
-    requests[1](Response.json({menu:[{id:dishId,name:'Aktuelle Pizza',cents:900}],onlinePickup:true}));
-    await wait();
-    requests[0](Response.json({menu:[{id:dishId,name:'Alte Pizza',cents:500}],onlinePickup:true}));
-    await wait();
-    assert.match(menu.textContent,/Aktuelle Pizza/);
-    assert.doesNotMatch(menu.textContent,/Alte Pizza/);
-  } finally {
-    dom.window.close();
-  }
+    requests[1](Response.json({menu:[{id:dishId,name:'Aktuelle Pizza',cents:900}],onlinePickup:true,shopProfile:{operator:'Aktueller Betreiber'}}));
+    await second;
+    requests[0](Response.json({menu:[{id:dishId,name:'Alte Pizza',cents:500}],onlinePickup:true,shopProfile:{operator:'Alter Betreiber'}}));
+    await first;
+    const doc = dom.window.document;
+    assert.match(doc.getElementById('storefrontMenu').textContent,/Aktuelle Pizza/);
+    assert.doesNotMatch(doc.getElementById('storefrontMenu').textContent,/Alte Pizza/);
+    assert.equal(doc.getElementById('storefrontContact').textContent,'Aktueller Betreiber');
+    const third = dom.window.renderStorefront(restaurant,'pickup','10551');
+    assert.equal(doc.getElementById('storefrontMenu').childElementCount,0);
+    requests[2](Response.json({menu:[{id:dishId,name:'Neue Pizza',cents:1000}],basketPreview:true}));
+    await third;
+    assert.equal(doc.getElementById('storefrontContact').childElementCount,0);
+    assert.equal(doc.getElementById('storefrontOperator').hidden,true);
+    assert.equal(doc.querySelectorAll('#storefrontMenu li').length,1);
+  } finally { dom.window.close(); }
 });
 
 test('adding a dish from a refreshed menu uses the new price for all its portions', () => {
@@ -171,17 +161,11 @@ test('sandbox preview displays and changes a basket without submitting an order'
     }
     assert.match(path,/\/menu\?/);
     return Response.json({menu:[{id:dishId,name:'Testartikel',cents:100}],basketPreview:true});
-  }, '?mode=pickup&postcode=10551');
+  }, '?mode=pickup&postcode=10551&restaurant='+restaurantId);
   try {
     await wait();
     const doc = dom.window.document;
-    const menu = doc.querySelector('#restaurants details');
-    const toggled = new Promise(resolve => menu.addEventListener('toggle',resolve,{once:true}));
-    menu.open = true;
-    await toggled;
-    await wait();
-
-    const add = menu.querySelector('button');
+    const add = doc.querySelector('#storefrontMenu button');
     add.click();
     add.click();
     const basket = doc.getElementById('demoBasket');
