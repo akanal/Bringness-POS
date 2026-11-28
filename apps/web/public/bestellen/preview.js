@@ -9,6 +9,69 @@ const status = document.getElementById('status');
 
 const initialSearch = new URLSearchParams(location.search);
 const demo = initialSearch.get('demo') === '1';
+const restaurantKey = initialSearch.get('restaurant');
+const category = initialSearch.get('category');
+const storefront = document.getElementById('storefront');
+
+function orderingUrl(filters) {
+  const params = new URLSearchParams(filters);
+  if (demo) params.set('demo', '1');
+  return '/bestellen/?' + params;
+}
+
+async function renderStorefront(restaurant, mode, postcode) {
+  const heading = document.getElementById('storefrontName');
+  const list = document.getElementById('storefrontMenu');
+  if (!restaurant) {
+    heading.textContent = 'Shop nicht verfügbar';
+    status.textContent = 'Für diesen Bestellort und diese Bestellart ist der Shop nicht verfügbar.';
+    return;
+  }
+
+  heading.textContent = restaurant.name;
+  document.title = restaurant.name + ' · Bringness';
+  const delivery = mode === 'delivery';
+  document.getElementById('storefrontTerms').textContent = delivery
+    ? `${restaurant.minutes} Min. · ${money.format(restaurant.feeCents / 100)} Lieferung · Mindestbestellwert ${money.format(restaurant.minimumCents / 100)}`
+    : `Abholung in ${restaurant.minutes} Min.`;
+  status.textContent = 'Speisekarte wird geladen …';
+
+  try {
+    let menu = restaurant.menu;
+    let checkout = {};
+    if (!demo) {
+      const params = new URLSearchParams({postcode, mode, restaurantId: restaurant.id});
+      const response = await fetch('/api/v1/delivery-portal/menu?' + params);
+      if (!response.ok) throw Error('menu');
+      checkout = await response.json();
+      menu = checkout.menu;
+    }
+    if (!Array.isArray(menu)) throw Error('menu');
+    status.textContent = menu.length ? '' : 'Derzeit sind keine Gerichte verfügbar.';
+    document.getElementById('storefrontMenuHeading').hidden = !menu.length;
+    for (const dish of menu) {
+      const item = document.createElement('li');
+      const title = document.createElement('strong');
+      title.textContent = dish.name;
+      const price = document.createElement('span');
+      price.textContent = money.format(dish.cents / 100);
+      item.append(title, price);
+      if (demo || checkout.testOrders || checkout.onlinePickup || checkout.basketPreview) {
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.textContent = demo || !checkout.onlinePickup ? 'Zum Testwarenkorb' : 'Zum Warenkorb';
+        add.setAttribute('aria-label', dish.name + ' · ' + add.textContent);
+        add.onclick = () => addDish(restaurant, delivery, dish, postcode,
+          checkout.mollieTestCheckout, checkout.onlinePickup, Boolean(checkout.basketPreview));
+        item.append(add);
+      }
+      list.append(item);
+    }
+  } catch {
+    status.textContent = 'Speisekarte konnte nicht geladen werden. Bitte lade die Seite erneut.';
+  }
+}
+
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
 const basket = document.getElementById('demoBasket');
 const basketItems = document.getElementById('basketItems');
@@ -274,6 +337,11 @@ async function search() {
     status.textContent = 'Suche derzeit nicht verfügbar. Bitte erneut versuchen.';
     return;
   }
+  if (restaurantKey) {
+    const restaurant = matches.find(entry => String(entry.id ?? entry.name) === restaurantKey);
+    await renderStorefront(restaurant, mode, postcode);
+    return;
+  }
   status.textContent = matches.length
     ? delivery ? 'Die Restaurants liefern mit eigenen Fahrern.' : 'Abholung direkt im Restaurant.'
     : 'Für diese Postleitzahl und Bestellart wurden keine Restaurants gefunden.';
@@ -307,70 +375,12 @@ async function search() {
     }
     if (!title.parentNode) card.append(title);
     terms.className = 'restaurant-terms';
-    if (restaurant.menu) {
-      const menu = document.createElement('details');
-      const summary = document.createElement('summary');
-      const dishes = document.createElement('ul');
-      summary.textContent = 'Beispiel-Speisekarte';
-      for (const dish of restaurant.menu) {
-        const item = document.createElement('li');
-        const add = document.createElement('button');
-        item.textContent = dish.name + ' · ' + money.format(dish.cents / 100) + ' ';
-        add.type = 'button';
-        add.textContent = 'Hinzufügen';
-        add.setAttribute('aria-label',dish.name + ' hinzufügen');
-        add.onclick = () => addDish(restaurant,delivery,dish);
-        item.append(add);
-        dishes.append(item);
-      }
-      menu.open = true;
-      menu.append(summary, terms, dishes);
-      card.append(menu);
-    }
-    if (!demo) {
-      const menu = document.createElement('details');
-      const summary = document.createElement('summary');
-      const list = document.createElement('ul');
-      summary.textContent = 'Speisekarte ansehen';
-      menu.append(summary, terms, list);
-      card.append(menu);
-      let menuVersion = 0;
-      menu.addEventListener('toggle', async () => {
-        const currentMenu = ++menuVersion;
-        if (!menu.open) return;
-        list.replaceChildren();
-        const notice = document.createElement('li');
-        notice.textContent = 'Speisekarte wird geladen …';
-        list.append(notice);
-        try {
-          const query = new URLSearchParams({postcode,mode,restaurantId:restaurant.id});
-          const response = await fetch('/api/v1/delivery-portal/menu?' + query);
-          if (!response.ok) throw Error();
-          const {menu: dishes,testOrders,mollieTestCheckout,onlinePickup,basketPreview} = await response.json();
-          if (currentMenu !== menuVersion || !menu.open) return;
-          if (!Array.isArray(dishes)) throw Error('Ungültige Speisekarte');
-          if (!dishes.length) {
-            notice.textContent = 'Derzeit sind hier keine Gerichte verfügbar.';
-            return;
-          }
-          list.replaceChildren();
-          for (const dish of dishes) {
-            const item = document.createElement('li');
-            item.textContent = dish.name + ' · ' + money.format(dish.cents / 100);
-            if (testOrders || onlinePickup || basketPreview) {
-              const add = document.createElement('button');
-              add.type = 'button';
-              add.textContent = onlinePickup ? 'Zum Warenkorb' : 'Zum Testwarenkorb';
-              add.onclick = () => addDish(restaurant,delivery,dish,postcode,mollieTestCheckout,onlinePickup,Boolean(basketPreview));
-              item.append(' ',add);
-            }
-            list.append(item);
-          }
-        } catch {
-          notice.textContent = 'Speisekarte konnte nicht geladen werden.';
-        }
-      });
-    }
+    const shopLink = document.createElement('a');
+    shopLink.className = 'restaurant-shop-link';
+    shopLink.href = orderingUrl({mode, postcode, restaurant: restaurant.id ?? restaurant.name});
+    shopLink.setAttribute('aria-label', restaurant.name + ' · Shop öffnen');
+    shopLink.append(...card.children, terms);
+    card.append(shopLink);
     results.append(card);
   }
   if (hasSearch && matches.length) setUpRestaurantControls(delivery);
@@ -512,7 +522,30 @@ if (demo) {
   document.querySelector('.brand').href = '/bestellen/?demo=1';
 }
 
-if (hasSearch) {
+const categoryLinks = Array.from(document.querySelectorAll('.shop-categories a'));
+const activeCategory = categoryLinks.find(link => link.dataset.category === category);
+const marketCategory = activeCategory && category !== 'essen';
+for (const link of categoryLinks) {
+  const filters = {category: link.dataset.category};
+  if (hasSearch) Object.assign(filters, {mode: initialMode, postcode: initialPostcode});
+  link.href = orderingUrl(filters);
+  if (link === activeCategory) link.setAttribute('aria-current', 'page');
+}
+if (marketCategory || (category === 'essen' && !hasSearch)) {
+  document.body.classList.add('category-page');
+  const label = activeCategory.querySelector('strong').textContent;
+  document.title = label + ' · Bringness';
+  document.getElementById('results-heading').textContent = label;
+  status.textContent = marketCategory ? 'Für diese Kategorie sind derzeit keine Angebote verfügbar.' : '';
+  if (!marketCategory) {
+    const chooseLocation = document.createElement('a');
+    chooseLocation.href = orderingUrl({}) + '#search';
+    chooseLocation.textContent = 'Bestellort auswählen';
+    status.append(chooseLocation);
+  }
+}
+
+if (hasSearch && !marketCategory) {
   document.body.classList.add('search-page');
   document.title = 'Restaurants · Bringness';
   document.getElementById('landingHeading').hidden = true;
@@ -560,6 +593,12 @@ if (hasSearch) {
     link.href = '/bestellen/?' + params;
     if (mode === initialMode) link.setAttribute('aria-current','page');
   }
+  if (restaurantKey) {
+    document.body.classList.add('storefront-page');
+    storefront.hidden = false;
+    document.getElementById('storefrontBack').href = orderingUrl({mode: initialMode, postcode: initialPostcode});
+    document.getElementById('menuFavorites').hidden = true;
+  }
   void search();
 }
 
@@ -587,4 +626,4 @@ selectors.forEach((button, index) => button.addEventListener('click', () => {
   showSlide(index);
 }));
 autoplay.addEventListener('click', () => play(!timer));
-if (!hasSearch) play(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+if (!hasSearch && !activeCategory) play(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
