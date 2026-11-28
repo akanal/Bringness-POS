@@ -93,15 +93,13 @@ async function renderStorefront(restaurant, mode, postcode) {
         menuContent.append(section);
         const link = document.createElement('a');
         link.href = '#' + section.id;
-        const icon = document.createElement('span');
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = categoryIcon(category);
-        link.append(icon, category);
+        link.append(categoryIcon(category), category);
         categories.append(link);
-        groups.set(category, list);
+        groups.set(category, { section, list, link });
       }
-      const list = groups.get(category);
+      const { list } = groups.get(category);
       const item = document.createElement('li');
+      item.dataset.search = [dish.name, category, dish.description].filter(Boolean).join(' ').toLocaleLowerCase('de');
       const title = document.createElement('strong');
       title.textContent = dish.name;
       const price = document.createElement('span');
@@ -155,20 +153,50 @@ async function renderStorefront(restaurant, mode, postcode) {
       list.append(item);
     }
     categories.hidden = !groups.size;
+    document.getElementById('storefrontSearch').hidden = !menu.length;
+    const search = document.getElementById('storefrontSearchInput');
+    const empty = document.getElementById('storefrontSearchEmpty');
+    search.oninput = () => {
+      const terms = search.value.trim().toLocaleLowerCase('de').split(/\s+/);
+      let found = false;
+      for (const { section, list, link } of groups.values()) {
+        let visible = false;
+        for (const item of list.children) {
+          item.hidden = !terms.every(term => item.dataset.search.includes(term));
+          if (!item.hidden) visible = true;
+        }
+        section.hidden = link.hidden = !visible;
+        if (visible) found = true;
+      }
+      empty.hidden = found;
+      categories.hidden = !found;
+    };
+    if (menu.length) search.oninput();
   } catch {
     status.textContent = 'Speisekarte konnte nicht geladen werden. Bitte lade die Seite erneut.';
   }
 }
 
+const categoryIcons = [
+  [/getränk|drink|kaffee|cocktail/i, 'M5 7h14l-2 14H7z M12 7l2-4h4'],
+  [/pizza/i, 'M3 6a21 21 0 0 1 18 0l-9 15z M5 9a16 16 0 0 1 14 0 M10 12h.1 M14 14h.1'],
+  [/burger/i, 'M3 10a9 6 0 0 1 18 0z M3 14h18 M3 17h18v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z'],
+  [/salat|salad/i, 'M3 12h18a9 9 0 0 1-18 0z M12 11c0-5 3-7 7-7 0 4-2 7-7 7z M10 9C7 9 5 7 5 4c3 0 5 2 5 5'],
+  [/pasta|nudel/i, 'M3 14h18a9 7 0 0 1-18 0z M7 11c-3-4 3-4 0-8 M12 11c-3-4 3-4 0-8 M17 11c-3-4 3-4 0-8'],
+  [/dessert|nachtisch|süß|kuchen/i, 'M4 12h16v8H4z M4 15l4 2 4-2 4 2 4-2 M12 12V7 M12 3h.01'],
+  [/suppe/i, 'M3 13h18a9 8 0 0 1-18 0z M8 9c-2-2 2-3 0-5 M12 9c-2-2 2-3 0-5 M16 9c-2-2 2-3 0-5']
+];
+
 function categoryIcon(category) {
-  if (/getränk|drink|kaffee|cocktail/i.test(category)) return '🥤';
-  if (/pizza/i.test(category)) return '🍕';
-  if (/burger/i.test(category)) return '🍔';
-  if (/salat|salad/i.test(category)) return '🥗';
-  if (/pasta|nudel/i.test(category)) return '🍝';
-  if (/dessert|nachtisch|süß|kuchen/i.test(category)) return '🍰';
-  if (/suppe/i.test(category)) return '🥣';
-  return '🍽️';
+  const namespace = 'http://www.w3.org/2000/svg';
+  const icon = document.createElementNS(namespace, 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(namespace, 'path');
+  path.setAttribute('d', categoryIcons.find(([pattern]) => pattern.test(category))?.[1] ||
+    'M4 3v6a3 3 0 0 0 6 0V3 M7 3v18 M19 3c-3 2-4 5-4 9h4 M19 3v18');
+  icon.append(path);
+  return icon;
 }
 
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});

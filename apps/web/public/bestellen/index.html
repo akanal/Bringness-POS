@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=shop-product-details">
+  <link rel="stylesheet" href="/bestellen/style.css?v=shop-menu-search">
 
 </head>
 <body>
@@ -95,6 +95,10 @@
         <p id="storefrontTerms"></p>
         <p id="storefrontPickupAddress" hidden></p>
         <h2 id="storefrontMenuHeading" hidden>Speisekarte</h2>
+        <label id="storefrontSearch" hidden>Speisekarte durchsuchen
+          <input id="storefrontSearchInput" type="search" placeholder="Gericht oder Kategorie">
+        </label>
+        <p id="storefrontSearchEmpty" role="status" hidden>Keine passenden Gerichte gefunden.</p>
         <nav id="storefrontCategories" aria-label="Speisekategorien" hidden></nav>
         <div id="storefrontMenu"></div>
       </section>
@@ -176,7 +180,7 @@
       <button id="mobileBasket" type="button" aria-controls="demoBasket" hidden></button>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=shop-product-details" defer></script>
+<script src="/bestellen/preview.js?v=shop-menu-search" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>

@@ -433,3 +433,8 @@ main > section[aria-labelledby="results-heading"] {
 .dish-details dl { margin: 4px 0; }
 .dish-details dt { font-weight: 700; }
 .dish-details dd { margin: 0 0 8px; }
+
+#storefrontSearch:not([hidden]) { display: grid; gap: 6px; max-width: 25rem; }
+#storefrontSearch input { padding: 10px 12px; border: 1px solid #b99380; border-radius: 8px; font: inherit; }
+#storefrontCategories svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#storefrontCategories a[hidden], #storefrontMenu li[hidden] { display: none; }
