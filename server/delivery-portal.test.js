@@ -9,13 +9,19 @@ test('public menu advertises online payment only for eligible pickup at the rele
   let ready = true;
   let merchantReads = 0;
   const db = {
-    async query(sql) {
+    async query(sql, args) {
+      if (sql.includes("settings->'shopProfile'")) {
+        assert.equal(args[0], '10551');
+        assert.match(sql,/s.restaurant_id=\$3 AND/);
+        return {rows:[{profile:{operator:'Testbetrieb'}}]};
+      }
       if (sql.includes('FROM pos_delivery_merchants')) {
         merchantReads++;
         return {rows:ready ? [{}] : []};
       }
       assert.match(sql,/JOIN products/);
-      return {rows:[{id:other,name:'Pizza',cents:900}]};
+      assert.match(sql,/c.name AS category/);
+      return {rows:[{id:other,name:'Pizza',cents:900,category:'Pizza'}]};
     }
   };
   const active = createDeliveryPortal(db,{liveCheckoutOrigin:'https://portal.example',liveRestaurantId:restaurantId});
@@ -25,6 +31,8 @@ test('public menu advertises online payment only for eligible pickup at the rele
     const req = {method:'GET',url:'/api/v1/delivery-portal/menu?postcode=10551&restaurantId='+id+'&mode='+mode};
     const res = {writeHead(code){assert.equal(code,200);},end(value){body=JSON.parse(value);}};
     assert.equal(await handler(req,res),true);
+    assert.equal(body.menu[0].category,'Pizza');
+    assert.deepEqual(body.shopProfile,{operator:'Testbetrieb'});
     return body.onlinePickup;
   }
   assert.equal(await menu(disabled,restaurantId,'pickup'),false);
