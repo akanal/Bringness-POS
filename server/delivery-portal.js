@@ -96,9 +96,13 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       if (menu) {
         const rid = url.searchParams.get('restaurantId');
         if (!idPattern.test(rid ?? '')) return send(400,{error:'Bitte ein Restaurant auswählen.'});
-        const {rows} = await db.query(`SELECT p.id,p.name,p.description,p.price_cents AS cents,c.name AS category
+        const {rows} = await db.query(`SELECT p.id,p.name,p.description,p.price_cents AS cents,c.name AS category,
+            p.image_url,pt.ingredients,
+            ARRAY(SELECT a.name_de FROM product_allergens pa JOIN allergen_catalog a ON a.code=pa.code WHERE pa.product_id=p.id ORDER BY a.name_de) AS allergens,
+            ARRAY(SELECT a.name_de FROM product_additives pa JOIN additive_catalog a ON a.code=pa.code WHERE pa.product_id=p.id ORDER BY a.name_de) AS additives
           FROM pos_delivery_locations s JOIN products p ON p.restaurant_id=s.restaurant_id
           LEFT JOIN categories c ON c.id=p.category_id AND c.restaurant_id=p.restaurant_id
+          LEFT JOIN product_translations pt ON pt.product_id=p.id AND pt.language_code='de'
           WHERE s.restaurant_id=$3 AND ${eligible} AND s.settings->'productIds' ? p.id::text
             AND p.active AND (p.category_id IS NULL OR c.active)
             AND coalesce((to_jsonb(p)->>'ai_stock_available')::boolean,true)

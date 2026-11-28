@@ -414,3 +414,22 @@ main > section[aria-labelledby="results-heading"] {
 .search-page #locationSummary,
 .search-page .ordering-modes a { color: #693118; }
 .search-page .ordering-modes a[aria-current="page"] { background: #fff; color: #693118; }
+
+#storefrontMenu li { position: relative; padding-top: 48px; }
+.dish-photo { grid-column: 1 / -1; width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; }
+.dish-details { grid-column: 1 / -1; }
+.dish-details summary {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 36px;
+  cursor: pointer;
+  border-radius: 8px;
+  background: #f4f4f4;
+}
+.dish-details dl { margin: 4px 0; }
+.dish-details dt { font-weight: 700; }
+.dish-details dd { margin: 0 0 8px; }

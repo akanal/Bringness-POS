@@ -1,6 +1,9 @@
 const samples = [
   { name: 'Testrestaurant Moabit', postcode: '10551', delivery: ['10551'], pickup: true, minutes: '25–40', fee: '2,50 €', minimum: '12,00 €', menu: [{name:'Hähnchen-Bowl',cents:1290},{name:'Gemüse-Bowl',cents:1090}], feeCents:250, minimumCents:1200 },
-  { name: 'Testküche Kreuzberg', postcode: '10997', delivery: [], pickup: true, minutes: '15–25', menu: [{name:'Margherita',cents:890},{name:'Pizza mit Gemüse',cents:1190}] }
+  { name: 'Testküche Kreuzberg', postcode: '10997', delivery: [], pickup: true, minutes: '15–25', menu: [{name:'Margherita',cents:890},{name:'Pizza mit Gemüse',cents:1190},
+    {name:'Pizza Margherita (Testprodukt)',cents:990,category:'Pizza',image_url:'/bestellen/pizza.webp',
+      ingredients:'Weizenmehl, Wasser, Hefe, Salz, Tomaten, Mozzarella, Basilikum',
+      allergens:['Glutenhaltiges Getreide (Weizen)','Milch'],additives:['Keine im Testrezept']}] }
 ];
 
 const form = document.getElementById('search');
@@ -104,6 +107,34 @@ async function renderStorefront(restaurant, mode, postcode) {
       const price = document.createElement('span');
       price.textContent = money.format(dish.cents / 100);
       item.append(title, price);
+      const productDetails = document.createElement('details');
+      productDetails.className = 'dish-details';
+      const toggle = document.createElement('summary');
+      toggle.textContent = '⋯';
+      toggle.setAttribute('aria-label', 'Produktinformationen zu ' + dish.name);
+      const panel = document.createElement('dl');
+      for (const [label, value] of [
+        ['Zutaten', dish.ingredients],
+        ['Allergene', dish.allergens?.join(', ')],
+        ['Zusatzstoffe', dish.additives?.join(', ')]
+      ]) {
+        const key = document.createElement('dt');
+        key.textContent = label;
+        const entry = document.createElement('dd');
+        entry.textContent = value || 'Keine Angaben hinterlegt';
+        panel.append(key, entry);
+      }
+      productDetails.append(toggle, panel);
+      const imageUrl = typeof dish.image_url === 'string' ? dish.image_url : '';
+      if ((demo && imageUrl === '/bestellen/pizza.webp') || /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(imageUrl)) {
+        const photo = document.createElement('img');
+        photo.className = 'dish-photo';
+        photo.src = imageUrl;
+        photo.alt = dish.name;
+        photo.loading = 'lazy';
+        item.prepend(photo);
+      }
+      item.append(productDetails);
       if (dish.description) {
         const description = document.createElement('p');
         description.textContent = dish.description;
