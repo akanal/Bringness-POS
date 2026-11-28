@@ -47,9 +47,34 @@
       : '';
   }
 
+  let shopCover = '';
+  const profileFields = {operator:'shopOperator', address:'shopAddress', phone:'shopPhone', email:'shopEmail'};
+  async function encodeCover(file) {
+    if (file.size > 12000000) throw Error('Das Titelbild darf höchstens 12 MB groß sein.');
+    const image = await createImageBitmap(file);
+    try {
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 1280 / image.width, 720 / image.height);
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext('2d', {alpha:false});
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.8, 0.65, 0.5, 0.35]) {
+        const data = canvas.toDataURL('image/jpeg', quality);
+        if (data.length <= 160000) return data;
+      }
+      throw Error('Das Titelbild konnte nicht ausreichend verkleinert werden.');
+    } finally {
+      image.close();
+    }
+  }
+
   request().then(({settings,products}) => {
     productsById = new Map(products.map(product => [product.id, product]));
     const list = document.getElementById('deliveryPortalProducts');
+    const profile = settings.shopProfile ?? {};
+    shopCover = profile.cover ?? '';
+    for (const [key, name] of Object.entries(profileFields)) fields[name].value = profile[key] ?? '';
     const selected = new Set(settings.productIds);
     for (const product of products) {
       const label = document.createElement('label');
@@ -134,7 +159,14 @@
     };
     inputs.disabled = true;
     try {
+      const file = fields.shopCover.files[0];
+      const cover = file ? await encodeCover(file) : fields.removeShopCover.checked ? '' : shopCover;
+      settings.shopProfile = {cover};
+      for (const [key, name] of Object.entries(profileFields)) settings.shopProfile[key] = fields[name].value.trim();
       const saved = await request(settings);
+      shopCover = saved.settings.shopProfile?.cover ?? cover;
+      fields.shopCover.value = '';
+      fields.removeShopCover.checked = false;
       showSavedSearches(saved.settings);
       status.textContent = 'Standorteinstellungen gespeichert.';
     } catch (error) { status.textContent = error.message; }
