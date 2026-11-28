@@ -190,6 +190,30 @@ await markingReady;
 assert.equal(w.document.getElementById('moduleBody').textContent,'Kasse');
 assert.equal(readinessRequests.length,1);
 w.close();
+// A poll from a previous visit must not update a newly opened board.
+const refreshSource=boardSource.slice(boardSource.indexOf('async function refreshActiveOrderBoard('),boardSource.indexOf('setInterval(refreshActiveOrderBoard'));
+for(const outcome of ['success','failure']){
+ const {window:pollWindow}=new JSDOM('<body data-pos-view="bestellungen"><input id="restaurant" value="test"><div id="mainnav"><button class="active" data-view="bestellungen"></button></div><div id="moduleBody"><p id="kitchenMessage"></p></div></body>',{runScripts:'outside-only',pretendToBeVisual:true});
+ let complete,fail;
+ const request=new Promise((resolve,reject)=>{complete=resolve;fail=reject;});
+ pollWindow.orderBoardData=()=>request;
+ let renders=0;
+ pollWindow.renderOrderBoard=()=>{renders++;};
+ pollWindow.eval(`const $=id=>document.getElementById(id);
+ const token='test',kitchenActionsInFlight=new Set();
+ let kitchenPolling=false,kitchenBoardSignature='';
+ ${boardSource.slice(boardSource.indexOf('function isCurrentOrderBoard('),boardSource.indexOf('async function renderOrderBoard('))}
+ ${refreshSource}`);
+ const refresh=pollWindow.refreshActiveOrderBoard();
+ const oldBody=pollWindow.document.getElementById('moduleBody');
+ oldBody.outerHTML='<div id="moduleBody"><p id="kitchenMessage">Neue Ansicht</p></div>';
+ if(outcome==='success')complete({orders:[]});
+ else fail(new Error('Verspäteter Fehler'));
+ await refresh;
+ assert.equal(renders,0);
+ assert.equal(pollWindow.document.getElementById('kitchenMessage').textContent,'Neue Ansicht');
+ pollWindow.close();
+}
 console.log('Pickup display expiry passed: 30-minute boundary, pending retained, shared screens, queue, no order mutations and no collected buttons.');
 
 const cleanupRid=id(),cleanupOther=id(),stale='e2569e58-0000-4000-8000-000000000001',foreign='e2569e58-0000-4000-8000-000000000002',readyCleanup='1132b4a1-0000-4000-8000-000000000001';

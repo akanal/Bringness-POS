@@ -299,7 +299,18 @@ async function refreshActiveOrderBoard(){
  if(kitchenPolling||document.hidden||!token)return;
  const active=document.querySelector("#mainnav button[data-view].active")?.dataset.view;
  if(!["kueche","bestellungen"].includes(active)||!$("moduleBody")||!$("restaurant").value)return;
- kitchenPolling=true;try{const rid=$("restaurant").value,j=await orderBoardData(rid);if(document.querySelector("#mainnav button[data-view].active")?.dataset.view!==active||$("restaurant").value!==rid)return;const orders=(j.orders||[]).filter(o=>active==="bestellungen"||(!["paid","cancelled"].includes(o.status)&&!o.qr_ready_at)||(o.source==="qr"&&o.qr_service_mode==="pickup"&&o.status==="paid"&&!o.qr_ready_at)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)||a.id.localeCompare(b.id)),signature=JSON.stringify({view:active,restaurantId:rid,orders});if(active==="kueche")trackKitchenOrders(rid,orders,true);if(signature!==kitchenBoardSignature&&!kitchenActionsInFlight.size&&!window.bnTeamPos?.editingKitchen())await renderOrderBoard(active,rid,j)}catch(e){const msg=$("kitchenMessage");if(msg)msg.textContent="Aktualisierung fehlgeschlagen: "+e.message}finally{kitchenPolling=false}
+ const body=$("moduleBody"),rid=$("restaurant").value;
+ if(!isCurrentOrderBoard(active,rid,body))return;
+ kitchenPolling=true;
+ try{
+ const j=await orderBoardData(rid);
+ if(!isCurrentOrderBoard(active,rid,body))return;const orders=(j.orders||[]).filter(o=>active==="bestellungen"||(!["paid","cancelled"].includes(o.status)&&!o.qr_ready_at)||(o.source==="qr"&&o.qr_service_mode==="pickup"&&o.status==="paid"&&!o.qr_ready_at)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)||a.id.localeCompare(b.id)),signature=JSON.stringify({view:active,restaurantId:rid,orders});if(active==="kueche")trackKitchenOrders(rid,orders,true);if(signature!==kitchenBoardSignature&&!kitchenActionsInFlight.size&&!window.bnTeamPos?.editingKitchen())await renderOrderBoard(active,rid,j)
+ }catch(e){
+  if(isCurrentOrderBoard(active,rid,body)){
+   const msg=body.querySelector("#kitchenMessage");
+   if(msg)msg.textContent="Aktualisierung fehlgeschlagen: "+e.message;
+  }
+ }finally{kitchenPolling=false}
 }
 setInterval(refreshActiveOrderBoard,12000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refreshActiveOrderBoard()});
 
