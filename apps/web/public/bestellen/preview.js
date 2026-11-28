@@ -1,6 +1,9 @@
 const samples = [
   { name: 'Testrestaurant Moabit', postcode: '10551', delivery: ['10551'], pickup: true, minutes: '25–40', fee: '2,50 €', minimum: '12,00 €', menu: [{name:'Hähnchen-Bowl',cents:1290},{name:'Gemüse-Bowl',cents:1090}], feeCents:250, minimumCents:1200 },
-  { name: 'Testküche Kreuzberg', postcode: '10997', delivery: [], pickup: true, minutes: '15–25', menu: [{name:'Margherita',cents:890},{name:'Pizza mit Gemüse',cents:1190}] }
+  { name: 'Testküche Kreuzberg', postcode: '10997', delivery: [], pickup: true, minutes: '15–25', menu: [{name:'Margherita',cents:890},{name:'Pizza mit Gemüse',cents:1190},
+    {name:'Pizza Margherita (Testprodukt)',cents:990,category:'Pizza',image_url:'/bestellen/pizza.webp',
+      ingredients:'Weizenmehl, Wasser, Hefe, Salz, Tomaten, Mozzarella, Basilikum',
+      allergens:['Glutenhaltiges Getreide (Weizen)','Milch'],additives:['Keine im Testrezept']}] }
 ];
 
 const form = document.getElementById('search');
@@ -56,6 +59,14 @@ async function renderStorefront(restaurant, mode, postcode) {
       cover.hidden = false;
     }
 
+    const pickupAddress = document.getElementById('storefrontPickupAddress');
+    if (!delivery && profile.address) {
+      pickupAddress.textContent = 'Adresse des Betriebs: ' + profile.address;
+      pickupAddress.hidden = false;
+    }
+    const hours = document.getElementById('storefrontHours');
+    hours.textContent = profile.openingHours || '';
+    document.getElementById('storefrontHoursSection').hidden = !hours.textContent;
     const contact = document.getElementById('storefrontContact');
     for (const value of [profile.operator, profile.address, profile.phone, profile.email]) {
       if (!value) continue;
@@ -63,7 +74,8 @@ async function renderStorefront(restaurant, mode, postcode) {
       line.textContent = value;
       contact.append(line);
     }
-    document.getElementById('storefrontOperator').hidden = !contact.childElementCount;
+    document.getElementById('storefrontContactSection').hidden = !contact.childElementCount;
+    document.getElementById('storefrontOperator').hidden = !contact.childElementCount && !hours.textContent;
 
     if (!Array.isArray(menu)) throw Error('menu');
     status.textContent = menu.length ? '' : 'Derzeit sind keine Gerichte verfügbar.';
@@ -81,17 +93,46 @@ async function renderStorefront(restaurant, mode, postcode) {
         menuContent.append(section);
         const link = document.createElement('a');
         link.href = '#' + section.id;
-        link.textContent = category;
+        link.append(categoryIcon(category), category);
         categories.append(link);
-        groups.set(category, list);
+        groups.set(category, { section, list, link });
       }
-      const list = groups.get(category);
+      const { list } = groups.get(category);
       const item = document.createElement('li');
+      item.dataset.search = [dish.name, category, dish.description].filter(Boolean).join(' ').toLocaleLowerCase('de');
       const title = document.createElement('strong');
       title.textContent = dish.name;
       const price = document.createElement('span');
       price.textContent = money.format(dish.cents / 100);
       item.append(title, price);
+      const productDetails = document.createElement('details');
+      productDetails.className = 'dish-details';
+      const toggle = document.createElement('summary');
+      toggle.textContent = '⋯';
+      toggle.setAttribute('aria-label', 'Produktinformationen zu ' + dish.name);
+      const panel = document.createElement('dl');
+      for (const [label, value] of [
+        ['Zutaten', dish.ingredients],
+        ['Allergene', dish.allergens?.join(', ')],
+        ['Zusatzstoffe', dish.additives?.join(', ')]
+      ]) {
+        const key = document.createElement('dt');
+        key.textContent = label;
+        const entry = document.createElement('dd');
+        entry.textContent = value || 'Keine Angaben hinterlegt';
+        panel.append(key, entry);
+      }
+      productDetails.append(toggle, panel);
+      const imageUrl = typeof dish.image_url === 'string' ? dish.image_url : '';
+      if ((demo && imageUrl === '/bestellen/pizza.webp') || /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(imageUrl)) {
+        const photo = document.createElement('img');
+        photo.className = 'dish-photo';
+        photo.src = imageUrl;
+        photo.alt = dish.name;
+        photo.loading = 'lazy';
+        item.prepend(photo);
+      }
+      item.append(productDetails);
       if (dish.description) {
         const description = document.createElement('p');
         description.textContent = dish.description;
@@ -102,20 +143,70 @@ async function renderStorefront(restaurant, mode, postcode) {
         add.type = 'button';
         add.textContent = demo || !checkout.onlinePickup ? 'Zum Testwarenkorb' : 'Zum Warenkorb';
         add.setAttribute('aria-label', dish.name + ' · ' + add.textContent);
-        add.onclick = () => addDish(restaurant, delivery, dish, postcode,
-          checkout.mollieTestCheckout, checkout.onlinePickup, Boolean(checkout.basketPreview));
+        add.onclick = () => {
+          lastStorefrontAdd = add;
+          addDish(restaurant, delivery, dish, postcode,
+            checkout.mollieTestCheckout, checkout.onlinePickup, Boolean(checkout.basketPreview));
+        };
         item.append(add);
       }
       list.append(item);
     }
     categories.hidden = !groups.size;
+    document.getElementById('storefrontSearch').hidden = !menu.length;
+    const search = document.getElementById('storefrontSearchInput');
+    const empty = document.getElementById('storefrontSearchEmpty');
+    search.oninput = () => {
+      const terms = search.value.trim().toLocaleLowerCase('de').split(/\s+/);
+      let found = false;
+      for (const { section, list, link } of groups.values()) {
+        let visible = false;
+        for (const item of list.children) {
+          item.hidden = !terms.every(term => item.dataset.search.includes(term));
+          if (!item.hidden) visible = true;
+        }
+        section.hidden = link.hidden = !visible;
+        if (visible) found = true;
+      }
+      empty.hidden = found;
+      categories.hidden = !found;
+    };
+    if (menu.length) search.oninput();
   } catch {
     status.textContent = 'Speisekarte konnte nicht geladen werden. Bitte lade die Seite erneut.';
   }
 }
 
+const categoryIcons = [
+  [/getränk|drink|kaffee|cocktail/i, 'M5 7h14l-2 14H7z M12 7l2-4h4'],
+  [/pizza/i, 'M3 6a21 21 0 0 1 18 0l-9 15z M5 9a16 16 0 0 1 14 0 M10 12h.1 M14 14h.1'],
+  [/burger/i, 'M3 10a9 6 0 0 1 18 0z M3 14h18 M3 17h18v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z'],
+  [/salat|salad/i, 'M3 12h18a9 9 0 0 1-18 0z M12 11c0-5 3-7 7-7 0 4-2 7-7 7z M10 9C7 9 5 7 5 4c3 0 5 2 5 5'],
+  [/pasta|nudel/i, 'M3 14h18a9 7 0 0 1-18 0z M7 11c-3-4 3-4 0-8 M12 11c-3-4 3-4 0-8 M17 11c-3-4 3-4 0-8'],
+  [/dessert|nachtisch|süß|kuchen/i, 'M4 12h16v8H4z M4 15l4 2 4-2 4 2 4-2 M12 12V7 M12 3h.01'],
+  [/suppe/i, 'M3 13h18a9 8 0 0 1-18 0z M8 9c-2-2 2-3 0-5 M12 9c-2-2 2-3 0-5 M16 9c-2-2 2-3 0-5']
+];
+
+function categoryIcon(category) {
+  const namespace = 'http://www.w3.org/2000/svg';
+  const icon = document.createElementNS(namespace, 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(namespace, 'path');
+  path.setAttribute('d', categoryIcons.find(([pattern]) => pattern.test(category))?.[1] ||
+    'M4 3v6a3 3 0 0 0 6 0V3 M7 3v18 M19 3c-3 2-4 5-4 9h4 M19 3v18');
+  icon.append(path);
+  return icon;
+}
+
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
 const basket = document.getElementById('demoBasket');
+const mobileBasket = document.getElementById('mobileBasket');
+const mobileLayout = window.matchMedia('(max-width: 650px)');
+mobileBasket.onclick = () => {
+  basket.scrollIntoView({block:'start'});
+  basket.focus({preventScroll:true});
+};
 const basketItems = document.getElementById('basketItems');
 const basketTotal = document.getElementById('basketTotal');
 const basketMessage = document.getElementById('basketMessage');
@@ -126,6 +217,7 @@ const addressInputs = {
   city:document.getElementById('deliveryCity')
 };
 const finish = document.getElementById('finishDemo');
+let lastStorefrontAdd;
 let selection = null;
 let pendingOrder = null;
 let sending = false;
@@ -228,12 +320,15 @@ const quantities = new Map();
 function renderBasket() {
   basket.hidden = !selection || quantities.size === 0;
   basketItems.replaceChildren();
+  mobileBasket.hidden = basket.hidden || storefront.hidden;
+  document.body.classList.toggle('has-mobile-basket', !mobileBasket.hidden);
   if (basket.hidden) return;
   const {restaurant, delivery} = selection;
   addressFields.hidden = !delivery || !selection.mollieTestCheckout;
   addressFields.disabled = addressFields.hidden || Boolean(pendingOrder);
   document.getElementById('basketRestaurant').textContent = restaurant.name + (delivery ? ' · Lieferung' : ' · Abholung');
   let subtotal = 0;
+  let itemCount = 0;
   for (const [dish, quantity] of quantities) {
     const row = document.createElement('li');
     const remove = document.createElement('button');
@@ -247,13 +342,17 @@ function renderBasket() {
       else quantities.set(dish, quantity - 1);
       basketMessage.textContent = '';
       renderBasket();
+      if (basket.hidden && !storefront.hidden) lastStorefrontAdd?.focus();
     };
     row.append(remove);
     basketItems.append(row);
     subtotal += dish.cents * quantity;
+    itemCount += quantity;
   }
   const fee = delivery ? restaurant.feeCents : 0;
   const missing = delivery ? Math.max(0,restaurant.minimumCents - subtotal) : 0;
+  mobileBasket.textContent = (selection.onlinePickup ? 'Warenkorb' : 'Testwarenkorb') +
+    ' · ' + itemCount + ' · ' + money.format((subtotal + fee) / 100);
   basketTotal.textContent = 'Gesamt ' + money.format((subtotal + fee) / 100) +
     (fee ? ' · inkl. ' + money.format(fee / 100) + ' Lieferung' : '');
   document.getElementById('basketMinimum').textContent = missing
@@ -350,7 +449,7 @@ function addDish(restaurant, delivery, dish, postcode = '', mollieTestCheckout =
     ? 'Preis oder Lieferkonditionen wurden aktualisiert. Bitte prüfe den neuen Gesamtbetrag.'
     : '';
   renderBasket();
-  basket.scrollIntoView?.({block:'nearest'});
+  if (storefront.hidden || !mobileLayout.matches) basket.scrollIntoView?.({block:'nearest'});
 }
 if (demo) {
   document.getElementById('searchLabel').textContent = '· Vorschau mit Testrestaurants';
