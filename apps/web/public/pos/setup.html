@@ -1,6 +1,6 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'"><title>Bringness · Betrieb einrichten</title><link rel="stylesheet" href="/pos/operations.css"><link rel="stylesheet" href="/pos/setup.css?v=customer-details"><script defer src="/pos/setup.js?v=customer-details"></script></head><body><header><strong>Bringness · Einrichtung</strong><a href="/pos/">Zur Kasse</a></header><main><h1>Deinen Betrieb Schritt für Schritt einrichten</h1><p>Vorhandene Daten werden verwendet. Dein Fortschritt wird je Betrieb gespeichert. Du kannst jederzeit pausieren und hier weitermachen.</p><p id="message" role="status" aria-live="polite">Einrichtung wird geladen …</p><button id="retry" hidden>Unverändert erneut speichern</button><button id="refresh" type="button">Status aktualisieren</button><div id="wizard" hidden><h2 id="restaurant"></h2><p id="progress" role="status"></p><nav aria-label="Einrichtungsschritte" id="steps"></nav><section id="stepBody"></section><div class="setup-navigation"><button id="previous">Zurück</button><button id="next">Weiter</button></div></div><form id="deliveryPortalSettings" class="card" hidden>
 <h2>Bestellportal</h2>
-<p>Lege fest, wie dieser Standort in der Restaurantsuche erscheint. Für Lieferungen setzt der Betrieb eigene Fahrer ein.</p>
+<p>Wähle die Artikel aus der Kasse für den Shop aus. Namen, Kategorien, Beschreibungen und Preise werden aus dem Kassenkatalog geladen. Titelbild und öffentliche Betreiberangaben pflegst du im Shopprofil.</p>
 <fieldset disabled>
 <label><input type="checkbox" name="pickup"> Abholung veröffentlichen</label>
 <label><input type="checkbox" name="delivery"> Lieferung veröffentlichen</label>
@@ -28,4 +28,4 @@
 <p id="deliveryMerchantStatus" role="status"></p>
 <button type="button" id="verifyDeliveryMerchant" disabled>Profil prüfen und zuordnen</button>
 <button type="button" id="unlinkDeliveryMerchant" disabled>Zuordnung lösen</button>
-</section></main><script defer src="/pos/delivery-portal.js?v=shop-profile"></script></body></html>
+</section></main><script defer src="/pos/delivery-portal.js?v=pos-shop-link"></script></body></html>
