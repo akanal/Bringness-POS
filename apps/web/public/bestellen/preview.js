@@ -19,10 +19,19 @@ function orderingUrl(filters) {
   return '/bestellen/?' + params;
 }
 
+let storefrontRequestVersion = 0;
 async function renderStorefront(restaurant, mode, postcode) {
+  const requestVersion = ++storefrontRequestVersion;
   const heading = document.getElementById('storefrontName');
   const menuContent = document.getElementById('storefrontMenu');
   const categories = document.getElementById('storefrontCategories');
+  menuContent.replaceChildren();
+  categories.replaceChildren();
+  categories.hidden = true;
+  document.getElementById('storefrontContact').replaceChildren();
+  document.getElementById('storefrontOperator').hidden = true;
+  document.getElementById('storefrontCover').hidden = true;
+  document.getElementById('storefrontMenuHeading').hidden = true;
   if (!restaurant) {
     heading.textContent = 'Shop nicht verfügbar';
     status.textContent = 'Für diesen Bestellort und diese Bestellart ist der Shop nicht verfügbar.';
@@ -46,6 +55,7 @@ async function renderStorefront(restaurant, mode, postcode) {
       if (!response.ok) throw Error('menu');
       checkout = await response.json();
       menu = checkout.menu;
+      if (requestVersion !== storefrontRequestVersion) return;
     }
     const profile = checkout.shopProfile ?? {};
     const cover = document.getElementById('storefrontCover');
@@ -110,6 +120,7 @@ async function renderStorefront(restaurant, mode, postcode) {
     }
     categories.hidden = !groups.size;
   } catch {
+    if (requestVersion !== storefrontRequestVersion) return;
     status.textContent = 'Speisekarte konnte nicht geladen werden. Bitte lade die Seite erneut.';
   }
 }
