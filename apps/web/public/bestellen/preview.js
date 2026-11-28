@@ -21,7 +21,8 @@ function orderingUrl(filters) {
 
 async function renderStorefront(restaurant, mode, postcode) {
   const heading = document.getElementById('storefrontName');
-  const list = document.getElementById('storefrontMenu');
+  const menuContent = document.getElementById('storefrontMenu');
+  const categories = document.getElementById('storefrontCategories');
   if (!restaurant) {
     heading.textContent = 'Shop nicht verfügbar';
     status.textContent = 'Für diesen Bestellort und diese Bestellart ist der Shop nicht verfügbar.';
@@ -46,16 +47,56 @@ async function renderStorefront(restaurant, mode, postcode) {
       checkout = await response.json();
       menu = checkout.menu;
     }
+    const profile = checkout.shopProfile ?? {};
+    const cover = document.getElementById('storefrontCover');
+    const coverSource = profile.cover || (demo || (location.hostname === 'sandbox-bestellen.bringness.de' &&
+      restaurant.name === 'Bringness Sandbox Restaurant') ? '/bestellen/pizza.webp' : '');
+    if (coverSource) {
+      cover.src = coverSource;
+      cover.hidden = false;
+    }
+
+    const contact = document.getElementById('storefrontContact');
+    for (const value of [profile.operator, profile.address, profile.phone, profile.email]) {
+      if (!value) continue;
+      const line = document.createElement('div');
+      line.textContent = value;
+      contact.append(line);
+    }
+    document.getElementById('storefrontOperator').hidden = !contact.childElementCount;
+
     if (!Array.isArray(menu)) throw Error('menu');
     status.textContent = menu.length ? '' : 'Derzeit sind keine Gerichte verfügbar.';
     document.getElementById('storefrontMenuHeading').hidden = !menu.length;
+    const groups = new Map();
     for (const dish of menu) {
+      const category = dish.category || 'Weitere Speisen';
+      if (!groups.has(category)) {
+        const section = document.createElement('section');
+        section.id = 'shop-menu-category-' + groups.size;
+        const heading = document.createElement('h3');
+        heading.textContent = category;
+        const list = document.createElement('ul');
+        section.append(heading, list);
+        menuContent.append(section);
+        const link = document.createElement('a');
+        link.href = '#' + section.id;
+        link.textContent = category;
+        categories.append(link);
+        groups.set(category, list);
+      }
+      const list = groups.get(category);
       const item = document.createElement('li');
       const title = document.createElement('strong');
       title.textContent = dish.name;
       const price = document.createElement('span');
       price.textContent = money.format(dish.cents / 100);
       item.append(title, price);
+      if (dish.description) {
+        const description = document.createElement('p');
+        description.textContent = dish.description;
+        item.append(description);
+      }
       if (demo || checkout.testOrders || checkout.onlinePickup || checkout.basketPreview) {
         const add = document.createElement('button');
         add.type = 'button';
@@ -67,6 +108,7 @@ async function renderStorefront(restaurant, mode, postcode) {
       }
       list.append(item);
     }
+    categories.hidden = !groups.size;
   } catch {
     status.textContent = 'Speisekarte konnte nicht geladen werden. Bitte lade die Seite erneut.';
   }
