@@ -7,7 +7,7 @@ import {readJsonObject} from './http-body.js';
 
 const postcodePattern = /^\d{5}$/;
 const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-const defaults = {pickup:false, delivery:false, postcode:'', zones:[], minutes:30, feeCents:0, minimumCents:0, productIds:[]};
+const defaults = {pickup:false, delivery:false, postcode:'', zones:[], minutes:30, feeCents:0, minimumCents:0, productIds:[], shopProfile:{}};
 const integerBetween = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
 
 export async function migrateDeliveryPortal(db,{testOrders=false,liveCheckout=false}={}) {
@@ -96,7 +96,7 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       if (menu) {
         const rid = url.searchParams.get('restaurantId');
         if (!idPattern.test(rid ?? '')) return send(400,{error:'Bitte ein Restaurant auswählen.'});
-        const {rows} = await db.query(`SELECT p.id,p.name,p.price_cents AS cents
+        const {rows} = await db.query(`SELECT p.id,p.name,p.description,p.price_cents AS cents,c.name AS category
           FROM pos_delivery_locations s JOIN products p ON p.restaurant_id=s.restaurant_id
           LEFT JOIN categories c ON c.id=p.category_id AND c.restaurant_id=p.restaurant_id
           WHERE s.restaurant_id=$3 AND ${eligible} AND s.settings->'productIds' ? p.id::text
@@ -115,7 +115,10 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
           onlinePickup = !sandboxMenu && Boolean(verified.length);
           mollieTestCheckout = Boolean(sandboxMenu && verified.length);
         }
+        const profile = await db.query(`SELECT s.settings->'shopProfile' AS profile
+          FROM pos_delivery_locations s WHERE s.restaurant_id=$3 AND ${eligible}`,[postcode,mode,rid]);
         return send(200,{
+          shopProfile:profile.rows[0]?.profile ?? {},
           menu:rows,testOrders:sandbox ? mollieTestCheckout : testOrders,mollieTestCheckout,onlinePickup,
           ...(sandboxMenu && rows.length && !mollieTestCheckout ? {basketPreview:true} : {})
         });
@@ -146,7 +149,7 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
     }
 
     let input;
-    try { input = await readJsonObject(req,{maxBytes:16384}); }
+    try { input = await readJsonObject(req,{maxBytes:180000}); }
     catch (error) {
       if (!error.status) throw error;
       return send(error.status,{error:error.message});
@@ -161,13 +164,24 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
       return send(400,{error:'Bitte Postleitzahlen, Zeit und Beträge prüfen.'});
     }
     const settings = {pickup,delivery,postcode,zones:[...new Set(zones)],minutes,feeCents,minimumCents,productIds:[...new Set(productIds.map(id=>id.toLowerCase()))]};
+    if (input.shopProfile !== undefined) {
+      const profile = input.shopProfile;
+      const limits = {operator:160,address:300,phone:60,email:160,cover:160000};
+      if (!profile || typeof profile !== 'object' || Array.isArray(profile) ||
+          Object.entries(limits).some(([key,max]) => profile[key] !== undefined &&
+            (typeof profile[key] !== 'string' || profile[key].length > max)) ||
+          (profile.cover && !/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]+={0,2}$/.test(profile.cover))) {
+        return send(400,{error:'Bitte Titelbild und öffentliche Betreiberangaben prüfen.'});
+      }
+      settings.shopProfile = Object.fromEntries(Object.keys(limits).map(key => [key,profile[key]?.trim() ?? '']));
+    }
     const {rows} = await db.query(`INSERT INTO pos_delivery_locations (restaurant_id,settings)
       SELECT a.id,$3::jsonb FROM (${access}) a
       WHERE NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements_text($3::jsonb->'productIds') AS selected(id)
         WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.restaurant_id=a.id AND p.id=selected.id::uuid)
       )
-      ON CONFLICT (restaurant_id) DO UPDATE SET settings=EXCLUDED.settings RETURNING settings`,[rid,hash,JSON.stringify(settings)]);
+      ON CONFLICT (restaurant_id) DO UPDATE SET settings=pos_delivery_locations.settings || EXCLUDED.settings RETURNING settings`,[rid,hash,JSON.stringify(settings)]);
     return rows.length ? send(200,{settings:rows[0].settings}) : send(403,{error:'Kein Zugriff auf diesen Standort.'});
   };
 }
