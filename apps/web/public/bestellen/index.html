@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=restaurant-shop">
+  <link rel="stylesheet" href="/bestellen/style.css?v=shop-profile">
 
 </head>
 <body>
@@ -90,10 +90,12 @@
       <p id="status" role="status">Gib eine Postleitzahl ein, um Restaurants zu finden.</p>
       <section id="storefront" hidden aria-labelledby="storefrontName">
         <a id="storefrontBack">← Zurück zu den Restaurants</a>
+        <img id="storefrontCover" alt="" hidden>
         <h1 id="storefrontName"></h1>
         <p id="storefrontTerms"></p>
         <h2 id="storefrontMenuHeading" hidden>Speisekarte</h2>
-        <ul id="storefrontMenu"></ul>
+        <nav id="storefrontCategories" aria-label="Speisekategorien" hidden></nav>
+        <div id="storefrontMenu"></div>
       </section>
       <div id="restaurantDiscovery" hidden>
         <div class="discovery-shortcuts" aria-label="Schnellauswahl">
@@ -160,9 +162,13 @@
         <p id="basketPreviewNotice" hidden>Testwarenkorb zur Vorschau. Testbestellungen sind verfügbar, sobald die Mollie-Testzahlung freigegeben ist.</p>
         <p id="basketMessage" role="status"></p>
       </aside>
+      <footer id="storefrontOperator" hidden>
+        <h2>Betreiberinformationen</h2>
+        <address id="storefrontContact"></address>
+      </footer>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=restaurant-shop" defer></script>
+<script src="/bestellen/preview.js?v=shop-profile" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>
