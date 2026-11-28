@@ -13,10 +13,26 @@ def prepare(current, originals):
     marker='<section aria-labelledby="results-heading">'
     if h.count(marker)!=1:raise RuntimeError('Unexpected baseline HTML')
     h=h.replace(marker,match.group(0)+marker)
-    h=re.sub(r'style\.css(?:\?[^" ]*)?"','style.css?v=restore-20261127-1400"',h)
+    h=re.sub(r'style\.css(?:\?[^" ]*)?"','style.css?v=restore-20261127-restaurant-layout"',h)
     originals=dict(originals)
     originals['index.html']=h.encode()
-    originals['style.css']+=('\n/* Retained existing category icons; restored pre-14:00 design. */\n'+ICON_CSS).encode()
+    css = originals['style.css'].decode()
+    # The category section moves the results away from the second child.
+    css = re.sub(r'main\s*>\s*section:nth-child\(2\)', 'main > section[aria-labelledby="results-heading"]', css)
+    css += '\n/* Retained category icons. */\n' + ICON_CSS
+    css += """
+.search-page main > section[aria-labelledby="results-heading"] {
+  max-width: 112rem;
+}
+.search-page #locationSummary,
+.search-page .ordering-modes a {
+  color: #572714;
+}
+.search-page #restaurantHighlights .highlight-main {
+  min-height: clamp(112px, 11vw, 176px);
+}
+"""
+    originals['style.css'] = css.encode()
     return originals
 
 def main():
