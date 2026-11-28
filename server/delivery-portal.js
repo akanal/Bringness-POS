@@ -166,14 +166,15 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
     const settings = {pickup,delivery,postcode,zones:[...new Set(zones)],minutes,feeCents,minimumCents,productIds:[...new Set(productIds.map(id=>id.toLowerCase()))]};
     if (input.shopProfile !== undefined) {
       const profile = input.shopProfile;
-      const limits = {operator:160,address:300,phone:60,email:160,cover:160000};
+      const limits = {operator:160,address:300,phone:60,email:160,cover:160000,openingHours:500};
       if (!profile || typeof profile !== 'object' || Array.isArray(profile) ||
           Object.entries(limits).some(([key,max]) => profile[key] !== undefined &&
             (typeof profile[key] !== 'string' || profile[key].length > max)) ||
           (profile.cover && !/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]+={0,2}$/.test(profile.cover))) {
         return send(400,{error:'Bitte Titelbild und öffentliche Betreiberangaben prüfen.'});
       }
-      settings.shopProfile = Object.fromEntries(Object.keys(limits).map(key => [key,profile[key]?.trim() ?? '']));
+      settings.shopProfile = Object.fromEntries(Object.keys(limits).filter(key => key !== 'openingHours' || profile[key] !== undefined)
+        .map(key => [key,profile[key]?.trim() ?? '']));
     }
     const {rows} = await db.query(`INSERT INTO pos_delivery_locations (restaurant_id,settings)
       SELECT a.id,$3::jsonb FROM (${access}) a
@@ -181,7 +182,12 @@ export function createDeliveryPortal(db,{testOrders=false,sandbox,liveCheckoutOr
         SELECT 1 FROM jsonb_array_elements_text($3::jsonb->'productIds') AS selected(id)
         WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.restaurant_id=a.id AND p.id=selected.id::uuid)
       )
-      ON CONFLICT (restaurant_id) DO UPDATE SET settings=pos_delivery_locations.settings || EXCLUDED.settings RETURNING settings`,[rid,hash,JSON.stringify(settings)]);
+      ON CONFLICT (restaurant_id) DO UPDATE SET settings=pos_delivery_locations.settings || EXCLUDED.settings ||
+        CASE WHEN EXCLUDED.settings ? 'shopProfile' AND NOT (EXCLUDED.settings->'shopProfile' ? 'openingHours')
+          AND pos_delivery_locations.settings->'shopProfile' ? 'openingHours'
+        THEN jsonb_build_object('shopProfile', EXCLUDED.settings->'shopProfile' ||
+          jsonb_build_object('openingHours', pos_delivery_locations.settings->'shopProfile'->'openingHours'))
+        ELSE '{}'::jsonb END RETURNING settings`,[rid,hash,JSON.stringify(settings)]);
     return rows.length ? send(200,{settings:rows[0].settings}) : send(403,{error:'Kein Zugriff auf diesen Standort.'});
   };
 }

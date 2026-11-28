@@ -56,6 +56,14 @@ async function renderStorefront(restaurant, mode, postcode) {
       cover.hidden = false;
     }
 
+    const pickupAddress = document.getElementById('storefrontPickupAddress');
+    if (!delivery && profile.address) {
+      pickupAddress.textContent = 'Adresse des Betriebs: ' + profile.address;
+      pickupAddress.hidden = false;
+    }
+    const hours = document.getElementById('storefrontHours');
+    hours.textContent = profile.openingHours || '';
+    document.getElementById('storefrontHoursSection').hidden = !hours.textContent;
     const contact = document.getElementById('storefrontContact');
     for (const value of [profile.operator, profile.address, profile.phone, profile.email]) {
       if (!value) continue;
@@ -63,7 +71,8 @@ async function renderStorefront(restaurant, mode, postcode) {
       line.textContent = value;
       contact.append(line);
     }
-    document.getElementById('storefrontOperator').hidden = !contact.childElementCount;
+    document.getElementById('storefrontContactSection').hidden = !contact.childElementCount;
+    document.getElementById('storefrontOperator').hidden = !contact.childElementCount && !hours.textContent;
 
     if (!Array.isArray(menu)) throw Error('menu');
     status.textContent = menu.length ? '' : 'Derzeit sind keine Gerichte verfügbar.';
@@ -81,7 +90,10 @@ async function renderStorefront(restaurant, mode, postcode) {
         menuContent.append(section);
         const link = document.createElement('a');
         link.href = '#' + section.id;
-        link.textContent = category;
+        const icon = document.createElement('span');
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = categoryIcon(category);
+        link.append(icon, category);
         categories.append(link);
         groups.set(category, list);
       }
@@ -102,8 +114,11 @@ async function renderStorefront(restaurant, mode, postcode) {
         add.type = 'button';
         add.textContent = demo || !checkout.onlinePickup ? 'Zum Testwarenkorb' : 'Zum Warenkorb';
         add.setAttribute('aria-label', dish.name + ' · ' + add.textContent);
-        add.onclick = () => addDish(restaurant, delivery, dish, postcode,
-          checkout.mollieTestCheckout, checkout.onlinePickup, Boolean(checkout.basketPreview));
+        add.onclick = () => {
+          lastStorefrontAdd = add;
+          addDish(restaurant, delivery, dish, postcode,
+            checkout.mollieTestCheckout, checkout.onlinePickup, Boolean(checkout.basketPreview));
+        };
         item.append(add);
       }
       list.append(item);
@@ -114,8 +129,25 @@ async function renderStorefront(restaurant, mode, postcode) {
   }
 }
 
+function categoryIcon(category) {
+  if (/getränk|drink|kaffee|cocktail/i.test(category)) return '🥤';
+  if (/pizza/i.test(category)) return '🍕';
+  if (/burger/i.test(category)) return '🍔';
+  if (/salat|salad/i.test(category)) return '🥗';
+  if (/pasta|nudel/i.test(category)) return '🍝';
+  if (/dessert|nachtisch|süß|kuchen/i.test(category)) return '🍰';
+  if (/suppe/i.test(category)) return '🥣';
+  return '🍽️';
+}
+
 const money = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
 const basket = document.getElementById('demoBasket');
+const mobileBasket = document.getElementById('mobileBasket');
+const mobileLayout = window.matchMedia('(max-width: 650px)');
+mobileBasket.onclick = () => {
+  basket.scrollIntoView({block:'start'});
+  basket.focus({preventScroll:true});
+};
 const basketItems = document.getElementById('basketItems');
 const basketTotal = document.getElementById('basketTotal');
 const basketMessage = document.getElementById('basketMessage');
@@ -126,6 +158,7 @@ const addressInputs = {
   city:document.getElementById('deliveryCity')
 };
 const finish = document.getElementById('finishDemo');
+let lastStorefrontAdd;
 let selection = null;
 let pendingOrder = null;
 let sending = false;
@@ -228,12 +261,15 @@ const quantities = new Map();
 function renderBasket() {
   basket.hidden = !selection || quantities.size === 0;
   basketItems.replaceChildren();
+  mobileBasket.hidden = basket.hidden || storefront.hidden;
+  document.body.classList.toggle('has-mobile-basket', !mobileBasket.hidden);
   if (basket.hidden) return;
   const {restaurant, delivery} = selection;
   addressFields.hidden = !delivery || !selection.mollieTestCheckout;
   addressFields.disabled = addressFields.hidden || Boolean(pendingOrder);
   document.getElementById('basketRestaurant').textContent = restaurant.name + (delivery ? ' · Lieferung' : ' · Abholung');
   let subtotal = 0;
+  let itemCount = 0;
   for (const [dish, quantity] of quantities) {
     const row = document.createElement('li');
     const remove = document.createElement('button');
@@ -247,13 +283,17 @@ function renderBasket() {
       else quantities.set(dish, quantity - 1);
       basketMessage.textContent = '';
       renderBasket();
+      if (basket.hidden && !storefront.hidden) lastStorefrontAdd?.focus();
     };
     row.append(remove);
     basketItems.append(row);
     subtotal += dish.cents * quantity;
+    itemCount += quantity;
   }
   const fee = delivery ? restaurant.feeCents : 0;
   const missing = delivery ? Math.max(0,restaurant.minimumCents - subtotal) : 0;
+  mobileBasket.textContent = (selection.onlinePickup ? 'Warenkorb' : 'Testwarenkorb') +
+    ' · ' + itemCount + ' · ' + money.format((subtotal + fee) / 100);
   basketTotal.textContent = 'Gesamt ' + money.format((subtotal + fee) / 100) +
     (fee ? ' · inkl. ' + money.format(fee / 100) + ' Lieferung' : '');
   document.getElementById('basketMinimum').textContent = missing
@@ -350,7 +390,7 @@ function addDish(restaurant, delivery, dish, postcode = '', mollieTestCheckout =
     ? 'Preis oder Lieferkonditionen wurden aktualisiert. Bitte prüfe den neuen Gesamtbetrag.'
     : '';
   renderBasket();
-  basket.scrollIntoView?.({block:'nearest'});
+  if (storefront.hidden || !mobileLayout.matches) basket.scrollIntoView?.({block:'nearest'});
 }
 if (demo) {
   document.getElementById('searchLabel').textContent = '· Vorschau mit Testrestaurants';

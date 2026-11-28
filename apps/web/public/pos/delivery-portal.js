@@ -48,7 +48,7 @@
   }
 
   let shopCover = '';
-  const profileFields = {operator:'shopOperator', address:'shopAddress', phone:'shopPhone', email:'shopEmail'};
+  const profileFields = {operator:'shopOperator', address:'shopAddress', phone:'shopPhone', email:'shopEmail', openingHours:'shopHours'};
   async function encodeCover(file) {
     if (file.size > 12000000) throw Error('Das Titelbild darf höchstens 12 MB groß sein.');
     const image = await createImageBitmap(file);

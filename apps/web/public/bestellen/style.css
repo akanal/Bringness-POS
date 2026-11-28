@@ -371,12 +371,12 @@ main > section[aria-labelledby="results-heading"] {
 .restaurant-favorite { z-index: 1; }
 #storefront { max-width: 72rem; }
 #storefrontCover { width: 100%; height: clamp(160px, 24vw, 340px); object-fit: cover; border-radius: 14px; margin-top: 16px; }
-#storefrontCategories:not([hidden]) { display: flex; gap: 10px; margin-block: 16px; }
-#storefrontCategories a { color: #693118; background: #fff0de; border-radius: 20px; padding: 8px 14px; }
+#storefrontCategories:not([hidden]) { display: flex; flex-wrap: wrap; gap: 10px; margin-block: 16px; }
+#storefrontCategories a { display: inline-flex; align-items: center; gap: .5rem; color: #693118; background: #fff0de; border-radius: 20px; padding: 8px 14px; }
 #storefrontMenu p { grid-column: 1 / -1; margin: 0; }
 #storefrontMenu li > span { justify-self: end; white-space: nowrap; }
 #storefrontOperator { margin-top: 32px; border-top: 1px solid #ead9cb; padding-top: 16px; }
-#storefrontOperator address { font-style: normal; white-space: pre-line; overflow-wrap: anywhere; }
+#storefrontOperator address, #storefrontHours, #storefrontPickupAddress { font-style: normal; white-space: pre-line; overflow-wrap: anywhere; }
 #storefront h1 { font-size: clamp(2rem, 5vw, 3.5rem); margin: 20px 0 8px; color: inherit; }
 #storefrontMenu ul { list-style: none; padding: 0; display: grid; gap: 12px; }
 #storefrontMenu li {
@@ -389,6 +389,24 @@ main > section[aria-labelledby="results-heading"] {
   background: white;
 }
 #storefrontMenu button { grid-column: 1 / -1; justify-self: start; }
+#mobileBasket { display: none; }
+@media (max-width: 650px) {
+  .has-mobile-basket main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+  #mobileBasket:not([hidden]) {
+    display: block;
+    position: fixed;
+    inset: auto 16px calc(12px + env(safe-area-inset-bottom));
+    z-index: 10;
+    min-height: 48px;
+    border: 0;
+    border-radius: 12px;
+    background: #693118;
+    color: white;
+    font: inherit;
+    font-weight: 700;
+    box-shadow: 0 4px 16px #0003;
+  }
+}
 .search-page { background: #f5f4ef; }
 .search-page header { background: #1c2226; }
 .search-page #locationSummary,
