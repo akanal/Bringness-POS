@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Essen bestellen · Bringness</title>
-  <link rel="stylesheet" href="/bestellen/style.css?v=single-card-style">
+  <link rel="stylesheet" href="/bestellen/style.css?v=restaurant-shop">
 
 </head>
 <body>
@@ -78,9 +78,23 @@
   <button type="button" id="autoplay">Pause</button>
 </div>
     </section>
+    <nav class="shop-categories" aria-label="Kategorien">
+      <a data-category="essen" href="/bestellen/?category=essen"><span aria-hidden="true">🍔</span><strong>Essen</strong></a>
+      <a data-category="lebensmittel" href="/bestellen/?category=lebensmittel"><span aria-hidden="true">🥬</span><strong>Lebensmittel</strong></a>
+      <a data-category="kiosk" href="/bestellen/?category=kiosk"><span aria-hidden="true">📰</span><strong>Kiosk &amp; Presse</strong></a>
+      <a data-category="blumen" href="/bestellen/?category=blumen"><span aria-hidden="true">💐</span><strong>Blumen</strong></a>
+      <a data-category="mode" href="/bestellen/?category=mode"><span aria-hidden="true">👕</span><strong>Mode</strong></a>
+    </nav>
     <section aria-labelledby="results-heading">
       <h2 id="results-heading">Restaurants <small id="searchLabel"></small></h2>
       <p id="status" role="status">Gib eine Postleitzahl ein, um Restaurants zu finden.</p>
+      <section id="storefront" hidden aria-labelledby="storefrontName">
+        <a id="storefrontBack">← Zurück zu den Restaurants</a>
+        <h1 id="storefrontName"></h1>
+        <p id="storefrontTerms"></p>
+        <h2 id="storefrontMenuHeading" hidden>Speisekarte</h2>
+        <ul id="storefrontMenu"></ul>
+      </section>
       <div id="restaurantDiscovery" hidden>
         <div class="discovery-shortcuts" aria-label="Schnellauswahl">
           <button type="button" id="showAllRestaurants" aria-pressed="true">Alle Restaurants</button>
@@ -148,7 +162,7 @@
       </aside>
     </section>
   </main>
-<script src="/bestellen/preview.js?v=single-card-style" defer></script>
+<script src="/bestellen/preview.js?v=restaurant-shop" defer></script>
 <script src="/bestellen/address-search.js?v=1" defer></script>
 </body>
 </html>
