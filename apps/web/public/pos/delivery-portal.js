@@ -28,7 +28,7 @@
   status.after(searchLinks, menuNotice);
   let productsById = new Map();
 
-  function showSavedSearches(settings) {
+  function showShopLinks(settings) {
     searchLinks.replaceChildren();
     const searches = [
       ...(settings.pickup ? [['pickup', settings.postcode, 'Abholung']] : []),
@@ -37,11 +37,11 @@
     for (const [mode, postcode, label] of searches) {
       if (!/^\d{5}$/.test(postcode)) continue;
       const link = document.createElement('a');
-      link.href = '/bestellen/?' + new URLSearchParams({mode, postcode});
-      link.textContent = label + ' für ' + postcode + ' ansehen';
+      link.href = '/bestellen/?' + new URLSearchParams({mode, postcode, restaurant:rid});
+      link.textContent = 'Shop öffnen · ' + label + ' · ' + postcode;
       searchLinks.append(link, document.createElement('br'));
     }
-    if (!searchLinks.childElementCount) searchLinks.textContent = 'Für diesen Standort ist keine Abhol- oder Liefersuche aktiviert.';
+    if (!searchLinks.childElementCount) searchLinks.textContent = 'Aktiviere Abholung oder Lieferung, um den Shop für diesen Standort zu öffnen.';
     menuNotice.textContent = searches.length && !settings.productIds.some(id => productsById.get(id)?.active)
       ? 'Für die Speisekarte ist kein aktiver Artikel ausgewählt.'
       : '';
@@ -96,7 +96,7 @@
     fields.minimum.value = settings.minimumCents / 100;
     inputs.disabled = false;
     form.hidden = false;
-    showSavedSearches(settings);
+    showShopLinks(settings);
   }).catch(error => {
     if (!current() || [401,403].includes(error.status)) return;
     status.textContent = error.message;
@@ -167,7 +167,7 @@
       shopCover = saved.settings.shopProfile?.cover ?? cover;
       fields.shopCover.value = '';
       fields.removeShopCover.checked = false;
-      showSavedSearches(saved.settings);
+      showShopLinks(saved.settings);
       status.textContent = 'Standorteinstellungen gespeichert.';
     } catch (error) { status.textContent = error.message; }
     finally { inputs.disabled = !current(); }
